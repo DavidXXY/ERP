@@ -1,0 +1,44 @@
+{
+  "name": "engineering-ops-erp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/admin"
+  ],
+  "overrides": {
+    "vue": "3.5.13",
+    "vue-router": "4.5.0",
+    "typescript": "5.5.4",
+    "vue-tsc": "2.1.10"
+  },
+  "scripts": {
+    "dev": "npm run prototype:dev",
+    "build": "npm run prototype:build",
+    "prototype:dev": "vite --host 0.0.0.0",
+    "prototype:build": "tsc -b && vite build",
+    "prototype:preview": "vite preview --host 0.0.0.0",
+    "admin:dev": "npm --workspace apps/admin run dev",
+    "admin:build": "npm --workspace apps/admin run build",
+    "admin:preview": "npm --workspace apps/admin run preview",
+    "api:check": "bash scripts/check-backend.sh",
+    "api:dev": "cd services/api && mvn spring-boot:run",
+    "api:dev:local": "bash scripts/start-local-api.sh",
+    "infra:up": "docker compose -f infra/docker-compose.yml up -d",
+    "infra:down": "docker compose -f infra/docker-compose.yml down",
+    "tools:install": "bash scripts/install-local-tools.sh"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "latest",
+    "lucide-react": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "typescript": "5.5.4",
+    "vite": "latest"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.1",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3"
+  }
+}

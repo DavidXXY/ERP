@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.dev/
+.local-data/
+.env
+.env.local
+.env.*.local
+.DS_Store
+.vscode/
+*.tsbuildinfo

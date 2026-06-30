@@ -37,7 +37,7 @@ public final class QualificationDtos {
 
   public record EmployeeRequest(
       @NotBlank @Size(max = 80) String name, @Size(max = 64) String workNo,
-      @Size(max = 120) String department, @Size(max = 120) String position,
+      UUID organizationId, @Size(max = 120) String department, @Size(max = 120) String position,
       @Size(max = 32) String idCard, @Size(max = 40) String phone, LocalDate entryDate,
       @NotBlank @Size(max = 32) String employmentStatus, LocalDate contractStart,
       LocalDate contractEnd, @Size(max = 160) String socialSecurityUnit,
@@ -51,7 +51,8 @@ public final class QualificationDtos {
   ) {}
 
   public record EmployeeResponse(
-      UUID id, String name, String workNo, String department, String position,
+      UUID id, String name, String workNo, UUID organizationId, String organizationName,
+      String organizationPath, String department, String position,
       String idCard, String phone, LocalDate entryDate, String employmentStatus, LocalDate contractStart,
       LocalDate contractEnd, String socialSecurityUnit, LocalDate socialSecurityStart,
       LocalDate socialSecurityEnd, String remark, UUID systemUserId, EmployeeAccountResponse account,
@@ -122,9 +123,10 @@ public final class QualificationDtos {
   public record ReferenceDataResponse(
       List<String> subjectCompanies, List<String> qualificationCategories,
       List<String> certificateTypes, List<String> specialties, List<String> projectTypes,
-      List<EmployeeOption> employees
+      List<EmployeeOption> employees, List<OrganizationOption> organizations
   ) {}
   public record EmployeeOption(UUID id, String name, String workNo) {}
+  public record OrganizationOption(UUID id, String name, String fullPath, boolean enabled) {}
   public record TenderEmployeeResponse(
       UUID employeeId, String employeeName, String workNo,
       String department, String position, List<PersonnelCertificateResponse> certificates

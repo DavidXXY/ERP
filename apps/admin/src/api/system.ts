@@ -96,6 +96,8 @@ export type OrganizationResponse = {
   description?: string;
   directUserCount: number;
   totalUserCount: number;
+  directEmployeeCount: number;
+  totalEmployeeCount: number;
   childCount: number;
   children?: OrganizationResponse[];
   createdAt?: string;

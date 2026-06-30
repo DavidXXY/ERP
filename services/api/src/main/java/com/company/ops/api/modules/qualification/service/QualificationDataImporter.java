@@ -8,6 +8,8 @@ import com.company.ops.api.modules.qualification.repository.CompanyQualification
 import com.company.ops.api.modules.qualification.repository.PersonnelCertificateRepository;
 import com.company.ops.api.modules.qualification.repository.QualificationEmployeeRepository;
 import com.company.ops.api.modules.qualification.repository.QualificationPerformanceRepository;
+import com.company.ops.api.modules.system.domain.SystemOrganization;
+import com.company.ops.api.modules.system.repository.SystemOrganizationRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
@@ -31,16 +33,19 @@ public class QualificationDataImporter {
   private final CompanyQualificationRepository companyRepository;
   private final PersonnelCertificateRepository certificateRepository;
   private final QualificationPerformanceRepository performanceRepository;
+  private final SystemOrganizationRepository organizationRepository;
 
   public QualificationDataImporter(ObjectMapper objectMapper, QualificationEmployeeRepository employeeRepository,
                                    CompanyQualificationRepository companyRepository,
                                    PersonnelCertificateRepository certificateRepository,
-                                   QualificationPerformanceRepository performanceRepository) {
+                                   QualificationPerformanceRepository performanceRepository,
+                                   SystemOrganizationRepository organizationRepository) {
     this.objectMapper = objectMapper;
     this.employeeRepository = employeeRepository;
     this.companyRepository = companyRepository;
     this.certificateRepository = certificateRepository;
     this.performanceRepository = performanceRepository;
+    this.organizationRepository = organizationRepository;
   }
 
   @EventListener(ApplicationReadyEvent.class)
@@ -64,10 +69,23 @@ public class QualificationDataImporter {
     for (JsonNode node : nodes) {
       String externalId = text(node, "id");
       var existing = employeeRepository.findByExternalId(externalId);
-      if (existing.isPresent()) { result.put(externalId, existing.get()); continue; }
+      if (existing.isPresent()) {
+        QualificationEmployee employee = existing.get();
+        if (employee.getOrganization() == null) {
+          SystemOrganization organization = importedOrganization(employee.getDepartment());
+          employee.setOrganization(organization);
+          if (organization != null) employee.setDepartment(organization.getName());
+          employeeRepository.save(employee);
+        }
+        result.put(externalId, employee);
+        continue;
+      }
       QualificationEmployee item = new QualificationEmployee();
       item.setExternalId(externalId); item.setName(text(node, "name"));
-      item.setWorkNo(text(node, "workNo")); item.setDepartment(text(node, "department")); item.setPosition(text(node, "position"));
+      String importedDepartment = text(node, "department");
+      SystemOrganization organization = importedOrganization(importedDepartment);
+      item.setWorkNo(text(node, "workNo")); item.setOrganization(organization);
+      item.setDepartment(organization == null ? null : organization.getName()); item.setPosition(text(node, "position"));
       item.setIdCard(text(node, "idCard")); item.setPhone(text(node, "phone")); item.setEntryDate(date(node, "entryDate"));
       item.setEmploymentStatus(normalizeEmployment(text(node, "employmentStatus")));
       item.setContractStart(date(node, "contractStart")); item.setContractEnd(date(node, "contractEnd"));
@@ -136,4 +154,17 @@ public class QualificationDataImporter {
   }
   private String normalizeStatus(String value) { return value == null ? "NORMAL" : value.toUpperCase(); }
   private String normalizeEmployment(String value) { return value == null ? "ACTIVE" : value.toUpperCase(); }
+
+  private SystemOrganization importedOrganization(String department) {
+    if (department == null || department.isBlank() || "未分配".equals(department)) return null;
+    for (SystemOrganization organization : organizationRepository.findByTenantIdOrderBySortOrderAsc("default")) {
+      if (department.equals(organization.getName())) return organization;
+    }
+    String code = department.contains("财务") ? "FINANCE_DEPARTMENT"
+        : department.contains("采购") ? "PROCUREMENT_DEPARTMENT"
+        : department.contains("市场") ? "MARKETING_DEPARTMENT"
+        : department.contains("销售") || department.contains("客户") ? "DEPT_SALES"
+        : "TECHNICAL_SERVICE_DEPARTMENT";
+    return organizationRepository.findByCodeAndTenantId(code, "default");
+  }
 }

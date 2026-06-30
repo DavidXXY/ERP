@@ -7,6 +7,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import com.company.ops.api.modules.system.domain.SystemOrganization;
 import com.company.ops.api.modules.system.domain.SystemUser;
 import java.time.LocalDate;
 
@@ -17,6 +18,9 @@ public class QualificationEmployee extends BaseEntity {
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "system_user_id")
   private SystemUser systemUser;
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "organization_id")
+  private SystemOrganization organization;
   @Column(nullable = false, length = 80) private String name;
   @Column(name = "work_no", length = 64) private String workNo;
   @Column(length = 120) private String department;
@@ -34,6 +38,7 @@ public class QualificationEmployee extends BaseEntity {
 
   public String getExternalId() { return externalId; } public void setExternalId(String value) { externalId = value; }
   public SystemUser getSystemUser() { return systemUser; } public void setSystemUser(SystemUser value) { systemUser = value; }
+  public SystemOrganization getOrganization() { return organization; } public void setOrganization(SystemOrganization value) { organization = value; }
   public String getName() { return name; } public void setName(String value) { name = value; }
   public String getWorkNo() { return workNo; } public void setWorkNo(String value) { workNo = value; }
   public String getDepartment() { return department; } public void setDepartment(String value) { department = value; }

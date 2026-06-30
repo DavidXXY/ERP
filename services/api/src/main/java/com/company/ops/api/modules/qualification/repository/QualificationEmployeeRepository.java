@@ -8,6 +8,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface QualificationEmployeeRepository extends JpaRepository<QualificationEmployee, UUID> {
   List<QualificationEmployee> findAllByOrderByNameAsc();
+  List<QualificationEmployee> findByOrganization_IdOrderByNameAsc(UUID organizationId);
   Optional<QualificationEmployee> findByExternalId(String externalId);
   Optional<QualificationEmployee> findBySystemUser_Id(UUID systemUserId);
+  long countByOrganization_Id(UUID organizationId);
 }

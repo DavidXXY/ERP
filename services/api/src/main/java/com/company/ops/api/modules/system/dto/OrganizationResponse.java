@@ -18,6 +18,8 @@ public record OrganizationResponse(
     String description,
     long directUserCount,
     long totalUserCount,
+    long directEmployeeCount,
+    long totalEmployeeCount,
     int childCount,
     List<OrganizationResponse> children,
     String createdAt,

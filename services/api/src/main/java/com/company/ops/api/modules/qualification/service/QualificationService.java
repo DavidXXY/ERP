@@ -18,6 +18,7 @@ import com.company.ops.api.modules.qualification.dto.QualificationDtos.EmployeeC
 import com.company.ops.api.modules.qualification.dto.QualificationDtos.EmployeeOption;
 import com.company.ops.api.modules.qualification.dto.QualificationDtos.EmployeeRequest;
 import com.company.ops.api.modules.qualification.dto.QualificationDtos.EmployeeResponse;
+import com.company.ops.api.modules.qualification.dto.QualificationDtos.OrganizationOption;
 import com.company.ops.api.modules.qualification.dto.QualificationDtos.PerformanceRequest;
 import com.company.ops.api.modules.qualification.dto.QualificationDtos.PerformanceResponse;
 import com.company.ops.api.modules.qualification.dto.QualificationDtos.PersonnelCertificateRequest;
@@ -31,6 +32,8 @@ import com.company.ops.api.modules.qualification.repository.PersonnelCertificate
 import com.company.ops.api.modules.qualification.repository.QualificationEmployeeRepository;
 import com.company.ops.api.modules.qualification.repository.QualificationPerformanceRepository;
 import com.company.ops.api.modules.system.domain.SystemUser;
+import com.company.ops.api.modules.system.domain.SystemOrganization;
+import com.company.ops.api.modules.system.repository.SystemOrganizationRepository;
 import com.company.ops.api.modules.system.repository.SystemUserRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -38,6 +41,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -60,6 +64,7 @@ public class QualificationService {
   private final QualificationPerformanceRepository performanceRepository;
   private final EmployeeContractRepository contractRepository;
   private final SystemUserRepository systemUserRepository;
+  private final SystemOrganizationRepository organizationRepository;
   private final ObjectMapper objectMapper;
 
   public QualificationService(QualificationEmployeeRepository employeeRepository,
@@ -68,6 +73,7 @@ public class QualificationService {
                               QualificationPerformanceRepository performanceRepository,
                               EmployeeContractRepository contractRepository,
                               SystemUserRepository systemUserRepository,
+                              SystemOrganizationRepository organizationRepository,
                               ObjectMapper objectMapper) {
     this.employeeRepository = employeeRepository;
     this.companyRepository = companyRepository;
@@ -75,6 +81,7 @@ public class QualificationService {
     this.performanceRepository = performanceRepository;
     this.contractRepository = contractRepository;
     this.systemUserRepository = systemUserRepository;
+    this.organizationRepository = organizationRepository;
     this.objectMapper = objectMapper;
   }
 
@@ -106,7 +113,10 @@ public class QualificationService {
         List.copyOf(subjects), distinct(companies, CompanyQualification::getCategory),
         distinct(certificates, PersonnelCertificate::getType), distinct(certificates, PersonnelCertificate::getSpecialty),
         distinct(performances, QualificationPerformance::getProjectType),
-        employees.stream().map(item -> new EmployeeOption(item.getId(), item.getName(), item.getWorkNo())).toList()
+        employees.stream().map(item -> new EmployeeOption(item.getId(), item.getName(), item.getWorkNo())).toList(),
+        organizationRepository.findByTenantIdOrderBySortOrderAsc("default").stream()
+            .map(item -> new OrganizationOption(item.getId(), item.getName(), organizationPath(item), item.isEnabled()))
+            .toList()
     );
   }
 
@@ -138,10 +148,10 @@ public class QualificationService {
   }
 
   @Transactional(readOnly = true)
-  public List<EmployeeResponse> listEmployees(String keyword, String employmentStatus) {
+  public List<EmployeeResponse> listEmployees(String keyword, String employmentStatus, UUID organizationId) {
     Map<UUID, List<PersonnelCertificate>> certificates = certificatesByEmployee();
     return employeeRepository.findAllByOrderByNameAsc().stream()
-        .filter(item -> matchesEmployee(item, keyword, employmentStatus))
+        .filter(item -> matchesEmployee(item, keyword, employmentStatus, organizationId))
         .map(item -> toEmployee(item, certificates.getOrDefault(item.getId(), List.of()))).toList();
   }
 
@@ -320,12 +330,17 @@ public class QualificationService {
 
   private void applyEmployee(QualificationEmployee item, EmployeeRequest request) {
     item.setName(request.name()); item.setWorkNo(request.workNo());
-    item.setDepartment(request.department()); item.setPosition(request.position()); item.setIdCard(request.idCard());
+    SystemUser systemUser = resolveSystemUser(request.systemUserId(), item.getId());
+    SystemOrganization organization = resolveOrganization(request.organizationId(), systemUser);
+    item.setOrganization(organization);
+    item.setDepartment(organization == null ? request.department() : organization.getName());
+    item.setPosition(request.position()); item.setIdCard(request.idCard());
     item.setPhone(request.phone()); item.setEntryDate(request.entryDate()); item.setEmploymentStatus(normalize(request.employmentStatus(), "ACTIVE"));
     item.setContractStart(request.contractStart()); item.setContractEnd(request.contractEnd());
     item.setSocialSecurityUnit(request.socialSecurityUnit()); item.setSocialSecurityStart(request.socialSecurityStart());
     item.setSocialSecurityEnd(request.socialSecurityEnd()); item.setRemark(request.remark());
-    item.setSystemUser(resolveSystemUser(request.systemUserId(), item.getId()));
+    item.setSystemUser(systemUser);
+    if (systemUser != null && organization != null) systemUser.setOrganization(organization);
   }
 
   private void applyEmployeeContract(EmployeeContract item, EmployeeContractRequest request) {
@@ -344,6 +359,16 @@ public class QualificationService {
       throw new BusinessException("该登录账号已关联其他员工");
     });
     return systemUserRepository.findById(systemUserId).orElseThrow(() -> new BusinessException("登录账号不存在"));
+  }
+
+  private SystemOrganization resolveOrganization(UUID organizationId, SystemUser systemUser) {
+    if (organizationId != null) {
+      SystemOrganization organization = organizationRepository.findById(organizationId)
+          .orElseThrow(() -> new BusinessException("所属组织不存在"));
+      if (!organization.isEnabled()) throw new BusinessException("所属组织已停用");
+      return organization;
+    }
+    return systemUser == null ? null : systemUser.getOrganization();
   }
 
   private void applyCertificate(PersonnelCertificate item, PersonnelCertificateRequest request) {
@@ -372,7 +397,10 @@ public class QualificationService {
 
   private EmployeeResponse toEmployee(QualificationEmployee item, List<PersonnelCertificate> certificates) {
     EmployeeAccountResponse account = toEmployeeAccount(item.getSystemUser());
-    return new EmployeeResponse(item.getId(), item.getName(), item.getWorkNo(), item.getDepartment(),
+    SystemOrganization organization = item.getOrganization();
+    return new EmployeeResponse(item.getId(), item.getName(), item.getWorkNo(),
+        organization == null ? null : organization.getId(), organization == null ? null : organization.getName(),
+        organization == null ? null : organizationPath(organization), item.getDepartment(),
         item.getPosition(), item.getIdCard(), item.getPhone(), item.getEntryDate(), item.getEmploymentStatus(),
         item.getContractStart(), item.getContractEnd(), item.getSocialSecurityUnit(), item.getSocialSecurityStart(),
         item.getSocialSecurityEnd(), item.getRemark(), item.getSystemUser() == null ? null : item.getSystemUser().getId(), account,
@@ -416,10 +444,25 @@ public class QualificationService {
         && (blank(status) || status.equalsIgnoreCase(companyStatus(item)));
   }
 
-  private boolean matchesEmployee(QualificationEmployee item, String keyword, String status) {
+  private boolean matchesEmployee(QualificationEmployee item, String keyword, String status, UUID organizationId) {
     return (blank(keyword) || contains(item.getName(), keyword) || contains(item.getWorkNo(), keyword)
-        || contains(item.getDepartment(), keyword) || contains(item.getIdCard(), keyword))
-        && (blank(status) || status.equalsIgnoreCase(item.getEmploymentStatus()));
+        || contains(item.getDepartment(), keyword)
+        || contains(item.getOrganization() == null ? null : item.getOrganization().getName(), keyword)
+        || contains(item.getIdCard(), keyword))
+        && (blank(status) || status.equalsIgnoreCase(item.getEmploymentStatus()))
+        && (organizationId == null || (item.getOrganization() != null && organizationId.equals(item.getOrganization().getId())));
+  }
+
+  private String organizationPath(SystemOrganization organization) {
+    List<String> names = new ArrayList<>();
+    Set<UUID> visited = new LinkedHashSet<>();
+    SystemOrganization current = organization;
+    while (current != null && visited.add(current.getId())) {
+      names.add(current.getName());
+      current = current.getParent();
+    }
+    Collections.reverse(names);
+    return String.join(" / ", names);
   }
 
   private boolean matchesCertificate(PersonnelCertificate item, String keyword, String specialty,

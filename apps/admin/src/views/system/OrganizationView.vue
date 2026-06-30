@@ -17,7 +17,7 @@
       <div><span>组织总数</span><strong>{{ flatOrganizations.length }}</strong></div>
       <div><span>部门与团队</span><strong>{{ operatingUnitCount }}</strong></div>
       <div><span>启用组织</span><strong>{{ activeOrganizationCount }}</strong></div>
-      <div><span>已归属账号</span><strong>{{ assignedUserCount }}</strong></div>
+      <div><span>已归属员工</span><strong>{{ assignedEmployeeCount }}</strong></div>
     </section>
 
     <div class="organization-workspace">
@@ -41,7 +41,7 @@
             <template #title="{ dataRef }">
               <div class="tree-node" :class="{ disabled: !dataRef.enabled }">
                 <span class="tree-node-name">{{ dataRef.name }}</span>
-                <span class="tree-node-count">{{ dataRef.totalUserCount }}</span>
+                <span class="tree-node-count">{{ dataRef.totalEmployeeCount }}</span>
               </div>
             </template>
           </a-tree>
@@ -50,6 +50,15 @@
       </aside>
 
       <section v-if="selectedOrganization" class="detail-panel">
+        <div class="detail-navigation">
+          <a-button class="directory-trigger" @click="directoryVisible = true">
+            <template #icon><ApartmentOutlined /></template>组织目录
+          </a-button>
+          <a-button v-if="parentOrganization" @click="goToParent">
+            <template #icon><ArrowLeftOutlined /></template>返回上级
+          </a-button>
+        </div>
+
         <div class="detail-heading">
           <div>
             <div class="title-line">
@@ -81,8 +90,9 @@
         </div>
 
         <div class="detail-metrics">
-          <div><span>直属账号</span><strong>{{ selectedOrganization.directUserCount }}</strong></div>
-          <div><span>含下级账号</span><strong>{{ selectedOrganization.totalUserCount }}</strong></div>
+          <div><span>直属员工</span><strong>{{ selectedOrganization.directEmployeeCount }}</strong></div>
+          <div><span>含下级员工</span><strong>{{ selectedOrganization.totalEmployeeCount }}</strong></div>
+          <div><span>登录账号</span><strong>{{ selectedOrganization.totalUserCount }}</strong></div>
           <div><span>直属下级</span><strong>{{ selectedOrganization.childCount }}</strong></div>
         </div>
 
@@ -108,20 +118,78 @@
             :key="child.id"
             type="button"
             class="child-row"
-            @click="selectedId = child.id"
+            @click="selectOrganization(child.id)"
           >
             <span>
               <strong>{{ child.name }}</strong>
               <small>{{ getTypeName(child.type) }} · {{ child.code }}</small>
             </span>
-            <span>{{ child.totalUserCount }} 人</span>
+            <span>{{ child.totalEmployeeCount }} 人</span>
           </button>
         </div>
         <a-empty v-else description="暂无直属下级" :image="simpleImage" />
+
+        <template v-if="auth.can('qualification:employee:view')">
+          <div class="subsection-heading employee-subsection-heading">
+            <div>
+              <strong>直属员工</strong>
+              <span>{{ organizationEmployees.length }} 人</span>
+            </div>
+            <a-button @click="openHumanResources">人事管理</a-button>
+          </div>
+          <a-spin :spinning="organizationEmployeesLoading">
+            <div v-if="organizationEmployees.length" class="organization-employee-list">
+              <button
+                v-for="employee in organizationEmployees"
+                :key="employee.id"
+                type="button"
+                class="organization-employee-row"
+                @click="openHumanResources"
+              >
+                <span>
+                  <strong>{{ employee.name }}</strong>
+                  <small>{{ employee.workNo || '未登记工号' }} · {{ employee.position || '未设置岗位' }}</small>
+                </span>
+                <a-tag :color="employee.employmentStatus === 'ACTIVE' ? 'green' : 'default'">
+                  {{ employee.employmentStatus === 'ACTIVE' ? '在职' : '非在职' }}
+                </a-tag>
+              </button>
+            </div>
+            <a-empty v-else-if="!organizationEmployeesLoading" description="该组织暂无直属员工" :image="simpleImage" />
+          </a-spin>
+        </template>
       </section>
 
       <section v-else class="empty-detail"><a-empty description="请选择组织查看详情" /></section>
     </div>
+
+    <a-drawer
+      v-model:open="directoryVisible"
+      title="组织目录"
+      placement="left"
+      width="min(360px, 88vw)"
+      :body-style="{ padding: '12px' }"
+    >
+      <a-spin :spinning="loading">
+        <a-tree
+          v-if="organizations.length"
+          block-node
+          default-expand-all
+          :selected-keys="selectedId ? [selectedId] : []"
+          :tree-data="organizations"
+          :field-names="{ title: 'name', key: 'id', children: 'children' }"
+          @select="handleSelect"
+        >
+          <template #title="{ dataRef }">
+            <div class="tree-node" :class="{ disabled: !dataRef.enabled }">
+              <span class="tree-node-name">{{ dataRef.name }}</span>
+              <span class="tree-node-count">{{ dataRef.totalEmployeeCount }}</span>
+            </div>
+          </template>
+        </a-tree>
+        <a-empty v-else-if="!loading" description="暂无组织" />
+      </a-spin>
+    </a-drawer>
 
     <a-modal
       v-model:open="modalVisible"
@@ -176,9 +244,17 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
+import { useRouter } from "vue-router";
 import { Empty, message, type FormInstance } from "ant-design-vue";
-import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons-vue";
+import {
+  ApartmentOutlined,
+  ArrowLeftOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+} from "@ant-design/icons-vue";
 import {
   createOrganizationApi,
   deleteOrganizationApi,
@@ -188,8 +264,10 @@ import {
   type OrganizationResponse,
 } from "@/api/system";
 import { useAuthStore } from "@/stores/auth";
+import { listQualificationEmployees, type QualificationEmployee } from "@/api/qualification";
 
 const auth = useAuthStore();
+const router = useRouter();
 const simpleImage = Empty.PRESENTED_IMAGE_SIMPLE;
 const typeOptions = [
   { label: "公司", value: "COMPANY" },
@@ -202,6 +280,9 @@ const organizations = ref<OrganizationResponse[]>([]);
 const flatOrganizations = ref<OrganizationResponse[]>([]);
 const loading = ref(false);
 const selectedId = ref("");
+const organizationEmployees = ref<QualificationEmployee[]>([]);
+const organizationEmployeesLoading = ref(false);
+const directoryVisible = ref(false);
 const modalVisible = ref(false);
 const modalLoading = ref(false);
 const isEdit = ref(false);
@@ -215,12 +296,17 @@ const formRules = {
 };
 
 const selectedOrganization = computed(() => findOrganization(organizations.value, selectedId.value));
+const parentOrganization = computed(() => {
+  const parentId = selectedOrganization.value?.parentId;
+  return parentId ? findOrganization(organizations.value, parentId) : undefined;
+});
 const operatingUnitCount = computed(() => flatOrganizations.value.filter((item) => item.type !== "COMPANY").length);
 const activeOrganizationCount = computed(() => flatOrganizations.value.filter((item) => item.enabled).length);
-const assignedUserCount = computed(() => flatOrganizations.value.reduce((sum, item) => sum + Number(item.directUserCount || 0), 0));
+const assignedEmployeeCount = computed(() => flatOrganizations.value.reduce((sum, item) => sum + Number(item.directEmployeeCount || 0), 0));
 const parentTreeOptions = computed(() => filterParentOptions(organizations.value, isEdit.value ? editId.value : ""));
 
 onMounted(loadData);
+watch(selectedId, loadOrganizationEmployees);
 
 async function loadData() {
   loading.value = true;
@@ -240,7 +326,37 @@ async function loadData() {
 }
 
 function handleSelect(keys: (string | number)[]) {
-  selectedId.value = String(keys[0] || selectedId.value);
+  selectOrganization(String(keys[0] || selectedId.value));
+}
+
+function selectOrganization(id: string) {
+  selectedId.value = id;
+  directoryVisible.value = false;
+}
+
+function goToParent() {
+  if (parentOrganization.value) selectOrganization(parentOrganization.value.id);
+}
+
+async function loadOrganizationEmployees(organizationId: string) {
+  if (!organizationId || !auth.can("qualification:employee:view")) {
+    organizationEmployees.value = [];
+    return;
+  }
+  organizationEmployeesLoading.value = true;
+  try {
+    const result = await listQualificationEmployees({ organizationId });
+    if (selectedId.value === organizationId) organizationEmployees.value = result;
+  } catch (error) {
+    organizationEmployees.value = [];
+    message.error(error instanceof Error ? error.message : "加载组织员工失败");
+  } finally {
+    organizationEmployeesLoading.value = false;
+  }
+}
+
+function openHumanResources() {
+  router.push({ path: "/hr", query: { tab: "employees", organizationId: selectedId.value } });
 }
 
 function openCreateModal(parentId?: string) {
@@ -474,6 +590,16 @@ function formatDateTime(value?: string) {
   padding: 26px;
 }
 
+.detail-navigation {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.directory-trigger {
+  display: none;
+}
+
 .title-line {
   display: flex;
   align-items: center;
@@ -482,7 +608,7 @@ function formatDateTime(value?: string) {
 }
 
 .detail-metrics {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   margin: 24px 0;
 }
 
@@ -526,6 +652,47 @@ function formatDateTime(value?: string) {
   color: #667085;
 }
 
+.employee-subsection-heading {
+  margin-top: 28px;
+}
+
+.organization-employee-list {
+  border-top: 1px solid #eaecf0;
+}
+
+.organization-employee-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  padding: 13px 4px;
+  border: 0;
+  border-bottom: 1px solid #eaecf0;
+  background: transparent;
+  color: #344054;
+  cursor: pointer;
+  text-align: left;
+}
+
+.organization-employee-row:hover {
+  background: #f9fafb;
+}
+
+.organization-employee-row > span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.organization-employee-row small {
+  overflow: hidden;
+  color: #667085;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .empty-detail {
   display: grid;
   place-items: center;
@@ -547,12 +714,15 @@ function formatDateTime(value?: string) {
   }
 
   .organization-workspace {
-    grid-template-columns: 1fr;
+    display: block;
   }
 
   .tree-panel {
-    border-right: 0;
-    border-bottom: 1px solid #e4e7ec;
+    display: none;
+  }
+
+  .directory-trigger {
+    display: inline-flex;
   }
 }
 
@@ -562,16 +732,15 @@ function formatDateTime(value?: string) {
   }
 
   .detail-metrics {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .detail-metrics > div {
+  .detail-metrics > div:nth-child(2n) {
     border-right: 0;
-    border-bottom: 1px solid #e4e7ec;
   }
 
-  .detail-metrics > div:last-child {
-    border-bottom: 0;
+  .detail-metrics > div:nth-child(-n + 2) {
+    border-bottom: 1px solid #e4e7ec;
   }
 }
 </style>

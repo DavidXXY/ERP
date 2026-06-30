@@ -60,6 +60,15 @@
           <a-input v-model:value="employeeFilters.keyword" class="employee-filter-search" allow-clear placeholder="搜索姓名、工号、部门或身份证号" @press-enter="loadEmployees">
             <template #prefix><SearchOutlined /></template>
           </a-input>
+          <a-select
+            v-model:value="employeeFilters.organizationId"
+            class="employee-organization-filter"
+            allow-clear
+            show-search
+            option-filter-prop="label"
+            placeholder="全部组织"
+            :options="employeeOrganizationOptions"
+          />
           <a-select v-model:value="employeeFilters.employmentStatus" class="employee-status-filter" allow-clear placeholder="全部人员状态" :options="employmentOptions" />
           <a-button class="employee-filter-button" @click="loadEmployees">查询</a-button>
         </div>
@@ -76,7 +85,7 @@
                   </div>
                 </div>
               </template>
-              <template v-else-if="column.key === 'organization'"><strong class="employee-cell-primary">{{ record.department || '未分配部门' }}</strong><span class="table-subtitle">{{ record.position || '未设置岗位' }}</span></template>
+              <template v-else-if="column.key === 'organization'"><strong class="employee-cell-primary">{{ record.organizationName || '未分配部门' }}</strong><span class="table-subtitle">{{ record.position || record.organizationPath || '未设置岗位' }}</span></template>
               <template v-else-if="column.key === 'contact'"><strong class="employee-cell-primary">{{ record.phone || '未登记手机号' }}</strong><span class="table-subtitle">{{ record.idCard || '未登记身份证号' }}</span></template>
               <template v-else-if="column.key === 'employmentStatus'"><a-tag :color="record.employmentStatus === 'ACTIVE' ? 'green' : 'default'">{{ employmentLabel(record.employmentStatus) }}</a-tag></template>
               <template v-else-if="column.key === 'certificates'"><strong>{{ record.validCertificateCount }}</strong><span class="employee-cert-total"> / {{ record.certificateCount }}</span></template>
@@ -109,7 +118,7 @@
                   </div>
                 </div>
                 <div class="employee-mobile-meta">
-                  <div><span>部门</span><strong>{{ record.department || '未分配' }}</strong></div>
+                  <div><span>部门</span><strong>{{ record.organizationName || '未分配' }}</strong></div>
                   <div><span>登录账号</span><strong :class="{ 'employee-account-disabled': record.account && !record.account.enabled }">{{ record.account?.username || '未开通' }}</strong></div>
                   <div><span>有效证书</span><strong>{{ record.validCertificateCount }} / {{ record.certificateCount }}</strong></div>
                 </div>
@@ -207,7 +216,7 @@
     <a-modal v-model:open="employeeOpen" :title="employeeEditingId ? '编辑人员档案' : '新增人员档案'" width="820px" :confirm-loading="saving" @ok="saveEmployee">
       <a-form ref="employeeFormRef" :model="employeeForm" layout="vertical">
         <a-row :gutter="14"><a-col :span="12"><a-form-item label="姓名" name="name" :rules="requiredRule"><a-input v-model:value="employeeForm.name" /></a-form-item></a-col><a-col :span="12"><a-form-item label="工号"><a-input v-model:value="employeeForm.workNo" /></a-form-item></a-col></a-row>
-        <a-row :gutter="14"><a-col :span="8"><a-form-item label="部门"><a-input v-model:value="employeeForm.department" /></a-form-item></a-col><a-col :span="8"><a-form-item label="岗位"><a-input v-model:value="employeeForm.position" /></a-form-item></a-col><a-col :span="8"><a-form-item label="状态"><a-select v-model:value="employeeForm.employmentStatus" :options="employmentOptions" /></a-form-item></a-col></a-row>
+        <a-row :gutter="14"><a-col :span="10"><a-form-item label="所属组织" name="organizationId" :rules="requiredRule"><a-select v-model:value="employeeForm.organizationId" show-search option-filter-prop="label" placeholder="选择公司、部门或团队" :options="employeeOrganizationOptions" /></a-form-item></a-col><a-col :span="7"><a-form-item label="岗位"><a-input v-model:value="employeeForm.position" /></a-form-item></a-col><a-col :span="7"><a-form-item label="状态"><a-select v-model:value="employeeForm.employmentStatus" :options="employmentOptions" /></a-form-item></a-col></a-row>
         <a-row :gutter="14"><a-col :span="12"><a-form-item label="身份证号"><a-input v-model:value="employeeForm.idCard" /></a-form-item></a-col><a-col :span="12"><a-form-item label="手机号"><a-input v-model:value="employeeForm.phone" /></a-form-item></a-col></a-row>
         <a-row :gutter="14"><a-col :span="8"><a-form-item label="入职日期"><a-input v-model:value="employeeForm.entryDate" type="date" /></a-form-item></a-col><a-col v-if="auth.can('system:user:view')" :span="16"><a-form-item label="关联登录账号"><a-select v-model:value="employeeForm.systemUserId" allow-clear show-search option-filter-prop="label" placeholder="未开通登录账号" :options="accountOptions" /></a-form-item></a-col></a-row>
         <a-row :gutter="14"><a-col :span="12"><a-form-item label="社保单位"><a-input v-model:value="employeeForm.socialSecurityUnit" /></a-form-item></a-col><a-col :span="12"><a-form-item label="社保截止"><a-input v-model:value="employeeForm.socialSecurityEnd" type="date" /></a-form-item></a-col></a-row>
@@ -237,7 +246,7 @@
 
     <a-drawer v-model:open="employeeDetailOpen" title="员工档案详情" width="960px">
       <template v-if="employeeDetail">
-        <a-descriptions bordered :column="2" size="small"><a-descriptions-item label="姓名">{{ employeeDetail.employee.name }}</a-descriptions-item><a-descriptions-item label="状态">{{ employmentLabel(employeeDetail.employee.employmentStatus) }}</a-descriptions-item><a-descriptions-item label="工号">{{ employeeDetail.employee.workNo || '-' }}</a-descriptions-item><a-descriptions-item label="部门岗位">{{ employeeDetail.employee.department || '-' }} / {{ employeeDetail.employee.position || '-' }}</a-descriptions-item><a-descriptions-item label="身份证号">{{ employeeDetail.employee.idCard || '-' }}</a-descriptions-item><a-descriptions-item label="手机号">{{ employeeDetail.employee.phone || '-' }}</a-descriptions-item><a-descriptions-item label="社保单位">{{ employeeDetail.employee.socialSecurityUnit || '-' }}</a-descriptions-item><a-descriptions-item label="社保截止">{{ employeeDetail.employee.socialSecurityEnd || '-' }}</a-descriptions-item></a-descriptions>
+        <a-descriptions bordered :column="2" size="small"><a-descriptions-item label="姓名">{{ employeeDetail.employee.name }}</a-descriptions-item><a-descriptions-item label="状态">{{ employmentLabel(employeeDetail.employee.employmentStatus) }}</a-descriptions-item><a-descriptions-item label="工号">{{ employeeDetail.employee.workNo || '-' }}</a-descriptions-item><a-descriptions-item label="部门岗位">{{ employeeDetail.employee.organizationName || '未分配' }} / {{ employeeDetail.employee.position || '-' }}</a-descriptions-item><a-descriptions-item label="组织路径" :span="2">{{ employeeDetail.employee.organizationPath || '未分配组织' }}</a-descriptions-item><a-descriptions-item label="身份证号">{{ employeeDetail.employee.idCard || '-' }}</a-descriptions-item><a-descriptions-item label="手机号">{{ employeeDetail.employee.phone || '-' }}</a-descriptions-item><a-descriptions-item label="社保单位">{{ employeeDetail.employee.socialSecurityUnit || '-' }}</a-descriptions-item><a-descriptions-item label="社保截止">{{ employeeDetail.employee.socialSecurityEnd || '-' }}</a-descriptions-item></a-descriptions>
         <a-tabs v-model:active-key="employeeDetailTab" class="employee-detail-tabs">
           <a-tab-pane key="contracts" tab="员工合同">
             <a-space class="table-toolbar"><a-button v-if="auth.can('qualification:employee:manage')" type="primary" @click="openEmployeeContract()"><template #icon><PlusOutlined /></template>新增合同</a-button></a-space>
@@ -280,7 +289,7 @@
         <a-row :gutter="14"><a-col :span="12"><a-form-item label="登录名" name="username" :rules="requiredRule"><a-input v-model:value="employeeAccountForm.username" :disabled="Boolean(accountEditingId)" /></a-form-item></a-col><a-col :span="12"><a-form-item v-if="!accountEditingId" label="初始密码" name="password" :rules="passwordRules"><a-input-password v-model:value="employeeAccountForm.password" /></a-form-item><a-form-item v-else label="账号状态"><a-switch v-model:checked="employeeAccountForm.enabled" checked-children="启用" un-checked-children="禁用" /></a-form-item></a-col></a-row>
         <a-row :gutter="14"><a-col :span="12"><a-form-item label="姓名" name="displayName" :rules="requiredRule"><a-input v-model:value="employeeAccountForm.displayName" /></a-form-item></a-col><a-col :span="12"><a-form-item label="手机号"><a-input v-model:value="employeeAccountForm.phone" /></a-form-item></a-col></a-row>
         <a-form-item label="邮箱"><a-input v-model:value="employeeAccountForm.email" /></a-form-item>
-        <a-row :gutter="14"><a-col :span="12"><a-form-item label="所属组织"><a-select v-model:value="employeeAccountForm.orgId" allow-clear :options="organizationOptions" /></a-form-item></a-col><a-col :span="12"><a-form-item label="角色"><a-select v-model:value="employeeAccountForm.roleIds" mode="multiple" :options="roleOptions" /></a-form-item></a-col></a-row>
+        <a-row :gutter="14"><a-col :span="12"><a-form-item label="所属组织"><a-select v-model:value="employeeAccountForm.orgId" disabled :options="organizationOptions" /></a-form-item></a-col><a-col :span="12"><a-form-item label="角色"><a-select v-model:value="employeeAccountForm.roleIds" mode="multiple" :options="roleOptions" /></a-form-item></a-col></a-row>
       </a-form>
     </a-modal>
 
@@ -329,7 +338,7 @@ const route = useRoute();
 const auth = useAuthStore();
 const mode = computed<QualificationViewMode>(() => props.displayMode || (route.path.split("/").pop() as QualificationViewMode) || "dashboard");
 const loading = ref(false); const saving = ref(false);
-const references = reactive<QualificationReferences>({ subjectCompanies: [], qualificationCategories: [], certificateTypes: [], specialties: [], projectTypes: [], employees: [] });
+const references = reactive<QualificationReferences>({ subjectCompanies: [], qualificationCategories: [], certificateTypes: [], specialties: [], projectTypes: [], employees: [], organizations: [] });
 const dashboard = reactive<QualificationDashboard>({ companyQualificationCount: 0, employeeCount: 0, certificateCount: 0, tenderAvailableCertificateCount: 0, pendingWarningCount: 0, expiredCount: 0, companyCategoryDistribution: [], certificateSpecialtyDistribution: [], recentWarnings: [] });
 const companies = ref<CompanyQualification[]>([]); const employees = ref<QualificationEmployee[]>([]); const certificates = ref<PersonnelCertificate[]>([]); const performances = ref<QualificationPerformance[]>([]); const tenderEmployees = ref<TenderEmployee[]>([]); const warnings = ref<QualificationWarning[]>([]);
 
@@ -339,6 +348,7 @@ const certificateTypeOptions = computed(() => references.certificateTypes.map(va
 const specialtyOptions = computed(() => references.specialties.map(value => ({ label: value, value })));
 const projectTypeOptions = computed(() => references.projectTypes.map(value => ({ label: value, value })));
 const employeeOptions = computed(() => references.employees.map(item => ({ label: `${item.name} · ${item.workNo || '无工号'}`, value: item.id })));
+const employeeOrganizationOptions = computed(() => references.organizations.filter(item => item.enabled).map(item => ({ label: item.fullPath || item.name, value: item.id })));
 const accountUsers = ref<UserResponse[]>([]); const accountRoles = ref<RoleResponse[]>([]); const accountOrganizations = ref<OrganizationResponse[]>([]);
 const accountOptions = computed(() => accountUsers.value.filter(user => !employees.value.some(employee => employee.systemUserId === user.id && employee.id !== employeeEditingId.value)).map(user => ({ label: `${user.displayName} · ${user.username}`, value: user.id })));
 const roleOptions = computed(() => accountRoles.value.map(item => ({ label: item.name, value: item.id })));
@@ -367,7 +377,11 @@ const detailCertificateColumns = [{ title: "证书", dataIndex: "name" }, { titl
 const employeeContractColumns = [{ title: "合同", key: "contract", width: 190 }, { title: "合同期限", key: "period", width: 220 }, { title: "签订日期", dataIndex: "signDate", width: 110 }, { title: "状态", key: "status", width: 90 }, { title: "附件", key: "attachments", width: 80 }, { title: "操作", key: "actions", width: 90, fixed: "right" }];
 
 const companyFilters = reactive({ keyword: "", subjectCompany: undefined as string | undefined, status: undefined as string | undefined });
-const employeeFilters = reactive({ keyword: "", employmentStatus: undefined as string | undefined });
+const employeeFilters = reactive({
+  keyword: "",
+  organizationId: typeof route.query.organizationId === "string" ? route.query.organizationId : undefined as string | undefined,
+  employmentStatus: undefined as string | undefined,
+});
 const certificateFilters = reactive({ keyword: "", specialty: undefined as string | undefined, status: undefined as string | undefined });
 const performanceFilters = reactive({ keyword: "", subjectCompany: undefined as string | undefined, projectType: undefined as string | undefined });
 const tenderFilters = reactive({ keyword: "", specialties: [] as string[], registeredOnly: false, availableOnly: true });
@@ -390,6 +404,11 @@ const passwordResetOpen = ref(false); const newPassword = ref("");
 const attachmentOpen = ref(false); const previewAttachments = ref<Attachment[]>([]);
 
 watch([() => route.path, () => props.displayMode], loadActive, { immediate: true });
+watch(() => route.query.organizationId, (value) => {
+  if (mode.value !== "employees") return;
+  employeeFilters.organizationId = typeof value === "string" ? value : undefined;
+  loadEmployees();
+});
 
 async function ensureReferences() { if (!references.subjectCompanies.length) Object.assign(references, await getQualificationReferences()); }
 async function loadActive() { loading.value = true; try { await ensureReferences(); if (mode.value === "dashboard") Object.assign(dashboard, await getQualificationDashboard()); else if (mode.value === "companies") await loadCompanies(); else if (mode.value === "employees") await Promise.all([loadEmployees(), loadAccountReferences()]); else if (mode.value === "certificates") await loadCertificates(); else if (mode.value === "performances") await loadPerformances(); else if (mode.value === "tender") await loadTender(); else if (mode.value === "warnings") warnings.value = await listQualificationWarnings(); } catch (error) { message.error(error instanceof Error ? error.message : "资质数据加载失败"); } finally { loading.value = false; } }
@@ -422,10 +441,10 @@ async function openEmployeeAccount() {
   accountEditingId.value = account?.id || "";
   if (account) {
     const user = await getUserApi(account.id);
-    Object.assign(employeeAccountForm, { username: user.username, password: "", displayName: user.displayName, phone: user.phone || "", email: user.email || "", enabled: user.enabled, orgId: user.orgId, roleIds: user.roles.map(role => role.id) });
+    Object.assign(employeeAccountForm, { username: user.username, password: "", displayName: user.displayName, phone: user.phone || "", email: user.email || "", enabled: user.enabled, orgId: employeeDetail.value.employee.organizationId, roleIds: user.roles.map(role => role.id) });
   } else {
     const employee = employeeDetail.value.employee;
-    Object.assign(employeeAccountForm, { username: (employee.workNo || "").toLowerCase(), password: "", displayName: employee.name, phone: employee.phone || "", email: "", enabled: true, orgId: undefined, roleIds: [] });
+    Object.assign(employeeAccountForm, { username: (employee.workNo || "").toLowerCase(), password: "", displayName: employee.name, phone: employee.phone || "", email: "", enabled: true, orgId: employee.organizationId, roleIds: [] });
   }
   employeeAccountOpen.value = true;
 }
@@ -466,9 +485,9 @@ function applyTenderPreset() { tenderFilters.specialties = ["高处安装、维�
 async function refreshReferences() { Object.assign(references, await getQualificationReferences()); }
 function cleanParams(value: Record<string, unknown>) { return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined && item !== "")); }
 function employeeInitial(name: string) { return name.trim().slice(0, 1) || "员"; }
-function employeePayload(record: QualificationEmployee, systemUserId: string | null | undefined = record.systemUserId): EmployeePayload { return { name: record.name, workNo: record.workNo, department: record.department, position: record.position, idCard: record.idCard, phone: record.phone, entryDate: record.entryDate, employmentStatus: record.employmentStatus, contractStart: record.contractStart, contractEnd: record.contractEnd, socialSecurityUnit: record.socialSecurityUnit, socialSecurityStart: record.socialSecurityStart, socialSecurityEnd: record.socialSecurityEnd, remark: record.remark, systemUserId }; }
+function employeePayload(record: QualificationEmployee, systemUserId: string | null | undefined = record.systemUserId): EmployeePayload { return { name: record.name, workNo: record.workNo, organizationId: record.organizationId, department: record.organizationName || record.department, position: record.position, idCard: record.idCard, phone: record.phone, entryDate: record.entryDate, employmentStatus: record.employmentStatus, contractStart: record.contractStart, contractEnd: record.contractEnd, socialSecurityUnit: record.socialSecurityUnit, socialSecurityStart: record.socialSecurityStart, socialSecurityEnd: record.socialSecurityEnd, remark: record.remark, systemUserId }; }
 function emptyCompany(): CompanyQualificationPayload { return { subjectCompany: "", name: "", category: "", level: "", certificateNo: "", issuer: "", issueDate: undefined, validFrom: undefined, validTo: undefined, annualReviewDate: undefined, renewalDate: undefined, scope: "", projectTypes: [], holderBranch: "", storageLocation: "", availableForTender: true, manualStatus: "NORMAL", locked: false, attachments: [], remark: "" }; }
-function emptyEmployee(): EmployeePayload { return { name: "", workNo: "", department: "", position: "", idCard: "", phone: "", entryDate: undefined, employmentStatus: "ACTIVE", contractStart: undefined, contractEnd: undefined, socialSecurityUnit: "", socialSecurityStart: undefined, socialSecurityEnd: undefined, remark: "", systemUserId: undefined }; }
+function emptyEmployee(): EmployeePayload { return { name: "", workNo: "", organizationId: undefined, department: "", position: "", idCard: "", phone: "", entryDate: undefined, employmentStatus: "ACTIVE", contractStart: undefined, contractEnd: undefined, socialSecurityUnit: "", socialSecurityStart: undefined, socialSecurityEnd: undefined, remark: "", systemUserId: undefined }; }
 function emptyEmployeeContract(): EmployeeContractPayload { return { contractNo: "", contractType: "FIXED_TERM", signDate: undefined, startDate: "", endDate: undefined, probationEndDate: undefined, status: "ACTIVE", attachments: [], remark: "" }; }
 function emptyCertificate(): CertificatePayload { return { employeeId: "", name: "", type: "", certificateNo: "", specialty: "", companyRegistered: true, issueDate: undefined, validTo: undefined, reviewDate: undefined, availableForTender: true, manualStatus: "NORMAL", locked: false, attachments: [], remark: "" }; }
 function emptyPerformance(): PerformancePayload { return { subjectCompany: "", name: "", clientName: "", contractNo: "", contractDate: undefined, contractAmount: "", projectType: "", attachments: [], remark: "" }; }
@@ -493,7 +512,7 @@ function warningRowKey(item: QualificationWarning) { return `${item.sourceType}-
 .employee-summary { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 7px; color: #65717e; font-size: 12px; }
 .employee-summary strong { color: #263442; font-size: 13px; }
 .employee-create-button { flex: none; }
-.employee-filter-bar { display: grid; grid-template-columns: minmax(280px, 1fr) 180px auto; gap: 10px; padding: 14px 20px; border-bottom: 1px solid #e8ecef; background: #f7f9fa; }
+.employee-filter-bar { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(200px, 260px) 180px auto; gap: 10px; padding: 14px 20px; border-bottom: 1px solid #e8ecef; background: #f7f9fa; }
 .employee-filter-search :deep(.ant-input-prefix) { color: #83909d; }
 .employee-filter-button { min-width: 76px; }
 .employee-desktop-table { padding: 0 20px 18px; }
@@ -536,7 +555,7 @@ function warningRowKey(item: QualificationWarning) { return `${item.sourceType}-
   .employee-directory-header { min-height: 78px; padding: 15px 14px; }
   .employee-summary { gap: 12px; }
   .employee-filter-bar { grid-template-columns: minmax(0, 1fr) 82px; padding: 12px 14px; }
-  .employee-filter-search { grid-column: 1 / -1; }
+  .employee-filter-search, .employee-organization-filter { grid-column: 1 / -1; }
   .employee-status-filter { min-width: 0; }
   .employee-filter-button { min-width: 0; }
 }
@@ -556,7 +575,7 @@ function warningRowKey(item: QualificationWarning) { return `${item.sourceType}-
   .employee-directory-header { min-height: 78px; padding: 15px 14px; }
   .employee-summary { gap: 12px; }
   .employee-filter-bar { grid-template-columns: minmax(0, 1fr) 82px; padding: 12px 14px; }
-  .employee-filter-search { grid-column: 1 / -1; }
+  .employee-filter-search, .employee-organization-filter { grid-column: 1 / -1; }
   .employee-status-filter { min-width: 0; }
   .employee-filter-button { min-width: 0; }
 }

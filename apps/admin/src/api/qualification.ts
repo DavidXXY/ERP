@@ -10,7 +10,8 @@ export type CompanyQualification = {
   status: QualificationStatus; daysLeft?: number;
 };
 export type QualificationEmployee = {
-  id: string; name: string; workNo?: string; department?: string; position?: string;
+  id: string; name: string; workNo?: string; organizationId?: string; organizationName?: string;
+  organizationPath?: string; department?: string; position?: string;
   idCard?: string; phone?: string; entryDate?: string; employmentStatus: string; contractStart?: string;
   contractEnd?: string; socialSecurityUnit?: string; socialSecurityStart?: string; socialSecurityEnd?: string;
   remark?: string; systemUserId?: string; account?: EmployeeAccount;
@@ -51,6 +52,7 @@ export type QualificationReferences = {
   subjectCompanies: string[]; qualificationCategories: string[]; certificateTypes: string[];
   specialties: string[]; projectTypes: string[];
   employees: Array<{ id: string; name: string; workNo?: string }>;
+  organizations: Array<{ id: string; name: string; fullPath: string; enabled: boolean }>;
 };
 export type TenderEmployee = {
   employeeId: string; employeeName: string; workNo?: string;

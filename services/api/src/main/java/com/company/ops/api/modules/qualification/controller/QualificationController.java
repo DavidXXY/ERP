@@ -51,7 +51,8 @@ public class QualificationController {
   @GetMapping("/dashboard") @PreAuthorize("hasAuthority('qualification:view')")
   public ApiResponse<DashboardResponse> dashboard() { return ApiResponse.ok(service.dashboard()); }
 
-  @GetMapping("/references") @PreAuthorize("hasAuthority('qualification:view')")
+  @GetMapping("/references")
+  @PreAuthorize("hasAnyAuthority('qualification:view','qualification:employee:view','qualification:certificate:view')")
   public ApiResponse<ReferenceDataResponse> references() { return ApiResponse.ok(service.references()); }
 
   @GetMapping("/companies") @PreAuthorize("hasAuthority('qualification:company:view')")
@@ -73,8 +74,10 @@ public class QualificationController {
 
   @GetMapping("/employees") @PreAuthorize("hasAuthority('qualification:employee:view')")
   public ApiResponse<List<EmployeeResponse>> employees(
-      @RequestParam(required = false) String keyword, @RequestParam(required = false) String employmentStatus) {
-    return ApiResponse.ok(service.listEmployees(keyword, employmentStatus));
+      @RequestParam(required = false) String keyword,
+      @RequestParam(required = false) String employmentStatus,
+      @RequestParam(required = false) UUID organizationId) {
+    return ApiResponse.ok(service.listEmployees(keyword, employmentStatus, organizationId));
   }
   @GetMapping("/employees/{id}") @PreAuthorize("hasAuthority('qualification:employee:view')")
   public ApiResponse<EmployeeDetailResponse> employee(@PathVariable UUID id) { return ApiResponse.ok(service.employeeDetail(id)); }

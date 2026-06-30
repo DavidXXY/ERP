@@ -1,6 +1,7 @@
 package com.company.ops.api.modules.system.service;
 
 import com.company.ops.api.common.exception.BusinessException;
+import com.company.ops.api.modules.qualification.repository.QualificationEmployeeRepository;
 import com.company.ops.api.modules.system.domain.SystemOrganization;
 import com.company.ops.api.modules.system.domain.SystemPermission;
 import com.company.ops.api.modules.system.domain.SystemRole;
@@ -43,6 +44,7 @@ public class SystemService {
   private final SystemRoleRepository roleRepository;
   private final SystemPermissionRepository permissionRepository;
   private final SystemOrganizationRepository organizationRepository;
+  private final QualificationEmployeeRepository employeeRepository;
   private final PasswordEncoder passwordEncoder;
 
   private static final DateTimeFormatter DT_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
@@ -52,11 +54,13 @@ public class SystemService {
       SystemRoleRepository roleRepository,
       SystemPermissionRepository permissionRepository,
       SystemOrganizationRepository organizationRepository,
+      QualificationEmployeeRepository employeeRepository,
       PasswordEncoder passwordEncoder) {
     this.userRepository = userRepository;
     this.roleRepository = roleRepository;
     this.permissionRepository = permissionRepository;
     this.organizationRepository = organizationRepository;
+    this.employeeRepository = employeeRepository;
     this.passwordEncoder = passwordEncoder;
   }
 
@@ -102,9 +106,11 @@ public class SystemService {
   public UserResponse updateUser(UUID id, UpdateUserRequest request) {
     SystemUser user = userRepository.findById(id).orElseThrow();
 
+    SystemOrganization selectedOrganization = null;
     if (request.orgId() != null) {
-      user.setOrganization(organizationRepository.findById(request.orgId())
-          .orElseThrow(() -> new BusinessException("所属组织不存在")));
+      selectedOrganization = organizationRepository.findById(request.orgId())
+          .orElseThrow(() -> new BusinessException("所属组织不存在"));
+      user.setOrganization(selectedOrganization);
     }
     if (request.displayName() != null) user.setDisplayName(request.displayName());
     if (request.phone() != null) user.setPhone(request.phone());
@@ -120,6 +126,14 @@ public class SystemService {
     }
 
     SystemUser saved = userRepository.save(user);
+    if (selectedOrganization != null) {
+      SystemOrganization organization = selectedOrganization;
+      employeeRepository.findBySystemUser_Id(id).ifPresent(employee -> {
+        employee.setOrganization(organization);
+        employee.setDepartment(organization.getName());
+        employeeRepository.save(employee);
+      });
+    }
     return toUserResponseWithDetails(saved);
   }
 
@@ -349,9 +363,10 @@ public class SystemService {
     List<SystemOrganization> all = organizationRepository.findByTenantIdOrderBySortOrderAsc("default");
     Map<UUID, List<SystemOrganization>> children = childOrganizations(all);
     Map<UUID, Long> directUsers = directUserCounts(all);
+    Map<UUID, Long> directEmployees = directEmployeeCounts(all);
     return all.stream()
         .filter(item -> item.getParent() == null)
-        .map(item -> toOrganizationResponse(item, children, directUsers, true))
+        .map(item -> toOrganizationResponse(item, children, directUsers, directEmployees, true))
         .toList();
   }
 
@@ -360,8 +375,9 @@ public class SystemService {
     List<SystemOrganization> all = organizationRepository.findByTenantIdOrderBySortOrderAsc("default");
     Map<UUID, List<SystemOrganization>> children = childOrganizations(all);
     Map<UUID, Long> directUsers = directUserCounts(all);
+    Map<UUID, Long> directEmployees = directEmployeeCounts(all);
     return all.stream()
-        .map(item -> toOrganizationResponse(item, children, directUsers, false))
+        .map(item -> toOrganizationResponse(item, children, directUsers, directEmployees, false))
         .toList();
   }
 
@@ -370,7 +386,7 @@ public class SystemService {
     List<SystemOrganization> all = organizationRepository.findByTenantIdOrderBySortOrderAsc("default");
     SystemOrganization org = all.stream().filter(item -> item.getId().equals(id)).findFirst()
         .orElseThrow(() -> new BusinessException("组织不存在"));
-    return toOrganizationResponse(org, childOrganizations(all), directUserCounts(all), true);
+    return toOrganizationResponse(org, childOrganizations(all), directUserCounts(all), directEmployeeCounts(all), true);
   }
 
   @Transactional
@@ -396,6 +412,7 @@ public class SystemService {
     }
 
     SystemOrganization saved = organizationRepository.save(org);
+    employeeRepository.findByOrganization_IdOrderByNameAsc(saved.getId()).forEach(employee -> employee.setDepartment(saved.getName()));
     return getOrganization(saved.getId());
   }
 
@@ -442,6 +459,10 @@ public class SystemService {
     if (userCount > 0) {
       throw new BusinessException("该组织仍有 " + userCount + " 个账号，请先转移成员");
     }
+    long employeeCount = employeeRepository.countByOrganization_Id(id);
+    if (employeeCount > 0) {
+      throw new BusinessException("该组织仍有 " + employeeCount + " 名员工，请先在人事管理中调整部门");
+    }
     if (roleRepository.countByDataScopeOrganizations_Id(id) > 0) {
       throw new BusinessException("该组织仍被角色数据范围引用，不能删除");
     }
@@ -452,13 +473,14 @@ public class SystemService {
       SystemOrganization org,
       Map<UUID, List<SystemOrganization>> children,
       Map<UUID, Long> directUsers,
+      Map<UUID, Long> directEmployees,
       boolean includeChildren
   ) {
     String parentName = org.getParent() != null ? org.getParent().getName() : null;
     List<SystemOrganization> childEntities = children.getOrDefault(org.getId(), List.of());
     List<OrganizationResponse> childResponses = includeChildren
         ? childEntities.stream()
-            .map(child -> toOrganizationResponse(child, children, directUsers, true))
+            .map(child -> toOrganizationResponse(child, children, directUsers, directEmployees, true))
             .toList()
         : List.of();
     return new OrganizationResponse(
@@ -476,6 +498,8 @@ public class SystemService {
         org.getDescription(),
         directUsers.getOrDefault(org.getId(), 0L),
         totalUserCount(org.getId(), children, directUsers),
+        directEmployees.getOrDefault(org.getId(), 0L),
+        totalEmployeeCount(org.getId(), children, directEmployees),
         childEntities.size(),
         childResponses,
         org.getCreatedAt() != null ? org.getCreatedAt().format(DT_FORMATTER) : null,
@@ -504,6 +528,12 @@ public class SystemService {
     return counts;
   }
 
+  private Map<UUID, Long> directEmployeeCounts(List<SystemOrganization> organizations) {
+    Map<UUID, Long> counts = new HashMap<>();
+    organizations.forEach(org -> counts.put(org.getId(), employeeRepository.countByOrganization_Id(org.getId())));
+    return counts;
+  }
+
   private long totalUserCount(
       UUID organizationId,
       Map<UUID, List<SystemOrganization>> children,
@@ -512,6 +542,18 @@ public class SystemService {
     long total = directUsers.getOrDefault(organizationId, 0L);
     for (SystemOrganization child : children.getOrDefault(organizationId, List.of())) {
       total += totalUserCount(child.getId(), children, directUsers);
+    }
+    return total;
+  }
+
+  private long totalEmployeeCount(
+      UUID organizationId,
+      Map<UUID, List<SystemOrganization>> children,
+      Map<UUID, Long> directEmployees
+  ) {
+    long total = directEmployees.getOrDefault(organizationId, 0L);
+    for (SystemOrganization child : children.getOrDefault(organizationId, List.of())) {
+      total += totalEmployeeCount(child.getId(), children, directEmployees);
     }
     return total;
   }

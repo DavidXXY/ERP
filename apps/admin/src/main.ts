@@ -32,6 +32,8 @@ import {
   Table,
   Tag,
   Tabs,
+  Tree,
+  TreeSelect,
   Typography,
   Upload,
 } from "ant-design-vue";
@@ -74,6 +76,8 @@ const app = createApp(App);
   Table,
   Tag,
   Tabs,
+  Tree,
+  TreeSelect,
   Typography,
   Upload,
 ].forEach((component) => app.use(component));

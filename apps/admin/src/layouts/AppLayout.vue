@@ -107,22 +107,25 @@
           <a-menu-item v-if="auth.can('system:permission:view')" key="/system/permissions">权限管理</a-menu-item>
         </a-sub-menu>
       </a-menu>
-    </a-layout-sider>
+      </a-layout-sider>
 
     <a-layout>
       <a-layout-header class="app-header">
-        <div>
+        <div class="app-header-title">
           <a-typography-title :level="3">{{ route.meta.title }}</a-typography-title>
-          <span>统一业务与经营管理</span>
+          <span class="app-header-subtitle">统一业务与经营管理</span>
         </div>
-        <a-space>
-          <a-tag color="green">开发环境</a-tag>
-          <a-dropdown>
+        <a-space class="app-header-actions">
+          <a-tag class="app-environment" color="green">开发环境</a-tag>
+          <a-dropdown :trigger="['click']">
             <a-button type="text">
               {{ auth.user?.displayName || "当前用户" }}
             </a-button>
             <template #overlay>
               <a-menu>
+                <a-menu-item key="profile" @click="router.push('/profile')">
+                  <template #icon><UserOutlined /></template>个人设置
+                </a-menu-item>
                 <a-menu-item key="roles" disabled>
                   {{ auth.user?.roles.join(" / ") || "未加载角色" }}
                 </a-menu-item>
@@ -159,6 +162,7 @@ import ShoppingCartOutlined from "@ant-design/icons-vue/ShoppingCartOutlined";
 import TeamOutlined from "@ant-design/icons-vue/TeamOutlined";
 import ToolOutlined from "@ant-design/icons-vue/ToolOutlined";
 import WalletOutlined from "@ant-design/icons-vue/WalletOutlined";
+import UserOutlined from "@ant-design/icons-vue/UserOutlined";
 import { useAppStore } from "@/stores/app";
 import { useAuthStore } from "@/stores/auth";
 

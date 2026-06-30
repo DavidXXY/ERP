@@ -32,6 +32,12 @@ export const routes: RouteRecordRaw[] = [
         meta: { title: "经营驾驶舱", permission: "dashboard:view" },
       },
       {
+        path: "profile",
+        name: "personal-settings",
+        component: () => import("@/views/personal/PersonalSettingsView.vue"),
+        meta: { title: "个人设置" },
+      },
+      {
         path: "crm/customers",
         name: "crm-customers",
         component: CustomerPoolView,

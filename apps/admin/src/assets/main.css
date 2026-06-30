@@ -93,11 +93,51 @@ body {
 }
 
 .app-sider {
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  align-self: flex-start;
+  overflow: hidden;
   height: 100vh;
-  position: sticky;
+  height: 100dvh;
+  min-height: 100vh;
+  min-height: 100dvh;
+  position: sticky !important;
+  z-index: 30;
   top: 0;
   left: 0;
+}
+
+.app-sider > .ant-layout-sider-children {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.app-sider.ant-layout-sider-has-trigger {
+  padding-bottom: 0;
+}
+
+.app-sider .ant-menu {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+  scrollbar-width: thin;
+}
+
+.app-sider .ant-menu::-webkit-scrollbar {
+  width: 5px;
+}
+
+.app-sider .ant-menu::-webkit-scrollbar-thumb {
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.app-sider .ant-menu::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .brand {
@@ -135,6 +175,9 @@ body {
 }
 
 .app-header {
+  position: sticky;
+  z-index: 20;
+  top: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -142,16 +185,29 @@ body {
   padding: 0 24px;
   border-bottom: 1px solid #e6eaee;
   background: #fff !important;
-  line-height: normal;
+  line-height: 1.4 !important;
+}
+
+.app-header-title {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
 }
 
 .app-header h3.ant-typography {
-  margin: 0 0 2px;
+  margin: 0;
+  line-height: 1.35;
 }
 
-.app-header span {
+.app-header-subtitle {
+  display: block;
   color: #64748b;
   font-size: 12px;
+  line-height: 1.4 !important;
+}
+
+.app-header-actions {
+  flex: none;
 }
 
 .app-content {
@@ -243,7 +299,10 @@ body {
   border-radius: 8px;
 }
 
-.ant-layout-sider-trigger {
+.app-sider > .ant-layout-sider-trigger {
+  position: static;
+  flex: 0 0 48px;
+  width: 100% !important;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
@@ -267,14 +326,27 @@ body {
   }
 
   .app-header {
-    align-items: flex-start;
-    flex-direction: column;
-    height: auto !important;
-    gap: 10px;
-    padding: 14px 16px;
+    height: 64px !important;
+    gap: 12px;
+    padding: 10px 16px;
   }
 
   .app-content {
     padding: 14px;
+  }
+}
+
+@media (max-width: 560px) {
+  .app-header-subtitle,
+  .app-environment {
+    display: none;
+  }
+
+  .app-header h3.ant-typography {
+    font-size: 18px;
+  }
+
+  .app-header-actions {
+    gap: 2px !important;
   }
 }

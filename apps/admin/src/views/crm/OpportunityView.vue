@@ -4,7 +4,7 @@
       <template #extra>
         <a-space>
           <a-button @click="loadData">刷新</a-button>
-          <a-button v-if="auth.can('crm:opportunity:create')" type="primary" @click="createOpen = true">
+          <a-button v-if="auth.can('crm:opportunity:create')" type="primary" @click="openCreate()">
             新增商机
           </a-button>
         </a-space>
@@ -98,6 +98,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
 import { message } from "ant-design-vue";
+import { useRoute, useRouter } from "vue-router";
 import {
   advanceOpportunity,
   createOpportunity,
@@ -116,6 +117,8 @@ import {
 } from "./crm-options";
 
 const auth = useAuthStore();
+const route = useRoute();
+const router = useRouter();
 const opportunities = ref<Opportunity[]>([]);
 const customers = ref<CustomerSummary[]>([]);
 const loading = ref(false);
@@ -169,7 +172,22 @@ const activeAmount = computed(() => activeItems.value.reduce((sum, item) => sum 
 const weightedAmount = computed(() => activeItems.value.reduce((sum, item) => sum + Number(item.expectedAmount || 0) * item.probability / 100, 0));
 const overdueActionCount = computed(() => activeItems.value.filter(actionOverdue).length);
 
-onMounted(loadData);
+onMounted(async () => {
+  await loadData();
+  const customerId = typeof route.query.customer === "string" ? route.query.customer : undefined;
+  if (route.query.create === "1" && customerId && customers.value.some(customer => customer.id === customerId)) {
+    openCreate({
+      customerId,
+      source: "合同续约",
+      needSummary: typeof route.query.need === "string" ? route.query.need : "原合同续约",
+      expectedAmount: Number(route.query.amount || 0),
+      nextAction: "确认续约服务范围、付款节点和合同周期",
+      nextActionAt: dateAfterDays(7),
+    });
+    const { customer: _customer, create: _create, need: _need, amount: _amount, ...query } = route.query;
+    await router.replace({ path: route.path, query });
+  }
+});
 
 async function loadData() {
   loading.value = true;
@@ -196,6 +214,16 @@ async function handleCreate() {
   } finally {
     saving.value = false;
   }
+}
+
+function openCreate(prefill: Partial<ReturnType<typeof initialCreateForm>> = {}) {
+  const customer = prefill.customerId ? customers.value.find(item => item.id === prefill.customerId) : undefined;
+  Object.assign(createForm, initialCreateForm(), {
+    code: generateOpportunityCode(),
+    ownerName: customer?.ownerName || auth.user?.displayName || "",
+    ...prefill,
+  });
+  createOpen.value = true;
 }
 
 function openAdvance(record: Opportunity) {
@@ -241,6 +269,19 @@ function defaultProbability(stage: OpportunityStage) {
 
 function initialCreateForm() {
   return { customerId: undefined as string | undefined, code: "", source: "", needSummary: "", expectedAmount: 0, nextAction: "", nextActionAt: "", ownerName: "" };
+}
+
+function generateOpportunityCode() {
+  const date = new Date();
+  const stamp = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, "0")}${String(date.getDate()).padStart(2, "0")}`;
+  const time = `${String(date.getHours()).padStart(2, "0")}${String(date.getMinutes()).padStart(2, "0")}${String(date.getSeconds()).padStart(2, "0")}`;
+  return `SJ-${stamp}-${time}`;
+}
+
+function dateAfterDays(days: number) {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date.toISOString().slice(0, 10);
 }
 
 function moneyFormatter({ value }: { value: number }) {

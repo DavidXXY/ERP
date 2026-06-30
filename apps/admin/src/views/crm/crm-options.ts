@@ -45,8 +45,11 @@ export function quoteStatusLabel(value: QuoteStatus) {
   return {
     DRAFT: "草稿",
     PENDING_APPROVAL: "审批中",
-    APPROVED: "已通过",
+    APPROVED: "待客户确认",
     REJECTED: "已驳回",
+    CUSTOMER_ACCEPTED: "客户已接受",
+    CUSTOMER_DECLINED: "客户已拒绝",
+    CONVERTED: "已转合同",
   }[value];
 }
 
@@ -54,8 +57,11 @@ export function quoteStatusColor(value: QuoteStatus) {
   return {
     DRAFT: "default",
     PENDING_APPROVAL: "orange",
-    APPROVED: "green",
+    APPROVED: "blue",
     REJECTED: "red",
+    CUSTOMER_ACCEPTED: "green",
+    CUSTOMER_DECLINED: "red",
+    CONVERTED: "cyan",
   }[value];
 }
 

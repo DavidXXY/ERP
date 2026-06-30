@@ -4,7 +4,7 @@
       <template #extra>
         <a-space>
           <a-button @click="loadData">刷新</a-button>
-          <a-button v-if="auth.can('crm:followup:create')" type="primary" @click="createOpen = true">新增记录</a-button>
+          <a-button v-if="auth.can('crm:followup:create')" type="primary" @click="openCreate()">新增记录</a-button>
         </a-space>
       </template>
 
@@ -50,11 +50,14 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
 import { message } from "ant-design-vue";
+import { useRoute, useRouter } from "vue-router";
 import { createFollowUp, listCustomers, listFollowUps, listOpportunities, type CustomerSummary, type FollowUp, type FollowUpType, type Opportunity } from "@/api/crm";
 import { useAuthStore } from "@/stores/auth";
 import { followUpTypeColor, followUpTypeLabel, followUpTypeOptions } from "./crm-options";
 
 const auth = useAuthStore();
+const route = useRoute();
+const router = useRouter();
 const items = ref<FollowUp[]>([]);
 const customers = ref<CustomerSummary[]>([]);
 const opportunities = ref<Opportunity[]>([]);
@@ -94,7 +97,15 @@ const filteredItems = computed(() => {
   });
 });
 
-onMounted(loadData);
+onMounted(async () => {
+  await loadData();
+  const customerId = typeof route.query.customer === "string" ? route.query.customer : undefined;
+  if (route.query.create === "1" && customerId && customers.value.some(customer => customer.id === customerId)) {
+    openCreate(customerId);
+    const { customer: _customer, create: _create, ...query } = route.query;
+    await router.replace({ path: route.path, query });
+  }
+});
 
 async function loadData() {
   loading.value = true;
@@ -111,6 +122,12 @@ function syncOpportunity() {
   if (!opportunities.value.some((item) => item.id === form.opportunityId && item.customerId === form.customerId)) {
     form.opportunityId = undefined;
   }
+}
+
+function openCreate(customerId?: string) {
+  Object.assign(form, initialForm(), { customerId });
+  syncOpportunity();
+  createOpen.value = true;
 }
 
 async function handleCreate() {
@@ -135,7 +152,7 @@ async function handleCreate() {
 
 function initialForm() {
   const now = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-  return { customerId: undefined as string | undefined, opportunityId: undefined as string | undefined, type: "PHONE" as FollowUpType, subject: "", content: "", followedAt: now, nextAction: "", ownerName: "" };
+  return { customerId: undefined as string | undefined, opportunityId: undefined as string | undefined, type: "PHONE" as FollowUpType, subject: "", content: "", followedAt: now, nextAction: "", ownerName: auth.user?.displayName || "" };
 }
 
 function formatDateTime(value: string) {

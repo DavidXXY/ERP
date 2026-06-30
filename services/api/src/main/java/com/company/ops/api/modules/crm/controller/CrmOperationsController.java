@@ -3,6 +3,7 @@ package com.company.ops.api.modules.crm.controller;
 import com.company.ops.api.common.api.ApiResponse;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.AdvanceOpportunityRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ContractResponse;
+import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ConvertQuoteRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.CreateFollowUpRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.CreateOpportunityRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.CreateQuoteRequest;
@@ -11,11 +12,14 @@ import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.FollowUpResponse;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.OpportunityResponse;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.QuoteResponse;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ProcessQuoteApprovalRequest;
-import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.QuoteApprovalResult;
+import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ProcessQuoteCustomerResultRequest;
+import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.QuoteConversionResult;
+import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.QuoteRevisionResponse;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ReceivableResponse;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.RecordReceiptRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.RegisterInvoiceRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.RenewalResponse;
+import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.UpdateQuoteRequest;
 import com.company.ops.api.modules.crm.service.CrmOperationsService;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -25,6 +29,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -77,6 +82,21 @@ public class CrmOperationsController {
     return ApiResponse.ok(crmOperationsService.createQuote(request));
   }
 
+  @PutMapping("/quotes/{id}")
+  @PreAuthorize("hasAuthority('crm:quote:update')")
+  public ApiResponse<QuoteResponse> updateQuote(
+      @PathVariable UUID id,
+      @Valid @RequestBody UpdateQuoteRequest request
+  ) {
+    return ApiResponse.ok(crmOperationsService.updateQuote(id, request));
+  }
+
+  @GetMapping("/quotes/{id}/revisions")
+  @PreAuthorize("hasAuthority('crm:quote:view')")
+  public ApiResponse<List<QuoteRevisionResponse>> listQuoteRevisions(@PathVariable UUID id) {
+    return ApiResponse.ok(crmOperationsService.listQuoteRevisions(id));
+  }
+
   @PostMapping("/quotes/{id}/submit")
   @PreAuthorize("hasAuthority('crm:quote:submit')")
   public ApiResponse<QuoteResponse> submitQuote(@PathVariable UUID id) {
@@ -85,11 +105,29 @@ public class CrmOperationsController {
 
   @PostMapping("/quotes/{id}/approval")
   @PreAuthorize("hasAuthority('crm:quote:approve')")
-  public ApiResponse<QuoteApprovalResult> processQuoteApproval(
+  public ApiResponse<QuoteResponse> processQuoteApproval(
       @PathVariable UUID id,
       @Valid @RequestBody ProcessQuoteApprovalRequest request
   ) {
     return ApiResponse.ok(crmOperationsService.processQuoteApproval(id, request));
+  }
+
+  @PostMapping("/quotes/{id}/customer-result")
+  @PreAuthorize("hasAuthority('crm:quote:customer-result')")
+  public ApiResponse<QuoteResponse> processQuoteCustomerResult(
+      @PathVariable UUID id,
+      @Valid @RequestBody ProcessQuoteCustomerResultRequest request
+  ) {
+    return ApiResponse.ok(crmOperationsService.processQuoteCustomerResult(id, request));
+  }
+
+  @PostMapping("/quotes/{id}/convert")
+  @PreAuthorize("hasAuthority('crm:quote:convert')")
+  public ApiResponse<QuoteConversionResult> convertQuote(
+      @PathVariable UUID id,
+      @Valid @RequestBody ConvertQuoteRequest request
+  ) {
+    return ApiResponse.ok(crmOperationsService.convertQuote(id, request));
   }
 
   @GetMapping("/contracts")

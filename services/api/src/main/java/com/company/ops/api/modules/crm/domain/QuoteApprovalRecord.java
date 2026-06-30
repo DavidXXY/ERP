@@ -16,6 +16,9 @@ public class QuoteApprovalRecord extends BaseEntity {
   @Column(name = "quote_id", nullable = false)
   private UUID quoteId;
 
+  @Column(name = "quote_version", nullable = false)
+  private int quoteVersion = 1;
+
   @Enumerated(EnumType.STRING)
   @Column(nullable = false, length = 32)
   private ApprovalDecision decision;
@@ -38,6 +41,14 @@ public class QuoteApprovalRecord extends BaseEntity {
 
   public void setQuoteId(UUID quoteId) {
     this.quoteId = quoteId;
+  }
+
+  public int getQuoteVersion() {
+    return quoteVersion;
+  }
+
+  public void setQuoteVersion(int quoteVersion) {
+    this.quoteVersion = quoteVersion;
   }
 
   public ApprovalDecision getDecision() {

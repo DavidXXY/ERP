@@ -2,11 +2,13 @@ package com.company.ops.api.modules.crm.dto;
 
 import com.company.ops.api.modules.crm.domain.ContractStatus;
 import com.company.ops.api.modules.crm.domain.CustomerLevel;
+import com.company.ops.api.modules.crm.domain.FollowUpType;
 import com.company.ops.api.modules.crm.domain.OpportunityStage;
 import com.company.ops.api.modules.crm.domain.ReceivableStatus;
 import com.company.ops.api.modules.crm.domain.RiskStatus;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -26,6 +28,7 @@ public record CustomerDetailResponse(
     List<Opportunity> opportunities,
     List<Contract> contracts,
     List<Receivable> receivables,
+    List<FollowUp> followUps,
     CustomerMetrics metrics
 ) {
 
@@ -94,6 +97,19 @@ public record CustomerDetailResponse(
       BigDecimal settledAmount,
       BigDecimal outstandingAmount,
       ReceivableStatus status
+  ) {
+  }
+
+  public record FollowUp(
+      UUID id,
+      UUID opportunityId,
+      String opportunityCode,
+      FollowUpType type,
+      String subject,
+      String content,
+      OffsetDateTime followedAt,
+      String nextAction,
+      String ownerName
   ) {
   }
 

@@ -5,6 +5,7 @@ import com.company.ops.api.modules.crm.domain.ApprovalDecision;
 import com.company.ops.api.modules.crm.domain.CustomerLevel;
 import com.company.ops.api.modules.crm.domain.FollowUpType;
 import com.company.ops.api.modules.crm.domain.OpportunityStage;
+import com.company.ops.api.modules.crm.domain.QuoteCustomerDecision;
 import com.company.ops.api.modules.crm.domain.QuoteStatus;
 import com.company.ops.api.modules.crm.domain.ReceivableStatus;
 import com.company.ops.api.modules.crm.domain.RiskStatus;
@@ -70,7 +71,18 @@ public final class CrmOperationsDtos {
       @NotBlank @Size(max = 800) String serviceScope,
       @Size(max = 120) String inspectCycle,
       @Size(max = 300) String paymentNodes,
-      @NotNull @DecimalMin("0") BigDecimal amount
+      @NotNull @DecimalMin("0") BigDecimal amount,
+      @NotBlank @Size(max = 80) String editorName
+  ) {
+  }
+
+  public record UpdateQuoteRequest(
+      @NotBlank @Size(max = 800) String serviceScope,
+      @Size(max = 120) String inspectCycle,
+      @Size(max = 300) String paymentNodes,
+      @NotNull @DecimalMin("0") BigDecimal amount,
+      @NotBlank @Size(max = 500) String revisionNote,
+      @NotBlank @Size(max = 80) String editorName
   ) {
   }
 
@@ -85,10 +97,15 @@ public final class CrmOperationsDtos {
       String inspectCycle,
       String paymentNodes,
       BigDecimal amount,
+      int versionNo,
       QuoteStatus status,
       String lastApprovalComment,
       String lastApproverName,
       OffsetDateTime lastApprovalAt,
+      QuoteCustomerDecision customerDecision,
+      String customerComment,
+      String customerDecisionBy,
+      OffsetDateTime customerDecidedAt,
       UUID convertedContractId,
       OffsetDateTime updatedAt
   ) {
@@ -97,7 +114,18 @@ public final class CrmOperationsDtos {
   public record ProcessQuoteApprovalRequest(
       @NotNull ApprovalDecision decision,
       @NotBlank @Size(max = 500) String comment,
-      @NotBlank @Size(max = 80) String approverName,
+      @NotBlank @Size(max = 80) String approverName
+  ) {
+  }
+
+  public record ProcessQuoteCustomerResultRequest(
+      @NotNull QuoteCustomerDecision decision,
+      @NotBlank @Size(max = 500) String comment,
+      @NotBlank @Size(max = 80) String operatorName
+  ) {
+  }
+
+  public record ConvertQuoteRequest(
       @Size(max = 64) String contractCode,
       @Size(max = 160) String projectName,
       @Size(max = 80) String contractType,
@@ -110,10 +138,25 @@ public final class CrmOperationsDtos {
   ) {
   }
 
-  public record QuoteApprovalResult(
+  public record QuoteConversionResult(
       QuoteResponse quote,
       ContractResponse contract,
       ReceivableResponse receivable
+  ) {
+  }
+
+  public record QuoteRevisionResponse(
+      UUID id,
+      int versionNo,
+      String code,
+      String serviceScope,
+      String inspectCycle,
+      String paymentNodes,
+      BigDecimal amount,
+      QuoteStatus status,
+      String revisionNote,
+      String editorName,
+      OffsetDateTime revisedAt
   ) {
   }
 

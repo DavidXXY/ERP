@@ -7,6 +7,7 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
@@ -34,9 +35,25 @@ public class QuotePlan extends BaseEntity {
   @Column(nullable = false, precision = 14, scale = 2)
   private BigDecimal amount = BigDecimal.ZERO;
 
+  @Column(name = "version_no", nullable = false)
+  private int versionNo = 1;
+
   @Enumerated(EnumType.STRING)
   @Column(nullable = false, length = 40)
   private QuoteStatus status = QuoteStatus.DRAFT;
+
+  @Enumerated(EnumType.STRING)
+  @Column(name = "customer_decision", length = 32)
+  private QuoteCustomerDecision customerDecision;
+
+  @Column(name = "customer_comment", length = 500)
+  private String customerComment;
+
+  @Column(name = "customer_decision_by", length = 80)
+  private String customerDecisionBy;
+
+  @Column(name = "customer_decided_at")
+  private OffsetDateTime customerDecidedAt;
 
   public UUID getCustomerId() {
     return customerId;
@@ -94,11 +111,51 @@ public class QuotePlan extends BaseEntity {
     this.amount = amount;
   }
 
+  public int getVersionNo() {
+    return versionNo;
+  }
+
+  public void setVersionNo(int versionNo) {
+    this.versionNo = versionNo;
+  }
+
   public QuoteStatus getStatus() {
     return status;
   }
 
   public void setStatus(QuoteStatus status) {
     this.status = status;
+  }
+
+  public QuoteCustomerDecision getCustomerDecision() {
+    return customerDecision;
+  }
+
+  public void setCustomerDecision(QuoteCustomerDecision customerDecision) {
+    this.customerDecision = customerDecision;
+  }
+
+  public String getCustomerComment() {
+    return customerComment;
+  }
+
+  public void setCustomerComment(String customerComment) {
+    this.customerComment = customerComment;
+  }
+
+  public String getCustomerDecisionBy() {
+    return customerDecisionBy;
+  }
+
+  public void setCustomerDecisionBy(String customerDecisionBy) {
+    this.customerDecisionBy = customerDecisionBy;
+  }
+
+  public OffsetDateTime getCustomerDecidedAt() {
+    return customerDecidedAt;
+  }
+
+  public void setCustomerDecidedAt(OffsetDateTime customerDecidedAt) {
+    this.customerDecidedAt = customerDecidedAt;
   }
 }

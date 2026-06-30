@@ -5,8 +5,9 @@ export type RiskStatus = "NORMAL" | "OVERDUE" | "RENEWAL_RISK";
 export type ContractStatus = "ACTIVE" | "RENEWAL_PENDING" | "OVERDUE_RISK" | "CLOSED";
 export type ReceivableStatus = "INVOICE_PENDING" | "PAYMENT_PENDING" | "SETTLED" | "OVERDUE";
 export type OpportunityStage = "LEAD" | "QUALIFIED" | "SOLUTION" | "QUOTATION" | "NEGOTIATION" | "WON" | "LOST";
-export type QuoteStatus = "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED";
+export type QuoteStatus = "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED" | "CUSTOMER_ACCEPTED" | "CUSTOMER_DECLINED" | "CONVERTED";
 export type ApprovalDecision = "APPROVED" | "REJECTED";
+export type QuoteCustomerDecision = "ACCEPTED" | "DECLINED";
 export type FollowUpType = "VISIT" | "PHONE" | "CALLBACK" | "COMPLAINT";
 
 export type CustomerSummary = {
@@ -81,6 +82,17 @@ export type CustomerDetail = CustomerSummary & {
     outstandingAmount: number;
     status: ReceivableStatus;
   }>;
+  followUps: Array<{
+    id: string;
+    opportunityId?: string;
+    opportunityCode?: string;
+    type: FollowUpType;
+    subject: string;
+    content: string;
+    followedAt: string;
+    nextAction?: string;
+    ownerName: string;
+  }>;
   metrics: {
     contractCount: number;
     contractAmount: number;
@@ -136,10 +148,15 @@ export type QuotePlan = {
   inspectCycle?: string;
   paymentNodes?: string;
   amount: number;
+  versionNo: number;
   status: QuoteStatus;
   lastApprovalComment?: string;
   lastApproverName?: string;
   lastApprovalAt?: string;
+  customerDecision?: QuoteCustomerDecision;
+  customerComment?: string;
+  customerDecisionBy?: string;
+  customerDecidedAt?: string;
   convertedContractId?: string;
   updatedAt: string;
 };
@@ -152,12 +169,31 @@ export type CreateQuotePayload = {
   inspectCycle?: string;
   paymentNodes?: string;
   amount: number;
+  editorName: string;
+};
+
+export type UpdateQuotePayload = {
+  serviceScope: string;
+  inspectCycle?: string;
+  paymentNodes?: string;
+  amount: number;
+  revisionNote: string;
+  editorName: string;
 };
 
 export type ProcessQuoteApprovalPayload = {
   decision: ApprovalDecision;
   comment: string;
   approverName: string;
+};
+
+export type ProcessQuoteCustomerResultPayload = {
+  decision: QuoteCustomerDecision;
+  comment: string;
+  operatorName: string;
+};
+
+export type ConvertQuotePayload = {
   contractCode?: string;
   projectName?: string;
   contractType?: string;
@@ -167,6 +203,20 @@ export type ProcessQuoteApprovalPayload = {
   receivableCode?: string;
   firstReceivableAmount?: number;
   firstReceivableDueDate?: string;
+};
+
+export type QuoteRevision = {
+  id: string;
+  versionNo: number;
+  code: string;
+  serviceScope: string;
+  inspectCycle?: string;
+  paymentNodes?: string;
+  amount: number;
+  status: QuoteStatus;
+  revisionNote: string;
+  editorName: string;
+  revisedAt: string;
 };
 
 export type FollowUp = {
@@ -226,7 +276,7 @@ export type Receivable = {
   status: ReceivableStatus;
 };
 
-export type QuoteApprovalResult = {
+export type QuoteConversionResult = {
   quote: QuotePlan;
   contract?: ServiceContract;
   receivable?: Receivable;
@@ -294,6 +344,8 @@ export type CreateCustomerPayload = {
   }>;
 };
 
+export type UpdateCustomerPayload = Omit<CreateCustomerPayload, "code">;
+
 export function listCustomers() {
   return request<CustomerSummary[]>({
     method: "GET",
@@ -312,6 +364,14 @@ export function createCustomer(payload: CreateCustomerPayload) {
   return request<CustomerDetail>({
     method: "POST",
     url: "/crm/customers",
+    data: payload,
+  });
+}
+
+export function updateCustomer(id: string, payload: UpdateCustomerPayload) {
+  return request<CustomerDetail>({
+    method: "PUT",
+    url: `/crm/customers/${id}`,
     data: payload,
   });
 }
@@ -336,12 +396,28 @@ export function createQuote(payload: CreateQuotePayload) {
   return request<QuotePlan>({ method: "POST", url: "/crm/quotes", data: payload });
 }
 
+export function updateQuote(id: string, payload: UpdateQuotePayload) {
+  return request<QuotePlan>({ method: "PUT", url: `/crm/quotes/${id}`, data: payload });
+}
+
+export function listQuoteRevisions(id: string) {
+  return request<QuoteRevision[]>({ method: "GET", url: `/crm/quotes/${id}/revisions` });
+}
+
 export function submitQuote(id: string) {
   return request<QuotePlan>({ method: "POST", url: `/crm/quotes/${id}/submit` });
 }
 
 export function processQuoteApproval(id: string, payload: ProcessQuoteApprovalPayload) {
-  return request<QuoteApprovalResult>({ method: "POST", url: `/crm/quotes/${id}/approval`, data: payload });
+  return request<QuotePlan>({ method: "POST", url: `/crm/quotes/${id}/approval`, data: payload });
+}
+
+export function processQuoteCustomerResult(id: string, payload: ProcessQuoteCustomerResultPayload) {
+  return request<QuotePlan>({ method: "POST", url: `/crm/quotes/${id}/customer-result`, data: payload });
+}
+
+export function convertQuote(id: string, payload: ConvertQuotePayload) {
+  return request<QuoteConversionResult>({ method: "POST", url: `/crm/quotes/${id}/convert`, data: payload });
 }
 
 export function listContracts() {

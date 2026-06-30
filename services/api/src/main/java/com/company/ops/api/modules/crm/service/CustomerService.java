@@ -9,13 +9,16 @@ import com.company.ops.api.modules.crm.domain.RiskStatus;
 import com.company.ops.api.modules.crm.dto.CreateCustomerRequest;
 import com.company.ops.api.modules.crm.dto.CustomerDetailResponse;
 import com.company.ops.api.modules.crm.dto.CustomerSummaryResponse;
+import com.company.ops.api.modules.crm.dto.UpdateCustomerRequest;
 import com.company.ops.api.modules.crm.repository.CustomerRepository;
+import com.company.ops.api.modules.crm.repository.FollowUpRepository;
 import com.company.ops.api.modules.crm.repository.OpportunityRepository;
 import com.company.ops.api.modules.crm.repository.ReceivableRepository;
 import com.company.ops.api.modules.crm.repository.ServiceContractRepository;
 import com.company.ops.api.modules.system.security.DataScopeService;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +30,7 @@ public class CustomerService {
   private final OpportunityRepository opportunityRepository;
   private final ServiceContractRepository contractRepository;
   private final ReceivableRepository receivableRepository;
+  private final FollowUpRepository followUpRepository;
   private final DataScopeService dataScopeService;
 
   public CustomerService(
@@ -34,12 +38,14 @@ public class CustomerService {
       OpportunityRepository opportunityRepository,
       ServiceContractRepository contractRepository,
       ReceivableRepository receivableRepository,
+      FollowUpRepository followUpRepository,
       DataScopeService dataScopeService
   ) {
     this.customerRepository = customerRepository;
     this.opportunityRepository = opportunityRepository;
     this.contractRepository = contractRepository;
     this.receivableRepository = receivableRepository;
+    this.followUpRepository = followUpRepository;
     this.dataScopeService = dataScopeService;
   }
 
@@ -59,6 +65,12 @@ public class CustomerService {
     var contracts = contractRepository.findByCustomerIdOrderByStartDateDesc(id);
     var opportunities = opportunityRepository.findByCustomerIdOrderByUpdatedAtDesc(id);
     var receivables = receivableRepository.findByCustomerIdOrderByDueDateAsc(id);
+    var followUps = followUpRepository.findByCustomerIdOrderByFollowedAtDesc(id);
+    Map<UUID, String> opportunityCodes = opportunities.stream()
+        .collect(java.util.stream.Collectors.toMap(
+            opportunity -> opportunity.getId(),
+            opportunity -> opportunity.getCode()
+        ));
 
     BigDecimal contractAmount = contracts.stream()
         .map(contract -> contract.getAmount() == null ? BigDecimal.ZERO : contract.getAmount())
@@ -142,6 +154,19 @@ public class CustomerService {
                 receivable.getStatus()
             ))
             .toList(),
+        followUps.stream()
+            .map(followUp -> new CustomerDetailResponse.FollowUp(
+                followUp.getId(),
+                followUp.getOpportunityId(),
+                followUp.getOpportunityId() == null ? null : opportunityCodes.get(followUp.getOpportunityId()),
+                followUp.getType(),
+                followUp.getSubject(),
+                followUp.getContent(),
+                followUp.getFollowedAt(),
+                followUp.getNextAction(),
+                followUp.getOwnerName()
+            ))
+            .toList(),
         new CustomerDetailResponse.CustomerMetrics(
             contracts.size(),
             contractAmount,
@@ -157,48 +182,96 @@ public class CustomerService {
       throw new BusinessException("客户编码已存在");
     }
 
+    assertOwnerVisible(request.ownerName());
+
     Customer customer = new Customer();
     customer.setCode(request.code());
-    customer.setName(request.name());
-    customer.setIndustry(request.industry());
-    customer.setLevel(request.level());
-    customer.setOwnerName(request.ownerName());
-    customer.setPaymentHabit(request.paymentHabit());
-    customer.setRiskStatus(request.riskStatus() == null ? RiskStatus.NORMAL : request.riskStatus());
-    customer.setRiskNote(request.riskNote());
-
-    if (request.invoice() != null) {
-      customer.setInvoiceTitle(request.invoice().title());
-      customer.setTaxNo(request.invoice().taxNo());
-      customer.setBankName(request.invoice().bankName());
-      customer.setBankAccount(request.invoice().bankAccount());
-      customer.setRegisteredAddress(request.invoice().registeredAddress());
-      customer.setRegisteredPhone(request.invoice().registeredPhone());
-    }
-
-    if (request.contacts() != null) {
-      request.contacts().forEach(contactRequest -> {
-        CustomerContact contact = new CustomerContact();
-        contact.setName(contactRequest.name());
-        contact.setTitle(contactRequest.title());
-        contact.setPhone(contactRequest.phone());
-        contact.setEmail(contactRequest.email());
-        contact.setPrimaryContact(contactRequest.primaryContact());
-        customer.addContact(contact);
-      });
-    }
-
-    if (request.sites() != null) {
-      request.sites().forEach(siteRequest -> {
-        CustomerSite site = new CustomerSite();
-        site.setName(siteRequest.name());
-        site.setAddress(siteRequest.address());
-        customer.addSite(site);
-      });
-    }
+    applyCustomerDetails(customer, request.name(), request.industry(), request.level(),
+        request.ownerName(), request.paymentHabit(), request.riskStatus(), request.riskNote(),
+        request.invoice(), request.contacts(), request.sites());
 
     Customer saved = customerRepository.save(customer);
     return getCustomer(saved.getId());
+  }
+
+  @Transactional
+  public CustomerDetailResponse updateCustomer(UUID id, UpdateCustomerRequest request) {
+    Customer customer = customerRepository.findById(id)
+        .orElseThrow(() -> new BusinessException("客户不存在"));
+    if (!dataScopeService.canViewOwner(customer.getOwnerName())) {
+      throw new BusinessException("无权编辑该客户");
+    }
+    assertOwnerVisible(request.ownerName());
+    applyCustomerDetails(customer, request.name(), request.industry(), request.level(),
+        request.ownerName(), request.paymentHabit(), request.riskStatus(), request.riskNote(),
+        request.invoice(), request.contacts(), request.sites());
+    customerRepository.save(customer);
+    return getCustomer(id);
+  }
+
+  private void applyCustomerDetails(
+      Customer customer,
+      String name,
+      String industry,
+      com.company.ops.api.modules.crm.domain.CustomerLevel level,
+      String ownerName,
+      String paymentHabit,
+      RiskStatus riskStatus,
+      String riskNote,
+      CreateCustomerRequest.InvoiceRequest invoice,
+      List<CreateCustomerRequest.ContactRequest> contacts,
+      List<CreateCustomerRequest.SiteRequest> sites
+  ) {
+    customer.setName(name);
+    customer.setIndustry(industry);
+    customer.setLevel(level);
+    customer.setOwnerName(ownerName);
+    customer.setPaymentHabit(paymentHabit);
+    customer.setRiskStatus(riskStatus == null ? RiskStatus.NORMAL : riskStatus);
+    customer.setRiskNote(riskNote);
+
+    customer.setInvoiceTitle(invoice == null ? null : invoice.title());
+    customer.setTaxNo(invoice == null ? null : invoice.taxNo());
+    customer.setBankName(invoice == null ? null : invoice.bankName());
+    customer.setBankAccount(invoice == null ? null : invoice.bankAccount());
+    customer.setRegisteredAddress(invoice == null ? null : invoice.registeredAddress());
+    customer.setRegisteredPhone(invoice == null ? null : invoice.registeredPhone());
+
+    long primaryCount = contacts == null ? 0 : contacts.stream()
+        .filter(CreateCustomerRequest.ContactRequest::primaryContact)
+        .count();
+    if (primaryCount > 1) {
+      throw new BusinessException("一个客户只能设置一位主要联系人");
+    }
+    customer.getContacts().clear();
+    if (contacts != null) {
+      for (int index = 0; index < contacts.size(); index++) {
+        CreateCustomerRequest.ContactRequest request = contacts.get(index);
+        CustomerContact contact = new CustomerContact();
+        contact.setName(request.name());
+        contact.setTitle(request.title());
+        contact.setPhone(request.phone());
+        contact.setEmail(request.email());
+        contact.setPrimaryContact(primaryCount == 0 ? index == 0 : request.primaryContact());
+        customer.addContact(contact);
+      }
+    }
+
+    customer.getSites().clear();
+    if (sites != null) {
+      sites.forEach(request -> {
+        CustomerSite site = new CustomerSite();
+        site.setName(request.name());
+        site.setAddress(request.address());
+        customer.addSite(site);
+      });
+    }
+  }
+
+  private void assertOwnerVisible(String ownerName) {
+    if (!dataScopeService.canViewOwner(ownerName)) {
+      throw new BusinessException("无权将客户分配给该负责人");
+    }
   }
 
   private CustomerSummaryResponse toSummary(Customer customer) {

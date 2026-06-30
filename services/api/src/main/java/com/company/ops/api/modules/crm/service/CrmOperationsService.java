@@ -7,8 +7,10 @@ import com.company.ops.api.modules.crm.domain.Customer;
 import com.company.ops.api.modules.crm.domain.FollowUp;
 import com.company.ops.api.modules.crm.domain.Opportunity;
 import com.company.ops.api.modules.crm.domain.OpportunityStage;
+import com.company.ops.api.modules.crm.domain.QuoteCustomerDecision;
 import com.company.ops.api.modules.crm.domain.QuotePlan;
 import com.company.ops.api.modules.crm.domain.QuoteApprovalRecord;
+import com.company.ops.api.modules.crm.domain.QuoteRevision;
 import com.company.ops.api.modules.crm.domain.QuoteStatus;
 import com.company.ops.api.modules.crm.domain.Receivable;
 import com.company.ops.api.modules.crm.domain.ReceivableStatus;
@@ -16,6 +18,7 @@ import com.company.ops.api.modules.crm.domain.ReceivableReceipt;
 import com.company.ops.api.modules.crm.domain.ServiceContract;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.AdvanceOpportunityRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ContractResponse;
+import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ConvertQuoteRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.CreateFollowUpRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.CreateOpportunityRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.CreateQuoteRequest;
@@ -24,16 +27,20 @@ import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.FollowUpResponse;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.OpportunityResponse;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.QuoteResponse;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ProcessQuoteApprovalRequest;
-import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.QuoteApprovalResult;
+import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ProcessQuoteCustomerResultRequest;
+import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.QuoteConversionResult;
+import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.QuoteRevisionResponse;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ReceivableResponse;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.RecordReceiptRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.RegisterInvoiceRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.RenewalResponse;
+import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.UpdateQuoteRequest;
 import com.company.ops.api.modules.crm.repository.CustomerRepository;
 import com.company.ops.api.modules.crm.repository.FollowUpRepository;
 import com.company.ops.api.modules.crm.repository.OpportunityRepository;
 import com.company.ops.api.modules.crm.repository.QuotePlanRepository;
 import com.company.ops.api.modules.crm.repository.QuoteApprovalRecordRepository;
+import com.company.ops.api.modules.crm.repository.QuoteRevisionRepository;
 import com.company.ops.api.modules.crm.repository.ReceivableRepository;
 import com.company.ops.api.modules.crm.repository.ReceivableReceiptRepository;
 import com.company.ops.api.modules.crm.repository.ServiceContractRepository;
@@ -58,6 +65,7 @@ public class CrmOperationsService {
   private final OpportunityRepository opportunityRepository;
   private final QuotePlanRepository quoteRepository;
   private final QuoteApprovalRecordRepository quoteApprovalRepository;
+  private final QuoteRevisionRepository quoteRevisionRepository;
   private final FollowUpRepository followUpRepository;
   private final ServiceContractRepository contractRepository;
   private final ReceivableRepository receivableRepository;
@@ -69,6 +77,7 @@ public class CrmOperationsService {
       OpportunityRepository opportunityRepository,
       QuotePlanRepository quoteRepository,
       QuoteApprovalRecordRepository quoteApprovalRepository,
+      QuoteRevisionRepository quoteRevisionRepository,
       FollowUpRepository followUpRepository,
       ServiceContractRepository contractRepository,
       ReceivableRepository receivableRepository,
@@ -79,6 +88,7 @@ public class CrmOperationsService {
     this.opportunityRepository = opportunityRepository;
     this.quoteRepository = quoteRepository;
     this.quoteApprovalRepository = quoteApprovalRepository;
+    this.quoteRevisionRepository = quoteRevisionRepository;
     this.followUpRepository = followUpRepository;
     this.contractRepository = contractRepository;
     this.receivableRepository = receivableRepository;
@@ -169,8 +179,10 @@ public class CrmOperationsService {
     quote.setInspectCycle(request.inspectCycle());
     quote.setPaymentNodes(request.paymentNodes());
     quote.setAmount(defaultAmount(request.amount()));
+    quote.setVersionNo(1);
     quote.setStatus(QuoteStatus.DRAFT);
     QuotePlan saved = quoteRepository.save(quote);
+    saveQuoteRevision(saved, "首次创建", request.editorName());
     Map<UUID, Customer> customers = customerMap(nullableId(saved.getCustomerId()));
     Map<UUID, Opportunity> opportunities = opportunity == null
         ? Map.of()
@@ -179,11 +191,48 @@ public class CrmOperationsService {
   }
 
   @Transactional
+  public QuoteResponse updateQuote(UUID id, UpdateQuoteRequest request) {
+    QuotePlan quote = quoteRepository.findById(id)
+        .orElseThrow(() -> new BusinessException("报价方案不存在"));
+    if (quote.getStatus() == QuoteStatus.PENDING_APPROVAL) {
+      throw new BusinessException("审批中的报价不能修改，请先完成审批");
+    }
+    if (quote.getStatus() == QuoteStatus.CONVERTED) {
+      throw new BusinessException("已转合同的报价不能修改");
+    }
+
+    quote.setServiceScope(request.serviceScope());
+    quote.setInspectCycle(request.inspectCycle());
+    quote.setPaymentNodes(request.paymentNodes());
+    quote.setAmount(defaultAmount(request.amount()));
+    quote.setVersionNo(Math.max(quote.getVersionNo(), 1) + 1);
+    quote.setStatus(QuoteStatus.DRAFT);
+    clearCustomerResult(quote);
+    QuotePlan saved = quoteRepository.save(quote);
+    saveQuoteRevision(saved, request.revisionNote(), request.editorName());
+    return toQuote(
+        saved,
+        customerMap(nullableId(saved.getCustomerId())),
+        opportunityMap(nullableId(saved.getOpportunityId()))
+    );
+  }
+
+  @Transactional(readOnly = true)
+  public List<QuoteRevisionResponse> listQuoteRevisions(UUID id) {
+    if (!quoteRepository.existsById(id)) {
+      throw new BusinessException("报价方案不存在");
+    }
+    return quoteRevisionRepository.findByQuoteIdOrderByVersionNoDesc(id).stream()
+        .map(this::toQuoteRevision)
+        .toList();
+  }
+
+  @Transactional
   public QuoteResponse submitQuote(UUID id) {
     QuotePlan quote = quoteRepository.findById(id)
         .orElseThrow(() -> new BusinessException("报价方案不存在"));
-    if (quote.getStatus() != QuoteStatus.DRAFT && quote.getStatus() != QuoteStatus.REJECTED) {
-      throw new BusinessException("当前状态不能重复提交审批");
+    if (quote.getStatus() != QuoteStatus.DRAFT) {
+      throw new BusinessException("只有草稿版本可以提交审批");
     }
     quote.setStatus(QuoteStatus.PENDING_APPROVAL);
     QuotePlan saved = quoteRepository.save(quote);
@@ -195,19 +244,14 @@ public class CrmOperationsService {
   }
 
   @Transactional
-  public QuoteApprovalResult processQuoteApproval(UUID id, ProcessQuoteApprovalRequest request) {
+  public QuoteResponse processQuoteApproval(UUID id, ProcessQuoteApprovalRequest request) {
     QuotePlan quote = quoteRepository.findById(id)
         .orElseThrow(() -> new BusinessException("报价方案不存在"));
     if (quote.getStatus() != QuoteStatus.PENDING_APPROVAL) {
       throw new BusinessException("只有审批中的报价可以处理");
     }
 
-    ServiceContract contract = null;
-    Receivable receivable = null;
     if (request.decision() == ApprovalDecision.APPROVED) {
-      contract = createContractFromApprovedQuote(quote, request);
-      receivable = createFirstReceivable(quote, contract, request);
-      markOpportunityWon(quote, contract);
       quote.setStatus(QuoteStatus.APPROVED);
     } else {
       quote.setStatus(QuoteStatus.REJECTED);
@@ -216,21 +260,63 @@ public class CrmOperationsService {
 
     QuoteApprovalRecord approval = new QuoteApprovalRecord();
     approval.setQuoteId(quote.getId());
+    approval.setQuoteVersion(quote.getVersionNo());
     approval.setDecision(request.decision());
     approval.setComment(request.comment());
     approval.setApproverName(request.approverName());
     approval.setDecidedAt(OffsetDateTime.now());
-    approval.setGeneratedContractId(contract == null ? null : contract.getId());
     quoteApprovalRepository.save(approval);
 
     Map<UUID, Customer> customers = customerMap(nullableId(quote.getCustomerId()));
     Map<UUID, Opportunity> opportunities = opportunityMap(nullableId(quote.getOpportunityId()));
-    return new QuoteApprovalResult(
+    return toQuote(quote, customers, opportunities);
+  }
+
+  @Transactional
+  public QuoteResponse processQuoteCustomerResult(
+      UUID id,
+      ProcessQuoteCustomerResultRequest request
+  ) {
+    QuotePlan quote = quoteRepository.findById(id)
+        .orElseThrow(() -> new BusinessException("报价方案不存在"));
+    if (quote.getStatus() != QuoteStatus.APPROVED) {
+      throw new BusinessException("只有内部审批通过的报价可以登记客户结果");
+    }
+    quote.setCustomerDecision(request.decision());
+    quote.setCustomerComment(request.comment());
+    quote.setCustomerDecisionBy(request.operatorName());
+    quote.setCustomerDecidedAt(OffsetDateTime.now());
+    quote.setStatus(request.decision() == QuoteCustomerDecision.ACCEPTED
+        ? QuoteStatus.CUSTOMER_ACCEPTED
+        : QuoteStatus.CUSTOMER_DECLINED);
+    QuotePlan saved = quoteRepository.save(quote);
+    return toQuote(
+        saved,
+        customerMap(nullableId(saved.getCustomerId())),
+        opportunityMap(nullableId(saved.getOpportunityId()))
+    );
+  }
+
+  @Transactional
+  public QuoteConversionResult convertQuote(UUID id, ConvertQuoteRequest request) {
+    QuotePlan quote = quoteRepository.findById(id)
+        .orElseThrow(() -> new BusinessException("报价方案不存在"));
+    if (quote.getStatus() != QuoteStatus.CUSTOMER_ACCEPTED) {
+      throw new BusinessException("只有客户已接受的报价可以转为合同");
+    }
+
+    ServiceContract contract = createContractFromAcceptedQuote(quote, request);
+    Receivable receivable = createFirstReceivable(quote, contract, request);
+    markOpportunityWon(quote, contract);
+    quote.setStatus(QuoteStatus.CONVERTED);
+    quoteRepository.save(quote);
+
+    Map<UUID, Customer> customers = customerMap(nullableId(quote.getCustomerId()));
+    Map<UUID, Opportunity> opportunities = opportunityMap(nullableId(quote.getOpportunityId()));
+    return new QuoteConversionResult(
         toQuote(quote, customers, opportunities),
-        contract == null ? null : toContract(contract, customers),
-        receivable == null
-            ? null
-            : toReceivable(receivable, customers, Map.of(contract.getId(), contract))
+        toContract(contract, customers),
+        receivable == null ? null : toReceivable(receivable, customers, Map.of(contract.getId(), contract))
     );
   }
 
@@ -464,6 +550,12 @@ public class CrmOperationsService {
     QuoteApprovalRecord approval = quoteApprovalRepository
         .findFirstByQuoteIdOrderByDecidedAtDesc(item.getId())
         .orElse(null);
+    if (approval != null && approval.getQuoteVersion() != item.getVersionNo()) {
+      approval = null;
+    }
+    UUID convertedContractId = contractRepository.findByQuoteId(item.getId())
+        .map(ServiceContract::getId)
+        .orElse(null);
     return new QuoteResponse(
         item.getId(),
         item.getCustomerId(),
@@ -475,18 +567,23 @@ public class CrmOperationsService {
         item.getInspectCycle(),
         item.getPaymentNodes(),
         item.getAmount(),
+        item.getVersionNo(),
         item.getStatus(),
         approval == null ? null : approval.getComment(),
         approval == null ? null : approval.getApproverName(),
         approval == null ? null : approval.getDecidedAt(),
-        approval == null ? null : approval.getGeneratedContractId(),
+        item.getCustomerDecision(),
+        item.getCustomerComment(),
+        item.getCustomerDecisionBy(),
+        item.getCustomerDecidedAt(),
+        convertedContractId,
         item.getUpdatedAt()
     );
   }
 
-  private ServiceContract createContractFromApprovedQuote(
+  private ServiceContract createContractFromAcceptedQuote(
       QuotePlan quote,
-      ProcessQuoteApprovalRequest request
+      ConvertQuoteRequest request
   ) {
     if (quote.getCustomerId() == null) {
       throw new BusinessException("报价未关联客户，不能生成合同");
@@ -524,7 +621,7 @@ public class CrmOperationsService {
   private Receivable createFirstReceivable(
       QuotePlan quote,
       ServiceContract contract,
-      ProcessQuoteApprovalRequest request
+      ConvertQuoteRequest request
   ) {
     BigDecimal amount = defaultAmount(request.firstReceivableAmount());
     if (amount.compareTo(BigDecimal.ZERO) <= 0) {
@@ -564,6 +661,45 @@ public class CrmOperationsService {
       opportunity.setNextActionAt(contract.getStartDate());
       opportunityRepository.save(opportunity);
     });
+  }
+
+  private void clearCustomerResult(QuotePlan quote) {
+    quote.setCustomerDecision(null);
+    quote.setCustomerComment(null);
+    quote.setCustomerDecisionBy(null);
+    quote.setCustomerDecidedAt(null);
+  }
+
+  private void saveQuoteRevision(QuotePlan quote, String revisionNote, String editorName) {
+    QuoteRevision revision = new QuoteRevision();
+    revision.setQuoteId(quote.getId());
+    revision.setVersionNo(quote.getVersionNo());
+    revision.setCode(quote.getCode());
+    revision.setServiceScope(quote.getServiceScope());
+    revision.setInspectCycle(quote.getInspectCycle());
+    revision.setPaymentNodes(quote.getPaymentNodes());
+    revision.setAmount(defaultAmount(quote.getAmount()));
+    revision.setStatus(quote.getStatus());
+    revision.setRevisionNote(revisionNote);
+    revision.setEditorName(editorName);
+    revision.setRevisedAt(OffsetDateTime.now());
+    quoteRevisionRepository.save(revision);
+  }
+
+  private QuoteRevisionResponse toQuoteRevision(QuoteRevision revision) {
+    return new QuoteRevisionResponse(
+        revision.getId(),
+        revision.getVersionNo(),
+        revision.getCode(),
+        revision.getServiceScope(),
+        revision.getInspectCycle(),
+        revision.getPaymentNodes(),
+        revision.getAmount(),
+        revision.getStatus(),
+        revision.getRevisionNote(),
+        revision.getEditorName(),
+        revision.getRevisedAt()
+    );
   }
 
   private ContractResponse toContract(ServiceContract item, Map<UUID, Customer> customers) {

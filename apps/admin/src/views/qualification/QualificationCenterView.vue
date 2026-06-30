@@ -342,7 +342,7 @@ const employeeOptions = computed(() => references.employees.map(item => ({ label
 const accountUsers = ref<UserResponse[]>([]); const accountRoles = ref<RoleResponse[]>([]); const accountOrganizations = ref<OrganizationResponse[]>([]);
 const accountOptions = computed(() => accountUsers.value.filter(user => !employees.value.some(employee => employee.systemUserId === user.id && employee.id !== employeeEditingId.value)).map(user => ({ label: `${user.displayName} · ${user.username}`, value: user.id })));
 const roleOptions = computed(() => accountRoles.value.map(item => ({ label: item.name, value: item.id })));
-const organizationOptions = computed(() => accountOrganizations.value.map(item => ({ label: item.name, value: item.id })));
+const organizationOptions = computed(() => accountOrganizations.value.map(item => ({ label: item.fullPath || item.name, value: item.id })));
 const activeEmployeeCount = computed(() => employees.value.filter(employee => employee.employmentStatus === "ACTIVE").length);
 const linkedAccountCount = computed(() => employees.value.filter(employee => Boolean(employee.account)).length);
 const statusOptions = ["VALID", "EXPIRING", "EXPIRED", "UNVERIFIED", "LOCKED", "VOIDED"].map(value => ({ value, label: statusLabel(value as QualificationStatus) }));

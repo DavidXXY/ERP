@@ -9,5 +9,6 @@ public record CreateRoleRequest(
     @NotBlank @Size(max = 64) String code,
     @NotBlank @Size(max = 120) String name,
     @NotBlank @Size(max = 40) String dataScope,
-    List<UUID> permissionIds
+    List<UUID> permissionIds,
+    List<UUID> dataOrganizationIds
 ) {}

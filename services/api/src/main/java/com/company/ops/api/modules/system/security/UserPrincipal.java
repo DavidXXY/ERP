@@ -5,7 +5,9 @@ import com.company.ops.api.modules.system.domain.SystemRole;
 import com.company.ops.api.modules.system.domain.SystemUser;
 import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -20,6 +22,7 @@ public class UserPrincipal implements UserDetails {
   private final List<String> roleCodes;
   private final List<String> permissions;
   private final List<String> dataScopes;
+  private final Set<UUID> dataScopeOrganizationIds;
   private final List<GrantedAuthority> authorities;
 
   public UserPrincipal(SystemUser user) {
@@ -36,6 +39,11 @@ public class UserPrincipal implements UserDetails {
         .sorted()
         .toList();
     this.dataScopes = user.getRoles().stream().map(SystemRole::getDataScope).distinct().sorted().toList();
+    this.dataScopeOrganizationIds = user.getRoles().stream()
+        .filter(role -> "CUSTOM".equals(role.getDataScope()))
+        .flatMap(role -> role.getDataScopeOrganizations().stream())
+        .map(organization -> organization.getId())
+        .collect(Collectors.toUnmodifiableSet());
     this.authorities = permissions.stream()
         .map(SimpleGrantedAuthority::new)
         .map(GrantedAuthority.class::cast)
@@ -60,6 +68,10 @@ public class UserPrincipal implements UserDetails {
 
   public List<String> dataScopes() {
     return dataScopes;
+  }
+
+  public Set<UUID> dataScopeOrganizationIds() {
+    return dataScopeOrganizationIds;
   }
 
   @Override

@@ -213,7 +213,7 @@ async function loadRoles() {
 async function loadOrganizations() {
   try {
     organizations.value = await listOrganizationsFlatApi();
-    orgOptions.value = organizations.value.map(o => ({ label: o.name, value: o.id }));
+    orgOptions.value = organizations.value.map(o => ({ label: o.fullPath || o.name, value: o.id }));
   } catch (e) {
     message.error('加载组织列表失败');
   }

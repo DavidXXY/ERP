@@ -7,5 +7,9 @@ public record UpdateOrganizationRequest(
     @Size(max = 120) String name,
     @Size(max = 40) String type,
     Integer sortOrder,
-    UUID parentId
+    UUID parentId,
+    @Size(max = 80) String leaderName,
+    @Size(max = 40) String phone,
+    Boolean enabled,
+    @Size(max = 500) String description
 ) {}

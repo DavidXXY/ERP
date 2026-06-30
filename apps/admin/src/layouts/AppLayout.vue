@@ -4,6 +4,8 @@
       v-model:collapsed="app.sidebarCollapsed"
       class="app-sider"
       collapsible
+      breakpoint="lg"
+      :collapsed-width="72"
       :width="252"
     >
       <div class="brand">

@@ -9,8 +9,12 @@ public record RoleResponse(
     String name,
     String dataScope,
     List<PermissionSummary> permissions,
+    List<OrganizationSummary> dataOrganizations,
+    long userCount,
+    boolean builtIn,
     String createdAt,
     String updatedAt
 ) {
   public record PermissionSummary(UUID id, String code, String name, String module) {}
+  public record OrganizationSummary(UUID id, String code, String name) {}
 }

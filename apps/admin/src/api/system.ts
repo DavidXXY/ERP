@@ -38,6 +38,9 @@ export type RoleResponse = {
   name: string;
   dataScope: string;
   permissions: { id: string; code: string; name: string; module: string }[];
+  dataOrganizations: { id: string; code: string; name: string }[];
+  userCount: number;
+  builtIn: boolean;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -47,12 +50,14 @@ export type CreateRoleRequest = {
   name: string;
   dataScope: string;
   permissionIds?: string[];
+  dataOrganizationIds?: string[];
 };
 
 export type UpdateRoleRequest = {
   name?: string;
   dataScope?: string;
   permissionIds?: string[];
+  dataOrganizationIds?: string[];
 };
 
 export type PermissionResponse = {
@@ -60,6 +65,8 @@ export type PermissionResponse = {
   code: string;
   name: string;
   module: string;
+  roleCount: number;
+  builtIn: boolean;
   createdAt?: string;
 };
 
@@ -82,6 +89,14 @@ export type OrganizationResponse = {
   sortOrder: number;
   parentId?: string;
   parentName?: string;
+  fullPath: string;
+  leaderName?: string;
+  phone?: string;
+  enabled: boolean;
+  description?: string;
+  directUserCount: number;
+  totalUserCount: number;
+  childCount: number;
   children?: OrganizationResponse[];
   createdAt?: string;
   updatedAt?: string;
@@ -93,6 +108,10 @@ export type CreateOrganizationRequest = {
   type?: string;
   sortOrder?: number;
   parentId?: string;
+  leaderName?: string;
+  phone?: string;
+  enabled?: boolean;
+  description?: string;
 };
 
 export type UpdateOrganizationRequest = {
@@ -100,6 +119,10 @@ export type UpdateOrganizationRequest = {
   type?: string;
   sortOrder?: number;
   parentId?: string;
+  leaderName?: string;
+  phone?: string;
+  enabled?: boolean;
+  description?: string;
 };
 
 export type PageResponse<T> = {

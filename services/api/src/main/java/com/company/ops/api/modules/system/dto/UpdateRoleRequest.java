@@ -7,5 +7,6 @@ import java.util.UUID;
 public record UpdateRoleRequest(
     @Size(max = 120) String name,
     @Size(max = 40) String dataScope,
-    List<UUID> permissionIds
+    List<UUID> permissionIds,
+    List<UUID> dataOrganizationIds
 ) {}

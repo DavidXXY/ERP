@@ -1,5 +1,6 @@
 package com.company.ops.api.modules.system.service;
 
+import com.company.ops.api.common.exception.BusinessException;
 import com.company.ops.api.modules.system.domain.SystemOrganization;
 import com.company.ops.api.modules.system.domain.SystemPermission;
 import com.company.ops.api.modules.system.domain.SystemRole;
@@ -21,8 +22,12 @@ import com.company.ops.api.modules.system.repository.SystemPermissionRepository;
 import com.company.ops.api.modules.system.repository.SystemRoleRepository;
 import com.company.ops.api.modules.system.repository.SystemUserRepository;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -69,9 +74,13 @@ public class SystemService {
 
   @Transactional
   public UserResponse createUser(CreateUserRequest request) {
+    if (userRepository.existsByUsername(request.username())) {
+      throw new BusinessException("用户名已存在");
+    }
     SystemUser user = new SystemUser();
     if (request.orgId() != null) {
-      user.setOrganization(organizationRepository.findById(request.orgId()).orElse(null));
+      user.setOrganization(organizationRepository.findById(request.orgId())
+          .orElseThrow(() -> new BusinessException("所属组织不存在")));
     }
     user.setUsername(request.username());
     user.setDisplayName(request.displayName());
@@ -81,7 +90,7 @@ public class SystemService {
     user.setEnabled(true);
 
     if (request.roleIds() != null && !request.roleIds().isEmpty()) {
-      Set<SystemRole> roles = new HashSet<>(roleRepository.findAllById(request.roleIds()));
+      Set<SystemRole> roles = resolveRoles(request.roleIds());
       user.getRoles().addAll(roles);
     }
 
@@ -94,7 +103,8 @@ public class SystemService {
     SystemUser user = userRepository.findById(id).orElseThrow();
 
     if (request.orgId() != null) {
-      user.setOrganization(organizationRepository.findById(request.orgId()).orElse(null));
+      user.setOrganization(organizationRepository.findById(request.orgId())
+          .orElseThrow(() -> new BusinessException("所属组织不存在")));
     }
     if (request.displayName() != null) user.setDisplayName(request.displayName());
     if (request.phone() != null) user.setPhone(request.phone());
@@ -104,7 +114,7 @@ public class SystemService {
     if (request.roleIds() != null) {
       user.getRoles().clear();
       if (!request.roleIds().isEmpty()) {
-        Set<SystemRole> roles = new HashSet<>(roleRepository.findAllById(request.roleIds()));
+        Set<SystemRole> roles = resolveRoles(request.roleIds());
         user.getRoles().addAll(roles);
       }
     }
@@ -172,14 +182,21 @@ public class SystemService {
 
   @Transactional
   public RoleResponse createRole(CreateRoleRequest request) {
+    if (roleRepository.existsByCodeAndTenantId(request.code(), "default")) {
+      throw new BusinessException("角色代码已存在");
+    }
+    validateDataScope(request.dataScope(), request.dataOrganizationIds());
     SystemRole role = new SystemRole();
     role.setCode(request.code());
     role.setName(request.name());
     role.setDataScope(request.dataScope());
+    role.setBuiltIn(false);
 
     if (request.permissionIds() != null && !request.permissionIds().isEmpty()) {
-      Set<SystemPermission> permissions = new HashSet<>(permissionRepository.findAllById(request.permissionIds()));
-      role.getPermissions().addAll(permissions);
+      role.getPermissions().addAll(resolvePermissions(request.permissionIds()));
+    }
+    if ("CUSTOM".equals(request.dataScope())) {
+      role.getDataScopeOrganizations().addAll(resolveOrganizations(request.dataOrganizationIds()));
     }
 
     SystemRole saved = roleRepository.save(role);
@@ -191,13 +208,19 @@ public class SystemService {
     SystemRole role = roleRepository.findById(id).orElseThrow();
 
     if (request.name() != null) role.setName(request.name());
-    if (request.dataScope() != null) role.setDataScope(request.dataScope());
+    if (request.dataScope() != null) {
+      validateDataScope(request.dataScope(), request.dataOrganizationIds());
+      role.setDataScope(request.dataScope());
+      role.getDataScopeOrganizations().clear();
+      if ("CUSTOM".equals(request.dataScope())) {
+        role.getDataScopeOrganizations().addAll(resolveOrganizations(request.dataOrganizationIds()));
+      }
+    }
 
     if (request.permissionIds() != null) {
       role.getPermissions().clear();
       if (!request.permissionIds().isEmpty()) {
-        Set<SystemPermission> permissions = new HashSet<>(permissionRepository.findAllById(request.permissionIds()));
-        role.getPermissions().addAll(permissions);
+        role.getPermissions().addAll(resolvePermissions(request.permissionIds()));
       }
     }
 
@@ -207,7 +230,16 @@ public class SystemService {
 
   @Transactional
   public void deleteRole(UUID id) {
-    roleRepository.deleteById(id);
+    SystemRole role = roleRepository.findById(id)
+        .orElseThrow(() -> new BusinessException("角色不存在"));
+    if (role.isBuiltIn()) {
+      throw new BusinessException("内置角色不能删除");
+    }
+    long userCount = userRepository.countByRoles_Id(id);
+    if (userCount > 0) {
+      throw new BusinessException("该角色仍分配给 " + userCount + " 个账号，不能删除");
+    }
+    roleRepository.delete(role);
   }
 
   private RoleResponse toRoleResponse(SystemRole role) {
@@ -217,6 +249,9 @@ public class SystemService {
         role.getName(),
         role.getDataScope(),
         List.of(),
+        List.of(),
+        userRepository.countByRoles_Id(role.getId()),
+        role.isBuiltIn(),
         role.getCreatedAt() != null ? role.getCreatedAt().format(DT_FORMATTER) : null,
         role.getUpdatedAt() != null ? role.getUpdatedAt().format(DT_FORMATTER) : null
     );
@@ -225,6 +260,11 @@ public class SystemService {
   private RoleResponse toRoleResponseWithDetails(SystemRole role) {
     List<RoleResponse.PermissionSummary> permissions = role.getPermissions().stream()
         .map(p -> new RoleResponse.PermissionSummary(p.getId(), p.getCode(), p.getName(), p.getModule()))
+        .sorted((a, b) -> a.code().compareTo(b.code()))
+        .toList();
+    List<RoleResponse.OrganizationSummary> dataOrganizations = role.getDataScopeOrganizations().stream()
+        .map(org -> new RoleResponse.OrganizationSummary(org.getId(), org.getCode(), org.getName()))
+        .sorted((a, b) -> a.name().compareTo(b.name()))
         .toList();
     return new RoleResponse(
         role.getId(),
@@ -232,6 +272,9 @@ public class SystemService {
         role.getName(),
         role.getDataScope(),
         permissions,
+        dataOrganizations,
+        userRepository.countByRoles_Id(role.getId()),
+        role.isBuiltIn(),
         role.getCreatedAt() != null ? role.getCreatedAt().format(DT_FORMATTER) : null,
         role.getUpdatedAt() != null ? role.getUpdatedAt().format(DT_FORMATTER) : null
     );
@@ -253,10 +296,14 @@ public class SystemService {
 
   @Transactional
   public PermissionResponse createPermission(CreatePermissionRequest request) {
+    if (permissionRepository.existsByCodeAndTenantId(request.code(), "default")) {
+      throw new BusinessException("权限代码已存在");
+    }
     SystemPermission permission = new SystemPermission();
     permission.setCode(request.code());
     permission.setName(request.name());
     permission.setModule(request.module());
+    permission.setBuiltIn(false);
     SystemPermission saved = permissionRepository.save(permission);
     return toPermissionResponse(saved);
   }
@@ -272,7 +319,16 @@ public class SystemService {
 
   @Transactional
   public void deletePermission(UUID id) {
-    permissionRepository.deleteById(id);
+    SystemPermission permission = permissionRepository.findById(id)
+        .orElseThrow(() -> new BusinessException("权限不存在"));
+    if (permission.isBuiltIn()) {
+      throw new BusinessException("系统内置权限不能删除");
+    }
+    long roleCount = roleRepository.countByPermissions_Id(id);
+    if (roleCount > 0) {
+      throw new BusinessException("该权限仍被 " + roleCount + " 个角色使用，不能删除");
+    }
+    permissionRepository.delete(permission);
   }
 
   private PermissionResponse toPermissionResponse(SystemPermission permission) {
@@ -281,6 +337,8 @@ public class SystemService {
         permission.getCode(),
         permission.getName(),
         permission.getModule(),
+        roleRepository.countByPermissions_Id(permission.getId()),
+        permission.isBuiltIn(),
         permission.getCreatedAt() != null ? permission.getCreatedAt().format(DT_FORMATTER) : null
     );
   }
@@ -288,66 +346,121 @@ public class SystemService {
   // Organization management
   @Transactional(readOnly = true)
   public List<OrganizationResponse> listOrganizations() {
-    List<SystemOrganization> roots = organizationRepository.findTreeByTenantId("default");
-    return roots.stream().map(this::toOrganizationResponseWithChildren).toList();
+    List<SystemOrganization> all = organizationRepository.findByTenantIdOrderBySortOrderAsc("default");
+    Map<UUID, List<SystemOrganization>> children = childOrganizations(all);
+    Map<UUID, Long> directUsers = directUserCounts(all);
+    return all.stream()
+        .filter(item -> item.getParent() == null)
+        .map(item -> toOrganizationResponse(item, children, directUsers, true))
+        .toList();
   }
 
   @Transactional(readOnly = true)
   public List<OrganizationResponse> listOrganizationsFlat() {
-    return organizationRepository.findByTenantIdOrderBySortOrderAsc("default").stream()
-        .map(this::toOrganizationResponse)
+    List<SystemOrganization> all = organizationRepository.findByTenantIdOrderBySortOrderAsc("default");
+    Map<UUID, List<SystemOrganization>> children = childOrganizations(all);
+    Map<UUID, Long> directUsers = directUserCounts(all);
+    return all.stream()
+        .map(item -> toOrganizationResponse(item, children, directUsers, false))
         .toList();
   }
 
   @Transactional(readOnly = true)
   public OrganizationResponse getOrganization(UUID id) {
-    SystemOrganization org = organizationRepository.findById(id).orElseThrow();
-    return toOrganizationResponseWithChildren(org);
+    List<SystemOrganization> all = organizationRepository.findByTenantIdOrderBySortOrderAsc("default");
+    SystemOrganization org = all.stream().filter(item -> item.getId().equals(id)).findFirst()
+        .orElseThrow(() -> new BusinessException("组织不存在"));
+    return toOrganizationResponse(org, childOrganizations(all), directUserCounts(all), true);
   }
 
   @Transactional
   public OrganizationResponse createOrganization(CreateOrganizationRequest request) {
+    if (organizationRepository.existsByCodeAndTenantId(request.code(), "default")) {
+      throw new BusinessException("组织代码已存在");
+    }
+    validateOrganizationType(request.type());
     SystemOrganization org = new SystemOrganization();
     org.setCode(request.code());
     org.setName(request.name());
     org.setType(request.type() != null ? request.type() : "DEPARTMENT");
     org.setSortOrder(request.sortOrder() != null ? request.sortOrder() : 0);
+    org.setLeaderName(request.leaderName());
+    org.setPhone(request.phone());
+    org.setEnabled(request.enabled() == null || request.enabled());
+    org.setDescription(request.description());
 
     if (request.parentId() != null) {
-      SystemOrganization parent = organizationRepository.findById(request.parentId()).orElseThrow();
+      SystemOrganization parent = organizationRepository.findById(request.parentId())
+          .orElseThrow(() -> new BusinessException("上级组织不存在"));
       org.setParent(parent);
     }
 
     SystemOrganization saved = organizationRepository.save(org);
-    return toOrganizationResponse(saved);
+    return getOrganization(saved.getId());
   }
 
   @Transactional
   public OrganizationResponse updateOrganization(UUID id, UpdateOrganizationRequest request) {
-    SystemOrganization org = organizationRepository.findById(id).orElseThrow();
+    SystemOrganization org = organizationRepository.findById(id)
+        .orElseThrow(() -> new BusinessException("组织不存在"));
 
     if (request.name() != null) org.setName(request.name());
-    if (request.type() != null) org.setType(request.type());
+    if (request.type() != null) {
+      validateOrganizationType(request.type());
+      org.setType(request.type());
+    }
     if (request.sortOrder() != null) org.setSortOrder(request.sortOrder());
+    if (request.leaderName() != null) org.setLeaderName(request.leaderName());
+    if (request.phone() != null) org.setPhone(request.phone());
+    if (request.enabled() != null) org.setEnabled(request.enabled());
+    if (request.description() != null) org.setDescription(request.description());
 
     if (request.parentId() != null) {
-      SystemOrganization parent = organizationRepository.findById(request.parentId()).orElseThrow();
+      SystemOrganization parent = organizationRepository.findById(request.parentId())
+          .orElseThrow(() -> new BusinessException("上级组织不存在"));
+      validateOrganizationParent(org, parent);
       org.setParent(parent);
-    } else if (request.parentId() == null) {
+    } else {
       org.setParent(null);
     }
 
     SystemOrganization saved = organizationRepository.save(org);
-    return toOrganizationResponse(saved);
+    return getOrganization(saved.getId());
   }
 
   @Transactional
   public void deleteOrganization(UUID id) {
-    organizationRepository.deleteById(id);
+    SystemOrganization org = organizationRepository.findById(id)
+        .orElseThrow(() -> new BusinessException("组织不存在"));
+    if ("ROOT".equals(org.getCode())) {
+      throw new BusinessException("根组织不能删除");
+    }
+    if (organizationRepository.countByParent_Id(id) > 0) {
+      throw new BusinessException("该组织存在下级组织，请先调整下级组织");
+    }
+    long userCount = userRepository.countByOrganization_Id(id);
+    if (userCount > 0) {
+      throw new BusinessException("该组织仍有 " + userCount + " 个账号，请先转移成员");
+    }
+    if (roleRepository.countByDataScopeOrganizations_Id(id) > 0) {
+      throw new BusinessException("该组织仍被角色数据范围引用，不能删除");
+    }
+    organizationRepository.delete(org);
   }
 
-  private OrganizationResponse toOrganizationResponse(SystemOrganization org) {
+  private OrganizationResponse toOrganizationResponse(
+      SystemOrganization org,
+      Map<UUID, List<SystemOrganization>> children,
+      Map<UUID, Long> directUsers,
+      boolean includeChildren
+  ) {
     String parentName = org.getParent() != null ? org.getParent().getName() : null;
+    List<SystemOrganization> childEntities = children.getOrDefault(org.getId(), List.of());
+    List<OrganizationResponse> childResponses = includeChildren
+        ? childEntities.stream()
+            .map(child -> toOrganizationResponse(child, children, directUsers, true))
+            .toList()
+        : List.of();
     return new OrganizationResponse(
         org.getId(),
         org.getCode(),
@@ -356,29 +469,118 @@ public class SystemService {
         org.getSortOrder(),
         org.getParent() != null ? org.getParent().getId() : null,
         parentName,
-        List.of(),
+        organizationPath(org),
+        org.getLeaderName(),
+        org.getPhone(),
+        org.isEnabled(),
+        org.getDescription(),
+        directUsers.getOrDefault(org.getId(), 0L),
+        totalUserCount(org.getId(), children, directUsers),
+        childEntities.size(),
+        childResponses,
         org.getCreatedAt() != null ? org.getCreatedAt().format(DT_FORMATTER) : null,
         org.getUpdatedAt() != null ? org.getUpdatedAt().format(DT_FORMATTER) : null
     );
   }
 
-  private OrganizationResponse toOrganizationResponseWithChildren(SystemOrganization org) {
-    String parentName = org.getParent() != null ? org.getParent().getName() : null;
-    List<OrganizationResponse> children = org.getChildren().stream()
-        .sorted((a, b) -> Integer.compare(a.getSortOrder() != null ? a.getSortOrder() : 0, b.getSortOrder() != null ? b.getSortOrder() : 0))
-        .map(this::toOrganizationResponseWithChildren)
-        .toList();
-    return new OrganizationResponse(
-        org.getId(),
-        org.getCode(),
-        org.getName(),
-        org.getType(),
-        org.getSortOrder(),
-        org.getParent() != null ? org.getParent().getId() : null,
-        parentName,
-        children,
-        org.getCreatedAt() != null ? org.getCreatedAt().format(DT_FORMATTER) : null,
-        org.getUpdatedAt() != null ? org.getUpdatedAt().format(DT_FORMATTER) : null
-    );
+  private Map<UUID, List<SystemOrganization>> childOrganizations(List<SystemOrganization> organizations) {
+    Map<UUID, List<SystemOrganization>> result = new HashMap<>();
+    for (SystemOrganization organization : organizations) {
+      if (organization.getParent() != null) {
+        result.computeIfAbsent(organization.getParent().getId(), ignored -> new ArrayList<>())
+            .add(organization);
+      }
+    }
+    result.values().forEach(items -> items.sort((a, b) -> {
+      int order = Integer.compare(a.getSortOrder() == null ? 0 : a.getSortOrder(), b.getSortOrder() == null ? 0 : b.getSortOrder());
+      return order != 0 ? order : a.getName().compareTo(b.getName());
+    }));
+    return result;
+  }
+
+  private Map<UUID, Long> directUserCounts(List<SystemOrganization> organizations) {
+    Map<UUID, Long> counts = new HashMap<>();
+    organizations.forEach(org -> counts.put(org.getId(), userRepository.countByOrganization_Id(org.getId())));
+    return counts;
+  }
+
+  private long totalUserCount(
+      UUID organizationId,
+      Map<UUID, List<SystemOrganization>> children,
+      Map<UUID, Long> directUsers
+  ) {
+    long total = directUsers.getOrDefault(organizationId, 0L);
+    for (SystemOrganization child : children.getOrDefault(organizationId, List.of())) {
+      total += totalUserCount(child.getId(), children, directUsers);
+    }
+    return total;
+  }
+
+  private String organizationPath(SystemOrganization organization) {
+    List<String> names = new ArrayList<>();
+    Set<UUID> visited = new HashSet<>();
+    SystemOrganization current = organization;
+    while (current != null && visited.add(current.getId())) {
+      names.add(current.getName());
+      current = current.getParent();
+    }
+    Collections.reverse(names);
+    return String.join(" / ", names);
+  }
+
+  private void validateOrganizationType(String type) {
+    if (type != null && !Set.of("COMPANY", "DEPARTMENT", "TEAM").contains(type)) {
+      throw new BusinessException("组织类型不正确");
+    }
+  }
+
+  private void validateOrganizationParent(SystemOrganization organization, SystemOrganization parent) {
+    if (organization.getId().equals(parent.getId())) {
+      throw new BusinessException("上级组织不能选择自身");
+    }
+    Set<UUID> visited = new HashSet<>();
+    SystemOrganization current = parent;
+    while (current != null && visited.add(current.getId())) {
+      if (organization.getId().equals(current.getId())) {
+        throw new BusinessException("不能将组织移动到自己的下级组织");
+      }
+      current = current.getParent();
+    }
+  }
+
+  private void validateDataScope(String dataScope, List<UUID> organizationIds) {
+    if (!Set.of("SELF", "DEPT", "DEPARTMENT", "DEPT_AND_SUB", "CUSTOM", "ALL").contains(dataScope)) {
+      throw new BusinessException("数据范围不正确");
+    }
+    if ("CUSTOM".equals(dataScope) && (organizationIds == null || organizationIds.isEmpty())) {
+      throw new BusinessException("自定义数据范围至少选择一个组织");
+    }
+  }
+
+  private Set<SystemPermission> resolvePermissions(List<UUID> ids) {
+    Set<UUID> requested = new HashSet<>(ids == null ? List.of() : ids);
+    Set<SystemPermission> permissions = new HashSet<>(permissionRepository.findAllById(requested));
+    if (permissions.size() != requested.size()) {
+      throw new BusinessException("部分权限不存在，请刷新后重试");
+    }
+    return permissions;
+  }
+
+  private Set<SystemOrganization> resolveOrganizations(List<UUID> ids) {
+    Set<UUID> requested = new HashSet<>(ids == null ? List.of() : ids);
+    Set<SystemOrganization> organizations = new HashSet<>(organizationRepository.findAllById(requested));
+    if (organizations.size() != requested.size()) {
+      throw new BusinessException("部分组织不存在，请刷新后重试");
+    }
+    return organizations;
+  }
+
+  private Set<SystemRole> resolveRoles(List<UUID> ids) {
+    Set<UUID> requested = new HashSet<>(ids == null ? List.of() : ids);
+    Set<SystemRole> roles = new HashSet<>(roleRepository.findAllById(requested));
+    if (roles.size() != requested.size()) {
+      throw new BusinessException("部分角色不存在，请刷新后重试");
+    }
+    return roles;
   }
 }

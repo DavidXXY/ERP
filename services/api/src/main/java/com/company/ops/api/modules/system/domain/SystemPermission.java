@@ -18,6 +18,9 @@ public class SystemPermission extends BaseEntity {
   @Column(nullable = false, length = 80)
   private String module;
 
+  @Column(name = "built_in", nullable = false)
+  private boolean builtIn;
+
   public String getCode() {
     return code;
   }
@@ -41,5 +44,12 @@ public class SystemPermission extends BaseEntity {
   public void setModule(String module) {
     this.module = module;
   }
-}
 
+  public boolean isBuiltIn() {
+    return builtIn;
+  }
+
+  public void setBuiltIn(boolean builtIn) {
+    this.builtIn = builtIn;
+  }
+}

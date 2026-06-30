@@ -1,7 +1,11 @@
 package com.company.ops.api.modules.system.security;
 
 import com.company.ops.api.modules.system.domain.SystemUser;
+import com.company.ops.api.modules.system.domain.SystemOrganization;
+import com.company.ops.api.modules.system.repository.SystemOrganizationRepository;
 import com.company.ops.api.modules.system.repository.SystemUserRepository;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -13,7 +17,15 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class DataScopeService {
   private final SystemUserRepository userRepository;
-  public DataScopeService(SystemUserRepository userRepository) { this.userRepository = userRepository; }
+  private final SystemOrganizationRepository organizationRepository;
+
+  public DataScopeService(
+      SystemUserRepository userRepository,
+      SystemOrganizationRepository organizationRepository
+  ) {
+    this.userRepository = userRepository;
+    this.organizationRepository = organizationRepository;
+  }
 
   @Transactional(readOnly = true)
   public boolean canViewOwner(String ownerName) {
@@ -36,17 +48,60 @@ public class DataScopeService {
   }
 
   protected Set<String> visibleDisplayNames(UserPrincipal principal) {
-    if (!principal.dataScopes().contains("DEPARTMENT")) return Set.of(principal.displayName());
-    SystemUser user = userRepository.findById(principal.id()).orElse(null);
-    if (user == null || user.getOrganization() == null) return Set.of(principal.displayName());
-    return userRepository.findByOrganization_Id(user.getOrganization().getId()).stream().map(SystemUser::getDisplayName).collect(Collectors.toSet());
+    Set<UUID> userIds = visibleUserIds(principal);
+    if (userIds.isEmpty()) return Set.of(principal.displayName());
+    Set<String> names = userRepository.findAllById(userIds).stream()
+        .map(SystemUser::getDisplayName)
+        .collect(Collectors.toSet());
+    names.add(principal.displayName());
+    return names;
   }
 
   protected Set<UUID> visibleUserIds(UserPrincipal principal) {
-    if (!principal.dataScopes().contains("DEPARTMENT")) return Set.of(principal.id());
+    if (principal.dataScopes().contains("ALL")) {
+      return userRepository.findAll().stream().map(SystemUser::getId).collect(Collectors.toSet());
+    }
+    Set<UUID> visible = new HashSet<>();
+    visible.add(principal.id());
     SystemUser user = userRepository.findById(principal.id()).orElse(null);
-    if (user == null || user.getOrganization() == null) return Set.of(principal.id());
-    return userRepository.findByOrganization_Id(user.getOrganization().getId()).stream().map(SystemUser::getId).collect(Collectors.toSet());
+    Set<UUID> organizationIds = new HashSet<>();
+    if (user != null && user.getOrganization() != null) {
+      UUID currentOrganizationId = user.getOrganization().getId();
+      if (principal.dataScopes().contains("DEPT") || principal.dataScopes().contains("DEPARTMENT")) {
+        organizationIds.add(currentOrganizationId);
+      }
+      if (principal.dataScopes().contains("DEPT_AND_SUB")) {
+        organizationIds.addAll(organizationAndDescendantIds(currentOrganizationId));
+      }
+    }
+    if (principal.dataScopes().contains("CUSTOM")) {
+      organizationIds.addAll(principal.dataScopeOrganizationIds());
+    }
+    if (!organizationIds.isEmpty()) {
+      visible.addAll(userRepository.findByOrganization_IdIn(organizationIds).stream()
+          .map(SystemUser::getId)
+          .toList());
+    }
+    return visible;
+  }
+
+  private Set<UUID> organizationAndDescendantIds(UUID rootId) {
+    List<SystemOrganization> organizations = organizationRepository
+        .findByTenantIdOrderBySortOrderAsc("default");
+    Set<UUID> visible = new HashSet<>();
+    visible.add(rootId);
+    boolean changed;
+    do {
+      changed = false;
+      for (SystemOrganization organization : organizations) {
+        if (organization.getParent() != null
+            && visible.contains(organization.getParent().getId())
+            && visible.add(organization.getId())) {
+          changed = true;
+        }
+      }
+    } while (changed);
+    return visible;
   }
 
   private UserPrincipal principal() {

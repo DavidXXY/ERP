@@ -7,5 +7,7 @@ public record PermissionResponse(
     String code,
     String name,
     String module,
+    long roleCount,
+    boolean builtIn,
     String createdAt
 ) {}

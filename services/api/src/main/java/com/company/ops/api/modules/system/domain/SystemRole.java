@@ -24,6 +24,9 @@ public class SystemRole extends BaseEntity {
   @Column(name = "data_scope", nullable = false, length = 40)
   private String dataScope = "SELF";
 
+  @Column(name = "built_in", nullable = false)
+  private boolean builtIn;
+
   @ManyToMany(fetch = FetchType.LAZY)
   @JoinTable(
       name = "sys_role_permissions",
@@ -31,6 +34,14 @@ public class SystemRole extends BaseEntity {
       inverseJoinColumns = @JoinColumn(name = "permission_id")
   )
   private Set<SystemPermission> permissions = new HashSet<>();
+
+  @ManyToMany(fetch = FetchType.LAZY)
+  @JoinTable(
+      name = "sys_role_data_organizations",
+      joinColumns = @JoinColumn(name = "role_id"),
+      inverseJoinColumns = @JoinColumn(name = "organization_id")
+  )
+  private Set<SystemOrganization> dataScopeOrganizations = new HashSet<>();
 
   public String getCode() {
     return code;
@@ -56,8 +67,19 @@ public class SystemRole extends BaseEntity {
     this.dataScope = dataScope;
   }
 
+  public boolean isBuiltIn() {
+    return builtIn;
+  }
+
+  public void setBuiltIn(boolean builtIn) {
+    this.builtIn = builtIn;
+  }
+
   public Set<SystemPermission> getPermissions() {
     return permissions;
   }
-}
 
+  public Set<SystemOrganization> getDataScopeOrganizations() {
+    return dataScopeOrganizations;
+  }
+}

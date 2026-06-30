@@ -19,5 +19,9 @@ public interface SystemOrganizationRepository extends JpaRepository<SystemOrgani
 
   boolean existsByCodeAndTenantId(String code, String tenantId);
 
+  boolean existsByCodeAndTenantIdAndIdNot(String code, String tenantId, UUID id);
+
+  long countByParent_Id(UUID parentId);
+
   SystemOrganization findByCodeAndTenantId(String code, String tenantId);
 }

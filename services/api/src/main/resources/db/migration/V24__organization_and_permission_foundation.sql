@@ -1,7 +1,7 @@
-alter table sys_organizations add column if not exists leader_name varchar(80);
-alter table sys_organizations add column if not exists phone varchar(40);
-alter table sys_organizations add column if not exists enabled boolean not null default true;
-alter table sys_organizations add column if not exists description varchar(500);
+-- [now in V1] alter table sys_organizations add column if not exists leader_name varchar(80);
+-- [now in V1] alter table sys_organizations add column if not exists phone varchar(40);
+-- [now in V1] alter table sys_organizations add column if not exists enabled boolean not null default true;
+-- [now in V1] alter table sys_organizations add column if not exists description varchar(500);
 
 alter table sys_roles add column if not exists built_in boolean not null default false;
 alter table sys_permissions add column if not exists built_in boolean not null default false;
@@ -9,7 +9,7 @@ alter table sys_permissions add column if not exists built_in boolean not null d
 update sys_roles set built_in = true where code in ('ADMIN', 'CRM_MANAGER');
 update sys_permissions set built_in = true;
 
-create table if not exists sys_role_data_organizations (
+-- [now in V1] create table if not exists sys_role_data_organizations (
   role_id uuid not null references sys_roles(id) on delete cascade,
   organization_id uuid not null references sys_organizations(id),
   primary key (role_id, organization_id)

@@ -314,6 +314,7 @@ const categoryOptions: Array<{ label: string; value: ProjectCostCategory }> = [
 ];
 const sourceOptions = [
   { label: "手工登记", value: "MANUAL" }, { label: "仓库领料", value: "INVENTORY" },
+  { label: "采购入库（自动）", value: "PROCUREMENT", disabled: true },
   { label: "费用报销", value: "EXPENSE" }, { label: "外包结算", value: "SUBCONTRACT" },
 ];
 const approvalFilterOptions = [

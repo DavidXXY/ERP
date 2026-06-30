@@ -5,7 +5,7 @@ import jakarta.validation.constraints.Size;
 import java.util.UUID;
 
 public record CreateOrganizationRequest(
-    @NotBlank @Size(max = 64) String code,
+    String code, // auto-generated if null
     @NotBlank @Size(max = 120) String name,
     @Size(max = 40) String type,
     Integer sortOrder,

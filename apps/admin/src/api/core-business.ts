@@ -14,13 +14,13 @@ export type ProjectStage =
 export type ProjectType = "NEW_CONSTRUCTION" | "RENOVATION" | "O_M_RENOVATION";
 export type ProjectApprovalStatus = "PENDING" | "APPROVED" | "REJECTED";
 export type ProjectCostCategory = "LABOR" | "MATERIAL" | "SUBCONTRACT" | "TRAVEL" | "OTHER";
-export type ProjectCostSource = "MANUAL" | "INVENTORY" | "EXPENSE" | "SUBCONTRACT";
+export type ProjectCostSource = "MANUAL" | "INVENTORY" | "PROCUREMENT" | "EXPENSE" | "SUBCONTRACT";
 
 export type Project = {
   id: string;
   customerId?: string;
   customerName?: string;
-  code: string;
+  code?: string;
   name: string;
   projectType: ProjectType;
   managerName: string;
@@ -49,7 +49,7 @@ export type ProjectBudgetInput = {
 
 export type CreateProjectPayload = {
   customerId: string;
-  code: string;
+  code?: string;
   name: string;
   projectType: ProjectType;
   managerName: string;
@@ -98,7 +98,7 @@ export type StockMovementType = "INBOUND" | "OUTBOUND" | "RETURN" | "SCRAP" | "A
 
 export type InventoryPart = {
   id: string;
-  code: string;
+  code?: string;
   name: string;
   model?: string;
   stockQty: number;
@@ -119,7 +119,7 @@ export type StockMovement = {
 };
 
 export type CreateInventoryPartPayload = {
-  code: string;
+  code?: string;
   name: string;
   model?: string;
   stockQty?: number;
@@ -150,7 +150,7 @@ export type MaterialIssueLine = {
 
 export type MaterialIssue = {
   id: string;
-  code: string;
+  code?: string;
   projectId: string;
   projectCode: string;
   projectName: string;
@@ -164,14 +164,14 @@ export type MaterialIssue = {
 
 export type InventoryProjectOption = {
   id: string;
-  code: string;
+  code?: string;
   name: string;
   managerName: string;
   stage: ProjectStage;
 };
 
 export type CreateMaterialIssuePayload = {
-  code: string;
+  code?: string;
   projectId: string;
   issueDate: string;
   receiverName: string;
@@ -191,7 +191,7 @@ export type MaterialReturnLine = {
 
 export type MaterialReturn = {
   id: string;
-  code: string;
+  code?: string;
   issueId: string;
   issueCode: string;
   projectId: string;
@@ -207,10 +207,22 @@ export type SupplierRiskStatus = "NORMAL" | "WATCHLIST" | "BLOCKED";
 export type PurchaseRequestStatus = "DRAFT" | "SUBMITTED" | "APPROVED" | "ORDERED" | "RECEIVED" | "CANCELLED";
 export type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED";
 export type PurchaseOrderStatus = "DRAFT" | "ORDERED" | "PARTIAL_RECEIVED" | "RECEIVED" | "CLOSED" | "CANCELLED";
+export type ProcurementCostType = "PROJECT" | "DEPARTMENT";
+
+export type ProcurementCostTargetOption = {
+  id: string;
+  code?: string;
+  name: string;
+};
+
+export type ProcurementCostTargetOptions = {
+  projects: ProcurementCostTargetOption[];
+  departments: ProcurementCostTargetOption[];
+};
 
 export type Supplier = {
   id: string;
-  code: string;
+  code?: string;
   name: string;
   category?: string;
   contactName?: string;
@@ -221,13 +233,17 @@ export type Supplier = {
 
 export type PurchaseRequest = {
   id: string;
-  code: string;
+  code?: string;
   requesterName: string;
   partId?: string;
   partName: string;
   quantity: number;
   expectedDate?: string;
   reason?: string;
+  costType: ProcurementCostType;
+  costTargetId: string;
+  costTargetCode: string;
+  costTargetName: string;
   status: PurchaseRequestStatus;
   approvalStatus: ApprovalStatus;
   lastApprovalComment?: string;
@@ -237,7 +253,7 @@ export type PurchaseRequest = {
 
 export type PurchaseOrder = {
   id: string;
-  code: string;
+  code?: string;
   supplierId: string;
   supplierName?: string;
   requestId?: string;
@@ -249,11 +265,15 @@ export type PurchaseOrder = {
   unitPrice: number;
   orderAmount: number;
   expectedDeliveryDate?: string;
+  costType: ProcurementCostType;
+  costTargetId: string;
+  costTargetCode: string;
+  costTargetName: string;
   status: PurchaseOrderStatus;
 };
 
 export type CreateSupplierPayload = {
-  code: string;
+  code?: string;
   name: string;
   category?: string;
   contactName?: string;
@@ -263,17 +283,20 @@ export type CreateSupplierPayload = {
 };
 
 export type CreatePurchaseRequestPayload = {
-  code: string;
+  code?: string;
   requesterName: string;
   partId?: string;
   partName?: string;
   quantity: number;
   expectedDate?: string;
   reason?: string;
+  costType: ProcurementCostType;
+  projectId?: string;
+  departmentId?: string;
 };
 
 export type CreatePurchaseOrderPayload = {
-  code: string;
+  code?: string;
   supplierId: string;
   requestId: string;
   unitPrice: number;
@@ -282,7 +305,7 @@ export type CreatePurchaseOrderPayload = {
 
 export type GoodsReceipt = {
   id: string;
-  code: string;
+  code?: string;
   orderId: string;
   orderCode: string;
   partId: string;
@@ -293,13 +316,17 @@ export type GoodsReceipt = {
   receivedDate: string;
   deliveryNo: string;
   receiverName: string;
+  costType: ProcurementCostType;
+  costTargetId: string;
+  costTargetCode: string;
+  costTargetName: string;
 };
 
 export type PayableStatus = "PENDING" | "PARTIAL_PAID" | "PAID" | "CANCELLED";
 
 export type ProcurementPayable = {
   id: string;
-  code: string;
+  code?: string;
   supplierId: string;
   supplierName: string;
   orderId: string;
@@ -309,13 +336,33 @@ export type ProcurementPayable = {
   paidAmount: number;
   outstandingAmount: number;
   dueDate: string;
+  costType: ProcurementCostType;
+  costTargetId: string;
+  costTargetCode: string;
+  costTargetName: string;
   status: PayableStatus;
+};
+
+export type ProcurementCostAllocation = {
+  id: string;
+  orderId: string;
+  orderCode: string;
+  receiptId: string;
+  receiptCode: string;
+  costType: ProcurementCostType;
+  costTargetId: string;
+  costTargetCode: string;
+  costTargetName: string;
+  partName: string;
+  amount: number;
+  incurredDate: string;
 };
 
 export type ReceivePurchaseOrderResult = {
   order: PurchaseOrder;
   receipt: GoodsReceipt;
   payable: ProcurementPayable;
+  costAllocation: ProcurementCostAllocation;
   currentStockQty: number;
 };
 
@@ -385,6 +432,14 @@ export function listSuppliers() {
 
 export function createSupplier(payload: CreateSupplierPayload) {
   return request<Supplier>({ method: "POST", url: "/procurement/suppliers", data: payload });
+}
+
+export function listProcurementCostTargets() {
+  return request<ProcurementCostTargetOptions>({ method: "GET", url: "/procurement/cost-targets" });
+}
+
+export function listProcurementCostAllocations() {
+  return request<ProcurementCostAllocation[]>({ method: "GET", url: "/procurement/cost-allocations" });
 }
 
 export function listPurchaseRequests() {

@@ -8,6 +8,7 @@ import com.company.ops.api.modules.crm.domain.ReceivableStatus;
 import com.company.ops.api.modules.crm.domain.RiskStatus;
 import com.company.ops.api.modules.crm.dto.CreateCustomerRequest;
 import com.company.ops.api.modules.crm.dto.CustomerDetailResponse;
+import com.company.ops.api.common.service.CodeGenerator;
 import com.company.ops.api.modules.crm.dto.CustomerSummaryResponse;
 import com.company.ops.api.modules.crm.dto.UpdateCustomerRequest;
 import com.company.ops.api.modules.crm.repository.CustomerRepository;
@@ -26,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class CustomerService {
 
+  private final CodeGenerator codeGenerator;
   private final CustomerRepository customerRepository;
   private final OpportunityRepository opportunityRepository;
   private final ServiceContractRepository contractRepository;
@@ -34,6 +36,7 @@ public class CustomerService {
   private final DataScopeService dataScopeService;
 
   public CustomerService(
+      CodeGenerator codeGenerator,
       CustomerRepository customerRepository,
       OpportunityRepository opportunityRepository,
       ServiceContractRepository contractRepository,
@@ -41,6 +44,7 @@ public class CustomerService {
       FollowUpRepository followUpRepository,
       DataScopeService dataScopeService
   ) {
+    this.codeGenerator = codeGenerator;
     this.customerRepository = customerRepository;
     this.opportunityRepository = opportunityRepository;
     this.contractRepository = contractRepository;
@@ -178,14 +182,15 @@ public class CustomerService {
 
   @Transactional
   public CustomerDetailResponse createCustomer(CreateCustomerRequest request) {
-    if (customerRepository.existsByCode(request.code())) {
+    String generatedCode = request.code() != null ? request.code() : codeGenerator.generate("CUSTOMER");
+    if (customerRepository.existsByCode(generatedCode)) {
       throw new BusinessException("客户编码已存在");
     }
 
     assertOwnerVisible(request.ownerName());
 
     Customer customer = new Customer();
-    customer.setCode(request.code());
+    customer.setCode(generatedCode);
     applyCustomerDetails(customer, request.name(), request.industry(), request.level(),
         request.ownerName(), request.paymentHabit(), request.riskStatus(), request.riskNote(),
         request.invoice(), request.contacts(), request.sites());

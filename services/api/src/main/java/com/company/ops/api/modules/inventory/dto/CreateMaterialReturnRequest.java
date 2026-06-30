@@ -9,7 +9,8 @@ import java.time.LocalDate;
 import java.util.List;
 
 public record CreateMaterialReturnRequest(
-    @NotBlank @Size(max = 64) String code,
+    // auto-gen
+    String code,
     @NotNull LocalDate returnDate,
     @NotBlank @Size(max = 80) String handlerName,
     @NotEmpty List<@Valid MaterialReturnLineRequest> lines

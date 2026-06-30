@@ -3,15 +3,20 @@ create extension if not exists pgcrypto;
 create table sys_organizations (
   id uuid primary key default gen_random_uuid(),
   tenant_id varchar(64) not null default 'default',
-  code varchar(64) not null unique,
+  code varchar(64) not null,
   name varchar(120) not null,
   type varchar(40) default 'DEPARTMENT',
   sort_order int default 0,
+  leader_name varchar(80),
+  phone varchar(40),
+  enabled boolean not null default true,
+  description varchar(500),
   parent_id uuid,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   created_by varchar(64),
-  updated_by varchar(64)
+  updated_by varchar(64),
+  unique (tenant_id, code)
 );
 
 create table sys_users (
@@ -300,3 +305,21 @@ create index idx_contract_customer on crm_service_contracts (customer_id);
 create index idx_receivable_customer on fin_receivables (customer_id);
 create index idx_work_order_customer on work_orders (customer_id);
 
+
+create table sys_role_permissions (
+  role_id uuid not null references sys_roles(id) on delete cascade,
+  permission_id uuid not null references sys_permissions(id) on delete cascade,
+  primary key (role_id, permission_id)
+);
+
+create table sys_role_data_organizations (
+  role_id uuid not null references sys_roles(id) on delete cascade,
+  organization_id uuid not null references sys_organizations(id),
+  primary key (role_id, organization_id)
+);
+
+create table code_sequences (
+  entity_type varchar(64) primary key,
+  prefix varchar(16) not null,
+  next_number bigint not null default 1
+);

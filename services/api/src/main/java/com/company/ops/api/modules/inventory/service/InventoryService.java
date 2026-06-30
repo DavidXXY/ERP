@@ -1,6 +1,7 @@
 package com.company.ops.api.modules.inventory.service;
 
 import com.company.ops.api.common.exception.BusinessException;
+import com.company.ops.api.common.service.CodeGenerator;
 import com.company.ops.api.modules.inventory.domain.InventoryIssueLine;
 import com.company.ops.api.modules.inventory.domain.InventoryIssueOrder;
 import com.company.ops.api.modules.inventory.domain.InventoryIssueStatus;
@@ -50,6 +51,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class InventoryService {
 
+  private final CodeGenerator codeGenerator;
   private final InventoryPartRepository partRepository;
   private final StockMovementRepository movementRepository;
   private final InventoryIssueOrderRepository issueRepository;
@@ -69,6 +71,7 @@ public class InventoryService {
       ProjectRepository projectRepository,
       ProjectCostEntryRepository projectCostRepository
   ) {
+    this.codeGenerator = codeGenerator;
     this.partRepository = partRepository;
     this.movementRepository = movementRepository;
     this.issueRepository = issueRepository;
@@ -103,11 +106,12 @@ public class InventoryService {
 
   @Transactional
   public InventoryPartResponse createPart(CreateInventoryPartRequest request) {
-    if (partRepository.existsByCode(request.code())) {
+    String partCode = request.code() != null ? request.code() : codeGenerator.generate("PART");
+    if (partRepository.existsByCode(partCode)) {
       throw new BusinessException("物料编码已存在");
     }
     InventoryPart part = new InventoryPart();
-    part.setCode(request.code());
+    part.setCode(partCode);
     part.setName(request.name());
     part.setModel(request.model());
     part.setStockQty(amount(request.stockQty()));
@@ -156,7 +160,8 @@ public class InventoryService {
 
   @Transactional
   public MaterialIssueResponse createIssue(CreateMaterialIssueRequest request) {
-    if (issueRepository.existsByCode(request.code())) {
+    String issueCode = request.code() != null ? request.code() : codeGenerator.generate("ISSUE");
+    if (issueRepository.existsByCode(issueCode)) {
       throw new BusinessException("领料单号已存在");
     }
     validateUniqueParts(request.lines());
@@ -164,7 +169,7 @@ public class InventoryService {
     Map<UUID, InventoryPart> parts = lockParts(request.lines().stream().map(MaterialIssueLineRequest::partId).toList());
 
     InventoryIssueOrder order = new InventoryIssueOrder();
-    order.setCode(request.code());
+    order.setCode(issueCode);
     order.setProjectId(project.getId());
     order.setIssueDate(request.issueDate());
     order.setReceiverName(request.receiverName());
@@ -222,7 +227,8 @@ public class InventoryService {
 
   @Transactional
   public MaterialReturnResponse createReturn(UUID issueId, CreateMaterialReturnRequest request) {
-    if (returnRepository.existsByCode(request.code())) {
+    String returnCode = request.code() != null ? request.code() : codeGenerator.generate("RETURN_ORDER");
+    if (returnRepository.existsByCode(returnCode)) {
       throw new BusinessException("退料单号已存在");
     }
     InventoryIssueOrder issue = issueRepository.findById(issueId)
@@ -246,7 +252,7 @@ public class InventoryService {
     Map<UUID, InventoryPart> parts = lockParts(issueLines.values().stream().map(InventoryIssueLine::getPartId).toList());
 
     InventoryReturnOrder returnOrder = new InventoryReturnOrder();
-    returnOrder.setCode(request.code());
+    returnOrder.setCode(returnCode);
     returnOrder.setIssueId(issue.getId());
     returnOrder.setProjectId(project.getId());
     returnOrder.setReturnDate(request.returnDate());

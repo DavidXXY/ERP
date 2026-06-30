@@ -18,10 +18,12 @@
       />
 
       <a-row :gutter="[16, 16]" class="metric-row">
-        <a-col :xs="12" :lg="6"><a-statistic title="待审批申请" :value="pendingApprovalCount" suffix="条" /></a-col>
-        <a-col :xs="12" :lg="6"><a-statistic title="待收货订单" :value="openOrderCount" suffix="单" /></a-col>
-        <a-col :xs="12" :lg="6"><a-statistic title="累计入库金额" :value="receiptAmount" :formatter="moneyFormatter" /></a-col>
-        <a-col :xs="12" :lg="6"><a-statistic title="采购待付" :value="outstandingPayable" :formatter="moneyFormatter" /></a-col>
+        <a-col :xs="12" :lg="8" :xl="4"><a-statistic title="待审批申请" :value="pendingApprovalCount" suffix="条" /></a-col>
+        <a-col :xs="12" :lg="8" :xl="4"><a-statistic title="待收货订单" :value="openOrderCount" suffix="单" /></a-col>
+        <a-col :xs="12" :lg="8" :xl="4"><a-statistic title="累计入库金额" :value="receiptAmount" :formatter="moneyFormatter" /></a-col>
+        <a-col :xs="12" :lg="8" :xl="4"><a-statistic title="采购待付" :value="outstandingPayable" :formatter="moneyFormatter" /></a-col>
+        <a-col :xs="12" :lg="8" :xl="4"><a-statistic title="项目采购成本" :value="projectCostAmount" :formatter="moneyFormatter" /></a-col>
+        <a-col :xs="12" :lg="8" :xl="4"><a-statistic title="部门采购成本" :value="departmentCostAmount" :formatter="moneyFormatter" /></a-col>
       </a-row>
 
       <a-tabs v-model:active-key="activeTab">
@@ -52,6 +54,11 @@
               <template v-else-if="column.key === 'part'">
                 {{ record.partName }}
                 <span class="table-subtitle">申请数量 {{ formatQuantity(record.quantity) }}</span>
+              </template>
+              <template v-else-if="column.key === 'costTarget'">
+                <a-tag :color="costTypeColor(record.costType)">{{ costTypeLabel(record.costType) }}</a-tag>
+                <strong>{{ record.costTargetName }}</strong>
+                <span class="table-subtitle">{{ record.costTargetCode }}</span>
               </template>
               <template v-else-if="column.key === 'status'">
                 <a-tag :color="requestColor(record.status)">{{ requestLabel(record.status) }}</a-tag>
@@ -115,6 +122,10 @@
               <template v-else-if="column.key === 'amount'">
                 <strong>{{ formatMoney(record.orderAmount) }}</strong>
               </template>
+              <template v-else-if="column.key === 'costTarget'">
+                <a-tag :color="costTypeColor(record.costType)">{{ costTypeLabel(record.costType) }}</a-tag>
+                <span>{{ record.costTargetName }}</span>
+              </template>
               <template v-else-if="column.key === 'status'">
                 <a-tag :color="orderColor(record.status)">{{ orderLabel(record.status) }}</a-tag>
               </template>
@@ -152,8 +163,41 @@
                 {{ formatQuantity(record.quantity) }} × {{ formatMoney(record.unitPrice) }}
               </template>
               <template v-else-if="column.key === 'amount'"><strong>{{ formatMoney(record.amount) }}</strong></template>
+              <template v-else-if="column.key === 'costTarget'">
+                <a-tag :color="costTypeColor(record.costType)">{{ costTypeLabel(record.costType) }}</a-tag>
+                <span>{{ record.costTargetName }}</span>
+              </template>
             </template>
             <template #emptyText>订单收货后，到货入库记录会显示在这里</template>
+          </a-table>
+        </a-tab-pane>
+
+        <a-tab-pane key="costs" tab="成本归集">
+          <div class="table-toolbar">
+            <a-segmented v-model:value="costFilter" :options="costFilterOptions" />
+          </div>
+          <a-table
+            :columns="costAllocationColumns"
+            :data-source="filteredCostAllocations"
+            :loading="loading"
+            :pagination="{ pageSize: 8 }"
+            :row-key="(record: ProcurementCostAllocation) => record.id"
+            :scroll="{ x: 980 }"
+            size="middle"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'source'">
+                <strong>{{ record.receiptCode }}</strong>
+                <span class="table-subtitle">订单 {{ record.orderCode }}</span>
+              </template>
+              <template v-else-if="column.key === 'costTarget'">
+                <a-tag :color="costTypeColor(record.costType)">{{ costTypeLabel(record.costType) }}</a-tag>
+                <strong>{{ record.costTargetName }}</strong>
+                <span class="table-subtitle">{{ record.costTargetCode }}</span>
+              </template>
+              <template v-else-if="column.key === 'amount'"><strong>{{ formatMoney(record.amount) }}</strong></template>
+            </template>
+            <template #emptyText>暂无采购成本归集记录</template>
           </a-table>
         </a-tab-pane>
 
@@ -175,6 +219,10 @@
               <template v-else-if="column.key === 'amount'">
                 <strong>{{ formatMoney(record.amount) }}</strong>
                 <span class="table-subtitle">待付 {{ formatMoney(record.outstandingAmount) }}</span>
+              </template>
+              <template v-else-if="column.key === 'costTarget'">
+                <a-tag :color="costTypeColor(record.costType)">{{ costTypeLabel(record.costType) }}</a-tag>
+                <span>{{ record.costTargetName }}</span>
               </template>
               <template v-else-if="column.key === 'status'">
                 <a-tag :color="payableColor(record.status)">{{ payableLabel(record.status) }}</a-tag>
@@ -237,6 +285,9 @@
           <a-col :xs="24" :md="8"><a-form-item label="期望到货"><a-input v-model:value="requestForm.expectedDate" type="date" /></a-form-item></a-col>
           <a-col :xs="24" :md="12"><a-form-item label="关联物料" name="partId"><a-select v-model:value="requestForm.partId" :options="partOptions" show-search option-filter-prop="label" placeholder="选择物料" @change="syncRequestPart" /></a-form-item></a-col>
           <a-col :xs="24" :md="12"><a-form-item label="采购物料名称"><a-input v-model:value="requestForm.partName" disabled /></a-form-item></a-col>
+          <a-col :span="24"><a-form-item label="成本归属" name="costType"><a-segmented v-model:value="requestForm.costType" :options="costTypeOptions" @change="changeCostType" /></a-form-item></a-col>
+          <a-col v-if="requestForm.costType === 'PROJECT'" :span="24"><a-form-item label="关联项目" name="projectId" :rules="[{ required: true, message: '请选择成本项目' }]"><a-select v-model:value="requestForm.projectId" :options="projectOptions" show-search option-filter-prop="label" placeholder="选择已审批且未关闭的项目" /></a-form-item></a-col>
+          <a-col v-else :span="24"><a-form-item label="成本部门" name="departmentId" :rules="[{ required: true, message: '请选择成本部门' }]"><a-select v-model:value="requestForm.departmentId" :options="departmentOptions" show-search option-filter-prop="label" placeholder="选择承担采购成本的部门" /></a-form-item></a-col>
           <a-col :xs="24" :md="8"><a-form-item label="数量" name="quantity"><a-input-number v-model:value="requestForm.quantity" :min="0.01" :precision="2" class="full-input" /></a-form-item></a-col>
           <a-col :xs="24" :md="16"><a-form-item label="采购原因"><a-input v-model:value="requestForm.reason" /></a-form-item></a-col>
         </a-row>
@@ -244,7 +295,7 @@
     </a-modal>
 
     <a-modal v-model:open="approvalOpen" title="采购申请审批" width="720px" :confirm-loading="savingApproval" @ok="handleApproval">
-      <a-alert v-if="selectedRequest" class="section-alert" type="info" :message="`${selectedRequest.code} · ${selectedRequest.partName} · 数量 ${formatQuantity(selectedRequest.quantity)}`" />
+      <a-alert v-if="selectedRequest" class="section-alert" type="info" :message="`${selectedRequest.code} · ${selectedRequest.partName} · ${costTypeLabel(selectedRequest.costType)}：${selectedRequest.costTargetName}`" />
       <a-form ref="approvalFormRef" :model="approvalForm" :rules="approvalRules" layout="vertical">
         <a-row :gutter="16">
           <a-col :xs="24" :md="10"><a-form-item label="审批结论" name="decision"><a-radio-group v-model:value="approvalForm.decision" button-style="solid"><a-radio-button value="APPROVED">通过</a-radio-button><a-radio-button value="REJECTED">驳回</a-radio-button></a-radio-group></a-form-item></a-col>
@@ -264,12 +315,13 @@
           <a-col :xs="24" :md="8"><a-form-item label="采购数量"><a-input :value="selectedOrderRequest ? formatQuantity(selectedOrderRequest.quantity) : ''" disabled /></a-form-item></a-col>
           <a-col :xs="24" :md="8"><a-form-item label="含税单价" name="unitPrice"><a-input-number v-model:value="orderForm.unitPrice" :min="0.01" :precision="2" class="full-input" /></a-form-item></a-col>
           <a-col :xs="24" :md="8"><a-form-item label="订单金额"><a-input :value="formatMoney(orderAmount)" disabled /></a-form-item></a-col>
+          <a-col :span="24"><a-form-item label="成本归属"><a-input :value="selectedOrderRequest ? `${costTypeLabel(selectedOrderRequest.costType)} · ${selectedOrderRequest.costTargetName}` : ''" disabled /></a-form-item></a-col>
         </a-row>
       </a-form>
     </a-modal>
 
     <a-modal v-model:open="receiptOpen" title="采购订单到货入库" width="760px" :confirm-loading="savingReceipt" @ok="handleReceive">
-      <a-alert v-if="selectedOrder" class="section-alert" type="info" :message="`${selectedOrder.code} · ${selectedOrder.partName} · 剩余可收 ${formatQuantity(remainingQuantity)}`" />
+      <a-alert v-if="selectedOrder" class="section-alert" type="info" :message="`${selectedOrder.code} · 剩余可收 ${formatQuantity(remainingQuantity)} · ${costTypeLabel(selectedOrder.costType)}：${selectedOrder.costTargetName}`" />
       <a-form ref="receiptFormRef" :model="receiptForm" :rules="receiptRules" layout="vertical">
         <a-row :gutter="16">
           <a-col :xs="24" :md="8"><a-form-item label="本次到货数量" name="quantity"><a-input-number v-model:value="receiptForm.quantity" :min="0.01" :max="remainingQuantity" :precision="2" class="full-input" /></a-form-item></a-col>
@@ -295,6 +347,8 @@ import {
   createSupplier,
   listGoodsReceipts,
   listInventoryParts,
+  listProcurementCostAllocations,
+  listProcurementCostTargets,
   listProcurementPayables,
   listPurchaseOrders,
   listPurchaseRequests,
@@ -308,6 +362,9 @@ import {
   type GoodsReceipt,
   type InventoryPart,
   type PayableStatus,
+  type ProcurementCostAllocation,
+  type ProcurementCostTargetOptions,
+  type ProcurementCostType,
   type ProcurementPayable,
   type PurchaseOrder,
   type PurchaseOrderStatus,
@@ -328,6 +385,9 @@ const purchaseRequests = ref<PurchaseRequest[]>([]);
 const purchaseOrders = ref<PurchaseOrder[]>([]);
 const goodsReceipts = ref<GoodsReceipt[]>([]);
 const payables = ref<ProcurementPayable[]>([]);
+const costAllocations = ref<ProcurementCostAllocation[]>([]);
+const costTargets = ref<ProcurementCostTargetOptions>({ projects: [], departments: [] });
+const costFilter = ref<"ALL" | ProcurementCostType>("ALL");
 const parts = ref<InventoryPart[]>([]);
 const loading = ref(false);
 const errorMessage = ref("");
@@ -355,8 +415,9 @@ const orderForm = reactive<CreatePurchaseOrderPayload>(initialOrderForm());
 const receiptForm = reactive<ReceiptForm>(initialReceiptForm());
 
 const requestColumns = [
-  { title: "申请", key: "code", width: 280 },
-  { title: "物料 / 数量", key: "part", width: 230 },
+  { title: "申请", key: "code", width: 260 },
+  { title: "物料 / 数量", key: "part", width: 210 },
+  { title: "成本归属", key: "costTarget", width: 220 },
   { title: "期望到货", dataIndex: "expectedDate", width: 120 },
   { title: "状态 / 审批", key: "status", width: 300 },
   { title: "操作", key: "action", width: 120, fixed: "right" },
@@ -365,6 +426,7 @@ const orderColumns = [
   { title: "订单", key: "code", width: 230 },
   { title: "供应商", dataIndex: "supplierName", width: 200 },
   { title: "物料 / 单价", key: "part", width: 220 },
+  { title: "成本归属", key: "costTarget", width: 200 },
   { title: "已收 / 订购", key: "quantity", width: 160 },
   { title: "订单金额", key: "amount", width: 140 },
   { title: "预计到货", dataIndex: "expectedDeliveryDate", width: 120 },
@@ -376,6 +438,7 @@ const receiptColumns = [
   { title: "物料", dataIndex: "partName", width: 190 },
   { title: "数量 / 单价", key: "quantity", width: 190 },
   { title: "入库金额", key: "amount", width: 140 },
+  { title: "成本归属", key: "costTarget", width: 200 },
   { title: "到货日期", dataIndex: "receivedDate", width: 120 },
   { title: "送货单号", dataIndex: "deliveryNo", width: 150 },
   { title: "收货人", dataIndex: "receiverName", width: 110 },
@@ -384,6 +447,7 @@ const payableColumns = [
   { title: "应付单", key: "payable", width: 250 },
   { title: "供应商", dataIndex: "supplierName", width: 220 },
   { title: "金额", key: "amount", width: 180 },
+  { title: "成本归属", key: "costTarget", width: 200 },
   { title: "已付金额", dataIndex: "paidAmount", customRender: ({ text }: { text: number }) => formatMoney(text), width: 140 },
   { title: "到期日", dataIndex: "dueDate", width: 120 },
   { title: "状态", key: "status", width: 160 },
@@ -395,11 +459,26 @@ const supplierColumns = [
   { title: "账期", dataIndex: "settlementTerms", width: 180 },
   { title: "风险", key: "risk", width: 110 },
 ];
+const costAllocationColumns = [
+  { title: "来源单据", key: "source", width: 220 },
+  { title: "成本归属", key: "costTarget", width: 260 },
+  { title: "采购物料", dataIndex: "partName", width: 220 },
+  { title: "归集金额", key: "amount", width: 150 },
+  { title: "归集日期", dataIndex: "incurredDate", width: 130 },
+];
 
 const supplierRiskOptions = [
   { label: "正常", value: "NORMAL" },
   { label: "关注", value: "WATCHLIST" },
   { label: "停用", value: "BLOCKED" },
+];
+const costTypeOptions = [
+  { label: "项目采购", value: "PROJECT" },
+  { label: "部门采购", value: "DEPARTMENT" },
+];
+const costFilterOptions = [
+  { label: "全部", value: "ALL" },
+  ...costTypeOptions,
 ];
 const supplierRules = { code: [{ required: true, message: "请输入供应商编码" }], name: [{ required: true, message: "请输入供应商名称" }] };
 const requestRules = {
@@ -407,6 +486,7 @@ const requestRules = {
   requesterName: [{ required: true, message: "请输入申请人" }],
   partId: [{ required: true, message: "请选择关联物料" }],
   quantity: [{ required: true, message: "请输入数量" }],
+  costType: [{ required: true, message: "请选择成本归属" }],
 };
 const approvalRules = {
   decision: [{ required: true, message: "请选择审批结论" }],
@@ -431,12 +511,17 @@ const pendingApprovalCount = computed(() => purchaseRequests.value.filter((item)
 const openOrderCount = computed(() => purchaseOrders.value.filter(canReceive).length);
 const receiptAmount = computed(() => goodsReceipts.value.reduce((sum, item) => sum + Number(item.amount || 0), 0));
 const outstandingPayable = computed(() => payables.value.reduce((sum, item) => sum + Number(item.outstandingAmount || 0), 0));
+const projectCostAmount = computed(() => costAllocations.value.filter((item) => item.costType === "PROJECT").reduce((sum, item) => sum + Number(item.amount || 0), 0));
+const departmentCostAmount = computed(() => costAllocations.value.filter((item) => item.costType === "DEPARTMENT").reduce((sum, item) => sum + Number(item.amount || 0), 0));
+const filteredCostAllocations = computed(() => costFilter.value === "ALL" ? costAllocations.value : costAllocations.value.filter((item) => item.costType === costFilter.value));
 const orderedRequestIds = computed(() => new Set(purchaseOrders.value.map((item) => item.requestId).filter(Boolean)));
 const partOptions = computed(() => parts.value.map((part) => ({ label: `${part.name} (${part.code}) · 库存 ${formatQuantity(part.stockQty)}`, value: part.id })));
 const supplierOptions = computed(() => suppliers.value.filter((item) => item.riskStatus !== "BLOCKED").map((item) => ({ label: `${item.name} (${item.code})${item.riskStatus === "WATCHLIST" ? " · 关注" : ""}`, value: item.id })));
+const projectOptions = computed(() => costTargets.value.projects.map((item) => ({ label: `${item.name} (${item.code})`, value: item.id })));
+const departmentOptions = computed(() => costTargets.value.departments.map((item) => ({ label: `${item.name} (${item.code})`, value: item.id })));
 const requestOptions = computed(() => purchaseRequests.value
   .filter((item) => item.approvalStatus === "APPROVED" && item.status === "APPROVED" && !orderedRequestIds.value.has(item.id))
-  .map((item) => ({ label: `${item.code} · ${item.partName} · 数量 ${formatQuantity(item.quantity)}`, value: item.id })));
+  .map((item) => ({ label: `${item.code} · ${item.partName} · ${item.costTargetName}`, value: item.id })));
 const selectedOrderRequest = computed(() => purchaseRequests.value.find((item) => item.id === orderForm.requestId) || null);
 const orderAmount = computed(() => Number(selectedOrderRequest.value?.quantity || 0) * Number(orderForm.unitPrice || 0));
 const remainingQuantity = computed(() => Math.max(0, Number(selectedOrder.value?.orderedQty || 0) - Number(selectedOrder.value?.receivedQty || 0)));
@@ -447,9 +532,10 @@ async function loadData() {
   loading.value = true;
   errorMessage.value = "";
   try {
-    const [supplierData, requestData, orderData, partData, receiptData, payableData] = await Promise.all([
+    const [supplierData, requestData, orderData, partData, receiptData, payableData, targetData, allocationData] = await Promise.all([
       listSuppliers(), listPurchaseRequests(), listPurchaseOrders(), listInventoryParts(), listGoodsReceipts(),
       auth.can("procurement:payable:view") ? listProcurementPayables() : Promise.resolve([]),
+      listProcurementCostTargets(), listProcurementCostAllocations(),
     ]);
     suppliers.value = supplierData;
     purchaseRequests.value = requestData;
@@ -457,6 +543,8 @@ async function loadData() {
     parts.value = partData;
     goodsReceipts.value = receiptData;
     payables.value = payableData;
+    costTargets.value = targetData;
+    costAllocations.value = allocationData;
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : "采购数据加载失败";
   } finally {
@@ -483,6 +571,12 @@ function openReceipt(record: PurchaseOrder) {
 }
 
 function syncRequestPart(partId: string) { requestForm.partName = parts.value.find((item) => item.id === partId)?.name || ""; }
+function changeCostType(value: string | number) {
+  requestForm.costType = value as ProcurementCostType;
+  requestForm.projectId = undefined;
+  requestForm.departmentId = undefined;
+  requestFormRef.value?.clearValidate(["projectId", "departmentId"]);
+}
 function syncOrderRequest(requestId: string) {
   const request = purchaseRequests.value.find((item) => item.id === requestId);
   const part = parts.value.find((item) => item.id === request?.partId);
@@ -530,14 +624,14 @@ async function handleReceive() {
   try {
     const result = await receivePurchaseOrder(selectedOrder.value.id, { ...receiptForm });
     receiptOpen.value = false;
-    message.success(`入库完成，当前库存 ${formatQuantity(result.currentStockQty)}，应付单 ${result.payable.code} 已生成`);
+    message.success(`入库完成，${result.costAllocation.costTargetName} 成本 ${formatMoney(result.costAllocation.amount)} 已归集`);
     await loadData();
   } catch (error) { message.error(error instanceof Error ? error.message : "到货入库失败"); }
   finally { savingReceipt.value = false; }
 }
 
 function initialSupplierForm(): CreateSupplierPayload { return { code: "", name: "", category: "", contactName: "", phone: "", settlementTerms: "", riskStatus: "NORMAL" }; }
-function initialRequestForm(): CreatePurchaseRequestPayload { return { code: "", requesterName: auth.user?.displayName || "", partId: undefined, partName: "", quantity: 1, expectedDate: addDays(7), reason: "" }; }
+function initialRequestForm(): CreatePurchaseRequestPayload { return { code: "", requesterName: auth.user?.displayName || "", partId: undefined, partName: "", quantity: 1, expectedDate: addDays(7), reason: "", costType: "DEPARTMENT", projectId: undefined, departmentId: undefined }; }
 function initialApprovalForm(): ApprovalForm { return { decision: "APPROVED", comment: "同意采购", approverName: auth.user?.displayName || "" }; }
 function initialOrderForm(): CreatePurchaseOrderPayload { return { code: "", supplierId: "", requestId: "", unitPrice: 0.01, expectedDeliveryDate: undefined }; }
 function initialReceiptForm(): ReceiptForm { return { quantity: 1, receivedDate: addDays(0), deliveryNo: "", receiverName: auth.user?.displayName || "", payableDueDate: addDays(30) }; }
@@ -551,6 +645,8 @@ function formatMoney(value: number) { return new Intl.NumberFormat("zh-CN", { st
 function formatQuantity(value: number) { return new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 2 }).format(value || 0); }
 function supplierRiskLabel(status: SupplierRiskStatus) { return supplierRiskOptions.find((item) => item.value === status)?.label || status; }
 function supplierRiskColor(status: SupplierRiskStatus) { return ({ NORMAL: "green", WATCHLIST: "orange", BLOCKED: "red" } as Record<SupplierRiskStatus, string>)[status]; }
+function costTypeLabel(type: ProcurementCostType) { return type === "PROJECT" ? "项目采购" : "部门采购"; }
+function costTypeColor(type: ProcurementCostType) { return type === "PROJECT" ? "blue" : "cyan"; }
 function requestLabel(status: PurchaseRequestStatus) { return ({ DRAFT: "草稿", SUBMITTED: "已提交", APPROVED: "已审批", ORDERED: "已下单", RECEIVED: "已到货", CANCELLED: "已取消" } as Record<PurchaseRequestStatus, string>)[status]; }
 function requestColor(status: PurchaseRequestStatus) { return ({ DRAFT: "default", SUBMITTED: "blue", APPROVED: "green", ORDERED: "purple", RECEIVED: "cyan", CANCELLED: "red" } as Record<PurchaseRequestStatus, string>)[status]; }
 function approvalLabel(status: ApprovalStatus) { return ({ PENDING: "待审批", APPROVED: "审批通过", REJECTED: "已驳回" } as Record<ApprovalStatus, string>)[status]; }

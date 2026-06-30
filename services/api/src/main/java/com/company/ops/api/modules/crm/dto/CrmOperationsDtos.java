@@ -27,7 +27,8 @@ public final class CrmOperationsDtos {
 
   public record CreateOpportunityRequest(
       UUID customerId,
-      @NotBlank @Size(max = 64) String code,
+      // auto-gen
+    String code,
       @Size(max = 80) String source,
       @NotBlank @Size(max = 500) String needSummary,
       OpportunityStage stage,
@@ -67,7 +68,8 @@ public final class CrmOperationsDtos {
   public record CreateQuoteRequest(
       UUID customerId,
       UUID opportunityId,
-      @NotBlank @Size(max = 64) String code,
+      // auto-gen
+    String code,
       @NotBlank @Size(max = 800) String serviceScope,
       @Size(max = 120) String inspectCycle,
       @Size(max = 300) String paymentNodes,

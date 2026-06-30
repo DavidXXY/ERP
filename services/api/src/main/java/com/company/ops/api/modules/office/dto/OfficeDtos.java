@@ -20,7 +20,8 @@ public final class OfficeDtos {
   public record OfficeOverview(long pendingApprovals, BigDecimal pendingExpenseAmount, BigDecimal approvedExpenseAmount,
                                long activeOutsourceOrders, BigDecimal outsourceAmount, long unreadNotifications,
                                long documentCount) {}
-  public record CreateApprovalRequest(@NotBlank @Size(max=64) String code, @NotNull ApprovalType approvalType,
+  public record CreateApprovalRequest(// auto-gen
+    String code, @NotNull ApprovalType approvalType,
                                       @NotBlank @Size(max=180) String title, @Size(max=64) String sourceNo,
                                       @DecimalMin("0.00") BigDecimal amount, @NotBlank @Size(max=80) String applicantName,
                                       @NotBlank @Size(max=1000) String content) {}
@@ -31,7 +32,8 @@ public final class OfficeDtos {
                                  BigDecimal amount, ApprovalStatus status, String applicantName, String content,
                                  String approverName, String approvalComment, OffsetDateTime processedAt,
                                  OffsetDateTime createdAt, List<ApprovalActionResponse> actions) {}
-  public record CreateExpenseRequest(@NotBlank @Size(max=64) String code, UUID claimantId,
+  public record CreateExpenseRequest(// auto-gen
+    String code, UUID claimantId,
                                      @NotBlank @Size(max=80) String claimantName, UUID projectId, UUID workOrderId,
                                      @NotNull ExpenseType expenseType, @NotNull @DecimalMin("0.01") BigDecimal amount,
                                      @NotNull LocalDate expenseDate, @NotBlank @Size(max=500) String description) {}
@@ -39,7 +41,8 @@ public final class OfficeDtos {
                                 String projectCode, UUID workOrderId, String workOrderCode, ExpenseType expenseType,
                                 BigDecimal amount, LocalDate expenseDate, String description, ExpenseStatus status,
                                 UUID approvalRequestId) {}
-  public record CreateOutsourceRequest(@NotBlank @Size(max=64) String code, @NotNull UUID supplierId,
+  public record CreateOutsourceRequest(// auto-gen
+    String code, @NotNull UUID supplierId,
                                        UUID projectId, UUID workOrderId, @NotBlank @Size(max=100) String serviceType,
                                        @NotBlank @Size(max=800) String description,
                                        @NotNull @DecimalMin("0.01") BigDecimal amount, @NotNull LocalDate plannedDate,

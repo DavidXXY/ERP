@@ -6,6 +6,8 @@ import com.company.ops.api.modules.procurement.dto.CreatePurchaseRequestRequest;
 import com.company.ops.api.modules.procurement.dto.CreateSupplierRequest;
 import com.company.ops.api.modules.procurement.dto.GoodsReceiptResponse;
 import com.company.ops.api.modules.procurement.dto.ProcessPurchaseRequestApprovalRequest;
+import com.company.ops.api.modules.procurement.dto.ProcurementCostAllocationResponse;
+import com.company.ops.api.modules.procurement.dto.ProcurementCostTargetOptionsResponse;
 import com.company.ops.api.modules.procurement.dto.ProcurementPayableResponse;
 import com.company.ops.api.modules.procurement.dto.PurchaseOrderResponse;
 import com.company.ops.api.modules.procurement.dto.PurchaseRequestResponse;
@@ -47,6 +49,18 @@ public class ProcurementController {
   @PreAuthorize("hasAuthority('procurement:supplier:create')")
   public ApiResponse<SupplierResponse> createSupplier(@Valid @RequestBody CreateSupplierRequest request) {
     return ApiResponse.ok(procurementService.createSupplier(request));
+  }
+
+  @GetMapping("/cost-targets")
+  @PreAuthorize("hasAuthority('procurement:view')")
+  public ApiResponse<ProcurementCostTargetOptionsResponse> listCostTargets() {
+    return ApiResponse.ok(procurementService.listCostTargets());
+  }
+
+  @GetMapping("/cost-allocations")
+  @PreAuthorize("hasAuthority('procurement:view')")
+  public ApiResponse<List<ProcurementCostAllocationResponse>> listCostAllocations() {
+    return ApiResponse.ok(procurementService.listCostAllocations());
   }
 
   @GetMapping("/requests")

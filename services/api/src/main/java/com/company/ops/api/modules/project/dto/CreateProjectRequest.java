@@ -13,7 +13,7 @@ import java.util.UUID;
 
 public record CreateProjectRequest(
     @NotNull UUID customerId,
-    @NotBlank @Size(max = 64) String code,
+    String code, // auto-generated if null
     @NotBlank @Size(max = 180) String name,
     @NotNull ProjectType projectType,
     @NotBlank @Size(max = 80) String managerName,

@@ -1,6 +1,7 @@
 package com.company.ops.api.modules.finance.service;
 
 import com.company.ops.api.common.exception.BusinessException;
+import com.company.ops.api.common.service.CodeGenerator;
 import com.company.ops.api.modules.crm.domain.Receivable;
 import com.company.ops.api.modules.crm.domain.ReceivableStatus;
 import com.company.ops.api.modules.crm.repository.ReceivableRepository;
@@ -45,6 +46,7 @@ public class FinanceService {
       PaymentApplicationStatus.APPROVED
   );
 
+  private CodeGenerator codeGenerator;
   private final ReceivableRepository receivableRepository;
   private final ProcurementPayableRepository payableRepository;
   private final SupplierRepository supplierRepository;
@@ -62,6 +64,7 @@ public class FinanceService {
       PaymentRecordRepository paymentRepository,
       LedgerService ledgerService
   ) {
+    this.codeGenerator = codeGenerator;
     this.receivableRepository = receivableRepository;
     this.payableRepository = payableRepository;
     this.supplierRepository = supplierRepository;
@@ -146,7 +149,8 @@ public class FinanceService {
 
   @Transactional
   public PaymentApplicationResponse createApplication(CreatePaymentApplicationRequest request) {
-    if (applicationRepository.existsByCode(request.code())) {
+    String appCode = request.code() != null ? request.code() : codeGenerator.generate("PAYMENT_APPLICATION");
+    if (applicationRepository.existsByCode(appCode)) {
       throw new BusinessException("付款申请单号已存在");
     }
     ProcurementPayable payable = payableRepository.findByIdForUpdate(request.payableId())
@@ -162,7 +166,7 @@ public class FinanceService {
     }
 
     PaymentApplication application = new PaymentApplication();
-    application.setCode(request.code());
+    application.setCode(appCode);
     application.setPayableId(payable.getId());
     application.setSupplierId(payable.getSupplierId());
     application.setRequestedAmount(request.requestedAmount());
@@ -201,7 +205,8 @@ public class FinanceService {
 
   @Transactional
   public PaymentRecordResponse executePayment(UUID id, ExecutePaymentRequest request) {
-    if (paymentRepository.existsByCode(request.paymentCode())) {
+    String paymentCode = request.paymentCode() != null ? request.paymentCode() : codeGenerator.generate("PAYMENT_RECORD");
+    if (paymentRepository.existsByCode(paymentCode)) {
       throw new BusinessException("付款流水号已存在");
     }
     PaymentApplication application = applicationRepository.findByIdForUpdate(id)
@@ -217,7 +222,7 @@ public class FinanceService {
     }
 
     PaymentRecord payment = new PaymentRecord();
-    payment.setCode(request.paymentCode());
+    payment.setCode(paymentCode);
     payment.setApplicationId(application.getId());
     payment.setPayableId(payable.getId());
     payment.setSupplierId(application.getSupplierId());

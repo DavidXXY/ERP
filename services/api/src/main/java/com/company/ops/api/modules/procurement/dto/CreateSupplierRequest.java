@@ -4,7 +4,8 @@ import com.company.ops.api.modules.procurement.domain.SupplierRiskStatus;
 import jakarta.validation.constraints.NotBlank;
 
 public record CreateSupplierRequest(
-    @NotBlank String code,
+    // auto-gen
+    String code,
     @NotBlank String name,
     String category,
     String contactName,

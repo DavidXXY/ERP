@@ -11,3 +11,7 @@ services/api/target/
 .DS_Store
 .vscode/
 *.tsbuildinfo
+
+# Local H2 database
+*.mv.db
+*.trace.db

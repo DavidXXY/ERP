@@ -31,10 +31,6 @@ spring:
       max-file-size: 30MB
       max-request-size: 80MB
 
-flowable:
-  database-schema-update: true
-  async-executor-activate: false
-
 management:
   endpoints:
     web:

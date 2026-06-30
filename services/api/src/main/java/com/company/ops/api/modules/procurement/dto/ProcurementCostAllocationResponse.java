@@ -5,22 +5,17 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
 
-public record GoodsReceiptResponse(
+public record ProcurementCostAllocationResponse(
     UUID id,
-    String code,
     UUID orderId,
     String orderCode,
-    UUID partId,
-    String partName,
-    BigDecimal quantity,
-    BigDecimal unitPrice,
-    BigDecimal amount,
-    LocalDate receivedDate,
-    String deliveryNo,
-    String receiverName,
+    UUID receiptId,
+    String receiptCode,
     ProcurementCostType costType,
     UUID costTargetId,
     String costTargetCode,
-    String costTargetName
-) {
-}
+    String costTargetName,
+    String partName,
+    BigDecimal amount,
+    LocalDate incurredDate
+) {}

@@ -10,7 +10,8 @@ import java.util.List;
 import java.util.UUID;
 
 public record CreateMaterialIssueRequest(
-    @NotBlank @Size(max = 64) String code,
+    // auto-gen
+    String code,
     @NotNull UUID projectId,
     @NotNull LocalDate issueDate,
     @NotBlank @Size(max = 80) String receiverName,

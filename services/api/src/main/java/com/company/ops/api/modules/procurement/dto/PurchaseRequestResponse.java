@@ -1,6 +1,7 @@
 package com.company.ops.api.modules.procurement.dto;
 
 import com.company.ops.api.modules.procurement.domain.ApprovalStatus;
+import com.company.ops.api.modules.procurement.domain.ProcurementCostType;
 import com.company.ops.api.modules.procurement.domain.PurchaseRequestStatus;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -16,6 +17,10 @@ public record PurchaseRequestResponse(
     BigDecimal quantity,
     LocalDate expectedDate,
     String reason,
+    ProcurementCostType costType,
+    UUID costTargetId,
+    String costTargetCode,
+    String costTargetName,
     PurchaseRequestStatus status,
     ApprovalStatus approvalStatus,
     String lastApprovalComment,

@@ -8,7 +8,8 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 public record CreatePurchaseOrderRequest(
-    @NotBlank String code,
+    // auto-gen
+    String code,
     @NotNull UUID supplierId,
     @NotNull UUID requestId,
     @NotNull @DecimalMin("0.01") BigDecimal unitPrice,

@@ -1,6 +1,7 @@
 package com.company.ops.api.modules.system.service;
 
 import com.company.ops.api.common.exception.BusinessException;
+import com.company.ops.api.common.service.CodeGenerator;
 import com.company.ops.api.modules.qualification.repository.QualificationEmployeeRepository;
 import com.company.ops.api.modules.system.domain.SystemOrganization;
 import com.company.ops.api.modules.system.domain.SystemPermission;
@@ -40,6 +41,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class SystemService {
 
+  private final CodeGenerator codeGenerator;
   private final SystemUserRepository userRepository;
   private final SystemRoleRepository roleRepository;
   private final SystemPermissionRepository permissionRepository;
@@ -56,6 +58,7 @@ public class SystemService {
       SystemOrganizationRepository organizationRepository,
       QualificationEmployeeRepository employeeRepository,
       PasswordEncoder passwordEncoder) {
+    this.codeGenerator = codeGenerator;
     this.userRepository = userRepository;
     this.roleRepository = roleRepository;
     this.permissionRepository = permissionRepository;
@@ -391,12 +394,13 @@ public class SystemService {
 
   @Transactional
   public OrganizationResponse createOrganization(CreateOrganizationRequest request) {
-    if (organizationRepository.existsByCodeAndTenantId(request.code(), "default")) {
+    String orgCode = request.code() != null ? request.code() : codeGenerator.generate("ORGANIZATION");
+    if (organizationRepository.existsByCodeAndTenantId(orgCode, "default")) {
       throw new BusinessException("组织代码已存在");
     }
     validateOrganizationType(request.type());
     SystemOrganization org = new SystemOrganization();
-    org.setCode(request.code());
+    org.setCode(orgCode);
     org.setName(request.name());
     org.setType(request.type() != null ? request.type() : "DEPARTMENT");
     org.setSortOrder(request.sortOrder() != null ? request.sortOrder() : 0);

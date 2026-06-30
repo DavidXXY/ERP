@@ -34,7 +34,8 @@ public final class MaintenanceDtos {
                                       List<PartOption> parts, List<UserOption> users) {}
 
   public record CreateEquipmentRequest(
-      @NotNull UUID customerId, UUID contractId, @NotBlank @Size(max = 64) String code,
+      @NotNull UUID customerId, UUID contractId, // auto-gen
+    String code,
       @NotBlank @Size(max = 160) String name, @NotBlank @Size(max = 80) String category,
       @Size(max = 120) String model, @Size(max = 120) String serialNo,
       @NotBlank @Size(max = 300) String siteAddress, LocalDate installedDate,
@@ -51,7 +52,8 @@ public final class MaintenanceDtos {
                                   EquipmentStatus status, String requiredCertificate, String notes,
                                   long workOrderCount, long faultCount) {}
 
-  public record CreatePlanRequest(@NotBlank @Size(max = 64) String code, @NotNull UUID assetId,
+  public record CreatePlanRequest(// auto-gen
+    String code, @NotNull UUID assetId,
                                   @NotBlank @Size(max = 180) String planName,
                                   @NotNull @Min(1) Integer cycleDays, @NotNull LocalDate nextDueDate) {}
 
@@ -64,7 +66,8 @@ public final class MaintenanceDtos {
   public record GeneratePlanResponse(int generatedCount, List<String> workOrderCodes) {}
 
   public record CreateWorkOrderRequest(
-      @NotBlank @Size(max = 64) String code, @NotNull WorkOrderSource source,
+      // auto-gen
+    String code, @NotNull WorkOrderSource source,
       @NotNull WorkOrderType workType, @NotNull WorkOrderPriority priority,
       @NotBlank @Size(max = 180) String title, @NotNull UUID customerId,
       UUID contractId, UUID projectId, UUID equipmentId, @NotNull LocalDate plannedDate,

@@ -1,6 +1,7 @@
 package com.company.ops.api.modules.crm.service;
 
 import com.company.ops.api.common.exception.BusinessException;
+import com.company.ops.api.common.service.CodeGenerator;
 import com.company.ops.api.modules.crm.domain.ApprovalDecision;
 import com.company.ops.api.modules.crm.domain.ContractStatus;
 import com.company.ops.api.modules.crm.domain.Customer;
@@ -61,6 +62,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class CrmOperationsService {
 
+  private CodeGenerator codeGenerator;
   private final CustomerRepository customerRepository;
   private final OpportunityRepository opportunityRepository;
   private final QuotePlanRepository quoteRepository;
@@ -84,6 +86,7 @@ public class CrmOperationsService {
       ReceivableReceiptRepository receiptRepository,
       LedgerService ledgerService
   ) {
+    this.codeGenerator = codeGenerator;
     this.customerRepository = customerRepository;
     this.opportunityRepository = opportunityRepository;
     this.quoteRepository = quoteRepository;
@@ -107,14 +110,15 @@ public class CrmOperationsService {
 
   @Transactional
   public OpportunityResponse createOpportunity(CreateOpportunityRequest request) {
-    if (opportunityRepository.existsByCode(request.code())) {
+    String oppCode = request.code() != null ? request.code() : codeGenerator.generate("OPPORTUNITY");
+    if (opportunityRepository.existsByCode(oppCode)) {
       throw new BusinessException("商机编码已存在");
     }
     validateCustomer(request.customerId());
 
     Opportunity opportunity = new Opportunity();
     opportunity.setCustomerId(request.customerId());
-    opportunity.setCode(request.code());
+    opportunity.setCode(oppCode);
     opportunity.setSource(request.source());
     opportunity.setNeedSummary(request.needSummary());
     opportunity.setStage(request.stage() == null ? OpportunityStage.LEAD : request.stage());
@@ -154,7 +158,8 @@ public class CrmOperationsService {
 
   @Transactional
   public QuoteResponse createQuote(CreateQuoteRequest request) {
-    if (quoteRepository.existsByCode(request.code())) {
+    String quoteCode = request.code() != null ? request.code() : codeGenerator.generate("QUOTE");
+    if (quoteRepository.existsByCode(quoteCode)) {
       throw new BusinessException("报价编码已存在");
     }
     validateCustomer(request.customerId());
@@ -174,7 +179,7 @@ public class CrmOperationsService {
     QuotePlan quote = new QuotePlan();
     quote.setCustomerId(customerId);
     quote.setOpportunityId(request.opportunityId());
-    quote.setCode(request.code());
+    quote.setCode(quoteCode);
     quote.setServiceScope(request.serviceScope());
     quote.setInspectCycle(request.inspectCycle());
     quote.setPaymentNodes(request.paymentNodes());
@@ -588,7 +593,7 @@ public class CrmOperationsService {
     if (quote.getCustomerId() == null) {
       throw new BusinessException("报价未关联客户，不能生成合同");
     }
-    requireText(request.contractCode(), "请输入合同编号");
+    String contractCode = request.contractCode() != null ? request.contractCode() : codeGenerator.generate("CONTRACT");
     requireText(request.projectName(), "请输入合同项目名称");
     requireText(request.contractType(), "请选择合同类型");
     if (request.startDate() == null || request.endDate() == null) {
@@ -597,7 +602,7 @@ public class CrmOperationsService {
     if (request.endDate().isBefore(request.startDate())) {
       throw new BusinessException("合同结束日期不能早于开始日期");
     }
-    if (contractRepository.existsByCode(request.contractCode())) {
+    if (contractCode != null && contractRepository.existsByCode(contractCode)) {
       throw new BusinessException("合同编号已存在");
     }
     if (contractRepository.existsByQuoteId(quote.getId())) {
@@ -607,7 +612,7 @@ public class CrmOperationsService {
     ServiceContract contract = new ServiceContract();
     contract.setQuoteId(quote.getId());
     contract.setCustomerId(quote.getCustomerId());
-    contract.setCode(request.contractCode());
+    contract.setCode(contractCode);
     contract.setProjectName(request.projectName());
     contract.setContractType(request.contractType());
     contract.setAmount(defaultAmount(quote.getAmount()));
@@ -627,21 +632,21 @@ public class CrmOperationsService {
     if (amount.compareTo(BigDecimal.ZERO) <= 0) {
       return null;
     }
-    requireText(request.receivableCode(), "请输入首期应收单号");
+    String receivableCode = request.receivableCode() != null ? request.receivableCode() : codeGenerator.generate("RECEIVABLE");
     if (request.firstReceivableDueDate() == null) {
       throw new BusinessException("请输入首期应收到期日");
     }
     if (amount.compareTo(defaultAmount(quote.getAmount())) > 0) {
       throw new BusinessException("首期应收不能超过合同总额");
     }
-    if (receivableRepository.existsByCode(request.receivableCode())) {
+    if (receivableCode != null && receivableRepository.existsByCode(receivableCode)) {
       throw new BusinessException("应收单号已存在");
     }
 
     Receivable receivable = new Receivable();
     receivable.setCustomerId(quote.getCustomerId());
     receivable.setContractId(contract.getId());
-    receivable.setCode(request.receivableCode());
+    receivable.setCode(receivableCode);
     receivable.setSourceNo(contract.getCode());
     receivable.setAmount(amount);
     receivable.setDueDate(request.firstReceivableDueDate());

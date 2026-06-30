@@ -1,6 +1,7 @@
 package com.company.ops.api.modules.project.service;
 
 import com.company.ops.api.common.exception.BusinessException;
+import com.company.ops.api.common.service.CodeGenerator;
 import com.company.ops.api.modules.crm.domain.Customer;
 import com.company.ops.api.modules.crm.repository.CustomerRepository;
 import com.company.ops.api.modules.project.domain.Project;
@@ -41,6 +42,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ProjectService {
 
+  private final CodeGenerator codeGenerator;
   private final ProjectRepository projectRepository;
   private final ProjectBudgetItemRepository budgetRepository;
   private final ProjectCostEntryRepository costRepository;
@@ -56,6 +58,7 @@ public class ProjectService {
       CustomerRepository customerRepository,
       DataScopeService dataScopeService
   ) {
+    this.codeGenerator = codeGenerator;
     this.projectRepository = projectRepository;
     this.budgetRepository = budgetRepository;
     this.costRepository = costRepository;
@@ -83,7 +86,8 @@ public class ProjectService {
 
   @Transactional
   public ProjectDetailResponse createProject(CreateProjectRequest request) {
-    if (projectRepository.existsByCode(request.code())) {
+    String projectCode = request.code() != null ? request.code() : codeGenerator.generate("PROJECT");
+    if (projectRepository.existsByCode(projectCode)) {
       throw new BusinessException("项目编码已存在");
     }
     Customer customer = customerRepository.findById(request.customerId())
@@ -98,7 +102,7 @@ public class ProjectService {
         .reduce(BigDecimal.ZERO, BigDecimal::add);
     Project project = new Project();
     project.setCustomerId(request.customerId());
-    project.setCode(request.code());
+    project.setCode(projectCode);
     project.setName(request.name());
     project.setProjectType(request.projectType());
     project.setManagerName(request.managerName());

@@ -1,0 +1,182 @@
+package com.company.ops.api.modules.procurement.service;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import com.company.ops.api.common.exception.BusinessException;
+import com.company.ops.api.modules.inventory.domain.InventoryPart;
+import com.company.ops.api.modules.inventory.repository.InventoryPartRepository;
+import com.company.ops.api.modules.inventory.repository.StockMovementRepository;
+import com.company.ops.api.modules.procurement.domain.GoodsReceipt;
+import com.company.ops.api.modules.procurement.domain.ProcurementCostAllocation;
+import com.company.ops.api.modules.procurement.domain.ProcurementCostType;
+import com.company.ops.api.modules.procurement.domain.ProcurementPayable;
+import com.company.ops.api.modules.procurement.domain.PurchaseOrder;
+import com.company.ops.api.modules.procurement.domain.PurchaseOrderStatus;
+import com.company.ops.api.modules.procurement.domain.Supplier;
+import com.company.ops.api.modules.procurement.domain.SupplierRiskStatus;
+import com.company.ops.api.modules.procurement.dto.CreatePurchaseRequestRequest;
+import com.company.ops.api.modules.procurement.dto.ReceivePurchaseOrderRequest;
+import com.company.ops.api.modules.procurement.repository.GoodsReceiptRepository;
+import com.company.ops.api.modules.procurement.repository.ProcurementCostAllocationRepository;
+import com.company.ops.api.modules.procurement.repository.ProcurementPayableRepository;
+import com.company.ops.api.modules.procurement.repository.PurchaseOrderRepository;
+import com.company.ops.api.modules.procurement.repository.PurchaseRequestApprovalRecordRepository;
+import com.company.ops.api.modules.procurement.repository.PurchaseRequestRepository;
+import com.company.ops.api.modules.procurement.repository.SupplierRepository;
+import com.company.ops.api.modules.project.domain.Project;
+import com.company.ops.api.modules.project.domain.ProjectApprovalStatus;
+import com.company.ops.api.modules.project.domain.ProjectCostEntry;
+import com.company.ops.api.modules.project.domain.ProjectCostSource;
+import com.company.ops.api.modules.project.domain.ProjectStage;
+import com.company.ops.api.modules.project.repository.ProjectCostEntryRepository;
+import com.company.ops.api.modules.project.repository.ProjectRepository;
+import com.company.ops.api.modules.system.domain.SystemOrganization;
+import com.company.ops.api.modules.system.repository.SystemOrganizationRepository;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+@ExtendWith(MockitoExtension.class)
+class ProcurementServiceTest {
+
+  @Mock private SupplierRepository supplierRepository;
+  @Mock private PurchaseRequestRepository requestRepository;
+  @Mock private PurchaseRequestApprovalRecordRepository requestApprovalRepository;
+  @Mock private PurchaseOrderRepository orderRepository;
+  @Mock private GoodsReceiptRepository receiptRepository;
+  @Mock private ProcurementPayableRepository payableRepository;
+  @Mock private ProcurementCostAllocationRepository costAllocationRepository;
+  @Mock private InventoryPartRepository partRepository;
+  @Mock private StockMovementRepository movementRepository;
+  @Mock private ProjectRepository projectRepository;
+  @Mock private ProjectCostEntryRepository projectCostRepository;
+  @Mock private SystemOrganizationRepository organizationRepository;
+  @InjectMocks private ProcurementService procurementService;
+
+  @Test
+  void projectPurchaseRequiresProject() {
+    InventoryPart part = part("交换机");
+    when(requestRepository.existsByCode("CGSQ-001")).thenReturn(false);
+    when(partRepository.findById(part.getId())).thenReturn(Optional.of(part));
+
+    CreatePurchaseRequestRequest request = new CreatePurchaseRequestRequest(
+        "CGSQ-001", "采购员", part.getId(), null, BigDecimal.ONE,
+        LocalDate.now().plusDays(7), "项目设备", ProcurementCostType.PROJECT, null, null
+    );
+
+    assertThatThrownBy(() -> procurementService.createPurchaseRequest(request))
+        .isInstanceOf(BusinessException.class)
+        .hasMessage("项目采购必须关联项目");
+  }
+
+  @Test
+  void departmentPurchaseKeepsDepartmentSnapshot() {
+    InventoryPart part = part("办公电脑");
+    SystemOrganization department = new SystemOrganization();
+    department.setId(UUID.randomUUID());
+    department.setCode("FINANCE_DEPARTMENT");
+    department.setName("财务部");
+    department.setType("DEPARTMENT");
+    department.setEnabled(true);
+    when(requestRepository.existsByCode("CGSQ-002")).thenReturn(false);
+    when(partRepository.findById(part.getId())).thenReturn(Optional.of(part));
+    when(organizationRepository.findById(department.getId())).thenReturn(Optional.of(department));
+    when(requestRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+    var response = procurementService.createPurchaseRequest(new CreatePurchaseRequestRequest(
+        "CGSQ-002", "采购员", part.getId(), null, BigDecimal.valueOf(2),
+        LocalDate.now().plusDays(7), "部门办公", ProcurementCostType.DEPARTMENT,
+        null, department.getId()
+    ));
+
+    assertThat(response.costType()).isEqualTo(ProcurementCostType.DEPARTMENT);
+    assertThat(response.costTargetId()).isEqualTo(department.getId());
+    assertThat(response.costTargetCode()).isEqualTo("FINANCE_DEPARTMENT");
+    assertThat(response.costTargetName()).isEqualTo("财务部");
+  }
+
+  @Test
+  void projectReceiptPostsMaterialCostAndUpdatesActualCost() {
+    UUID projectId = UUID.randomUUID();
+    UUID requestId = UUID.randomUUID();
+    InventoryPart part = part("控制模块");
+    part.setStockQty(BigDecimal.ZERO);
+    part.setUnitCost(BigDecimal.ZERO);
+    Project project = new Project();
+    project.setId(projectId);
+    project.setCode("XM-001");
+    project.setName("交付项目");
+    project.setApprovalStatus(ProjectApprovalStatus.APPROVED);
+    project.setStage(ProjectStage.CONSTRUCTION);
+    project.setActualCost(BigDecimal.valueOf(500));
+    Supplier supplier = new Supplier();
+    supplier.setId(UUID.randomUUID());
+    supplier.setCode("GYS-001");
+    supplier.setName("设备供应商");
+    supplier.setRiskStatus(SupplierRiskStatus.NORMAL);
+    PurchaseOrder order = new PurchaseOrder();
+    order.setId(UUID.randomUUID());
+    order.setCode("CGDD-001");
+    order.setRequestId(requestId);
+    order.setSupplierId(supplier.getId());
+    order.setPartId(part.getId());
+    order.setPartName(part.getName());
+    order.setOrderedQty(BigDecimal.valueOf(2));
+    order.setReceivedQty(BigDecimal.ZERO);
+    order.setUnitPrice(BigDecimal.valueOf(120));
+    order.setOrderAmount(BigDecimal.valueOf(240));
+    order.setStatus(PurchaseOrderStatus.ORDERED);
+    order.setCostType(ProcurementCostType.PROJECT);
+    order.setProjectId(projectId);
+    order.setCostTargetCode(project.getCode());
+    order.setCostTargetName(project.getName());
+
+    when(orderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+    when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+    when(partRepository.findById(part.getId())).thenReturn(Optional.of(part));
+    when(receiptRepository.countByOrderId(order.getId())).thenReturn(0L);
+    when(receiptRepository.save(any(GoodsReceipt.class))).thenAnswer(invocation -> {
+      GoodsReceipt receipt = invocation.getArgument(0);
+      receipt.setId(UUID.randomUUID());
+      return receipt;
+    });
+    when(orderRepository.save(order)).thenReturn(order);
+    when(requestRepository.findById(requestId)).thenReturn(Optional.empty());
+    when(supplierRepository.findById(supplier.getId())).thenReturn(Optional.of(supplier));
+    when(payableRepository.save(any(ProcurementPayable.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    when(costAllocationRepository.save(any(ProcurementCostAllocation.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    when(projectCostRepository.save(any(ProjectCostEntry.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    when(projectRepository.save(project)).thenReturn(project);
+
+    var result = procurementService.receiveOrder(order.getId(), new ReceivePurchaseOrderRequest(
+        BigDecimal.ONE, LocalDate.now(), "SH-001", "仓管员", LocalDate.now().plusDays(30)
+    ));
+
+    assertThat(result.costAllocation().costType()).isEqualTo(ProcurementCostType.PROJECT);
+    assertThat(result.costAllocation().amount()).isEqualByComparingTo("120");
+    assertThat(project.getActualCost()).isEqualByComparingTo("620");
+    ArgumentCaptor<ProjectCostEntry> costCaptor = ArgumentCaptor.forClass(ProjectCostEntry.class);
+    verify(projectCostRepository).save(costCaptor.capture());
+    assertThat(costCaptor.getValue().getSourceType()).isEqualTo(ProjectCostSource.PROCUREMENT);
+    assertThat(costCaptor.getValue().getAmount()).isEqualByComparingTo("120");
+  }
+
+  private InventoryPart part(String name) {
+    InventoryPart part = new InventoryPart();
+    part.setId(UUID.randomUUID());
+    part.setCode("WL-001");
+    part.setName(name);
+    return part;
+  }
+}

@@ -9,7 +9,7 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 public record CreatePaymentApplicationRequest(
-    @NotBlank @Size(max = 64) String code,
+    String code, // auto-generated if null
     @NotNull UUID payableId,
     @NotNull @Positive BigDecimal requestedAmount,
     @NotNull LocalDate requestedDate,

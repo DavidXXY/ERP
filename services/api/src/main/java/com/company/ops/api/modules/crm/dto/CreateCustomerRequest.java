@@ -8,7 +8,8 @@ import jakarta.validation.constraints.NotNull;
 import java.util.List;
 
 public record CreateCustomerRequest(
-    @NotBlank String code,
+    // @NotBlank removed - auto-generated if null
+  String code,
     @NotBlank String name,
     @NotBlank String industry,
     @NotNull CustomerLevel level,

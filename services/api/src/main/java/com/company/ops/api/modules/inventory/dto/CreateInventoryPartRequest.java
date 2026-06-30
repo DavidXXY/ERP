@@ -5,7 +5,8 @@ import jakarta.validation.constraints.PositiveOrZero;
 import java.math.BigDecimal;
 
 public record CreateInventoryPartRequest(
-    @NotBlank String code,
+    // auto-gen
+    String code,
     @NotBlank String name,
     String model,
     @PositiveOrZero BigDecimal stockQty,

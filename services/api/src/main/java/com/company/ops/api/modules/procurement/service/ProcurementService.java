@@ -1,6 +1,7 @@
 package com.company.ops.api.modules.procurement.service;
 
 import com.company.ops.api.common.exception.BusinessException;
+import com.company.ops.api.common.service.CodeGenerator;
 import com.company.ops.api.modules.inventory.domain.InventoryPart;
 import com.company.ops.api.modules.inventory.domain.StockMovement;
 import com.company.ops.api.modules.inventory.domain.StockMovementType;
@@ -9,6 +10,8 @@ import com.company.ops.api.modules.inventory.repository.StockMovementRepository;
 import com.company.ops.api.modules.procurement.domain.ApprovalStatus;
 import com.company.ops.api.modules.procurement.domain.GoodsReceipt;
 import com.company.ops.api.modules.procurement.domain.PayableStatus;
+import com.company.ops.api.modules.procurement.domain.ProcurementCostAllocation;
+import com.company.ops.api.modules.procurement.domain.ProcurementCostType;
 import com.company.ops.api.modules.procurement.domain.ProcurementPayable;
 import com.company.ops.api.modules.procurement.domain.PurchaseOrder;
 import com.company.ops.api.modules.procurement.domain.PurchaseOrderStatus;
@@ -22,6 +25,9 @@ import com.company.ops.api.modules.procurement.dto.CreatePurchaseRequestRequest;
 import com.company.ops.api.modules.procurement.dto.CreateSupplierRequest;
 import com.company.ops.api.modules.procurement.dto.GoodsReceiptResponse;
 import com.company.ops.api.modules.procurement.dto.ProcessPurchaseRequestApprovalRequest;
+import com.company.ops.api.modules.procurement.dto.ProcurementCostAllocationResponse;
+import com.company.ops.api.modules.procurement.dto.ProcurementCostTargetOptionResponse;
+import com.company.ops.api.modules.procurement.dto.ProcurementCostTargetOptionsResponse;
 import com.company.ops.api.modules.procurement.dto.ProcurementPayableResponse;
 import com.company.ops.api.modules.procurement.dto.PurchaseOrderResponse;
 import com.company.ops.api.modules.procurement.dto.PurchaseRequestResponse;
@@ -30,10 +36,21 @@ import com.company.ops.api.modules.procurement.dto.ReceivePurchaseOrderResult;
 import com.company.ops.api.modules.procurement.dto.SupplierResponse;
 import com.company.ops.api.modules.procurement.repository.GoodsReceiptRepository;
 import com.company.ops.api.modules.procurement.repository.ProcurementPayableRepository;
+import com.company.ops.api.modules.procurement.repository.ProcurementCostAllocationRepository;
 import com.company.ops.api.modules.procurement.repository.PurchaseOrderRepository;
 import com.company.ops.api.modules.procurement.repository.PurchaseRequestApprovalRecordRepository;
 import com.company.ops.api.modules.procurement.repository.PurchaseRequestRepository;
 import com.company.ops.api.modules.procurement.repository.SupplierRepository;
+import com.company.ops.api.modules.project.domain.Project;
+import com.company.ops.api.modules.project.domain.ProjectApprovalStatus;
+import com.company.ops.api.modules.project.domain.ProjectCostCategory;
+import com.company.ops.api.modules.project.domain.ProjectCostEntry;
+import com.company.ops.api.modules.project.domain.ProjectCostSource;
+import com.company.ops.api.modules.project.domain.ProjectStage;
+import com.company.ops.api.modules.project.repository.ProjectCostEntryRepository;
+import com.company.ops.api.modules.project.repository.ProjectRepository;
+import com.company.ops.api.modules.system.domain.SystemOrganization;
+import com.company.ops.api.modules.system.repository.SystemOrganizationRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.OffsetDateTime;
@@ -49,14 +66,19 @@ import org.springframework.util.StringUtils;
 @Service
 public class ProcurementService {
 
+  private final CodeGenerator codeGenerator;
   private final SupplierRepository supplierRepository;
   private final PurchaseRequestRepository requestRepository;
   private final PurchaseRequestApprovalRecordRepository requestApprovalRepository;
   private final PurchaseOrderRepository orderRepository;
   private final GoodsReceiptRepository receiptRepository;
   private final ProcurementPayableRepository payableRepository;
+  private final ProcurementCostAllocationRepository costAllocationRepository;
   private final InventoryPartRepository partRepository;
   private final StockMovementRepository movementRepository;
+  private final ProjectRepository projectRepository;
+  private final ProjectCostEntryRepository projectCostRepository;
+  private final SystemOrganizationRepository organizationRepository;
 
   public ProcurementService(
       SupplierRepository supplierRepository,
@@ -65,17 +87,26 @@ public class ProcurementService {
       PurchaseOrderRepository orderRepository,
       GoodsReceiptRepository receiptRepository,
       ProcurementPayableRepository payableRepository,
+      ProcurementCostAllocationRepository costAllocationRepository,
       InventoryPartRepository partRepository,
-      StockMovementRepository movementRepository
+      StockMovementRepository movementRepository,
+      ProjectRepository projectRepository,
+      ProjectCostEntryRepository projectCostRepository,
+      SystemOrganizationRepository organizationRepository
   ) {
+    this.codeGenerator = codeGenerator;
     this.supplierRepository = supplierRepository;
     this.requestRepository = requestRepository;
     this.requestApprovalRepository = requestApprovalRepository;
     this.orderRepository = orderRepository;
     this.receiptRepository = receiptRepository;
     this.payableRepository = payableRepository;
+    this.costAllocationRepository = costAllocationRepository;
     this.partRepository = partRepository;
     this.movementRepository = movementRepository;
+    this.projectRepository = projectRepository;
+    this.projectCostRepository = projectCostRepository;
+    this.organizationRepository = organizationRepository;
   }
 
   @Transactional(readOnly = true)
@@ -87,11 +118,12 @@ public class ProcurementService {
 
   @Transactional
   public SupplierResponse createSupplier(CreateSupplierRequest request) {
-    if (supplierRepository.existsByCode(request.code())) {
+    String supplierCode = request.code() != null ? request.code() : codeGenerator.generate("SUPPLIER");
+    if (supplierRepository.existsByCode(supplierCode)) {
       throw new BusinessException("供应商编码已存在");
     }
     Supplier supplier = new Supplier();
-    supplier.setCode(request.code());
+    supplier.setCode(supplierCode);
     supplier.setName(request.name());
     supplier.setCategory(request.category());
     supplier.setContactName(request.contactName());
@@ -99,6 +131,45 @@ public class ProcurementService {
     supplier.setSettlementTerms(request.settlementTerms());
     supplier.setRiskStatus(request.riskStatus() == null ? SupplierRiskStatus.NORMAL : request.riskStatus());
     return toSupplierResponse(supplierRepository.save(supplier));
+  }
+
+  @Transactional(readOnly = true)
+  public ProcurementCostTargetOptionsResponse listCostTargets() {
+    List<ProcurementCostTargetOptionResponse> projects = projectRepository.findAllByOrderByCreatedAtDesc().stream()
+        .filter(project -> project.getApprovalStatus() == ProjectApprovalStatus.APPROVED)
+        .filter(project -> project.getStage() != ProjectStage.CLOSED)
+        .map(project -> new ProcurementCostTargetOptionResponse(
+            project.getId(), project.getCode(), project.getName()
+        ))
+        .toList();
+    List<ProcurementCostTargetOptionResponse> departments = organizationRepository
+        .findByTenantIdOrderBySortOrderAsc("default").stream()
+        .filter(SystemOrganization::isEnabled)
+        .filter(organization -> "DEPARTMENT".equals(organization.getType()))
+        .map(organization -> new ProcurementCostTargetOptionResponse(
+            organization.getId(), organization.getCode(), organization.getName()
+        ))
+        .toList();
+    return new ProcurementCostTargetOptionsResponse(projects, departments);
+  }
+
+  @Transactional(readOnly = true)
+  public List<ProcurementCostAllocationResponse> listCostAllocations() {
+    List<ProcurementCostAllocation> allocations = costAllocationRepository
+        .findAllByOrderByIncurredDateDescCreatedAtDesc();
+    Map<UUID, PurchaseOrder> orders = orderRepository.findAllById(
+        allocations.stream().map(ProcurementCostAllocation::getOrderId).distinct().toList()
+    ).stream().collect(Collectors.toMap(PurchaseOrder::getId, Function.identity()));
+    Map<UUID, GoodsReceipt> receipts = receiptRepository.findAllById(
+        allocations.stream().map(ProcurementCostAllocation::getReceiptId).distinct().toList()
+    ).stream().collect(Collectors.toMap(GoodsReceipt::getId, Function.identity()));
+    return allocations.stream()
+        .map(item -> toCostAllocationResponse(
+            item,
+            orders.get(item.getOrderId()),
+            receipts.get(item.getReceiptId())
+        ))
+        .toList();
   }
 
   @Transactional(readOnly = true)
@@ -110,7 +181,8 @@ public class ProcurementService {
 
   @Transactional
   public PurchaseRequestResponse createPurchaseRequest(CreatePurchaseRequestRequest request) {
-    if (requestRepository.existsByCode(request.code())) {
+    String prCode = request.code() != null ? request.code() : codeGenerator.generate("PURCHASE_REQUEST");
+    if (requestRepository.existsByCode(prCode)) {
       throw new BusinessException("采购申请编码已存在");
     }
 
@@ -123,15 +195,23 @@ public class ProcurementService {
     if (!StringUtils.hasText(partName)) {
       throw new BusinessException("请选择物料或填写采购物料名称");
     }
+    CostTarget costTarget = resolveCostTarget(
+        request.costType(), request.projectId(), request.departmentId()
+    );
 
     PurchaseRequest purchaseRequest = new PurchaseRequest();
-    purchaseRequest.setCode(request.code());
+    purchaseRequest.setCode(prCode);
     purchaseRequest.setRequesterName(request.requesterName());
     purchaseRequest.setPartId(request.partId());
     purchaseRequest.setPartName(partName);
     purchaseRequest.setQuantity(request.quantity());
     purchaseRequest.setExpectedDate(request.expectedDate());
     purchaseRequest.setReason(request.reason());
+    purchaseRequest.setCostType(request.costType());
+    purchaseRequest.setProjectId(request.projectId());
+    purchaseRequest.setDepartmentId(request.departmentId());
+    purchaseRequest.setCostTargetCode(costTarget.code());
+    purchaseRequest.setCostTargetName(costTarget.name());
     purchaseRequest.setStatus(PurchaseRequestStatus.SUBMITTED);
     purchaseRequest.setApprovalStatus(ApprovalStatus.PENDING);
     return toPurchaseRequestResponse(requestRepository.save(purchaseRequest));
@@ -212,6 +292,11 @@ public class ProcurementService {
     order.setExpectedDeliveryDate(request.expectedDeliveryDate() == null
         ? purchaseRequest.getExpectedDate()
         : request.expectedDeliveryDate());
+    order.setCostType(purchaseRequest.getCostType());
+    order.setProjectId(purchaseRequest.getProjectId());
+    order.setDepartmentId(purchaseRequest.getDepartmentId());
+    order.setCostTargetCode(purchaseRequest.getCostTargetCode());
+    order.setCostTargetName(purchaseRequest.getCostTargetName());
     order.setStatus(PurchaseOrderStatus.ORDERED);
 
     purchaseRequest.setStatus(PurchaseRequestStatus.ORDERED);
@@ -231,6 +316,7 @@ public class ProcurementService {
     if (order.getPartId() == null) {
       throw new BusinessException("订单未关联物料，不能入库");
     }
+    validateOrderCostTarget(order);
     BigDecimal currentReceived = amount(order.getReceivedQty());
     BigDecimal nextReceived = currentReceived.add(request.quantity());
     if (nextReceived.compareTo(amount(order.getOrderedQty())) > 0) {
@@ -295,11 +381,15 @@ public class ProcurementService {
     payable.setDueDate(request.payableDueDate());
     payable.setStatus(PayableStatus.PENDING);
     ProcurementPayable savedPayable = payableRepository.save(payable);
+    ProcurementCostAllocation savedAllocation = postCostAllocation(
+        savedOrder, savedReceipt, receiptAmount, request.receivedDate()
+    );
 
     return new ReceivePurchaseOrderResult(
         toPurchaseOrderResponse(savedOrder, supplier, purchaseRequest),
         toGoodsReceiptResponse(savedReceipt, savedOrder, part),
         toPayableResponse(savedPayable, supplier, savedOrder),
+        toCostAllocationResponse(savedAllocation, savedOrder, savedReceipt),
         stockAfter
     );
   }
@@ -374,6 +464,10 @@ public class ProcurementService {
         request.getQuantity(),
         request.getExpectedDate(),
         request.getReason(),
+        request.getCostType(),
+        costTargetId(request.getCostType(), request.getProjectId(), request.getDepartmentId()),
+        request.getCostTargetCode(),
+        request.getCostTargetName(),
         request.getStatus(),
         request.getApprovalStatus(),
         approval == null ? null : approval.getComment(),
@@ -401,6 +495,10 @@ public class ProcurementService {
         amount(order.getUnitPrice()),
         amount(order.getOrderAmount()),
         order.getExpectedDeliveryDate(),
+        order.getCostType(),
+        costTargetId(order.getCostType(), order.getProjectId(), order.getDepartmentId()),
+        order.getCostTargetCode(),
+        order.getCostTargetName(),
         order.getStatus()
     );
   }
@@ -422,7 +520,13 @@ public class ProcurementService {
         receipt.getAmount(),
         receipt.getReceivedDate(),
         receipt.getDeliveryNo(),
-        receipt.getReceiverName()
+        receipt.getReceiverName(),
+        order == null ? null : order.getCostType(),
+        order == null ? null : costTargetId(
+            order.getCostType(), order.getProjectId(), order.getDepartmentId()
+        ),
+        order == null ? null : order.getCostTargetCode(),
+        order == null ? null : order.getCostTargetName()
     );
   }
 
@@ -444,11 +548,142 @@ public class ProcurementService {
         amount(payable.getPaidAmount()),
         outstanding,
         payable.getDueDate(),
+        order == null ? null : order.getCostType(),
+        order == null ? null : costTargetId(
+            order.getCostType(), order.getProjectId(), order.getDepartmentId()
+        ),
+        order == null ? null : order.getCostTargetCode(),
+        order == null ? null : order.getCostTargetName(),
         payable.getStatus()
     );
+  }
+
+  private ProcurementCostAllocationResponse toCostAllocationResponse(
+      ProcurementCostAllocation allocation,
+      PurchaseOrder order,
+      GoodsReceipt receipt
+  ) {
+    return new ProcurementCostAllocationResponse(
+        allocation.getId(),
+        allocation.getOrderId(),
+        order == null ? null : order.getCode(),
+        allocation.getReceiptId(),
+        receipt == null ? null : receipt.getCode(),
+        allocation.getCostType(),
+        costTargetId(
+            allocation.getCostType(), allocation.getProjectId(), allocation.getDepartmentId()
+        ),
+        allocation.getTargetCode(),
+        allocation.getTargetName(),
+        allocation.getPartName(),
+        amount(allocation.getAmount()),
+        allocation.getIncurredDate()
+    );
+  }
+
+  private CostTarget resolveCostTarget(
+      ProcurementCostType costType,
+      UUID projectId,
+      UUID departmentId
+  ) {
+    if (costType == null) {
+      throw new BusinessException("请选择采购成本归属类型");
+    }
+    if (costType == ProcurementCostType.PROJECT) {
+      if (projectId == null) {
+        throw new BusinessException("项目采购必须关联项目");
+      }
+      if (departmentId != null) {
+        throw new BusinessException("项目采购不能同时关联部门");
+      }
+      Project project = projectRepository.findById(projectId)
+          .orElseThrow(() -> new BusinessException("关联项目不存在"));
+      if (project.getApprovalStatus() != ProjectApprovalStatus.APPROVED
+          || project.getStage() == ProjectStage.CLOSED) {
+        throw new BusinessException("只能选择已审批且未关闭的项目");
+      }
+      return new CostTarget(project.getCode(), project.getName());
+    }
+    if (departmentId == null) {
+      throw new BusinessException("部门采购必须关联成本部门");
+    }
+    if (projectId != null) {
+      throw new BusinessException("部门采购不能同时关联项目");
+    }
+    SystemOrganization department = organizationRepository.findById(departmentId)
+        .orElseThrow(() -> new BusinessException("成本部门不存在"));
+    if (!department.isEnabled() || !"DEPARTMENT".equals(department.getType())) {
+      throw new BusinessException("请选择有效的部门作为成本归属");
+    }
+    return new CostTarget(department.getCode(), department.getName());
+  }
+
+  private void validateOrderCostTarget(PurchaseOrder order) {
+    if (order.getCostType() == ProcurementCostType.PROJECT) {
+      if (order.getProjectId() == null) {
+        throw new BusinessException("采购订单缺少关联项目，不能收货");
+      }
+      Project project = projectRepository.findById(order.getProjectId())
+          .orElseThrow(() -> new BusinessException("采购订单关联项目不存在"));
+      if (project.getApprovalStatus() != ProjectApprovalStatus.APPROVED
+          || project.getStage() == ProjectStage.CLOSED) {
+        throw new BusinessException("关联项目已关闭或未审批，不能归集采购成本");
+      }
+      return;
+    }
+    if (order.getCostType() != ProcurementCostType.DEPARTMENT || order.getDepartmentId() == null) {
+      throw new BusinessException("采购订单缺少成本部门，不能收货");
+    }
+  }
+
+  private ProcurementCostAllocation postCostAllocation(
+      PurchaseOrder order,
+      GoodsReceipt receipt,
+      BigDecimal receiptAmount,
+      java.time.LocalDate incurredDate
+  ) {
+    ProcurementCostAllocation allocation = new ProcurementCostAllocation();
+    allocation.setOrderId(order.getId());
+    allocation.setReceiptId(receipt.getId());
+    allocation.setCostType(order.getCostType());
+    allocation.setProjectId(order.getProjectId());
+    allocation.setDepartmentId(order.getDepartmentId());
+    allocation.setTargetCode(order.getCostTargetCode());
+    allocation.setTargetName(order.getCostTargetName());
+    allocation.setPartName(order.getPartName());
+    allocation.setAmount(receiptAmount);
+    allocation.setIncurredDate(incurredDate);
+    ProcurementCostAllocation saved = costAllocationRepository.save(allocation);
+
+    if (order.getCostType() == ProcurementCostType.PROJECT) {
+      Project project = projectRepository.findById(order.getProjectId())
+          .orElseThrow(() -> new BusinessException("采购订单关联项目不存在"));
+      ProjectCostEntry entry = new ProjectCostEntry();
+      entry.setProjectId(project.getId());
+      entry.setCategory(ProjectCostCategory.MATERIAL);
+      entry.setSourceType(ProjectCostSource.PROCUREMENT);
+      entry.setSourceNo(receipt.getCode());
+      entry.setDescription("采购入库：" + order.getPartName());
+      entry.setAmount(receiptAmount);
+      entry.setIncurredDate(incurredDate);
+      projectCostRepository.save(entry);
+      project.setActualCost(amount(project.getActualCost()).add(receiptAmount));
+      projectRepository.save(project);
+    }
+    return saved;
+  }
+
+  private UUID costTargetId(
+      ProcurementCostType costType,
+      UUID projectId,
+      UUID departmentId
+  ) {
+    return costType == ProcurementCostType.PROJECT ? projectId : departmentId;
   }
 
   private BigDecimal amount(BigDecimal value) {
     return value == null ? BigDecimal.ZERO : value;
   }
+
+  private record CostTarget(String code, String name) {}
 }

@@ -7,7 +7,7 @@ import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 
 public record ExecutePaymentRequest(
-    @NotBlank @Size(max = 64) String paymentCode,
+    String paymentCode, // auto-generated if null
     @NotNull LocalDate paidDate,
     @NotNull PaymentMethod paymentMethod,
     @NotBlank @Size(max = 100) String bankReference,

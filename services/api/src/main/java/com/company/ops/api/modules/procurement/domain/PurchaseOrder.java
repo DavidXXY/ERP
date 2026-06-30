@@ -45,6 +45,22 @@ public class PurchaseOrder extends BaseEntity {
   private LocalDate expectedDeliveryDate;
 
   @Enumerated(EnumType.STRING)
+  @Column(name = "cost_type", nullable = false, length = 24)
+  private ProcurementCostType costType = ProcurementCostType.DEPARTMENT;
+
+  @Column(name = "project_id")
+  private UUID projectId;
+
+  @Column(name = "department_id")
+  private UUID departmentId;
+
+  @Column(name = "cost_target_code", nullable = false, length = 64)
+  private String costTargetCode;
+
+  @Column(name = "cost_target_name", nullable = false, length = 180)
+  private String costTargetName;
+
+  @Enumerated(EnumType.STRING)
   @Column(nullable = false, length = 32)
   private PurchaseOrderStatus status = PurchaseOrderStatus.ORDERED;
 
@@ -86,6 +102,46 @@ public class PurchaseOrder extends BaseEntity {
 
   public void setExpectedDeliveryDate(LocalDate expectedDeliveryDate) {
     this.expectedDeliveryDate = expectedDeliveryDate;
+  }
+
+  public ProcurementCostType getCostType() {
+    return costType;
+  }
+
+  public void setCostType(ProcurementCostType costType) {
+    this.costType = costType;
+  }
+
+  public UUID getProjectId() {
+    return projectId;
+  }
+
+  public void setProjectId(UUID projectId) {
+    this.projectId = projectId;
+  }
+
+  public UUID getDepartmentId() {
+    return departmentId;
+  }
+
+  public void setDepartmentId(UUID departmentId) {
+    this.departmentId = departmentId;
+  }
+
+  public String getCostTargetCode() {
+    return costTargetCode;
+  }
+
+  public void setCostTargetCode(String costTargetCode) {
+    this.costTargetCode = costTargetCode;
+  }
+
+  public String getCostTargetName() {
+    return costTargetName;
+  }
+
+  public void setCostTargetName(String costTargetName) {
+    this.costTargetName = costTargetName;
   }
 
   public PurchaseOrderStatus getStatus() {

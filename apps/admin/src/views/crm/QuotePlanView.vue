@@ -589,7 +589,7 @@ function initialConversionForm(record?: QuotePlan) {
   end.setDate(end.getDate() - 1);
   const due = new Date(today);
   due.setDate(due.getDate() + 30);
-  const suffix = record?.code.replace(/^BJ-?/, "") || "";
+  const suffix = (record?.code || "").replace(/^BJ-?/, "") || "";
   return {
     contractCode: suffix ? `HT-${suffix}` : "",
     projectName: record?.serviceScope.slice(0, 40) || "",

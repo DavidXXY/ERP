@@ -12,7 +12,7 @@ export type FollowUpType = "VISIT" | "PHONE" | "CALLBACK" | "COMPLAINT";
 
 export type CustomerSummary = {
   id: string;
-  code: string;
+  code?: string;
   name: string;
   industry: string;
   level: CustomerLevel;
@@ -49,7 +49,7 @@ export type CustomerDetail = CustomerSummary & {
   }>;
   opportunities: Array<{
     id: string;
-    code: string;
+    code?: string;
     source?: string;
     needSummary: string;
     stage: OpportunityStage;
@@ -61,7 +61,7 @@ export type CustomerDetail = CustomerSummary & {
   }>;
   contracts: Array<{
     id: string;
-    code: string;
+    code?: string;
     projectName: string;
     contractType: string;
     amount: number;
@@ -72,7 +72,7 @@ export type CustomerDetail = CustomerSummary & {
   }>;
   receivables: Array<{
     id: string;
-    code: string;
+    code?: string;
     sourceNo: string;
     amount: number;
     dueDate: string;
@@ -105,7 +105,7 @@ export type Opportunity = {
   id: string;
   customerId?: string;
   customerName: string;
-  code: string;
+  code?: string;
   source?: string;
   needSummary: string;
   stage: OpportunityStage;
@@ -119,7 +119,7 @@ export type Opportunity = {
 
 export type CreateOpportunityPayload = {
   customerId?: string;
-  code: string;
+  code?: string;
   source?: string;
   needSummary: string;
   stage?: OpportunityStage;
@@ -143,7 +143,7 @@ export type QuotePlan = {
   customerName: string;
   opportunityId?: string;
   opportunityCode?: string;
-  code: string;
+  code?: string;
   serviceScope: string;
   inspectCycle?: string;
   paymentNodes?: string;
@@ -164,7 +164,7 @@ export type QuotePlan = {
 export type CreateQuotePayload = {
   customerId?: string;
   opportunityId?: string;
-  code: string;
+  code?: string;
   serviceScope: string;
   inspectCycle?: string;
   paymentNodes?: string;
@@ -208,7 +208,7 @@ export type ConvertQuotePayload = {
 export type QuoteRevision = {
   id: string;
   versionNo: number;
-  code: string;
+  code?: string;
   serviceScope: string;
   inspectCycle?: string;
   paymentNodes?: string;
@@ -249,7 +249,7 @@ export type ServiceContract = {
   quoteId?: string;
   customerId: string;
   customerName: string;
-  code: string;
+  code?: string;
   projectName: string;
   contractType: string;
   amount: number;
@@ -265,7 +265,7 @@ export type Receivable = {
   customerName: string;
   contractId?: string;
   contractCode: string;
-  code: string;
+  code?: string;
   sourceNo: string;
   amount: number;
   dueDate: string;
@@ -315,7 +315,7 @@ export type CustomerProfile = {
 };
 
 export type CreateCustomerPayload = {
-  code: string;
+  code?: string;
   name: string;
   industry: string;
   level: CustomerLevel;

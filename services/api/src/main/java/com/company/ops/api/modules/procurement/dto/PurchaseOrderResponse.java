@@ -1,5 +1,6 @@
 package com.company.ops.api.modules.procurement.dto;
 
+import com.company.ops.api.modules.procurement.domain.ProcurementCostType;
 import com.company.ops.api.modules.procurement.domain.PurchaseOrderStatus;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -19,5 +20,9 @@ public record PurchaseOrderResponse(
     BigDecimal unitPrice,
     BigDecimal orderAmount,
     LocalDate expectedDeliveryDate,
+    ProcurementCostType costType,
+    UUID costTargetId,
+    String costTargetCode,
+    String costTargetName,
     PurchaseOrderStatus status
 ) {}

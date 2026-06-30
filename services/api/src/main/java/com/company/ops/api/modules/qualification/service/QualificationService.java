@@ -1,6 +1,7 @@
 package com.company.ops.api.modules.qualification.service;
 
 import com.company.ops.api.common.exception.BusinessException;
+import com.company.ops.api.common.service.CodeGenerator;
 import com.company.ops.api.modules.qualification.domain.CompanyQualification;
 import com.company.ops.api.modules.qualification.domain.EmployeeContract;
 import com.company.ops.api.modules.qualification.domain.PersonnelCertificate;
@@ -58,6 +59,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class QualificationService {
   private static final int WARNING_DAYS = 180;
+  private CodeGenerator codeGenerator;
   private final QualificationEmployeeRepository employeeRepository;
   private final CompanyQualificationRepository companyRepository;
   private final PersonnelCertificateRepository certificateRepository;
@@ -75,6 +77,7 @@ public class QualificationService {
                               SystemUserRepository systemUserRepository,
                               SystemOrganizationRepository organizationRepository,
                               ObjectMapper objectMapper) {
+    this.codeGenerator = codeGenerator;
     this.employeeRepository = employeeRepository;
     this.companyRepository = companyRepository;
     this.certificateRepository = certificateRepository;
@@ -168,6 +171,8 @@ public class QualificationService {
   @Transactional
   public EmployeeResponse createEmployee(EmployeeRequest request) {
     QualificationEmployee item = new QualificationEmployee();
+    String empCode = codeGenerator.generate("QUAL_EMPLOYEE");
+    item.setWorkNo(empCode);
     item.setExternalId("MANUAL-EMP-" + UUID.randomUUID());
     applyEmployee(item, request);
     return toEmployee(employeeRepository.save(item), List.of());
@@ -194,7 +199,8 @@ public class QualificationService {
 
   @Transactional
   public EmployeeContractResponse createEmployeeContract(UUID employeeId, EmployeeContractRequest request) {
-    if (contractRepository.existsByContractNo(request.contractNo())) throw new BusinessException("合同编号已存在");
+    String contractNo = request.contractNo() != null ? request.contractNo() : codeGenerator.generate("EMPLOYEE_CONTRACT");
+    if (contractRepository.existsByContractNo(contractNo)) throw new BusinessException("合同编号已存在");
     EmployeeContract item = new EmployeeContract();
     item.setEmployee(employeeRepository.findById(employeeId).orElseThrow(() -> new BusinessException("人员档案不存在")));
     applyEmployeeContract(item, request);

@@ -1,4 +1,4 @@
-create table sys_role_permissions (
+create table if not exists sys_role_permissions (
   role_id uuid not null references sys_roles(id) on delete cascade,
   permission_id uuid not null references sys_permissions(id) on delete cascade,
   primary key (role_id, permission_id)

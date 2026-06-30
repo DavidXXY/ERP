@@ -316,3 +316,23 @@ create table procurement_purchase_orders (
   updated_by varchar(64),
   unique (tenant_id, code)
 );
+
+-- V24 consolidated: add missing org columns
+alter table sys_organizations add column if not exists leader_name varchar(80);
+alter table sys_organizations add column if not exists phone varchar(40);
+alter table sys_organizations add column if not exists enabled boolean not null default true;
+alter table sys_organizations add column if not exists description varchar(500);
+
+-- V24 consolidated: role data org join table
+create table if not exists sys_role_data_organizations (
+  role_id uuid not null references sys_roles(id) on delete cascade,
+  organization_id uuid not null references sys_organizations(id),
+  primary key (role_id, organization_id)
+);
+
+-- New: code sequences table
+create table if not exists code_sequences (
+  entity_type varchar(64) primary key,
+  prefix varchar(16) not null,
+  next_number bigint not null default 1
+);

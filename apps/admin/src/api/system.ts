@@ -105,7 +105,7 @@ export type OrganizationResponse = {
 };
 
 export type CreateOrganizationRequest = {
-  code: string;
+  code?: string;
   name: string;
   type?: string;
   sortOrder?: number;

@@ -18,7 +18,7 @@ export type FinancePayableStatus = "PENDING" | "PARTIAL_PAID" | "PAID" | "CANCEL
 
 export type FinancePayable = {
   id: string;
-  code: string;
+  code?: string;
   supplierId: string;
   supplierName: string;
   orderId: string;
@@ -38,7 +38,7 @@ export type PaymentMethod = "BANK_TRANSFER" | "CHECK" | "CASH" | "OTHER";
 
 export type PaymentApplication = {
   id: string;
-  code: string;
+  code?: string;
   payableId: string;
   payableCode: string;
   supplierId: string;
@@ -57,7 +57,7 @@ export type PaymentApplication = {
 
 export type PaymentRecord = {
   id: string;
-  code: string;
+  code?: string;
   applicationId: string;
   applicationCode: string;
   payableId: string;

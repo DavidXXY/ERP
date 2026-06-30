@@ -6,6 +6,7 @@ public record ReceivePurchaseOrderResult(
     PurchaseOrderResponse order,
     GoodsReceiptResponse receipt,
     ProcurementPayableResponse payable,
+    ProcurementCostAllocationResponse costAllocation,
     BigDecimal currentStockQty
 ) {
 }

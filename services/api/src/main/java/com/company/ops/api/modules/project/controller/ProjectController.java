@@ -1,14 +1,20 @@
 package com.company.ops.api.modules.project.controller;
 
 import com.company.ops.api.common.api.ApiResponse;
+import com.company.ops.api.modules.project.dto.AdvanceProjectStageRequest;
+import com.company.ops.api.modules.project.dto.CreateProjectCostRequest;
 import com.company.ops.api.modules.project.dto.CreateProjectRequest;
+import com.company.ops.api.modules.project.dto.ProcessProjectApprovalRequest;
+import com.company.ops.api.modules.project.dto.ProjectDetailResponse;
 import com.company.ops.api.modules.project.dto.ProjectResponse;
 import com.company.ops.api.modules.project.service.ProjectService;
 import jakarta.validation.Valid;
 import java.util.List;
+import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -31,10 +37,44 @@ public class ProjectController {
     return ApiResponse.ok(projectService.listProjects());
   }
 
+  @GetMapping("/{id}")
+  @PreAuthorize("hasAuthority('project:view')")
+  public ApiResponse<ProjectDetailResponse> getProject(@PathVariable UUID id) {
+    return ApiResponse.ok(projectService.getProject(id));
+  }
+
   @PostMapping
   @ResponseStatus(HttpStatus.CREATED)
   @PreAuthorize("hasAuthority('project:create')")
-  public ApiResponse<ProjectResponse> createProject(@Valid @RequestBody CreateProjectRequest request) {
+  public ApiResponse<ProjectDetailResponse> createProject(@Valid @RequestBody CreateProjectRequest request) {
     return ApiResponse.ok(projectService.createProject(request));
+  }
+
+  @PostMapping("/{id}/approval")
+  @PreAuthorize("hasAuthority('project:approve')")
+  public ApiResponse<ProjectDetailResponse> processApproval(
+      @PathVariable UUID id,
+      @Valid @RequestBody ProcessProjectApprovalRequest request
+  ) {
+    return ApiResponse.ok(projectService.processApproval(id, request));
+  }
+
+  @PostMapping("/{id}/stage")
+  @PreAuthorize("hasAuthority('project:stage:update')")
+  public ApiResponse<ProjectDetailResponse> advanceStage(
+      @PathVariable UUID id,
+      @Valid @RequestBody AdvanceProjectStageRequest request
+  ) {
+    return ApiResponse.ok(projectService.advanceStage(id, request));
+  }
+
+  @PostMapping("/{id}/costs")
+  @ResponseStatus(HttpStatus.CREATED)
+  @PreAuthorize("hasAuthority('project:cost:create')")
+  public ApiResponse<ProjectDetailResponse> createCost(
+      @PathVariable UUID id,
+      @Valid @RequestBody CreateProjectCostRequest request
+  ) {
+    return ApiResponse.ok(projectService.createCost(id, request));
   }
 }

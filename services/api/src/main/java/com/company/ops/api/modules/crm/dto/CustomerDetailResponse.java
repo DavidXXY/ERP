@@ -2,6 +2,7 @@ package com.company.ops.api.modules.crm.dto;
 
 import com.company.ops.api.modules.crm.domain.ContractStatus;
 import com.company.ops.api.modules.crm.domain.CustomerLevel;
+import com.company.ops.api.modules.crm.domain.OpportunityStage;
 import com.company.ops.api.modules.crm.domain.ReceivableStatus;
 import com.company.ops.api.modules.crm.domain.RiskStatus;
 import java.math.BigDecimal;
@@ -22,6 +23,7 @@ public record CustomerDetailResponse(
     Invoice invoice,
     List<Contact> contacts,
     List<Site> sites,
+    List<Opportunity> opportunities,
     List<Contract> contracts,
     List<Receivable> receivables,
     CustomerMetrics metrics
@@ -54,6 +56,20 @@ public record CustomerDetailResponse(
   ) {
   }
 
+  public record Opportunity(
+      UUID id,
+      String code,
+      String source,
+      String needSummary,
+      OpportunityStage stage,
+      BigDecimal expectedAmount,
+      int probability,
+      String nextAction,
+      LocalDate nextActionAt,
+      String ownerName
+  ) {
+  }
+
   public record Contract(
       UUID id,
       String code,
@@ -73,6 +89,10 @@ public record CustomerDetailResponse(
       String sourceNo,
       BigDecimal amount,
       LocalDate dueDate,
+      String invoiceNo,
+      LocalDate invoiceDate,
+      BigDecimal settledAmount,
+      BigDecimal outstandingAmount,
       ReceivableStatus status
   ) {
   }
@@ -85,4 +105,3 @@ public record CustomerDetailResponse(
   ) {
   }
 }
-

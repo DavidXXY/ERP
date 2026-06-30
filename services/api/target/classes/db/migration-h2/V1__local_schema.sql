@@ -1,16 +1,15 @@
 create table sys_organizations (
   id uuid default RANDOM_UUID() primary key,
   tenant_id varchar(64) not null default 'default',
+  code varchar(64) not null unique,
+  name varchar(120) not null,
+  type varchar(40) default 'DEPARTMENT',
+  sort_order int default 0,
   parent_id uuid,
-  code varchar(64) not null,
-  name varchar(160) not null,
-  org_type varchar(40) not null,
-  enabled boolean not null default true,
   created_at timestamp not null default current_timestamp,
   updated_at timestamp not null default current_timestamp,
   created_by varchar(64),
-  updated_by varchar(64),
-  unique (tenant_id, code)
+  updated_by varchar(64)
 );
 
 create table sys_users (

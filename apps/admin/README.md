@@ -29,10 +29,9 @@ VITE_API_BASE_URL=http://your-host:8080/api npm run admin:dev
 - 经营驾驶舱
 - CRM / 客户池
 - CRM / 线索商机占位
-- CRM / 维保合同占位
+- CRM / 客户合同
 - 供应链采购占位
 - 项目管理占位
-- 备件仓储占位
+- 库存管理
 - 财务资金占位
 - 系统设置占位
-

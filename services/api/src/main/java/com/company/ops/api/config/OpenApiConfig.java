@@ -12,9 +12,8 @@ public class OpenApiConfig {
   public OpenAPI openAPI() {
     return new OpenAPI()
         .info(new Info()
-            .title("工程运维 ERP API")
+            .title("企业管理系统 API")
             .version("0.1.0")
             .description("CRM、项目、工单、仓储、财务、OA 一体化接口"));
   }
 }
-

@@ -5,9 +5,9 @@ create table sys_role_permissions (
 );
 
 insert into sys_organizations (
-  id, tenant_id, code, name, org_type, enabled, created_at, updated_at
+  id, tenant_id, code, name, type, created_at, updated_at
 ) values (
-  '00000000-0000-4000-8000-000000000001', 'default', 'ROOT', '工程运维公司', 'COMPANY', true, now(), now()
+  '00000000-0000-4000-8000-000000000001', 'default', 'ROOT', '工程运维公司', 'COMPANY', now(), now()
 );
 
 insert into sys_roles (

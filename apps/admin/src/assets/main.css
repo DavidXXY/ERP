@@ -87,6 +87,11 @@ body {
   min-height: 100vh;
 }
 
+.app-layout > .ant-layout,
+.app-content {
+  min-width: 0;
+}
+
 .app-sider {
   overflow: auto;
   height: 100vh;
@@ -158,6 +163,16 @@ body {
   min-width: 0;
 }
 
+.page-stack > *,
+.ant-card,
+.ant-card-body,
+.ant-tabs,
+.ant-tabs-content-holder,
+.ant-tabs-content,
+.ant-tabs-tabpane {
+  min-width: 0;
+}
+
 .section-alert {
   margin-bottom: 14px;
 }
@@ -187,6 +202,34 @@ body {
 
 .metric-row {
   margin-bottom: 16px;
+}
+
+.table-toolbar {
+  margin-bottom: 18px !important;
+}
+
+.ant-space.table-toolbar {
+  display: flex;
+  width: 100%;
+}
+
+.line-clamp-2 {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-height: 1.55;
+}
+
+.text-danger {
+  color: #cf1322;
+}
+
+.table-link {
+  height: auto;
+  padding: 0;
+  font-weight: 600;
+  text-align: left;
 }
 
 .muted {

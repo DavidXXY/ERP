@@ -8,5 +8,10 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface ServiceContractRepository extends JpaRepository<ServiceContract, UUID> {
 
   List<ServiceContract> findByCustomerIdOrderByStartDateDesc(UUID customerId);
-}
 
+  List<ServiceContract> findAllByOrderByEndDateAsc();
+
+  boolean existsByCode(String code);
+
+  boolean existsByQuoteId(UUID quoteId);
+}

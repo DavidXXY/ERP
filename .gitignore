@@ -1,5 +1,8 @@
 node_modules/
 dist/
+apps/admin/dist/
+apps/admin/vite.config.ts.timestamp-*.mjs
+services/api/target/
 .dev/
 .local-data/
 .env

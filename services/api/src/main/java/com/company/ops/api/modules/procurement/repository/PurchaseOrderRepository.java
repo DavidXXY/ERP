@@ -10,4 +10,6 @@ public interface PurchaseOrderRepository extends JpaRepository<PurchaseOrder, UU
   List<PurchaseOrder> findAllByOrderByCreatedAtDesc();
 
   boolean existsByCode(String code);
+
+  boolean existsByRequestId(UUID requestId);
 }

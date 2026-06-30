@@ -250,9 +250,9 @@ const modules: Array<{
   { id: "crm", label: "CRM", group: "核心业务", icon: BriefcaseBusiness },
   { id: "supplychain", label: "供应链采购", group: "核心业务", icon: Truck },
   { id: "projects", label: "项目管理", group: "核心业务", icon: HardHat },
-  { id: "inventory", label: "备件仓储", group: "核心业务", icon: PackageCheck },
+  { id: "inventory", label: "库存管理", group: "核心业务", icon: PackageCheck },
   { id: "finance", label: "财务资金", group: "资金管控", icon: Coins },
-  { id: "hr", label: "组织外勤", group: "底层支撑", icon: UsersRound },
+  { id: "hr", label: "组织人事", group: "底层支撑", icon: UsersRound },
   { id: "oa", label: "OA审批", group: "底层支撑", icon: ClipboardCheck },
   { id: "documents", label: "电子档案", group: "底层支撑", icon: FileArchive },
   { id: "permissions", label: "权限审计", group: "底层支撑", icon: ShieldCheck },
@@ -268,7 +268,7 @@ const crmTabs: Array<{
   { id: "customers", label: "客户池", icon: Building2 },
   { id: "leads", label: "线索商机", icon: TrendingUp },
   { id: "quotes", label: "报价方案", icon: ReceiptText },
-  { id: "contracts", label: "维保合同", icon: BriefcaseBusiness },
+  { id: "contracts", label: "客户合同", icon: BriefcaseBusiness },
   { id: "followups", label: "跟进回访", icon: CalendarCheck },
   { id: "renewals", label: "续约管理", icon: TimerReset },
   { id: "receivables", label: "合同应收", icon: WalletCards },
@@ -279,8 +279,8 @@ const contracts: Contract[] = [
   {
     id: "HT-2026-018",
     customer: "华东轨交能源中心",
-    project: "年度高压配电维保",
-    type: "年度包年维保",
+    project: "年度高压配电服务",
+    type: "年度服务",
     amount: 1260000,
     period: "2026.01-2026.12",
     serviceCycle: "季度巡检",
@@ -292,8 +292,8 @@ const contracts: Contract[] = [
   {
     id: "HT-2026-027",
     customer: "新澄水务集团",
-    project: "泵站驻场运维",
-    type: "驻场运维",
+    project: "泵站现场服务",
+    type: "现场服务",
     amount: 880000,
     period: "2026.03-2027.02",
     serviceCycle: "每日巡查",
@@ -305,7 +305,7 @@ const contracts: Contract[] = [
   {
     id: "HT-2025-144",
     customer: "启明商业广场",
-    project: "消防联动系统维保",
+    project: "消防联动系统服务",
     type: "设备质保合同",
     amount: 420000,
     period: "2025.08-2026.08",
@@ -322,7 +322,7 @@ const initialOrders: WorkOrder[] = [
     id: "GD-202606-1128",
     source: "合同周期",
     customer: "华东轨交能源中心",
-    project: "年度高压配电维保",
+    project: "年度高压配电服务",
     type: "季度巡检",
     priority: "普通",
     equipment: "10kV进线柜 A-01",
@@ -338,7 +338,7 @@ const initialOrders: WorkOrder[] = [
     id: "GD-202606-1136",
     source: "客户报修",
     customer: "新澄水务集团",
-    project: "泵站驻场运维",
+    project: "泵站现场服务",
     type: "故障抢修",
     priority: "紧急",
     equipment: "3号提升泵变频器",
@@ -354,7 +354,7 @@ const initialOrders: WorkOrder[] = [
     id: "GD-202606-1098",
     source: "项目改造",
     customer: "启明商业广场",
-    project: "消防联动系统维保",
+    project: "消防联动系统服务",
     type: "设备更换",
     priority: "高",
     equipment: "消防控制主机 F-02",
@@ -452,7 +452,7 @@ const initialApprovals: Approval[] = [
   {
     id: "SP-202606-276",
     type: "费用报销",
-    title: "泵站驻场交通住宿",
+    title: "泵站现场服务交通住宿",
     owner: "周舟",
     amount: 2360,
     status: "已通过",
@@ -480,7 +480,7 @@ const initialEvents: FlowEvent[] = [
   {
     id: "EV-02",
     time: "10:05",
-    title: "备件库存触发采购",
+    title: "物料库存触发采购",
     detail: "变频器控制板低于安全库存，已进入采购审批",
     tone: "warn",
   },
@@ -488,14 +488,14 @@ const initialEvents: FlowEvent[] = [
     id: "EV-03",
     time: "11:30",
     title: "项目成本归集",
-    detail: "消防联动模块领用、外勤工时已计入启明商业广场项目",
+    detail: "消防联动模块领用、现场工时已计入启明商业广场项目",
     tone: "info",
   },
   {
     id: "EV-04",
     time: "13:42",
     title: "合同节点生成应收",
-    detail: "华东轨交二季度维保款进入待回款台账",
+    detail: "华东轨交二季度服务款进入待回款台账",
     tone: "good",
   },
 ];
@@ -578,11 +578,11 @@ const projects = [
 const people = [
   {
     name: "陈一鸣",
-    role: "高压运维工程师",
+    role: "高压设备工程师",
     certs: "高压电工证 / 登高证",
     certExpire: "2026-12-08",
     location: "浦东新区",
-    schedule: "轨交驻场",
+    schedule: "轨交现场",
     status: "现场中",
     output: 6.8,
   },
@@ -598,7 +598,7 @@ const people = [
   },
   {
     name: "陆景",
-    role: "消防维保工程师",
+    role: "消防设备工程师",
     certs: "消防设施操作员",
     certExpire: "2027-01-22",
     location: "静安区",
@@ -621,7 +621,7 @@ const people = [
 const suppliers = [
   {
     name: "苏州智控仪表",
-    type: "备件供货商",
+    type: "物料供货商",
     scope: "传感器 / 仪表",
     accountPeriod: "月结30天",
     payable: 38400,
@@ -646,7 +646,7 @@ const suppliers = [
 ];
 
 const docs = [
-  ["合同档案", "维保合同 / 补充协议", "128份", "3份待归档"],
+  ["合同档案", "客户合同 / 补充协议", "128份", "3份待归档"],
   ["设备图纸", "竣工图 / 接线图 / 点位表", "346份", "12份本月新增"],
   ["检测报告", "年度检测 / 第三方报告", "94份", "5份待客户确认"],
   ["人员证书", "电工 / 焊工 / 登高 / 消防", "41份", "2份临期"],
@@ -655,14 +655,14 @@ const docs = [
 ];
 
 const ledgerRows = [
-  ["维保收入", "HT-2026-018", 315000, "应收账款 / 主营业务收入"],
-  ["备件成本", "GD-202606-1098", -620, "主营业务成本 / 库存商品"],
+  ["服务收入", "HT-2026-018", 315000, "应收账款 / 主营业务收入"],
+  ["物料成本", "GD-202606-1098", -620, "主营业务成本 / 库存商品"],
   ["人工成本", "GD-202606-1128", -1000, "项目成本 / 应付职工薪酬"],
   ["差旅费用", "SP-202606-276", -2360, "项目成本 / 银行存款"],
 ];
 
 const roles = [
-  ["运维工程师", "本人负责工单 / 负责项目设备", "照片、检测记录、领料申请"],
+  ["服务工程师", "本人负责工单 / 负责项目设备", "照片、检测记录、领料申请"],
   ["项目经理", "管辖项目 / 项目成本 / 工单进度", "派工、验收、项目预算"],
   ["财务", "全量应收应付 / 凭证 / 报表", "开票、核销、付款"],
   ["老板", "全域经营数据", "BI看板、利润分析"],
@@ -691,14 +691,14 @@ const linkageRows: LinkageRow[] = [
     trigger: "工单领料",
     source: "项目管理",
     action: "扣减库存并归集成本",
-    target: "备件仓储",
+    target: "库存管理",
     ledger: "库存成本入项目",
     owner: "仓储主管",
     tone: "info",
   },
   {
     trigger: "安全库存不足",
-    source: "备件仓储",
+    source: "库存管理",
     action: "自动生成采购申请",
     target: "供应链采购",
     ledger: "审批后入库生成应付",
@@ -708,7 +708,7 @@ const linkageRows: LinkageRow[] = [
   {
     trigger: "项目验收",
     source: "项目管理",
-    action: "归集工时/备件/外包/差旅",
+    action: "归集工时/物料/外包/差旅",
     target: "财务资金",
     ledger: "结转收入与毛利",
     owner: "项目经理",
@@ -748,8 +748,8 @@ const businessRules: BusinessRule[] = [
     id: "RULE-03",
     title: "领料自动归集成本",
     scene: "维修、巡检、改造项目",
-    rule: "备件从工单领用后，库存减少，并写入工单与项目成本。",
-    result: "实时计算维保毛利",
+    rule: "物料从工单领用后，库存减少，并写入工单与项目成本。",
+    result: "实时计算服务毛利",
     owner: "仓储",
     tone: "info",
   },
@@ -766,7 +766,7 @@ const businessRules: BusinessRule[] = [
     id: "RULE-05",
     title: "质保期免费工单",
     scene: "工程项目质保期内",
-    rule: "质保期内设备故障可生成免费工单，但人工与备件仍进入项目售后成本。",
+    rule: "质保期内设备故障可生成免费工单，但人工与物料仍进入项目售后成本。",
     result: "看清真实项目利润",
     owner: "项目",
     tone: "info",
@@ -829,13 +829,13 @@ const crmCustomers: CustomerProfile[] = [
     industry: "市政水务",
     level: "重点客户",
     owner: "客户经理B",
-    contacts: "刘工 / 运维部",
+    contacts: "刘工 / 设备部",
     sites: 8,
     addresses: ["城北泵站", "城南泵站", "东区调蓄池", "西区加压站"],
     payment: "月结，存在逾期",
     lastVisit: "2026-06-21",
     risk: "逾期",
-    riskNote: "夜间响应要求提高，本月驻场排班与回款需要同步跟进。",
+    riskNote: "夜间响应要求提高，本月人员排班与回款需要同步跟进。",
     invoice: {
       title: "新澄水务集团有限公司",
       taxNo: "91320582MA25P6XQ9B",
@@ -879,7 +879,7 @@ const crmCustomers: CustomerProfile[] = [
     payment: "合同预付30%",
     lastVisit: "2026-06-24",
     risk: "正常",
-    riskNote: "当前处于现场勘查阶段，重点推进UPS备件包报价。",
+    riskNote: "当前处于现场勘查阶段，重点推进UPS物料包报价。",
     invoice: {
       title: "东城数据中心有限公司",
       taxNo: "91310115MA1K4P7L8R",
@@ -896,7 +896,7 @@ const initialLeads: CrmLead[] = [
     id: "XS-202606-071",
     customer: "东城数据中心",
     source: "老客户转介绍",
-    need: "UPS与配电年度维保",
+    need: "UPS与配电年度服务",
     stage: "现场勘查",
     owner: "客户经理A",
     value: 680000,
@@ -908,12 +908,12 @@ const initialLeads: CrmLead[] = [
     id: "XS-202606-066",
     customer: "临港生物医药园",
     source: "招标公告",
-    need: "园区机电驻场运维",
+    need: "园区机电现场服务",
     stage: "需求确认",
     owner: "客户经理B",
     value: 1380000,
     probability: 52,
-    nextAction: "确认驻场人数与服务边界",
+    nextAction: "确认现场人数与服务边界",
     nextDate: "2026-06-30",
   },
   {
@@ -945,9 +945,9 @@ const initialQuotes: QuotePlan[] = [
   {
     id: "BJ-202606-041",
     customer: "启明商业广场",
-    type: "续约维保",
+    type: "续约服务",
     amount: 468000,
-    scope: "消防系统维保、故障抢修、年度联动测试",
+    scope: "消防系统服务、故障抢修、年度联动测试",
     cycle: "月度巡检",
     paymentNodes: "半年付",
     owner: "客户经理C",
@@ -956,9 +956,9 @@ const initialQuotes: QuotePlan[] = [
   {
     id: "BJ-202606-045",
     customer: "东城数据中心",
-    type: "年度包年维保",
+    type: "年度服务",
     amount: 680000,
-    scope: "UPS、配电柜、温湿度监控维保",
+    scope: "UPS、配电柜、温湿度监控服务",
     cycle: "季度巡检 + 7x24故障响应",
     paymentNodes: "季度付",
     owner: "客户经理A",
@@ -974,7 +974,7 @@ const crmFollowUps: FollowUpActivity[] = [
     owner: "客服主管",
     date: "2026-06-25",
     summary: "泵站变频器故障回访，客户要求缩短夜间响应时间。",
-    next: "调整驻场排班并反馈项目经理",
+    next: "调整人员排班并反馈项目经理",
     tone: "warn",
   },
   {
@@ -983,8 +983,8 @@ const crmFollowUps: FollowUpActivity[] = [
     type: "拜访",
     owner: "客户经理A",
     date: "2026-06-24",
-    summary: "现场确认UPS维保范围，客户关注备件响应和应急演练。",
-    next: "补充备件包报价",
+    summary: "现场确认UPS服务范围，客户关注物料响应和应急演练。",
+    next: "补充物料包报价",
     tone: "info",
   },
   {
@@ -1033,7 +1033,7 @@ function App() {
   const [selectedEquipmentId, setSelectedEquipmentId] = useState(equipment[1].id);
   const [selectedOrderId, setSelectedOrderId] = useState(initialOrders[0].id);
   const [fault, setFault] = useState("变频器报警，现场无法复位");
-  const [toast, setToast] = useState("工程运维一体化系统已加载");
+  const [toast, setToast] = useState("企业一体化管理系统已加载");
 
   const selectedModule =
     modules.find((item) => item.id === activeModule) ||
@@ -1268,7 +1268,7 @@ function App() {
     };
     setApprovals((current) => [newApproval, ...current]);
     setActiveModule("supplychain");
-    pushEvent("备件补货申请", `${part.name} 已进入供应链采购审批`, "warn");
+    pushEvent("物料补货申请", `${part.name} 已进入供应链采购审批`, "warn");
   };
 
   const advanceLead = (lead: CrmLead) => {
@@ -1295,7 +1295,7 @@ function App() {
                   : nextStage === "商务谈判"
                     ? "确认合同条款与付款节点"
                     : nextStage === "赢单"
-                      ? "转入维保合同与项目计划"
+                      ? "转入客户合同与项目计划"
                       : item.nextAction,
             }
           : item,
@@ -1380,7 +1380,7 @@ function App() {
             <Route size={22} />
           </div>
           <div>
-            <strong>工程运维ERP</strong>
+            <strong>企业管理系统</strong>
             <span>项目 · 工单 · 财务一体化</span>
           </div>
         </div>
@@ -1548,7 +1548,7 @@ function App() {
           />
           <MetricCard
             icon={PackageMinus}
-            label="低库存备件"
+            label="低库存物料"
             value={`${metrics.lowStock}类`}
             meta="自动触发采购"
             tone="info"
@@ -1557,7 +1557,7 @@ function App() {
             icon={Coins}
             label="工单已归集成本"
             value={formatMoney(metrics.cost)}
-            meta="人工 + 备件"
+            meta="人工 + 物料"
             tone="good"
           />
           <MetricCard
@@ -1588,7 +1588,7 @@ function App() {
                 ["CRM", "线索 / 商机 / 合同 / 续约"],
                 ["供应链采购", "采购申请 / 供应商 / 外包"],
                 ["项目管理", "项目 / 工单 / 设备 / 成本"],
-                ["备件仓储", "入库 / 领用 / 安全库存"],
+                ["库存管理", "入库 / 领用 / 安全库存"],
                 ["财务资金", "应收 / 应付 / 凭证"],
               ].map(([title, detail]) => (
                 <div className="flow-step" key={title}>
@@ -2166,7 +2166,7 @@ function App() {
       <section className="panel">
         <SectionTitle
           icon={BriefcaseBusiness}
-          title="维保合同"
+          title="客户合同"
           right="赢单后生成巡检计划 / 项目 / 应收"
         />
         <div className="table-wrap">
@@ -2338,7 +2338,7 @@ function App() {
         <section className="metric-grid">
           <MetricCard
             icon={PackageMinus}
-            label="待采购备件"
+            label="待采购物料"
             value={`${lowStockParts.length}类`}
             meta="低于安全库存"
             tone="warn"
@@ -2354,7 +2354,7 @@ function App() {
             icon={Truck}
             label="供应商/外包"
             value={`${suppliers.length}家`}
-            meta="备件供货 / 外协检测"
+            meta="物料供货 / 外协检测"
             tone="good"
           />
           <MetricCard
@@ -2419,7 +2419,7 @@ function App() {
               {!lowStockParts.length && (
                 <div className="risk-row info">
                   <strong>库存正常</strong>
-                  <span>暂无低于安全库存的备件</span>
+                  <span>暂无低于安全库存的物料</span>
                 </div>
               )}
             </div>
@@ -2430,7 +2430,7 @@ function App() {
           <SectionTitle
             icon={Truck}
             title="供应商与外包服务商"
-            right="备件供货 / 外协施工 / 检测结算"
+            right="物料供货 / 外协施工 / 检测结算"
           />
           <div className="supplier-grid">
             {suppliers.map((supplier) => (
@@ -2538,7 +2538,7 @@ function App() {
         <section className="split-grid">
           <OrderDetailPanel />
           <div className="panel">
-            <SectionTitle icon={MapPin} title="外勤轨迹" right="签到定位 / SLA" />
+            <SectionTitle icon={MapPin} title="现场轨迹" right="签到定位 / SLA" />
             <div className="route-list compact-route">
               {people.map((person) => (
                 <div className="route-row" key={person.name}>
@@ -2559,7 +2559,7 @@ function App() {
   function EquipmentModule() {
     return (
       <section className="panel">
-        <SectionTitle icon={Database} title="甲方设备台账" right="故障历史 / 维保周期 / 质保提醒" />
+        <SectionTitle icon={Database} title="客户设备台账" right="故障历史 / 服务周期 / 质保提醒" />
         <div className="table-wrap">
           <table>
             <thead>
@@ -2567,8 +2567,8 @@ function App() {
                 <th>设备</th>
                 <th>客户</th>
                 <th>安装地址</th>
-                <th>维保周期</th>
-                <th>下次维保</th>
+                <th>服务周期</th>
+                <th>下次服务</th>
                 <th>故障</th>
                 <th>资质</th>
               </tr>
@@ -2599,12 +2599,12 @@ function App() {
     return (
       <div className="page-stack">
         <section className="panel">
-          <SectionTitle icon={PackageCheck} title="备品备件库存" right="入库 / 领用 / 归还 / 报废 / 盘点" />
+          <SectionTitle icon={PackageCheck} title="物料库存" right="入库 / 领用 / 归还 / 报废 / 盘点" />
           <div className="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>备件</th>
+                  <th>物料</th>
                   <th>库存</th>
                   <th>安全库存</th>
                   <th>库位</th>
@@ -2702,7 +2702,7 @@ function App() {
   function HrModule() {
     return (
       <section className="panel">
-        <SectionTitle icon={UserRoundCheck} title="组织人事与外勤" right="资质 / 排班 / 补贴 / 绩效" />
+        <SectionTitle icon={UserRoundCheck} title="组织人事" right="资质 / 排班 / 补贴 / 绩效" />
         <div className="table-wrap">
           <table>
             <thead>
@@ -2818,20 +2818,20 @@ function App() {
 
   function BiModule() {
     const bars = [
-      ["维保收入", 86, formatMoney(1260000), "good"],
+      ["服务收入", 86, formatMoney(1260000), "good"],
       ["回款率", 82, "82%", "info"],
       ["项目毛利", 64, "64.8万", "warn"],
       ["工单完成率", 91, "91%", "good"],
       ["客户续约率", 76, "76%", "info"],
-      ["备件消耗成本", 38, "18.6万", "danger"],
+      ["物料消耗成本", 38, "18.6万", "danger"],
     ] as const;
     return (
       <div className="page-stack">
         <section className="metric-grid">
-          <MetricCard icon={BarChart3} label="月度维保收入" value={formatMoney(1260000)} meta="同比 +18%" tone="good" />
+          <MetricCard icon={BarChart3} label="月度服务收入" value={formatMoney(1260000)} meta="同比 +18%" tone="good" />
           <MetricCard icon={ClipboardList} label="工单完成率" value="91%" meta="SLA达成 88%" tone="info" />
           <MetricCard icon={Building2} label="客户续约率" value="76%" meta="3家待跟进" tone="warn" />
-          <MetricCard icon={PackageMinus} label="备件消耗" value={formatMoney(186000)} meta="高频设备 4类" tone="danger" />
+          <MetricCard icon={PackageMinus} label="物料消耗" value={formatMoney(186000)} meta="高频设备 4类" tone="danger" />
         </section>
         <section className="panel">
           <SectionTitle icon={BarChart3} title="经营指标" right="收入 / 成本 / 客户 / 设备" />
@@ -2857,7 +2857,7 @@ function App() {
       <aside className="panel quick-panel">
         <SectionTitle icon={Plus} title="报修登记" right="客户工单" />
         <label>
-          <span>维保合同</span>
+          <span>客户合同</span>
           <select
             value={selectedContractId}
             onChange={(event) => setSelectedContractId(event.target.value)}
@@ -2922,7 +2922,7 @@ function App() {
         <SectionTitle
           icon={PanelRightOpen}
           title="工单详情"
-          right="设备 / 备件 / 财务联动"
+          right="设备 / 物料 / 财务联动"
         />
         <div className="detail-head">
           <div>
@@ -2974,7 +2974,7 @@ function App() {
         </dl>
 
         <div className="detail-section">
-          <strong>计划备件</strong>
+          <strong>计划物料</strong>
           <div className="part-chip-list">
             {plannedParts.map((part) => (
               <span

@@ -12,6 +12,11 @@ public record PurchaseOrderResponse(
     String supplierName,
     UUID requestId,
     String requestCode,
+    UUID partId,
+    String partName,
+    BigDecimal orderedQty,
+    BigDecimal receivedQty,
+    BigDecimal unitPrice,
     BigDecimal orderAmount,
     LocalDate expectedDeliveryDate,
     PurchaseOrderStatus status

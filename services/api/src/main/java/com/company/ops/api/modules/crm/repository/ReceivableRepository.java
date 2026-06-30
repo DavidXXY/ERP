@@ -8,5 +8,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface ReceivableRepository extends JpaRepository<Receivable, UUID> {
 
   List<Receivable> findByCustomerIdOrderByDueDateAsc(UUID customerId);
-}
 
+  List<Receivable> findAllByOrderByDueDateAsc();
+
+  boolean existsByCode(String code);
+}

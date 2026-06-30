@@ -24,6 +24,8 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+      repositories:
+        enabled: false
   servlet:
     multipart:
       max-file-size: 30MB
@@ -58,3 +60,4 @@ ops:
     access-key: ${MINIO_ACCESS_KEY:ops_erp_minio}
     secret-key: ${MINIO_SECRET_KEY:ops_erp_minio_password}
     bucket: ${MINIO_BUCKET:ops-erp}
+    local-path: ${LOCAL_STORAGE_PATH:.local-data/uploads}

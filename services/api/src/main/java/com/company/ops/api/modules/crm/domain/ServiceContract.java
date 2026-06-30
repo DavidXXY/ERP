@@ -14,6 +14,9 @@ import java.util.UUID;
 @Table(name = "crm_service_contracts")
 public class ServiceContract extends BaseEntity {
 
+  @Column(name = "quote_id")
+  private UUID quoteId;
+
   @Column(name = "customer_id", nullable = false)
   private UUID customerId;
 
@@ -41,6 +44,14 @@ public class ServiceContract extends BaseEntity {
   @Enumerated(EnumType.STRING)
   @Column(nullable = false, length = 32)
   private ContractStatus status = ContractStatus.ACTIVE;
+
+  public UUID getQuoteId() {
+    return quoteId;
+  }
+
+  public void setQuoteId(UUID quoteId) {
+    this.quoteId = quoteId;
+  }
 
   public UUID getCustomerId() {
     return customerId;
@@ -114,4 +125,3 @@ public class ServiceContract extends BaseEntity {
     this.status = status;
   }
 }
-

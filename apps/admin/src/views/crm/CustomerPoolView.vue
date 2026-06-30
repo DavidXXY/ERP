@@ -124,6 +124,35 @@
           </a-card>
         </a-col>
 
+        <a-col :span="24">
+          <a-card size="small" title="跟踪中的项目">
+            <a-table
+              :columns="opportunityColumns"
+              :data-source="selectedDetail.opportunities"
+              :pagination="false"
+              :row-key="(record: CustomerDetail['opportunities'][number]) => record.id"
+              size="small"
+              :scroll="{ x: 900 }"
+            >
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.key === 'opportunity'">
+                  <strong>{{ record.code }}</strong>
+                  <span class="table-subtitle">{{ record.source || "来源未填" }}</span>
+                </template>
+                <template v-else-if="column.key === 'stage'">
+                  <a-tag :color="opportunityColor(record.stage)">{{ opportunityLabel(record.stage) }}</a-tag>
+                  <span class="table-subtitle">成功率 {{ record.probability }}%</span>
+                </template>
+                <template v-else-if="column.key === 'amount'">{{ formatMoney(record.expectedAmount) }}</template>
+                <template v-else-if="column.key === 'nextAction'">
+                  {{ record.nextAction || "-" }}
+                  <span class="table-subtitle">{{ record.nextActionAt || "未安排日期" }}</span>
+                </template>
+              </template>
+            </a-table>
+          </a-card>
+        </a-col>
+
         <a-col :xs="24" :xl="12">
           <a-card size="small" title="已签约合同">
             <a-list :data-source="selectedDetail.contracts" size="small">
@@ -148,11 +177,14 @@
               <template #renderItem="{ item }">
                 <a-list-item>
                   <a-list-item-meta :title="item.code">
-                    <template #description>{{ item.sourceNo }} · 到期 {{ item.dueDate }}</template>
+                    <template #description>
+                      {{ item.sourceNo }} · 到期 {{ item.dueDate }} · {{ item.invoiceNo ? `发票 ${item.invoiceNo}` : "未开票" }}
+                      <span class="table-subtitle">已收 {{ formatMoney(item.settledAmount) }} · 待收 {{ formatMoney(item.outstandingAmount) }}</span>
+                    </template>
                   </a-list-item-meta>
                   <template #actions>
                     <a-tag :color="receivableColor(item.status)">{{ receivableLabel(item.status) }}</a-tag>
-                    <strong>{{ formatMoney(item.amount) }}</strong>
+                    <strong>{{ formatMoney(item.outstandingAmount) }}</strong>
                   </template>
                 </a-list-item>
               </template>
@@ -247,6 +279,7 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from "vue";
 import { message } from "ant-design-vue";
+import { useRoute } from "vue-router";
 import {
   createCustomer,
   getCustomer,
@@ -255,6 +288,7 @@ import {
   type CreateCustomerPayload,
   type CustomerDetail,
   type CustomerLevel,
+  type OpportunityStage,
   type CustomerSummary,
   type ReceivableStatus,
   type RiskStatus,
@@ -286,6 +320,7 @@ const createOpen = ref(false);
 const errorMessage = ref("");
 const formRef = ref();
 const auth = useAuthStore();
+const route = useRoute();
 
 const columns = [
   { title: "客户", key: "name", dataIndex: "name", width: 260 },
@@ -295,6 +330,15 @@ const columns = [
   { title: "付款习惯", dataIndex: "paymentHabit" },
   { title: "风险", key: "risk", dataIndex: "riskStatus", width: 120 },
   { title: "操作", key: "action", width: 110 },
+];
+
+const opportunityColumns = [
+  { title: "商机", key: "opportunity", width: 160 },
+  { title: "需求", dataIndex: "needSummary", width: 300 },
+  { title: "阶段", key: "stage", width: 130 },
+  { title: "预计金额", key: "amount", width: 130 },
+  { title: "下一步动作", key: "nextAction", width: 240 },
+  { title: "负责人", dataIndex: "ownerName", width: 110 },
 ];
 
 const levelOptions = [
@@ -326,7 +370,11 @@ async function loadCustomers() {
   try {
     customers.value = await listCustomers();
     if (customers.value.length) {
-      await selectCustomer(selectedDetail.value?.id || customers.value[0].id);
+      const queryCustomerId = typeof route.query.customer === "string" ? route.query.customer : undefined;
+      const targetId = queryCustomerId && customers.value.some((item) => item.id === queryCustomerId)
+        ? queryCustomerId
+        : selectedDetail.value?.id || customers.value[0].id;
+      await selectCustomer(targetId);
     } else {
       selectedDetail.value = null;
     }
@@ -482,6 +530,30 @@ function receivableColor(status: ReceivableStatus) {
     SETTLED: "green",
     OVERDUE: "red",
   }[status];
+}
+
+function opportunityLabel(stage: OpportunityStage) {
+  return {
+    LEAD: "线索",
+    QUALIFIED: "已确认需求",
+    SOLUTION: "方案沟通",
+    QUOTATION: "报价中",
+    NEGOTIATION: "商务谈判",
+    WON: "赢单",
+    LOST: "丢单",
+  }[stage];
+}
+
+function opportunityColor(stage: OpportunityStage) {
+  return {
+    LEAD: "default",
+    QUALIFIED: "cyan",
+    SOLUTION: "blue",
+    QUOTATION: "purple",
+    NEGOTIATION: "orange",
+    WON: "green",
+    LOST: "red",
+  }[stage];
 }
 
 function formatMoney(value: number) {

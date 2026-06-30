@@ -1,6 +1,26 @@
 spring:
+  autoconfigure:
+    exclude:
+      - org.flowable.spring.boot.actuate.info.FlowableInfoAutoConfiguration
+      - org.flowable.spring.boot.EndpointAutoConfiguration
+      - org.flowable.spring.boot.RestApiAutoConfiguration
+      - org.flowable.spring.boot.app.AppEngineServicesAutoConfiguration
+      - org.flowable.spring.boot.app.AppEngineAutoConfiguration
+      - org.flowable.spring.boot.ProcessEngineServicesAutoConfiguration
+      - org.flowable.spring.boot.ProcessEngineAutoConfiguration
+      - org.flowable.spring.boot.FlowableJpaAutoConfiguration
+      - org.flowable.spring.boot.dmn.DmnEngineAutoConfiguration
+      - org.flowable.spring.boot.dmn.DmnEngineServicesAutoConfiguration
+      - org.flowable.spring.boot.idm.IdmEngineAutoConfiguration
+      - org.flowable.spring.boot.idm.IdmEngineServicesAutoConfiguration
+      - org.flowable.spring.boot.eventregistry.EventRegistryAutoConfiguration
+      - org.flowable.spring.boot.eventregistry.EventRegistryServicesAutoConfiguration
+      - org.flowable.spring.boot.cmmn.CmmnEngineAutoConfiguration
+      - org.flowable.spring.boot.cmmn.CmmnEngineServicesAutoConfiguration
+      - org.flowable.spring.boot.ldap.FlowableLdapAutoConfiguration
+      - org.flowable.spring.boot.FlowableSecurityAutoConfiguration
   datasource:
-    url: jdbc:h2:file:./.local-data/ops_erp;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
+    url: jdbc:h2:file:${OPS_ERP_LOCAL_DATA:${user.home}/.ops-erp-data/ops_erp};DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
     driver-class-name: org.h2.Driver
     username: sa
     password:
@@ -20,3 +40,12 @@ flowable:
   database-schema-update: true
   async-executor-activate: false
   database-type: h2
+
+management:
+  health:
+    redis:
+      enabled: false
+
+ops:
+  storage:
+    local-path: ${OPS_ERP_UPLOAD_PATH:${user.home}/.ops-erp-data/uploads}

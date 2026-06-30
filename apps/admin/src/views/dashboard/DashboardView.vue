@@ -1,33 +1,18 @@
 <template>
   <div class="page-stack">
-    <a-row :gutter="[16, 16]">
-      <a-col :xs="24" :md="12" :xl="6" v-for="item in metrics" :key="item.label">
-        <a-card>
-          <a-statistic :title="item.label" :value="item.value" :suffix="item.suffix" />
-          <p class="muted">{{ item.meta }}</p>
-        </a-card>
-      </a-col>
-    </a-row>
-
-    <a-card title="建设顺序">
-      <a-steps :current="0" :items="steps" />
+    <a-card title="经营驾驶舱"><template #extra><a-button :loading="loading" @click="loadData"><template #icon><ReloadOutlined /></template>刷新</a-button></template>
+      <a-row :gutter="[16,16]" class="metric-row"><a-col :xs="12" :xl="6"><a-statistic title="合同收入规模" :value="data.summary.contractRevenue" :formatter="moneyFormatter" /></a-col><a-col :xs="12" :xl="6"><a-statistic title="累计回款" :value="data.summary.receivedAmount" :formatter="moneyFormatter" /></a-col><a-col :xs="12" :xl="6"><a-statistic title="待收金额" :value="data.summary.receivableOutstanding" :formatter="moneyFormatter" /></a-col><a-col :xs="12" :xl="6"><a-statistic title="资金净流量" :value="data.summary.netCashFlow" :formatter="moneyFormatter" :value-style="valueStyle(data.summary.netCashFlow)" /></a-col><a-col :xs="12" :xl="6"><a-statistic title="在建项目" :value="data.summary.activeProjects" suffix="个" /></a-col><a-col :xs="12" :xl="6"><a-statistic title="进行中工单" :value="data.summary.openWorkOrders" suffix="张" /></a-col><a-col :xs="12" :xl="6"><a-statistic title="库存资产" :value="data.summary.inventoryValue" :formatter="moneyFormatter" /></a-col><a-col :xs="12" :xl="6"><a-statistic title="待续约合同" :value="data.summary.renewalRisks" suffix="份" :value-style="dangerStyle(data.summary.renewalRisks)" /></a-col></a-row>
+      <a-descriptions bordered :column="4" size="small"><a-descriptions-item label="已闭环工单">{{data.summary.completedWorkOrders}}</a-descriptions-item><a-descriptions-item label="项目累计成本">{{formatMoney(data.summary.projectCost)}}</a-descriptions-item><a-descriptions-item label="低库存物料"><span :class="{'text-danger':data.summary.lowStockParts>0}">{{data.summary.lowStockParts}}</span></a-descriptions-item><a-descriptions-item label="客户投诉"><span :class="{'text-danger':data.summary.complaints>0}">{{data.summary.complaints}}</span></a-descriptions-item></a-descriptions>
     </a-card>
+
+    <a-card title="近六月经营趋势"><a-table size="small" :columns="trendColumns" :data-source="data.monthlyTrends" :pagination="false" :row-key="(item:MonthlyTrend)=>item.month"><template #bodyCell="{column,record}"><template v-if="column.key==='revenue'">{{formatMoney(record.revenue)}}</template><template v-else-if="column.key==='expense'">{{formatMoney(record.expense)}}</template><template v-else-if="column.key==='cash'">收入 {{formatMoney(record.cashIn)}}<span class="table-subtitle">支出 {{formatMoney(record.cashOut)}}</span></template><template v-else-if="column.key==='profit'"><strong :class="{'text-danger':record.profit<0}">{{formatMoney(record.profit)}}</strong></template><template v-else-if="column.key==='trend'"><a-progress :percent="trendPercent(record.revenue)" :show-info="false" size="small" /></template></template></a-table></a-card>
+
+    <a-card><a-tabs><a-tab-pane key="customers" tab="客户利润"><a-table :columns="customerColumns" :data-source="data.customerProfits" :pagination="{pageSize:8}" :row-key="(item:CustomerProfit)=>item.customerId" :scroll="{x:1100}"><template #bodyCell="{column,record}"><template v-if="column.key==='contract'">{{formatMoney(record.contractAmount)}}<span class="table-subtitle">已回款 {{formatMoney(record.receivedAmount)}}</span></template><template v-else-if="column.key==='workorder'">收入 {{formatMoney(record.workOrderRevenue)}}<span class="table-subtitle">成本 {{formatMoney(record.workOrderCost)}}</span></template><template v-else-if="column.key==='profit'"><strong :class="{'text-danger':record.grossProfit<0}">{{formatMoney(record.grossProfit)}}</strong><span class="table-subtitle">毛利率 {{record.margin}}%</span></template><template v-else-if="column.key==='complaints'"><a-tag :color="record.complaints?'red':'green'">{{record.complaints}}</a-tag></template></template></a-table></a-tab-pane>
+      <a-tab-pane key="equipment" tab="设备故障"><a-table :columns="equipmentColumns" :data-source="data.equipmentPerformance" :pagination="{pageSize:8}" :row-key="(item:EquipmentPerformance)=>item.equipmentId"><template #bodyCell="{column,record}"><template v-if="column.key==='equipment'"><strong>{{record.equipmentCode}}</strong><span class="table-subtitle">{{record.equipmentName}}</span></template><template v-else-if="column.key==='fault'"><a-tag :color="record.faultCount>2?'red':record.faultCount?'orange':'green'">{{record.faultCount}} 次</a-tag></template><template v-else-if="column.key==='cost'">{{formatMoney(record.maintenanceCost)}}<span class="table-subtitle">单次 {{formatMoney(record.averageCost)}}</span></template></template></a-table></a-tab-pane>
+      <a-tab-pane key="workforce" tab="人员产值"><a-table :columns="workforceColumns" :data-source="data.workforcePerformance" :pagination="{pageSize:8}" :row-key="(item:WorkforcePerformance)=>item.userId"><template #bodyCell="{column,record}"><template v-if="column.key==='hours'">{{record.laborHours}} 小时</template><template v-else-if="column.key==='revenue'">{{formatMoney(record.generatedRevenue)}}<span class="table-subtitle">人工成本 {{formatMoney(record.laborCost)}}</span></template><template v-else-if="column.key==='output'">{{formatMoney(record.outputPerHour)}} / 小时</template></template></a-table></a-tab-pane></a-tabs></a-card>
   </div>
 </template>
-
 <script setup lang="ts">
-const metrics = [
-  { label: "客户档案", value: 3, suffix: "家", meta: "CRM 第一批接口已接入" },
-  { label: "基础模块", value: 8, suffix: "个", meta: "系统、CRM、项目、工单、仓储、财务、OA、档案" },
-  { label: "后端接口", value: 3, suffix: "个", meta: "客户列表、详情、新增" },
-  { label: "基础设施", value: 3, suffix: "项", meta: "PostgreSQL、Redis、MinIO" },
-];
-
-const steps = [
-  { title: "底层架构", description: "应用壳、数据库、接口规范" },
-  { title: "CRM", description: "客户池、商机、报价、合同" },
-  { title: "项目工单", description: "项目成本和现场执行" },
-  { title: "库存财务", description: "领料、采购、应收应付" },
-];
+import{computed,onMounted,reactive,ref}from"vue";import{message}from"ant-design-vue";import ReloadOutlined from"@ant-design/icons-vue/ReloadOutlined";import{getExecutiveDashboard,type CustomerProfit,type EquipmentPerformance,type ExecutiveDashboard,type MonthlyTrend,type WorkforcePerformance}from"@/api/bi";
+const loading=ref(false);const data=reactive<ExecutiveDashboard>(empty());const maxRevenue=computed(()=>Math.max(...data.monthlyTrends.map(i=>i.revenue),1));const trendColumns=[{title:"月份",dataIndex:"month",width:100},{title:"营业收入",key:"revenue",width:150},{title:"成本费用",key:"expense",width:150},{title:"现金流",key:"cash",width:250},{title:"利润",key:"profit",width:150},{title:"收入趋势",key:"trend"}];const customerColumns=[{title:"客户",dataIndex:"customerName",width:220},{title:"合同 / 回款",key:"contract",width:250},{title:"工单收入 / 成本",key:"workorder",width:250},{title:"综合毛利",key:"profit",width:220},{title:"投诉",key:"complaints",width:90}];const equipmentColumns=[{title:"设备",key:"equipment",width:250},{title:"客户",dataIndex:"customerName"},{title:"工单数",dataIndex:"workOrderCount",width:100},{title:"故障数",key:"fault",width:110},{title:"服务成本",key:"cost",width:220}];const workforceColumns=[{title:"工程师",dataIndex:"engineerName"},{title:"闭环工单",dataIndex:"completedOrders",width:120},{title:"工时",key:"hours",width:130},{title:"产值 / 成本",key:"revenue",width:250},{title:"人时产值",key:"output",width:180}];onMounted(loadData);async function loadData(){loading.value=true;try{Object.assign(data,await getExecutiveDashboard());}catch(error){message.error(error instanceof Error?error.message:"经营数据加载失败");}finally{loading.value=false;}}function empty():ExecutiveDashboard{return{summary:{contractRevenue:0,receivedAmount:0,receivableOutstanding:0,payableOutstanding:0,projectCost:0,workOrderCost:0,inventoryValue:0,netCashFlow:0,activeProjects:0,openWorkOrders:0,completedWorkOrders:0,lowStockParts:0,renewalRisks:0,complaints:0},monthlyTrends:[],customerProfits:[],equipmentPerformance:[],workforcePerformance:[]};}function trendPercent(v:number){return Math.round(v/maxRevenue.value*100);}function formatMoney(v:number){return new Intl.NumberFormat("zh-CN",{style:"currency",currency:"CNY",minimumFractionDigits:2,maximumFractionDigits:2}).format(v||0);}function moneyFormatter(v:number|string){return formatMoney(Number(v));}function dangerStyle(v:number){return v>0?{color:"#cf1322"}:{};}function valueStyle(v:number){return v<0?{color:"#cf1322"}:{color:"#237804"};}
 </script>
-

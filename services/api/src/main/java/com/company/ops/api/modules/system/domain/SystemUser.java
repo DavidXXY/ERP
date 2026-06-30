@@ -7,6 +7,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
 import jakarta.persistence.ManyToMany;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.util.HashSet;
 import java.util.Set;
@@ -16,8 +17,9 @@ import java.util.UUID;
 @Table(name = "sys_users")
 public class SystemUser extends BaseEntity {
 
-  @Column(name = "org_id")
-  private UUID orgId;
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "org_id")
+  private SystemOrganization organization;
 
   @Column(nullable = false, length = 80)
   private String username;
@@ -45,12 +47,12 @@ public class SystemUser extends BaseEntity {
   )
   private Set<SystemRole> roles = new HashSet<>();
 
-  public UUID getOrgId() {
-    return orgId;
+  public SystemOrganization getOrganization() {
+    return organization;
   }
 
-  public void setOrgId(UUID orgId) {
-    this.orgId = orgId;
+  public void setOrganization(SystemOrganization organization) {
+    this.organization = organization;
   }
 
   public String getUsername() {

@@ -3,16 +3,15 @@ create extension if not exists pgcrypto;
 create table sys_organizations (
   id uuid primary key default gen_random_uuid(),
   tenant_id varchar(64) not null default 'default',
+  code varchar(64) not null unique,
+  name varchar(120) not null,
+  type varchar(40) default 'DEPARTMENT',
+  sort_order int default 0,
   parent_id uuid,
-  code varchar(64) not null,
-  name varchar(160) not null,
-  org_type varchar(40) not null,
-  enabled boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   created_by varchar(64),
-  updated_by varchar(64),
-  unique (tenant_id, code)
+  updated_by varchar(64)
 );
 
 create table sys_users (

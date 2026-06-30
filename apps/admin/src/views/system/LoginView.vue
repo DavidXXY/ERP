@@ -1,9 +1,9 @@
 <template>
   <main class="login-page">
     <section class="login-hero">
-      <div class="login-mark">运</div>
-      <h1>工程运维ERP</h1>
-      <p>项目、外勤工单、备件仓储、合同应收和审批流程统一管理。</p>
+      <div class="login-mark">企</div>
+      <h1>企业管理系统</h1>
+      <p>客户、项目、采购、库存、财务与办公流程统一管理。</p>
     </section>
 
     <a-card class="login-card" title="账号登录">
@@ -69,4 +69,3 @@ async function handleLogin() {
   }
 }
 </script>
-

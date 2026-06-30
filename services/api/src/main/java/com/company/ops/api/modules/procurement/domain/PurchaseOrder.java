@@ -23,6 +23,21 @@ public class PurchaseOrder extends BaseEntity {
   @Column(name = "request_id")
   private UUID requestId;
 
+  @Column(name = "part_id")
+  private UUID partId;
+
+  @Column(name = "part_name", nullable = false, length = 160)
+  private String partName;
+
+  @Column(name = "ordered_qty", nullable = false, precision = 14, scale = 2)
+  private BigDecimal orderedQty = BigDecimal.ZERO;
+
+  @Column(name = "received_qty", nullable = false, precision = 14, scale = 2)
+  private BigDecimal receivedQty = BigDecimal.ZERO;
+
+  @Column(name = "unit_price", nullable = false, precision = 14, scale = 2)
+  private BigDecimal unitPrice = BigDecimal.ZERO;
+
   @Column(name = "order_amount", nullable = false, precision = 14, scale = 2)
   private BigDecimal orderAmount = BigDecimal.ZERO;
 
@@ -79,5 +94,45 @@ public class PurchaseOrder extends BaseEntity {
 
   public void setStatus(PurchaseOrderStatus status) {
     this.status = status;
+  }
+
+  public UUID getPartId() {
+    return partId;
+  }
+
+  public void setPartId(UUID partId) {
+    this.partId = partId;
+  }
+
+  public String getPartName() {
+    return partName;
+  }
+
+  public void setPartName(String partName) {
+    this.partName = partName;
+  }
+
+  public BigDecimal getOrderedQty() {
+    return orderedQty;
+  }
+
+  public void setOrderedQty(BigDecimal orderedQty) {
+    this.orderedQty = orderedQty;
+  }
+
+  public BigDecimal getReceivedQty() {
+    return receivedQty;
+  }
+
+  public void setReceivedQty(BigDecimal receivedQty) {
+    this.receivedQty = receivedQty;
+  }
+
+  public BigDecimal getUnitPrice() {
+    return unitPrice;
+  }
+
+  public void setUnitPrice(BigDecimal unitPrice) {
+    this.unitPrice = unitPrice;
   }
 }

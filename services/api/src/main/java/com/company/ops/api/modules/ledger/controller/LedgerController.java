@@ -1,0 +1,4 @@
+package com.company.ops.api.modules.ledger.controller;
+import com.company.ops.api.common.api.ApiResponse; import com.company.ops.api.modules.ledger.dto.LedgerDtos.*; import com.company.ops.api.modules.ledger.service.LedgerService; import java.util.List; import org.springframework.security.access.prepost.PreAuthorize; import org.springframework.web.bind.annotation.*;
+@RestController @RequestMapping("/api/finance/ledger") @PreAuthorize("hasAuthority('finance:ledger:view')")
+public class LedgerController {private final LedgerService service;public LedgerController(LedgerService service){this.service=service;}@GetMapping("/overview") public ApiResponse<LedgerOverview> overview(){return ApiResponse.ok(service.overview());}@GetMapping("/vouchers") public ApiResponse<List<VoucherResponse>> vouchers(){return ApiResponse.ok(service.vouchers());}@GetMapping("/statements") public ApiResponse<FinancialStatements> statements(){return ApiResponse.ok(service.statements());}}

@@ -4,6 +4,7 @@ import com.company.ops.api.modules.procurement.domain.ApprovalStatus;
 import com.company.ops.api.modules.procurement.domain.PurchaseRequestStatus;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 public record PurchaseRequestResponse(
@@ -16,5 +17,8 @@ public record PurchaseRequestResponse(
     LocalDate expectedDate,
     String reason,
     PurchaseRequestStatus status,
-    ApprovalStatus approvalStatus
+    ApprovalStatus approvalStatus,
+    String lastApprovalComment,
+    String lastApproverName,
+    OffsetDateTime lastApprovalAt
 ) {}

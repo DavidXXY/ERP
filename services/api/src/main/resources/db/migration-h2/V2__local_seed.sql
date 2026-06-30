@@ -1,7 +1,7 @@
 insert into sys_organizations (
-  id, tenant_id, code, name, org_type, enabled, created_at, updated_at
+  id, tenant_id, code, name, type, created_at, updated_at
 ) values (
-  '00000000-0000-4000-8000-000000000001', 'default', 'ROOT', '工程运维公司', 'COMPANY', true, current_timestamp, current_timestamp
+  '00000000-0000-4000-8000-000000000001', 'default', 'ROOT', '工程运维公司', 'COMPANY', current_timestamp, current_timestamp
 );
 
 insert into sys_roles (
@@ -27,7 +27,17 @@ insert into sys_permissions (
 ('00000000-0000-4000-8000-000000001602', 'default', 'inventory:part:create', '备件新增', 'inventory', current_timestamp, current_timestamp),
 ('00000000-0000-4000-8000-000000001603', 'default', 'inventory:movement:create', '库存流水新增', 'inventory', current_timestamp, current_timestamp),
 ('00000000-0000-4000-8000-000000001701', 'default', 'finance:view', '财务资金查看', 'finance', current_timestamp, current_timestamp),
-('00000000-0000-4000-8000-000000001801', 'default', 'system:view', '系统设置查看', 'system', current_timestamp, current_timestamp);
+('00000000-0000-4000-8000-000000001801', 'default', 'system:view', '系统设置查看', 'system', current_timestamp, current_timestamp),
+('00000000-0000-4000-8000-000000001901', 'default', 'system:user:view', '员工管理查看', 'system', current_timestamp, current_timestamp),
+('00000000-0000-4000-8000-000000001902', 'default', 'system:user:create', '员工新增', 'system', current_timestamp, current_timestamp),
+('00000000-0000-4000-8000-000000001903', 'default', 'system:user:update', '员工编辑', 'system', current_timestamp, current_timestamp),
+('00000000-0000-4000-8000-000000001904', 'default', 'system:user:delete', '员工删除', 'system', current_timestamp, current_timestamp),
+('00000000-0000-4000-8000-000000001905', 'default', 'system:user:reset-password', '员工密码重置', 'system', current_timestamp, current_timestamp),
+('00000000-0000-4000-8000-000000002001', 'default', 'system:role:view', '角色管理查看', 'system', current_timestamp, current_timestamp),
+('00000000-0000-4000-8000-000000002002', 'default', 'system:role:create', '角色新增', 'system', current_timestamp, current_timestamp),
+('00000000-0000-4000-8000-000000002003', 'default', 'system:role:update', '角色编辑', 'system', current_timestamp, current_timestamp),
+('00000000-0000-4000-8000-000000002004', 'default', 'system:role:delete', '角色删除', 'system', current_timestamp, current_timestamp),
+('00000000-0000-4000-8000-000000002101', 'default', 'system:permission:view', '权限管理查看', 'system', current_timestamp, current_timestamp);
 
 insert into sys_users (
   id, tenant_id, org_id, username, display_name, password_hash, phone, email, enabled, created_at, updated_at

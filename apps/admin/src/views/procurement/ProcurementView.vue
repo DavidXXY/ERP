@@ -1,20 +1,11 @@
 <template>
   <div class="page-stack">
-    <a-card>
-      <template #title>供应链采购</template>
+    <a-card title="供应链采购">
       <template #extra>
-        <a-space>
-          <a-button @click="loadData">刷新</a-button>
-          <a-button v-if="auth.can('procurement:supplier:create')" @click="supplierOpen = true">
-            新增供应商
-          </a-button>
-          <a-button v-if="auth.can('procurement:purchase:create')" type="primary" @click="requestOpen = true">
-            新增采购申请
-          </a-button>
-          <a-button v-if="auth.can('procurement:purchase:create')" @click="orderOpen = true">
-            新增采购订单
-          </a-button>
-        </a-space>
+        <a-button :loading="loading" @click="loadData">
+          <template #icon><ReloadOutlined /></template>
+          刷新
+        </a-button>
       </template>
 
       <a-alert
@@ -23,231 +14,269 @@
         type="warning"
         show-icon
         :message="errorMessage"
-        description="采购接口需要后端服务和数据库迁移正常启动。"
+        description="请确认后端服务已启动，并重新登录以刷新采购权限。"
       />
 
-      <a-table
-        :columns="requestColumns"
-        :data-source="purchaseRequests"
-        :loading="loading"
-        :pagination="{ pageSize: 6 }"
-        :row-key="(record: PurchaseRequest) => record.id"
-        size="middle"
-      >
-        <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'code'">
-            <strong>{{ record.code }}</strong>
-            <span class="table-subtitle">{{ record.requesterName }} · {{ record.reason || "无备注" }}</span>
-          </template>
-          <template v-else-if="column.key === 'part'">
-            {{ record.partName }}
-            <span class="table-subtitle">数量 {{ record.quantity }}</span>
-          </template>
-          <template v-else-if="column.key === 'status'">
-            <a-tag :color="requestColor(record.status)">{{ requestLabel(record.status) }}</a-tag>
-            <a-tag :color="approvalColor(record.approvalStatus)">{{ approvalLabel(record.approvalStatus) }}</a-tag>
-          </template>
-        </template>
-      </a-table>
+      <a-row :gutter="[16, 16]" class="metric-row">
+        <a-col :xs="12" :lg="6"><a-statistic title="待审批申请" :value="pendingApprovalCount" suffix="条" /></a-col>
+        <a-col :xs="12" :lg="6"><a-statistic title="待收货订单" :value="openOrderCount" suffix="单" /></a-col>
+        <a-col :xs="12" :lg="6"><a-statistic title="累计入库金额" :value="receiptAmount" :formatter="moneyFormatter" /></a-col>
+        <a-col :xs="12" :lg="6"><a-statistic title="采购待付" :value="outstandingPayable" :formatter="moneyFormatter" /></a-col>
+      </a-row>
+
+      <a-tabs v-model:active-key="activeTab">
+        <a-tab-pane key="requests" tab="采购申请">
+          <div class="table-toolbar">
+            <a-space wrap>
+              <a-button v-if="auth.can('procurement:purchase:create')" type="primary" @click="openRequest">
+                <template #icon><PlusOutlined /></template>
+                新增采购申请
+              </a-button>
+              <a-tag color="orange">待审批 {{ pendingApprovalCount }}</a-tag>
+            </a-space>
+          </div>
+          <a-table
+            :columns="requestColumns"
+            :data-source="purchaseRequests"
+            :loading="loading"
+            :pagination="{ pageSize: 8 }"
+            :row-key="(record: PurchaseRequest) => record.id"
+            :scroll="{ x: 1120 }"
+            size="middle"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'code'">
+                <strong>{{ record.code }}</strong>
+                <span class="table-subtitle">{{ record.requesterName }} · {{ record.reason || '无备注' }}</span>
+              </template>
+              <template v-else-if="column.key === 'part'">
+                {{ record.partName }}
+                <span class="table-subtitle">申请数量 {{ formatQuantity(record.quantity) }}</span>
+              </template>
+              <template v-else-if="column.key === 'status'">
+                <a-tag :color="requestColor(record.status)">{{ requestLabel(record.status) }}</a-tag>
+                <a-tag :color="approvalColor(record.approvalStatus)">{{ approvalLabel(record.approvalStatus) }}</a-tag>
+                <span v-if="record.lastApproverName" class="table-subtitle">
+                  {{ record.lastApproverName }} · {{ record.lastApprovalComment }}
+                </span>
+              </template>
+              <template v-else-if="column.key === 'action'">
+                <a-button
+                  v-if="auth.can('procurement:request:approve') && record.approvalStatus === 'PENDING'"
+                  type="link"
+                  size="small"
+                  @click="openApproval(record)"
+                >
+                  审批处理
+                </a-button>
+                <span v-else class="muted">无需处理</span>
+              </template>
+            </template>
+          </a-table>
+        </a-tab-pane>
+
+        <a-tab-pane key="orders" tab="采购订单">
+          <div class="table-toolbar">
+            <a-space wrap>
+              <a-button v-if="auth.can('procurement:purchase:create')" type="primary" @click="openOrder">
+                <template #icon><ShoppingCartOutlined /></template>
+                根据审批申请下单
+              </a-button>
+              <span class="muted">当前有 {{ requestOptions.length }} 条已审批申请可下单</span>
+            </a-space>
+          </div>
+          <a-table
+            :columns="orderColumns"
+            :data-source="purchaseOrders"
+            :loading="loading"
+            :pagination="{ pageSize: 8 }"
+            :row-key="(record: PurchaseOrder) => record.id"
+            :scroll="{ x: 1280 }"
+            size="middle"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'code'">
+                <strong>{{ record.code }}</strong>
+                <span class="table-subtitle">来源 {{ record.requestCode || '未关联申请' }}</span>
+              </template>
+              <template v-else-if="column.key === 'part'">
+                {{ record.partName || '未关联物料' }}
+                <span class="table-subtitle">单价 {{ formatMoney(record.unitPrice) }}</span>
+              </template>
+              <template v-else-if="column.key === 'quantity'">
+                <strong>{{ formatQuantity(record.receivedQty) }} / {{ formatQuantity(record.orderedQty) }}</strong>
+                <a-progress
+                  :percent="receivedPercent(record)"
+                  size="small"
+                  :show-info="false"
+                  :status="record.status === 'RECEIVED' ? 'success' : 'active'"
+                />
+              </template>
+              <template v-else-if="column.key === 'amount'">
+                <strong>{{ formatMoney(record.orderAmount) }}</strong>
+              </template>
+              <template v-else-if="column.key === 'status'">
+                <a-tag :color="orderColor(record.status)">{{ orderLabel(record.status) }}</a-tag>
+              </template>
+              <template v-else-if="column.key === 'action'">
+                <a-button
+                  v-if="auth.can('procurement:order:receive') && canReceive(record)"
+                  type="link"
+                  size="small"
+                  @click="openReceipt(record)"
+                >
+                  到货入库
+                </a-button>
+                <span v-else class="muted">{{ record.status === 'RECEIVED' ? '已全部入库' : '无需处理' }}</span>
+              </template>
+            </template>
+          </a-table>
+        </a-tab-pane>
+
+        <a-tab-pane key="receipts" tab="到货入库">
+          <a-table
+            :columns="receiptColumns"
+            :data-source="goodsReceipts"
+            :loading="loading"
+            :pagination="{ pageSize: 8 }"
+            :row-key="(record: GoodsReceipt) => record.id"
+            :scroll="{ x: 1080 }"
+            size="middle"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'receipt'">
+                <strong>{{ record.code }}</strong>
+                <span class="table-subtitle">订单 {{ record.orderCode }}</span>
+              </template>
+              <template v-else-if="column.key === 'quantity'">
+                {{ formatQuantity(record.quantity) }} × {{ formatMoney(record.unitPrice) }}
+              </template>
+              <template v-else-if="column.key === 'amount'"><strong>{{ formatMoney(record.amount) }}</strong></template>
+            </template>
+            <template #emptyText>订单收货后，到货入库记录会显示在这里</template>
+          </a-table>
+        </a-tab-pane>
+
+        <a-tab-pane v-if="auth.can('procurement:payable:view')" key="payables" tab="采购应付">
+          <a-table
+            :columns="payableColumns"
+            :data-source="payables"
+            :loading="loading"
+            :pagination="{ pageSize: 8 }"
+            :row-key="(record: ProcurementPayable) => record.id"
+            :scroll="{ x: 1080 }"
+            size="middle"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'payable'">
+                <strong>{{ record.code }}</strong>
+                <span class="table-subtitle">订单 {{ record.orderCode }}</span>
+              </template>
+              <template v-else-if="column.key === 'amount'">
+                <strong>{{ formatMoney(record.amount) }}</strong>
+                <span class="table-subtitle">待付 {{ formatMoney(record.outstandingAmount) }}</span>
+              </template>
+              <template v-else-if="column.key === 'status'">
+                <a-tag :color="payableColor(record.status)">{{ payableLabel(record.status) }}</a-tag>
+                <a-tag v-if="isOverdue(record)" color="red">已逾期</a-tag>
+              </template>
+            </template>
+            <template #emptyText>采购收货后，应付单会自动生成</template>
+          </a-table>
+        </a-tab-pane>
+
+        <a-tab-pane key="suppliers" tab="供应商">
+          <div class="table-toolbar">
+            <a-button v-if="auth.can('procurement:supplier:create')" type="primary" @click="openSupplier">
+              <template #icon><PlusOutlined /></template>
+              新增供应商
+            </a-button>
+          </div>
+          <a-table
+            :columns="supplierColumns"
+            :data-source="suppliers"
+            :loading="loading"
+            :pagination="{ pageSize: 8 }"
+            :row-key="(record: Supplier) => record.id"
+            :scroll="{ x: 900 }"
+            size="middle"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'name'">
+                <strong>{{ record.name }}</strong>
+                <span class="table-subtitle">{{ record.code }} · {{ record.category || '未分类' }}</span>
+              </template>
+              <template v-else-if="column.key === 'risk'">
+                <a-tag :color="supplierRiskColor(record.riskStatus)">{{ supplierRiskLabel(record.riskStatus) }}</a-tag>
+              </template>
+            </template>
+          </a-table>
+        </a-tab-pane>
+      </a-tabs>
     </a-card>
 
-    <a-card>
-      <template #title>采购订单</template>
-      <a-table
-        :columns="orderColumns"
-        :data-source="purchaseOrders"
-        :loading="loading"
-        :pagination="{ pageSize: 5 }"
-        :row-key="(record: PurchaseOrder) => record.id"
-        size="middle"
-      >
-        <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'code'">
-            <strong>{{ record.code }}</strong>
-            <span class="table-subtitle">{{ record.requestCode || "无关联申请" }}</span>
-          </template>
-          <template v-else-if="column.key === 'amount'">
-            {{ formatMoney(record.orderAmount) }}
-          </template>
-          <template v-else-if="column.key === 'status'">
-            <a-tag color="blue">{{ orderLabel(record.status) }}</a-tag>
-          </template>
-        </template>
-      </a-table>
-    </a-card>
-
-    <a-card>
-      <template #title>供应商档案</template>
-      <a-table
-        :columns="supplierColumns"
-        :data-source="suppliers"
-        :loading="loading"
-        :pagination="{ pageSize: 5 }"
-        :row-key="(record: Supplier) => record.id"
-        size="middle"
-      >
-        <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'name'">
-            <strong>{{ record.name }}</strong>
-            <span class="table-subtitle">{{ record.code }} · {{ record.category || "未分类" }}</span>
-          </template>
-          <template v-else-if="column.key === 'risk'">
-            <a-tag :color="supplierRiskColor(record.riskStatus)">{{ supplierRiskLabel(record.riskStatus) }}</a-tag>
-          </template>
-        </template>
-      </a-table>
-    </a-card>
-
-    <a-modal
-      v-model:open="supplierOpen"
-      title="新增供应商"
-      width="720px"
-      :confirm-loading="savingSupplier"
-      @ok="handleCreateSupplier"
-    >
+    <a-modal v-model:open="supplierOpen" title="新增供应商" width="720px" :confirm-loading="savingSupplier" @ok="handleCreateSupplier">
       <a-form ref="supplierFormRef" :model="supplierForm" :rules="supplierRules" layout="vertical">
         <a-row :gutter="16">
-          <a-col :span="8">
-            <a-form-item label="供应商编码" name="code">
-              <a-input v-model:value="supplierForm.code" placeholder="GYS-003" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="16">
-            <a-form-item label="供应商名称" name="name">
-              <a-input v-model:value="supplierForm.name" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="品类">
-              <a-input v-model:value="supplierForm.category" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="账期">
-              <a-input v-model:value="supplierForm.settlementTerms" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="8">
-            <a-form-item label="联系人">
-              <a-input v-model:value="supplierForm.contactName" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="8">
-            <a-form-item label="电话">
-              <a-input v-model:value="supplierForm.phone" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="8">
-            <a-form-item label="风险状态">
-              <a-select v-model:value="supplierForm.riskStatus" :options="supplierRiskOptions" />
-            </a-form-item>
-          </a-col>
+          <a-col :xs="24" :md="8"><a-form-item label="供应商编码" name="code"><a-input v-model:value="supplierForm.code" placeholder="GYS-003" /></a-form-item></a-col>
+          <a-col :xs="24" :md="16"><a-form-item label="供应商名称" name="name"><a-input v-model:value="supplierForm.name" /></a-form-item></a-col>
+          <a-col :xs="24" :md="12"><a-form-item label="品类"><a-input v-model:value="supplierForm.category" /></a-form-item></a-col>
+          <a-col :xs="24" :md="12"><a-form-item label="账期"><a-input v-model:value="supplierForm.settlementTerms" placeholder="例如：月结30天" /></a-form-item></a-col>
+          <a-col :xs="24" :md="8"><a-form-item label="联系人"><a-input v-model:value="supplierForm.contactName" /></a-form-item></a-col>
+          <a-col :xs="24" :md="8"><a-form-item label="电话"><a-input v-model:value="supplierForm.phone" /></a-form-item></a-col>
+          <a-col :xs="24" :md="8"><a-form-item label="风险状态"><a-select v-model:value="supplierForm.riskStatus" :options="supplierRiskOptions" /></a-form-item></a-col>
         </a-row>
       </a-form>
     </a-modal>
 
-    <a-modal
-      v-model:open="requestOpen"
-      title="新增采购申请"
-      width="760px"
-      :confirm-loading="savingRequest"
-      @ok="handleCreateRequest"
-    >
+    <a-modal v-model:open="requestOpen" title="新增采购申请" width="760px" :confirm-loading="savingRequest" @ok="handleCreateRequest">
       <a-form ref="requestFormRef" :model="requestForm" :rules="requestRules" layout="vertical">
         <a-row :gutter="16">
-          <a-col :span="8">
-            <a-form-item label="申请编码" name="code">
-              <a-input v-model:value="requestForm.code" placeholder="CGSQ-202606-003" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="8">
-            <a-form-item label="申请人" name="requesterName">
-              <a-input v-model:value="requestForm.requesterName" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="8">
-            <a-form-item label="期望到货">
-              <a-input v-model:value="requestForm.expectedDate" type="date" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="关联备件">
-              <a-select
-                v-model:value="requestForm.partId"
-                :options="partOptions"
-                allow-clear
-                show-search
-                option-filter-prop="label"
-                placeholder="选择备件"
-              />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="采购物料名称">
-              <a-input v-model:value="requestForm.partName" placeholder="未选择备件时填写" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="8">
-            <a-form-item label="数量" name="quantity">
-              <a-input-number v-model:value="requestForm.quantity" :min="0.01" :precision="2" class="full-input" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="16">
-            <a-form-item label="采购原因">
-              <a-input v-model:value="requestForm.reason" />
-            </a-form-item>
-          </a-col>
+          <a-col :xs="24" :md="8"><a-form-item label="申请编码" name="code"><a-input v-model:value="requestForm.code" placeholder="CGSQ-202606-003" /></a-form-item></a-col>
+          <a-col :xs="24" :md="8"><a-form-item label="申请人" name="requesterName"><a-input v-model:value="requestForm.requesterName" /></a-form-item></a-col>
+          <a-col :xs="24" :md="8"><a-form-item label="期望到货"><a-input v-model:value="requestForm.expectedDate" type="date" /></a-form-item></a-col>
+          <a-col :xs="24" :md="12"><a-form-item label="关联物料" name="partId"><a-select v-model:value="requestForm.partId" :options="partOptions" show-search option-filter-prop="label" placeholder="选择物料" @change="syncRequestPart" /></a-form-item></a-col>
+          <a-col :xs="24" :md="12"><a-form-item label="采购物料名称"><a-input v-model:value="requestForm.partName" disabled /></a-form-item></a-col>
+          <a-col :xs="24" :md="8"><a-form-item label="数量" name="quantity"><a-input-number v-model:value="requestForm.quantity" :min="0.01" :precision="2" class="full-input" /></a-form-item></a-col>
+          <a-col :xs="24" :md="16"><a-form-item label="采购原因"><a-input v-model:value="requestForm.reason" /></a-form-item></a-col>
         </a-row>
       </a-form>
     </a-modal>
 
-    <a-modal
-      v-model:open="orderOpen"
-      title="新增采购订单"
-      width="720px"
-      :confirm-loading="savingOrder"
-      @ok="handleCreateOrder"
-    >
+    <a-modal v-model:open="approvalOpen" title="采购申请审批" width="720px" :confirm-loading="savingApproval" @ok="handleApproval">
+      <a-alert v-if="selectedRequest" class="section-alert" type="info" :message="`${selectedRequest.code} · ${selectedRequest.partName} · 数量 ${formatQuantity(selectedRequest.quantity)}`" />
+      <a-form ref="approvalFormRef" :model="approvalForm" :rules="approvalRules" layout="vertical">
+        <a-row :gutter="16">
+          <a-col :xs="24" :md="10"><a-form-item label="审批结论" name="decision"><a-radio-group v-model:value="approvalForm.decision" button-style="solid"><a-radio-button value="APPROVED">通过</a-radio-button><a-radio-button value="REJECTED">驳回</a-radio-button></a-radio-group></a-form-item></a-col>
+          <a-col :xs="24" :md="14"><a-form-item label="审批人" name="approverName"><a-input v-model:value="approvalForm.approverName" /></a-form-item></a-col>
+          <a-col :span="24"><a-form-item label="审批意见" name="comment"><a-textarea v-model:value="approvalForm.comment" :rows="3" /></a-form-item></a-col>
+        </a-row>
+      </a-form>
+    </a-modal>
+
+    <a-modal v-model:open="orderOpen" title="根据审批申请创建采购订单" width="760px" :confirm-loading="savingOrder" @ok="handleCreateOrder">
       <a-form ref="orderFormRef" :model="orderForm" :rules="orderRules" layout="vertical">
         <a-row :gutter="16">
-          <a-col :span="8">
-            <a-form-item label="订单编码" name="code">
-              <a-input v-model:value="orderForm.code" placeholder="CGDD-202606-002" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="16">
-            <a-form-item label="供应商" name="supplierId">
-              <a-select
-                v-model:value="orderForm.supplierId"
-                :options="supplierOptions"
-                show-search
-                option-filter-prop="label"
-                placeholder="选择供应商"
-              />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="关联采购申请">
-              <a-select
-                v-model:value="orderForm.requestId"
-                :options="requestOptions"
-                allow-clear
-                show-search
-                option-filter-prop="label"
-                placeholder="选择已审批申请"
-              />
-            </a-form-item>
-          </a-col>
-          <a-col :span="6">
-            <a-form-item label="订单金额">
-              <a-input-number v-model:value="orderForm.orderAmount" :min="0" :precision="2" class="full-input" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="6">
-            <a-form-item label="预计到货">
-              <a-input v-model:value="orderForm.expectedDeliveryDate" type="date" />
-            </a-form-item>
-          </a-col>
+          <a-col :xs="24" :md="8"><a-form-item label="订单编码" name="code"><a-input v-model:value="orderForm.code" placeholder="CGDD-202606-002" /></a-form-item></a-col>
+          <a-col :xs="24" :md="16"><a-form-item label="关联采购申请" name="requestId"><a-select v-model:value="orderForm.requestId" :options="requestOptions" show-search option-filter-prop="label" placeholder="仅显示已审批且未下单的申请" @change="syncOrderRequest" /></a-form-item></a-col>
+          <a-col :xs="24" :md="16"><a-form-item label="供应商" name="supplierId"><a-select v-model:value="orderForm.supplierId" :options="supplierOptions" show-search option-filter-prop="label" placeholder="停用供应商不会显示" /></a-form-item></a-col>
+          <a-col :xs="24" :md="8"><a-form-item label="预计到货"><a-input v-model:value="orderForm.expectedDeliveryDate" type="date" /></a-form-item></a-col>
+          <a-col :xs="24" :md="8"><a-form-item label="采购数量"><a-input :value="selectedOrderRequest ? formatQuantity(selectedOrderRequest.quantity) : ''" disabled /></a-form-item></a-col>
+          <a-col :xs="24" :md="8"><a-form-item label="含税单价" name="unitPrice"><a-input-number v-model:value="orderForm.unitPrice" :min="0.01" :precision="2" class="full-input" /></a-form-item></a-col>
+          <a-col :xs="24" :md="8"><a-form-item label="订单金额"><a-input :value="formatMoney(orderAmount)" disabled /></a-form-item></a-col>
+        </a-row>
+      </a-form>
+    </a-modal>
+
+    <a-modal v-model:open="receiptOpen" title="采购订单到货入库" width="760px" :confirm-loading="savingReceipt" @ok="handleReceive">
+      <a-alert v-if="selectedOrder" class="section-alert" type="info" :message="`${selectedOrder.code} · ${selectedOrder.partName} · 剩余可收 ${formatQuantity(remainingQuantity)}`" />
+      <a-form ref="receiptFormRef" :model="receiptForm" :rules="receiptRules" layout="vertical">
+        <a-row :gutter="16">
+          <a-col :xs="24" :md="8"><a-form-item label="本次到货数量" name="quantity"><a-input-number v-model:value="receiptForm.quantity" :min="0.01" :max="remainingQuantity" :precision="2" class="full-input" /></a-form-item></a-col>
+          <a-col :xs="24" :md="8"><a-form-item label="到货日期" name="receivedDate"><a-input v-model:value="receiptForm.receivedDate" type="date" /></a-form-item></a-col>
+          <a-col :xs="24" :md="8"><a-form-item label="应付到期日" name="payableDueDate"><a-input v-model:value="receiptForm.payableDueDate" type="date" /></a-form-item></a-col>
+          <a-col :xs="24" :md="12"><a-form-item label="送货单号" name="deliveryNo"><a-input v-model:value="receiptForm.deliveryNo" /></a-form-item></a-col>
+          <a-col :xs="24" :md="12"><a-form-item label="收货人" name="receiverName"><a-input v-model:value="receiptForm.receiverName" /></a-form-item></a-col>
         </a-row>
       </a-form>
     </a-modal>
@@ -257,19 +286,29 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
 import { message } from "ant-design-vue";
+import PlusOutlined from "@ant-design/icons-vue/PlusOutlined";
+import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
+import ShoppingCartOutlined from "@ant-design/icons-vue/ShoppingCartOutlined";
 import {
   createPurchaseOrder,
   createPurchaseRequest,
   createSupplier,
+  listGoodsReceipts,
   listInventoryParts,
+  listProcurementPayables,
   listPurchaseOrders,
   listPurchaseRequests,
   listSuppliers,
+  processPurchaseRequestApproval,
+  receivePurchaseOrder,
   type ApprovalStatus,
   type CreatePurchaseOrderPayload,
   type CreatePurchaseRequestPayload,
   type CreateSupplierPayload,
+  type GoodsReceipt,
   type InventoryPart,
+  type PayableStatus,
+  type ProcurementPayable,
   type PurchaseOrder,
   type PurchaseOrderStatus,
   type PurchaseRequest,
@@ -279,47 +318,82 @@ import {
 } from "@/api/core-business";
 import { useAuthStore } from "@/stores/auth";
 
+type ApprovalForm = { decision: ApprovalStatus; comment: string; approverName: string };
+type ReceiptForm = { quantity: number; receivedDate: string; deliveryNo: string; receiverName: string; payableDueDate: string };
+
 const auth = useAuthStore();
+const activeTab = ref("requests");
 const suppliers = ref<Supplier[]>([]);
 const purchaseRequests = ref<PurchaseRequest[]>([]);
 const purchaseOrders = ref<PurchaseOrder[]>([]);
+const goodsReceipts = ref<GoodsReceipt[]>([]);
+const payables = ref<ProcurementPayable[]>([]);
 const parts = ref<InventoryPart[]>([]);
 const loading = ref(false);
 const errorMessage = ref("");
 const supplierOpen = ref(false);
 const requestOpen = ref(false);
+const approvalOpen = ref(false);
 const orderOpen = ref(false);
+const receiptOpen = ref(false);
 const savingSupplier = ref(false);
 const savingRequest = ref(false);
+const savingApproval = ref(false);
 const savingOrder = ref(false);
+const savingReceipt = ref(false);
 const supplierFormRef = ref();
 const requestFormRef = ref();
+const approvalFormRef = ref();
 const orderFormRef = ref();
+const receiptFormRef = ref();
+const selectedRequest = ref<PurchaseRequest | null>(null);
+const selectedOrder = ref<PurchaseOrder | null>(null);
 const supplierForm = reactive<CreateSupplierPayload>(initialSupplierForm());
 const requestForm = reactive<CreatePurchaseRequestPayload>(initialRequestForm());
+const approvalForm = reactive<ApprovalForm>(initialApprovalForm());
 const orderForm = reactive<CreatePurchaseOrderPayload>(initialOrderForm());
+const receiptForm = reactive<ReceiptForm>(initialReceiptForm());
 
 const requestColumns = [
-  { title: "申请", key: "code", width: 270 },
-  { title: "物料", key: "part", width: 220 },
+  { title: "申请", key: "code", width: 280 },
+  { title: "物料 / 数量", key: "part", width: 230 },
   { title: "期望到货", dataIndex: "expectedDate", width: 120 },
-  { title: "状态", key: "status", width: 190 },
+  { title: "状态 / 审批", key: "status", width: 300 },
+  { title: "操作", key: "action", width: 120, fixed: "right" },
 ];
-
 const orderColumns = [
-  { title: "订单", key: "code", width: 250 },
-  { title: "供应商", dataIndex: "supplierName" },
-  { title: "金额", key: "amount", width: 140 },
+  { title: "订单", key: "code", width: 230 },
+  { title: "供应商", dataIndex: "supplierName", width: 200 },
+  { title: "物料 / 单价", key: "part", width: 220 },
+  { title: "已收 / 订购", key: "quantity", width: 160 },
+  { title: "订单金额", key: "amount", width: 140 },
   { title: "预计到货", dataIndex: "expectedDeliveryDate", width: 120 },
   { title: "状态", key: "status", width: 110 },
+  { title: "操作", key: "action", width: 120, fixed: "right" },
 ];
-
+const receiptColumns = [
+  { title: "入库单", key: "receipt", width: 250 },
+  { title: "物料", dataIndex: "partName", width: 190 },
+  { title: "数量 / 单价", key: "quantity", width: 190 },
+  { title: "入库金额", key: "amount", width: 140 },
+  { title: "到货日期", dataIndex: "receivedDate", width: 120 },
+  { title: "送货单号", dataIndex: "deliveryNo", width: 150 },
+  { title: "收货人", dataIndex: "receiverName", width: 110 },
+];
+const payableColumns = [
+  { title: "应付单", key: "payable", width: 250 },
+  { title: "供应商", dataIndex: "supplierName", width: 220 },
+  { title: "金额", key: "amount", width: 180 },
+  { title: "已付金额", dataIndex: "paidAmount", customRender: ({ text }: { text: number }) => formatMoney(text), width: 140 },
+  { title: "到期日", dataIndex: "dueDate", width: 120 },
+  { title: "状态", key: "status", width: 160 },
+];
 const supplierColumns = [
   { title: "供应商", key: "name", width: 300 },
-  { title: "联系人", dataIndex: "contactName", width: 110 },
-  { title: "电话", dataIndex: "phone", width: 130 },
-  { title: "账期", dataIndex: "settlementTerms" },
-  { title: "风险", key: "risk", dataIndex: "riskStatus", width: 110 },
+  { title: "联系人", dataIndex: "contactName", width: 120 },
+  { title: "电话", dataIndex: "phone", width: 140 },
+  { title: "账期", dataIndex: "settlementTerms", width: 180 },
+  { title: "风险", key: "risk", width: 110 },
 ];
 
 const supplierRiskOptions = [
@@ -327,45 +401,45 @@ const supplierRiskOptions = [
   { label: "关注", value: "WATCHLIST" },
   { label: "停用", value: "BLOCKED" },
 ];
-
-const supplierRules = {
-  code: [{ required: true, message: "请输入供应商编码" }],
-  name: [{ required: true, message: "请输入供应商名称" }],
-};
-
+const supplierRules = { code: [{ required: true, message: "请输入供应商编码" }], name: [{ required: true, message: "请输入供应商名称" }] };
 const requestRules = {
   code: [{ required: true, message: "请输入采购申请编码" }],
   requesterName: [{ required: true, message: "请输入申请人" }],
+  partId: [{ required: true, message: "请选择关联物料" }],
   quantity: [{ required: true, message: "请输入数量" }],
 };
-
+const approvalRules = {
+  decision: [{ required: true, message: "请选择审批结论" }],
+  approverName: [{ required: true, message: "请输入审批人" }],
+  comment: [{ required: true, message: "请输入审批意见" }],
+};
 const orderRules = {
   code: [{ required: true, message: "请输入采购订单编码" }],
+  requestId: [{ required: true, message: "请选择已审批采购申请" }],
   supplierId: [{ required: true, message: "请选择供应商" }],
+  unitPrice: [{ required: true, message: "请输入含税单价" }],
+};
+const receiptRules = {
+  quantity: [{ required: true, message: "请输入本次到货数量" }],
+  receivedDate: [{ required: true, message: "请选择到货日期" }],
+  payableDueDate: [{ required: true, message: "请选择应付到期日" }],
+  deliveryNo: [{ required: true, message: "请输入送货单号" }],
+  receiverName: [{ required: true, message: "请输入收货人" }],
 };
 
-const partOptions = computed(() =>
-  parts.value.map((part) => ({
-    label: `${part.name} (${part.code}) · 库存 ${part.stockQty}`,
-    value: part.id,
-  })),
-);
-
-const supplierOptions = computed(() =>
-  suppliers.value.map((supplier) => ({
-    label: `${supplier.name} (${supplier.code})`,
-    value: supplier.id,
-  })),
-);
-
-const requestOptions = computed(() =>
-  purchaseRequests.value
-    .filter((request) => request.approvalStatus === "APPROVED" || request.status === "SUBMITTED")
-    .map((request) => ({
-      label: `${request.code} · ${request.partName}`,
-      value: request.id,
-    })),
-);
+const pendingApprovalCount = computed(() => purchaseRequests.value.filter((item) => item.approvalStatus === "PENDING").length);
+const openOrderCount = computed(() => purchaseOrders.value.filter(canReceive).length);
+const receiptAmount = computed(() => goodsReceipts.value.reduce((sum, item) => sum + Number(item.amount || 0), 0));
+const outstandingPayable = computed(() => payables.value.reduce((sum, item) => sum + Number(item.outstandingAmount || 0), 0));
+const orderedRequestIds = computed(() => new Set(purchaseOrders.value.map((item) => item.requestId).filter(Boolean)));
+const partOptions = computed(() => parts.value.map((part) => ({ label: `${part.name} (${part.code}) · 库存 ${formatQuantity(part.stockQty)}`, value: part.id })));
+const supplierOptions = computed(() => suppliers.value.filter((item) => item.riskStatus !== "BLOCKED").map((item) => ({ label: `${item.name} (${item.code})${item.riskStatus === "WATCHLIST" ? " · 关注" : ""}`, value: item.id })));
+const requestOptions = computed(() => purchaseRequests.value
+  .filter((item) => item.approvalStatus === "APPROVED" && item.status === "APPROVED" && !orderedRequestIds.value.has(item.id))
+  .map((item) => ({ label: `${item.code} · ${item.partName} · 数量 ${formatQuantity(item.quantity)}`, value: item.id })));
+const selectedOrderRequest = computed(() => purchaseRequests.value.find((item) => item.id === orderForm.requestId) || null);
+const orderAmount = computed(() => Number(selectedOrderRequest.value?.quantity || 0) * Number(orderForm.unitPrice || 0));
+const remainingQuantity = computed(() => Math.max(0, Number(selectedOrder.value?.orderedQty || 0) - Number(selectedOrder.value?.receivedQty || 0)));
 
 onMounted(loadData);
 
@@ -373,16 +447,16 @@ async function loadData() {
   loading.value = true;
   errorMessage.value = "";
   try {
-    const [supplierData, requestData, orderData, partData] = await Promise.all([
-      listSuppliers(),
-      listPurchaseRequests(),
-      listPurchaseOrders(),
-      listInventoryParts(),
+    const [supplierData, requestData, orderData, partData, receiptData, payableData] = await Promise.all([
+      listSuppliers(), listPurchaseRequests(), listPurchaseOrders(), listInventoryParts(), listGoodsReceipts(),
+      auth.can("procurement:payable:view") ? listProcurementPayables() : Promise.resolve([]),
     ]);
     suppliers.value = supplierData;
     purchaseRequests.value = requestData;
     purchaseOrders.value = orderData;
     parts.value = partData;
+    goodsReceipts.value = receiptData;
+    payables.value = payableData;
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : "采购数据加载失败";
   } finally {
@@ -390,160 +464,99 @@ async function loadData() {
   }
 }
 
+function openSupplier() { Object.assign(supplierForm, initialSupplierForm()); supplierOpen.value = true; }
+function openRequest() { Object.assign(requestForm, initialRequestForm()); requestOpen.value = true; }
+function openApproval(record: PurchaseRequest) {
+  selectedRequest.value = record;
+  Object.assign(approvalForm, initialApprovalForm());
+  approvalOpen.value = true;
+}
+function openOrder() {
+  if (!requestOptions.value.length) { message.warning("暂无已审批且未下单的采购申请"); return; }
+  Object.assign(orderForm, initialOrderForm());
+  orderOpen.value = true;
+}
+function openReceipt(record: PurchaseOrder) {
+  selectedOrder.value = record;
+  Object.assign(receiptForm, initialReceiptForm(), { quantity: Number(record.orderedQty) - Number(record.receivedQty) });
+  receiptOpen.value = true;
+}
+
+function syncRequestPart(partId: string) { requestForm.partName = parts.value.find((item) => item.id === partId)?.name || ""; }
+function syncOrderRequest(requestId: string) {
+  const request = purchaseRequests.value.find((item) => item.id === requestId);
+  const part = parts.value.find((item) => item.id === request?.partId);
+  orderForm.expectedDeliveryDate = request?.expectedDate;
+  orderForm.unitPrice = Number(part?.unitCost || 0) > 0 ? Number(part?.unitCost) : 0.01;
+}
+
 async function handleCreateSupplier() {
   await supplierFormRef.value?.validate();
   savingSupplier.value = true;
-  try {
-    await createSupplier(supplierForm);
-    Object.assign(supplierForm, initialSupplierForm());
-    supplierOpen.value = false;
-    message.success("供应商已新增");
-    await loadData();
-  } catch (error) {
-    message.error(error instanceof Error ? error.message : "供应商新增失败");
-  } finally {
-    savingSupplier.value = false;
-  }
+  try { await createSupplier({ ...supplierForm }); supplierOpen.value = false; message.success("供应商已新增"); await loadData(); }
+  catch (error) { message.error(error instanceof Error ? error.message : "供应商新增失败"); }
+  finally { savingSupplier.value = false; }
 }
-
 async function handleCreateRequest() {
   await requestFormRef.value?.validate();
   savingRequest.value = true;
-  try {
-    await createPurchaseRequest(requestForm);
-    Object.assign(requestForm, initialRequestForm());
-    requestOpen.value = false;
-    message.success("采购申请已新增");
-    await loadData();
-  } catch (error) {
-    message.error(error instanceof Error ? error.message : "采购申请新增失败");
-  } finally {
-    savingRequest.value = false;
-  }
+  try { await createPurchaseRequest({ ...requestForm }); requestOpen.value = false; message.success("采购申请已提交审批"); await loadData(); }
+  catch (error) { message.error(error instanceof Error ? error.message : "采购申请新增失败"); }
+  finally { savingRequest.value = false; }
 }
-
+async function handleApproval() {
+  if (!selectedRequest.value) return;
+  await approvalFormRef.value?.validate();
+  savingApproval.value = true;
+  try {
+    await processPurchaseRequestApproval(selectedRequest.value.id, { ...approvalForm });
+    approvalOpen.value = false;
+    message.success(approvalForm.decision === "APPROVED" ? "采购申请已审批通过" : "采购申请已驳回");
+    await loadData();
+  } catch (error) { message.error(error instanceof Error ? error.message : "审批处理失败"); }
+  finally { savingApproval.value = false; }
+}
 async function handleCreateOrder() {
   await orderFormRef.value?.validate();
   savingOrder.value = true;
+  try { await createPurchaseOrder({ ...orderForm }); orderOpen.value = false; activeTab.value = "orders"; message.success("采购订单已创建"); await loadData(); }
+  catch (error) { message.error(error instanceof Error ? error.message : "采购订单新增失败"); }
+  finally { savingOrder.value = false; }
+}
+async function handleReceive() {
+  if (!selectedOrder.value) return;
+  await receiptFormRef.value?.validate();
+  savingReceipt.value = true;
   try {
-    await createPurchaseOrder(orderForm);
-    Object.assign(orderForm, initialOrderForm());
-    orderOpen.value = false;
-    message.success("采购订单已新增");
+    const result = await receivePurchaseOrder(selectedOrder.value.id, { ...receiptForm });
+    receiptOpen.value = false;
+    message.success(`入库完成，当前库存 ${formatQuantity(result.currentStockQty)}，应付单 ${result.payable.code} 已生成`);
     await loadData();
-  } catch (error) {
-    message.error(error instanceof Error ? error.message : "采购订单新增失败");
-  } finally {
-    savingOrder.value = false;
-  }
+  } catch (error) { message.error(error instanceof Error ? error.message : "到货入库失败"); }
+  finally { savingReceipt.value = false; }
 }
 
-function initialSupplierForm(): CreateSupplierPayload {
-  return {
-    code: "",
-    name: "",
-    category: "",
-    contactName: "",
-    phone: "",
-    settlementTerms: "",
-    riskStatus: "NORMAL",
-  };
-}
+function initialSupplierForm(): CreateSupplierPayload { return { code: "", name: "", category: "", contactName: "", phone: "", settlementTerms: "", riskStatus: "NORMAL" }; }
+function initialRequestForm(): CreatePurchaseRequestPayload { return { code: "", requesterName: auth.user?.displayName || "", partId: undefined, partName: "", quantity: 1, expectedDate: addDays(7), reason: "" }; }
+function initialApprovalForm(): ApprovalForm { return { decision: "APPROVED", comment: "同意采购", approverName: auth.user?.displayName || "" }; }
+function initialOrderForm(): CreatePurchaseOrderPayload { return { code: "", supplierId: "", requestId: "", unitPrice: 0.01, expectedDeliveryDate: undefined }; }
+function initialReceiptForm(): ReceiptForm { return { quantity: 1, receivedDate: addDays(0), deliveryNo: "", receiverName: auth.user?.displayName || "", payableDueDate: addDays(30) }; }
+function addDays(days: number) { const date = new Date(); date.setDate(date.getDate() + days); return date.toISOString().slice(0, 10); }
 
-function initialRequestForm(): CreatePurchaseRequestPayload {
-  return {
-    code: "",
-    requesterName: "",
-    partId: undefined,
-    partName: "",
-    quantity: 1,
-    expectedDate: undefined,
-    reason: "",
-  };
-}
-
-function initialOrderForm(): CreatePurchaseOrderPayload {
-  return {
-    code: "",
-    supplierId: "",
-    requestId: undefined,
-    orderAmount: 0,
-    expectedDeliveryDate: undefined,
-  };
-}
-
-function supplierRiskLabel(status: SupplierRiskStatus) {
-  return supplierRiskOptions.find((option) => option.value === status)?.label || status;
-}
-
-function supplierRiskColor(status: SupplierRiskStatus) {
-  const colors: Record<SupplierRiskStatus, string> = {
-    NORMAL: "green",
-    WATCHLIST: "orange",
-    BLOCKED: "red",
-  };
-  return colors[status];
-}
-
-function requestLabel(status: PurchaseRequestStatus) {
-  const labels: Record<PurchaseRequestStatus, string> = {
-    DRAFT: "草稿",
-    SUBMITTED: "已提交",
-    APPROVED: "已审批",
-    ORDERED: "已下单",
-    RECEIVED: "已到货",
-    CANCELLED: "已取消",
-  };
-  return labels[status];
-}
-
-function requestColor(status: PurchaseRequestStatus) {
-  const colors: Record<PurchaseRequestStatus, string> = {
-    DRAFT: "default",
-    SUBMITTED: "blue",
-    APPROVED: "green",
-    ORDERED: "purple",
-    RECEIVED: "cyan",
-    CANCELLED: "red",
-  };
-  return colors[status];
-}
-
-function approvalLabel(status: ApprovalStatus) {
-  const labels: Record<ApprovalStatus, string> = {
-    PENDING: "待审批",
-    APPROVED: "审批通过",
-    REJECTED: "已驳回",
-  };
-  return labels[status];
-}
-
-function approvalColor(status: ApprovalStatus) {
-  const colors: Record<ApprovalStatus, string> = {
-    PENDING: "orange",
-    APPROVED: "green",
-    REJECTED: "red",
-  };
-  return colors[status];
-}
-
-function orderLabel(status: PurchaseOrderStatus) {
-  const labels: Record<PurchaseOrderStatus, string> = {
-    DRAFT: "草稿",
-    ORDERED: "已下单",
-    PARTIAL_RECEIVED: "部分到货",
-    RECEIVED: "已到货",
-    CLOSED: "已关闭",
-    CANCELLED: "已取消",
-  };
-  return labels[status];
-}
-
-function formatMoney(value: number) {
-  return new Intl.NumberFormat("zh-CN", {
-    style: "currency",
-    currency: "CNY",
-    maximumFractionDigits: 0,
-  }).format(value || 0);
-}
+function canReceive(order: PurchaseOrder) { return order.status === "ORDERED" || order.status === "PARTIAL_RECEIVED"; }
+function receivedPercent(order: PurchaseOrder) { return order.orderedQty > 0 ? Math.min(100, Math.round((Number(order.receivedQty) / Number(order.orderedQty)) * 100)) : 0; }
+function isOverdue(item: ProcurementPayable) { return item.status !== "PAID" && item.status !== "CANCELLED" && item.dueDate < addDays(0); }
+function moneyFormatter(value: number | string) { return formatMoney(Number(value)); }
+function formatMoney(value: number) { return new Intl.NumberFormat("zh-CN", { style: "currency", currency: "CNY", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value || 0); }
+function formatQuantity(value: number) { return new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 2 }).format(value || 0); }
+function supplierRiskLabel(status: SupplierRiskStatus) { return supplierRiskOptions.find((item) => item.value === status)?.label || status; }
+function supplierRiskColor(status: SupplierRiskStatus) { return ({ NORMAL: "green", WATCHLIST: "orange", BLOCKED: "red" } as Record<SupplierRiskStatus, string>)[status]; }
+function requestLabel(status: PurchaseRequestStatus) { return ({ DRAFT: "草稿", SUBMITTED: "已提交", APPROVED: "已审批", ORDERED: "已下单", RECEIVED: "已到货", CANCELLED: "已取消" } as Record<PurchaseRequestStatus, string>)[status]; }
+function requestColor(status: PurchaseRequestStatus) { return ({ DRAFT: "default", SUBMITTED: "blue", APPROVED: "green", ORDERED: "purple", RECEIVED: "cyan", CANCELLED: "red" } as Record<PurchaseRequestStatus, string>)[status]; }
+function approvalLabel(status: ApprovalStatus) { return ({ PENDING: "待审批", APPROVED: "审批通过", REJECTED: "已驳回" } as Record<ApprovalStatus, string>)[status]; }
+function approvalColor(status: ApprovalStatus) { return ({ PENDING: "orange", APPROVED: "green", REJECTED: "red" } as Record<ApprovalStatus, string>)[status]; }
+function orderLabel(status: PurchaseOrderStatus) { return ({ DRAFT: "草稿", ORDERED: "已下单", PARTIAL_RECEIVED: "部分到货", RECEIVED: "已到货", CLOSED: "已关闭", CANCELLED: "已取消" } as Record<PurchaseOrderStatus, string>)[status]; }
+function orderColor(status: PurchaseOrderStatus) { return ({ DRAFT: "default", ORDERED: "blue", PARTIAL_RECEIVED: "orange", RECEIVED: "green", CLOSED: "default", CANCELLED: "red" } as Record<PurchaseOrderStatus, string>)[status]; }
+function payableLabel(status: PayableStatus) { return ({ PENDING: "待付款", PARTIAL_PAID: "部分付款", PAID: "已付款", CANCELLED: "已取消" } as Record<PayableStatus, string>)[status]; }
+function payableColor(status: PayableStatus) { return ({ PENDING: "orange", PARTIAL_PAID: "blue", PAID: "green", CANCELLED: "default" } as Record<PayableStatus, string>)[status]; }
 </script>

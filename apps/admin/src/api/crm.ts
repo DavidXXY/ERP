@@ -4,6 +4,10 @@ export type CustomerLevel = "STRATEGIC" | "KEY" | "NORMAL";
 export type RiskStatus = "NORMAL" | "OVERDUE" | "RENEWAL_RISK";
 export type ContractStatus = "ACTIVE" | "RENEWAL_PENDING" | "OVERDUE_RISK" | "CLOSED";
 export type ReceivableStatus = "INVOICE_PENDING" | "PAYMENT_PENDING" | "SETTLED" | "OVERDUE";
+export type OpportunityStage = "LEAD" | "QUALIFIED" | "SOLUTION" | "QUOTATION" | "NEGOTIATION" | "WON" | "LOST";
+export type QuoteStatus = "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED";
+export type ApprovalDecision = "APPROVED" | "REJECTED";
+export type FollowUpType = "VISIT" | "PHONE" | "CALLBACK" | "COMPLAINT";
 
 export type CustomerSummary = {
   id: string;
@@ -42,6 +46,18 @@ export type CustomerDetail = CustomerSummary & {
     name: string;
     address: string;
   }>;
+  opportunities: Array<{
+    id: string;
+    code: string;
+    source?: string;
+    needSummary: string;
+    stage: OpportunityStage;
+    expectedAmount: number;
+    probability: number;
+    nextAction?: string;
+    nextActionAt?: string;
+    ownerName: string;
+  }>;
   contracts: Array<{
     id: string;
     code: string;
@@ -59,6 +75,10 @@ export type CustomerDetail = CustomerSummary & {
     sourceNo: string;
     amount: number;
     dueDate: string;
+    invoiceNo?: string;
+    invoiceDate?: string;
+    settledAmount: number;
+    outstandingAmount: number;
     status: ReceivableStatus;
   }>;
   metrics: {
@@ -67,6 +87,181 @@ export type CustomerDetail = CustomerSummary & {
     outstandingAmount: number;
     settledAmount: number;
   };
+};
+
+export type Opportunity = {
+  id: string;
+  customerId?: string;
+  customerName: string;
+  code: string;
+  source?: string;
+  needSummary: string;
+  stage: OpportunityStage;
+  expectedAmount: number;
+  probability: number;
+  nextAction?: string;
+  nextActionAt?: string;
+  ownerName: string;
+  updatedAt: string;
+};
+
+export type CreateOpportunityPayload = {
+  customerId?: string;
+  code: string;
+  source?: string;
+  needSummary: string;
+  stage?: OpportunityStage;
+  expectedAmount?: number;
+  probability?: number;
+  nextAction?: string;
+  nextActionAt?: string;
+  ownerName: string;
+};
+
+export type AdvanceOpportunityPayload = {
+  stage: OpportunityStage;
+  nextAction: string;
+  nextActionAt: string;
+  probability: number;
+};
+
+export type QuotePlan = {
+  id: string;
+  customerId?: string;
+  customerName: string;
+  opportunityId?: string;
+  opportunityCode?: string;
+  code: string;
+  serviceScope: string;
+  inspectCycle?: string;
+  paymentNodes?: string;
+  amount: number;
+  status: QuoteStatus;
+  lastApprovalComment?: string;
+  lastApproverName?: string;
+  lastApprovalAt?: string;
+  convertedContractId?: string;
+  updatedAt: string;
+};
+
+export type CreateQuotePayload = {
+  customerId?: string;
+  opportunityId?: string;
+  code: string;
+  serviceScope: string;
+  inspectCycle?: string;
+  paymentNodes?: string;
+  amount: number;
+};
+
+export type ProcessQuoteApprovalPayload = {
+  decision: ApprovalDecision;
+  comment: string;
+  approverName: string;
+  contractCode?: string;
+  projectName?: string;
+  contractType?: string;
+  startDate?: string;
+  endDate?: string;
+  serviceCycle?: string;
+  receivableCode?: string;
+  firstReceivableAmount?: number;
+  firstReceivableDueDate?: string;
+};
+
+export type FollowUp = {
+  id: string;
+  customerId: string;
+  customerName: string;
+  opportunityId?: string;
+  opportunityCode?: string;
+  type: FollowUpType;
+  subject: string;
+  content: string;
+  followedAt: string;
+  nextAction?: string;
+  ownerName: string;
+};
+
+export type CreateFollowUpPayload = {
+  customerId: string;
+  opportunityId?: string;
+  type: FollowUpType;
+  subject: string;
+  content: string;
+  followedAt: string;
+  nextAction?: string;
+  ownerName: string;
+};
+
+export type ServiceContract = {
+  id: string;
+  quoteId?: string;
+  customerId: string;
+  customerName: string;
+  code: string;
+  projectName: string;
+  contractType: string;
+  amount: number;
+  startDate: string;
+  endDate: string;
+  serviceCycle?: string;
+  status: ContractStatus;
+};
+
+export type Receivable = {
+  id: string;
+  customerId: string;
+  customerName: string;
+  contractId?: string;
+  contractCode: string;
+  code: string;
+  sourceNo: string;
+  amount: number;
+  dueDate: string;
+  invoiceNo?: string;
+  invoiceDate?: string;
+  settledAmount: number;
+  outstandingAmount: number;
+  status: ReceivableStatus;
+};
+
+export type QuoteApprovalResult = {
+  quote: QuotePlan;
+  contract?: ServiceContract;
+  receivable?: Receivable;
+};
+
+export type Renewal = {
+  contractId: string;
+  customerId: string;
+  customerName: string;
+  contractCode: string;
+  projectName: string;
+  amount: number;
+  endDate: string;
+  daysRemaining: number;
+  renewalRisk: "EXPIRED" | "HIGH" | "MEDIUM" | "LOW";
+  outstandingAmount: number;
+  status: ContractStatus;
+};
+
+export type CustomerProfile = {
+  customerId: string;
+  customerCode: string;
+  customerName: string;
+  industry: string;
+  level: CustomerLevel;
+  ownerName: string;
+  riskStatus: RiskStatus;
+  paymentHabit?: string;
+  opportunityCount: number;
+  opportunityAmount: number;
+  contractCount: number;
+  contractAmount: number;
+  outstandingAmount: number;
+  overdueAmount: number;
+  nearestContractEndDate?: string;
 };
 
 export type CreateCustomerPayload = {
@@ -121,3 +316,62 @@ export function createCustomer(payload: CreateCustomerPayload) {
   });
 }
 
+export function listOpportunities() {
+  return request<Opportunity[]>({ method: "GET", url: "/crm/opportunities" });
+}
+
+export function createOpportunity(payload: CreateOpportunityPayload) {
+  return request<Opportunity>({ method: "POST", url: "/crm/opportunities", data: payload });
+}
+
+export function advanceOpportunity(id: string, payload: AdvanceOpportunityPayload) {
+  return request<Opportunity>({ method: "POST", url: `/crm/opportunities/${id}/advance`, data: payload });
+}
+
+export function listQuotes() {
+  return request<QuotePlan[]>({ method: "GET", url: "/crm/quotes" });
+}
+
+export function createQuote(payload: CreateQuotePayload) {
+  return request<QuotePlan>({ method: "POST", url: "/crm/quotes", data: payload });
+}
+
+export function submitQuote(id: string) {
+  return request<QuotePlan>({ method: "POST", url: `/crm/quotes/${id}/submit` });
+}
+
+export function processQuoteApproval(id: string, payload: ProcessQuoteApprovalPayload) {
+  return request<QuoteApprovalResult>({ method: "POST", url: `/crm/quotes/${id}/approval`, data: payload });
+}
+
+export function listContracts() {
+  return request<ServiceContract[]>({ method: "GET", url: "/crm/contracts" });
+}
+
+export function listFollowUps() {
+  return request<FollowUp[]>({ method: "GET", url: "/crm/follow-ups" });
+}
+
+export function createFollowUp(payload: CreateFollowUpPayload) {
+  return request<FollowUp>({ method: "POST", url: "/crm/follow-ups", data: payload });
+}
+
+export function listRenewals() {
+  return request<Renewal[]>({ method: "GET", url: "/crm/renewals" });
+}
+
+export function listReceivables() {
+  return request<Receivable[]>({ method: "GET", url: "/crm/receivables" });
+}
+
+export function registerReceivableInvoice(id: string, payload: { invoiceNo: string; invoiceDate: string }) {
+  return request<Receivable>({ method: "POST", url: `/crm/receivables/${id}/invoice`, data: payload });
+}
+
+export function recordReceivableReceipt(id: string, payload: { amount: number; receivedDate: string; referenceNo: string; recorderName: string }) {
+  return request<Receivable>({ method: "POST", url: `/crm/receivables/${id}/receipts`, data: payload });
+}
+
+export function listCustomerProfiles() {
+  return request<CustomerProfile[]>({ method: "GET", url: "/crm/profiles" });
+}

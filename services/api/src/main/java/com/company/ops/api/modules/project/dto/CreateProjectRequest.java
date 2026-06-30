@@ -1,21 +1,26 @@
 package com.company.ops.api.modules.project.dto;
 
-import com.company.ops.api.modules.project.domain.ProjectStage;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
+import com.company.ops.api.modules.project.domain.ProjectType;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 public record CreateProjectRequest(
-    UUID customerId,
-    @NotBlank String code,
-    @NotBlank String name,
-    ProjectStage stage,
-    @PositiveOrZero BigDecimal budgetAmount,
-    @PositiveOrZero BigDecimal actualCost,
-    @Min(0) @Max(100) Integer progress,
+    @NotNull UUID customerId,
+    @NotBlank @Size(max = 64) String code,
+    @NotBlank @Size(max = 180) String name,
+    @NotNull ProjectType projectType,
+    @NotBlank @Size(max = 80) String managerName,
+    @NotBlank @Size(max = 300) String siteAddress,
+    @NotNull @PositiveOrZero BigDecimal contractAmount,
+    @NotNull LocalDate plannedStartDate,
+    @NotNull LocalDate plannedEndDate,
+    @NotNull List<@Valid ProjectBudgetItemRequest> budgetItems,
     LocalDate warrantyEndDate
 ) {}

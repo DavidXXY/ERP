@@ -14,8 +14,8 @@
   <groupId>com.company.ops</groupId>
   <artifactId>ops-erp-api</artifactId>
   <version>0.1.0</version>
-  <name>ops-erp-api</name>
-  <description>Engineering operations ERP backend</description>
+  <name>enterprise-management-api</name>
+  <description>Enterprise management system backend</description>
 
   <properties>
     <java.version>17</java.version>
@@ -111,10 +111,14 @@
   </dependencies>
 
   <build>
+    <directory>${user.home}/.ops-erp-build/api</directory>
     <plugins>
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
+        <configuration>
+          <mainClass>com.company.ops.api.EngineeringOpsErpApplication</mainClass>
+        </configuration>
       </plugin>
     </plugins>
   </build>

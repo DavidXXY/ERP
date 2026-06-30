@@ -32,6 +32,15 @@ public class Receivable extends BaseEntity {
   @Column(name = "due_date", nullable = false)
   private LocalDate dueDate;
 
+  @Column(name = "invoice_no", length = 80)
+  private String invoiceNo;
+
+  @Column(name = "invoice_date")
+  private LocalDate invoiceDate;
+
+  @Column(name = "settled_amount", nullable = false, precision = 14, scale = 2)
+  private BigDecimal settledAmount = BigDecimal.ZERO;
+
   @Enumerated(EnumType.STRING)
   @Column(nullable = false, length = 32)
   private ReceivableStatus status = ReceivableStatus.INVOICE_PENDING;
@@ -91,5 +100,28 @@ public class Receivable extends BaseEntity {
   public void setStatus(ReceivableStatus status) {
     this.status = status;
   }
-}
 
+  public String getInvoiceNo() {
+    return invoiceNo;
+  }
+
+  public void setInvoiceNo(String invoiceNo) {
+    this.invoiceNo = invoiceNo;
+  }
+
+  public LocalDate getInvoiceDate() {
+    return invoiceDate;
+  }
+
+  public void setInvoiceDate(LocalDate invoiceDate) {
+    this.invoiceDate = invoiceDate;
+  }
+
+  public BigDecimal getSettledAmount() {
+    return settledAmount;
+  }
+
+  public void setSettledAmount(BigDecimal settledAmount) {
+    this.settledAmount = settledAmount;
+  }
+}

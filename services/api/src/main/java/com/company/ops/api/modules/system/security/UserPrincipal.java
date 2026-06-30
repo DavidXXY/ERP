@@ -19,6 +19,7 @@ public class UserPrincipal implements UserDetails {
   private final boolean enabled;
   private final List<String> roleCodes;
   private final List<String> permissions;
+  private final List<String> dataScopes;
   private final List<GrantedAuthority> authorities;
 
   public UserPrincipal(SystemUser user) {
@@ -34,6 +35,7 @@ public class UserPrincipal implements UserDetails {
         .distinct()
         .sorted()
         .toList();
+    this.dataScopes = user.getRoles().stream().map(SystemRole::getDataScope).distinct().sorted().toList();
     this.authorities = permissions.stream()
         .map(SimpleGrantedAuthority::new)
         .map(GrantedAuthority.class::cast)
@@ -54,6 +56,10 @@ public class UserPrincipal implements UserDetails {
 
   public List<String> permissions() {
     return permissions;
+  }
+
+  public List<String> dataScopes() {
+    return dataScopes;
   }
 
   @Override
@@ -91,4 +97,3 @@ public class UserPrincipal implements UserDetails {
     return enabled;
   }
 }
-

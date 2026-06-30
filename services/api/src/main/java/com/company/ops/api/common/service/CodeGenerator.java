@@ -2,6 +2,8 @@ package com.company.ops.api.common.service;
 
 import com.company.ops.api.modules.system.domain.CodeSequence;
 import com.company.ops.api.modules.system.repository.CodeSequenceRepository;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.Map;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -58,6 +60,7 @@ public class CodeGenerator {
     long number = seq.getNextNumber();
     seq.setNextNumber(number + 1);
     codeSequenceRepository.save(seq);
-    return prefix + "-" + String.format("%0" + DEFAULT_WIDTH + "d", number);
+    String datePart = LocalDate.now().format(DateTimeFormatter.ofPattern("yyMMdd"));
+    return prefix + "-" + datePart + "-" + String.format("%0" + DEFAULT_WIDTH + "d", number);
   }
 }

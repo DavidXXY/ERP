@@ -160,12 +160,6 @@ export const routes: RouteRecordRaw[] = [
         redirect: { path: "/hr", query: { tab: "certificates" } },
       },
       {
-        path: "qualification/performances",
-        name: "qualification-performances",
-        component: () => import("@/views/qualification/QualificationCenterView.vue"),
-        meta: { title: "项目业绩", permission: "qualification:performance:view" },
-      },
-      {
         path: "qualification/tender",
         name: "qualification-tender",
         component: () => import("@/views/qualification/QualificationCenterView.vue"),

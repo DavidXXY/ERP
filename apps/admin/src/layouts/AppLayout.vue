@@ -72,7 +72,6 @@
           <template #title>资质管理</template>
           <a-menu-item v-if="auth.can('qualification:view')" key="/qualification/dashboard">资质总览</a-menu-item>
           <a-menu-item v-if="auth.can('qualification:company:view')" key="/qualification/companies">公司资质</a-menu-item>
-          <a-menu-item v-if="auth.can('qualification:performance:view')" key="/qualification/performances">项目业绩</a-menu-item>
           <a-menu-item v-if="auth.can('qualification:tender:view')" key="/qualification/tender">投标查询</a-menu-item>
           <a-menu-item v-if="auth.can('qualification:warning:view')" key="/qualification/warnings">预警中心</a-menu-item>
         </a-sub-menu>
@@ -194,7 +193,7 @@ const canAccessFinance = computed(() => [
 ].some((permission) => auth.can(permission)));
 const canAccessMaintenance = computed(() => ["maintenance:view", "maintenance:equipment:view", "maintenance:plan:view", "maintenance:workorder:view"].some((permission) => auth.can(permission)));
 const canAccessHumanResources = computed(() => ["qualification:employee:view", "qualification:certificate:view", "workforce:view"].some((permission) => auth.can(permission)));
-const canAccessQualification = computed(() => ["qualification:view", "qualification:company:view", "qualification:performance:view", "qualification:tender:view", "qualification:warning:view"].some((permission) => auth.can(permission)));
+const canAccessQualification = computed(() => ["qualification:view", "qualification:company:view", "qualification:tender:view", "qualification:warning:view"].some((permission) => auth.can(permission)));
 const canAccessOffice = computed(() => ["office:view", "office:approval:view", "office:expense:view", "office:outsource:view", "office:document:view", "office:notification:view", "office:audit:view"].some((permission) => auth.can(permission)));
 
 function onOpenChange(keys: string[]) {

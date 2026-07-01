@@ -66,7 +66,7 @@ import org.springframework.util.StringUtils;
 @Service
 public class ProcurementService {
 
-  private final CodeGenerator codeGenerator;
+  private CodeGenerator codeGenerator;
   private final SupplierRepository supplierRepository;
   private final PurchaseRequestRepository requestRepository;
   private final PurchaseRequestApprovalRecordRepository requestApprovalRepository;

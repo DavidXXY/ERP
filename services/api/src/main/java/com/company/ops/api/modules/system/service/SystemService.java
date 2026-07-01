@@ -41,7 +41,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class SystemService {
 
-  private final CodeGenerator codeGenerator;
+  private CodeGenerator codeGenerator;
   private final SystemUserRepository userRepository;
   private final SystemRoleRepository roleRepository;
   private final SystemPermissionRepository permissionRepository;

@@ -27,7 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class CustomerService {
 
-  private final CodeGenerator codeGenerator;
+  private CodeGenerator codeGenerator;
   private final CustomerRepository customerRepository;
   private final OpportunityRepository opportunityRepository;
   private final ServiceContractRepository contractRepository;

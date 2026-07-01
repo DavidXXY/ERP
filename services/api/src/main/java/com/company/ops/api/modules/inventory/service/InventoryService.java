@@ -51,7 +51,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class InventoryService {
 
-  private final CodeGenerator codeGenerator;
+  private CodeGenerator codeGenerator;
   private final InventoryPartRepository partRepository;
   private final StockMovementRepository movementRepository;
   private final InventoryIssueOrderRepository issueRepository;

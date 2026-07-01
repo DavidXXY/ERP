@@ -42,7 +42,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ProjectService {
 
-  private final CodeGenerator codeGenerator;
+  private CodeGenerator codeGenerator;
   private final ProjectRepository projectRepository;
   private final ProjectBudgetItemRepository budgetRepository;
   private final ProjectCostEntryRepository costRepository;

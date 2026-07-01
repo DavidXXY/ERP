@@ -118,7 +118,6 @@
       <a-spin :spinning="detailLoading">
         <template v-if="detail">
           <a-descriptions bordered :column="2" size="small">
-            <a-descriptions-item label="项目编码">{{ detail.project.code }}</a-descriptions-item>
             <a-descriptions-item label="项目类型">{{ projectTypeLabel(detail.project.projectType) }}</a-descriptions-item>
             <a-descriptions-item label="客户">{{ detail.project.customerName }}</a-descriptions-item>
             <a-descriptions-item label="项目负责人">{{ detail.project.managerName }}</a-descriptions-item>
@@ -176,7 +175,6 @@
     <a-modal v-model:open="createOpen" title="新增项目立项" width="860px" :confirm-loading="saving" @ok="handleCreate">
       <a-form ref="createFormRef" :model="createForm" :rules="createRules" layout="vertical">
         <a-row :gutter="16">
-          <a-col :xs="24" :md="8"><a-form-item label="项目编码" name="code"><a-input v-model:value="createForm.code" placeholder="XM-2026-020" /></a-form-item></a-col>
           <a-col :xs="24" :md="16"><a-form-item label="项目名称" name="name"><a-input v-model:value="createForm.name" /></a-form-item></a-col>
           <a-col :xs="24" :md="12"><a-form-item label="关联客户" name="customerId"><a-select v-model:value="createForm.customerId" :options="customerOptions" show-search option-filter-prop="label" /></a-form-item></a-col>
           <a-col :xs="24" :md="6"><a-form-item label="项目类型" name="projectType"><a-select v-model:value="createForm.projectType" :options="projectTypeOptions" /></a-form-item></a-col>
@@ -343,7 +341,7 @@ const stageRecordColumns = [
   { title: "操作记录", key: "operator", width: 190 },
 ];
 const createRules = {
-  code: [{ required: true, message: "请输入项目编码" }], name: [{ required: true, message: "请输入项目名称" }],
+  code: [], name: [{ required: true, message: "请输入项目名称" }],
   customerId: [{ required: true, message: "请选择客户" }], projectType: [{ required: true, message: "请选择项目类型" }],
   managerName: [{ required: true, message: "请输入项目负责人" }], siteAddress: [{ required: true, message: "请输入现场地址" }],
   contractAmount: [{ required: true, message: "请输入合同金额" }], plannedStartDate: [{ required: true, message: "请选择计划开始日期" }],

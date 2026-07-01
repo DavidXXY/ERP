@@ -98,7 +98,6 @@
     <a-modal v-model:open="partOpen" title="新增物料" width="720px" :confirm-loading="saving" @ok="handleCreatePart">
       <a-form ref="partFormRef" :model="partForm" :rules="partRules" layout="vertical">
         <a-row :gutter="16">
-          <a-col :xs="24" :md="8"><a-form-item label="物料编码" name="code"><a-input v-model:value="partForm.code" placeholder="WL-DL-002" /></a-form-item></a-col>
           <a-col :xs="24" :md="16"><a-form-item label="物料名称" name="name"><a-input v-model:value="partForm.name" /></a-form-item></a-col>
           <a-col :xs="24" :md="12"><a-form-item label="规格型号"><a-input v-model:value="partForm.model" /></a-form-item></a-col>
           <a-col :xs="24" :md="12"><a-form-item label="库位"><a-input v-model:value="partForm.location" /></a-form-item></a-col>
@@ -123,7 +122,6 @@
     <a-modal v-model:open="issueOpen" title="新增项目领料单" width="880px" :confirm-loading="saving" @ok="handleCreateIssue">
       <a-form ref="issueFormRef" :model="issueForm" :rules="issueRules" layout="vertical">
         <a-row :gutter="16">
-          <a-col :xs="24" :md="8"><a-form-item label="领料单号" name="code"><a-input v-model:value="issueForm.code" placeholder="LL-2026-001" /></a-form-item></a-col>
           <a-col :xs="24" :md="10"><a-form-item label="关联项目" name="projectId"><a-select v-model:value="issueForm.projectId" :options="projectOptions" show-search option-filter-prop="label" /></a-form-item></a-col>
           <a-col :xs="24" :md="6"><a-form-item label="领料日期" name="issueDate"><a-input v-model:value="issueForm.issueDate" type="date" /></a-form-item></a-col>
           <a-col :xs="24" :md="8"><a-form-item label="领用人" name="receiverName"><a-input v-model:value="issueForm.receiverName" /></a-form-item></a-col>
@@ -146,7 +144,6 @@
       <a-alert v-if="activeIssue" class="section-alert" type="info" :message="`${activeIssue.code} · ${activeIssue.projectName} · 可退 ${returnableLines(activeIssue).length} 项`" />
       <a-form ref="returnFormRef" :model="returnForm" :rules="returnRules" layout="vertical">
         <a-row :gutter="16">
-          <a-col :xs="24" :md="8"><a-form-item label="退料单号" name="code"><a-input v-model:value="returnForm.code" placeholder="TL-2026-001" /></a-form-item></a-col>
           <a-col :xs="24" :md="8"><a-form-item label="退料日期" name="returnDate"><a-input v-model:value="returnForm.returnDate" type="date" /></a-form-item></a-col>
           <a-col :xs="24" :md="8"><a-form-item label="经办人" name="handlerName"><a-input v-model:value="returnForm.handlerName" /></a-form-item></a-col>
         </a-row>
@@ -255,13 +252,13 @@ const returnLineColumns = [
 const manualMovementOptions = [
   { label: "其他入库", value: "INBOUND" }, { label: "报废出库", value: "SCRAP" }, { label: "盘盈调整", value: "ADJUSTMENT" },
 ];
-const partRules = { code: [{ required: true, message: "请输入物料编码" }], name: [{ required: true, message: "请输入物料名称" }] };
+const partRules = { code: [], name: [{ required: true, message: "请输入物料名称" }] };
 const movementRules = { movementType: [{ required: true }], quantity: [{ required: true, message: "请输入数量" }] };
 const issueRules = {
-  code: [{ required: true, message: "请输入领料单号" }], projectId: [{ required: true, message: "请选择项目" }],
+  code: [], projectId: [{ required: true, message: "请选择项目" }],
   issueDate: [{ required: true }], receiverName: [{ required: true, message: "请输入领用人" }], purpose: [{ required: true, message: "请输入领料用途" }],
 };
-const returnRules = { code: [{ required: true, message: "请输入退料单号" }], returnDate: [{ required: true }], handlerName: [{ required: true, message: "请输入经办人" }] };
+const returnRules = { code: [], returnDate: [{ required: true }], handlerName: [{ required: true, message: "请输入经办人" }] };
 
 const inventoryValue = computed(() => parts.value.reduce((sum, item) => sum + Number(item.stockQty) * Number(item.unitCost), 0));
 const lowStockCount = computed(() => parts.value.filter((item) => item.lowStock).length);

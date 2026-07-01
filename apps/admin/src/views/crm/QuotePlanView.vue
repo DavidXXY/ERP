@@ -119,7 +119,6 @@
       <a-form ref="formRef" :model="form" :rules="rules" layout="vertical">
         <a-row :gutter="16">
           <a-col :xs="24" :md="8">
-            <a-form-item label="报价编号" name="code"><a-input v-model:value="form.code" :disabled="Boolean(editingQuote)" /></a-form-item>
           </a-col>
           <a-col :xs="24" :md="16">
             <a-form-item label="关联商机" name="opportunityId">
@@ -301,7 +300,7 @@ const customerResultForm = reactive(initialCustomerResultForm());
 const conversionForm = reactive(initialConversionForm());
 
 const rules = {
-  code: [{ required: true, message: "请输入报价编号" }],
+  code: [],
   opportunityId: [{ required: true, message: "请选择关联商机" }],
   serviceScope: [{ required: true, message: "请输入服务范围" }],
   amount: [{ required: true, message: "请输入报价金额" }],

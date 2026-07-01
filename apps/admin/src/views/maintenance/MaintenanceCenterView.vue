@@ -84,7 +84,6 @@
         <a-row :gutter="16">
           <a-col :xs="24" :md="12"><a-form-item label="客户" name="customerId"><a-select v-model:value="equipmentForm.customerId" show-search option-filter-prop="label" :options="customerOptions" @change="equipmentForm.contractId = undefined" /></a-form-item></a-col>
           <a-col :xs="24" :md="12"><a-form-item label="服务合同"><a-select v-model:value="equipmentForm.contractId" allow-clear :options="equipmentContractOptions" /></a-form-item></a-col>
-          <a-col :xs="24" :md="8"><a-form-item label="设备编号" name="code"><a-input v-model:value="equipmentForm.code" /></a-form-item></a-col>
           <a-col :xs="24" :md="8"><a-form-item label="设备名称" name="name"><a-input v-model:value="equipmentForm.name" /></a-form-item></a-col>
           <a-col :xs="24" :md="8"><a-form-item label="设备类别" name="category"><a-input v-model:value="equipmentForm.category" placeholder="配电柜、泵组等" /></a-form-item></a-col>
           <a-col :xs="24" :md="8"><a-form-item label="型号"><a-input v-model:value="equipmentForm.model" /></a-form-item></a-col>
@@ -105,7 +104,6 @@
       <a-form ref="planFormRef" :model="planForm" :rules="planRules" layout="vertical">
         <a-form-item label="设备" name="assetId"><a-select v-model:value="planForm.assetId" show-search option-filter-prop="label" :options="assetOptions" @change="fillPlanFromAsset" /></a-form-item>
         <a-row :gutter="16">
-          <a-col :span="12"><a-form-item label="计划编号" name="code"><a-input v-model:value="planForm.code" /></a-form-item></a-col>
           <a-col :span="12"><a-form-item label="计划名称" name="planName"><a-input v-model:value="planForm.planName" /></a-form-item></a-col>
           <a-col :span="12"><a-form-item label="周期（天）" name="cycleDays"><a-input-number v-model:value="planForm.cycleDays" :min="1" class="full-input" /></a-form-item></a-col>
           <a-col :span="12"><a-form-item label="下次执行" name="nextDueDate"><a-input v-model:value="planForm.nextDueDate" type="date" /></a-form-item></a-col>
@@ -116,7 +114,6 @@
     <a-modal v-model:open="orderOpen" title="新建服务工单" width="860px" :confirm-loading="saving" @ok="handleCreateOrder">
       <a-form ref="orderFormRef" :model="orderForm" :rules="orderRules" layout="vertical">
         <a-row :gutter="16">
-          <a-col :xs="24" :md="8"><a-form-item label="工单编号" name="code"><a-input v-model:value="orderForm.code" /></a-form-item></a-col>
           <a-col :xs="24" :md="8"><a-form-item label="来源" name="source"><a-select v-model:value="orderForm.source" :options="sourceOptions" /></a-form-item></a-col>
           <a-col :xs="24" :md="8"><a-form-item label="工单类型" name="workType"><a-select v-model:value="orderForm.workType" :options="typeOptions" /></a-form-item></a-col>
           <a-col :xs="24" :md="8"><a-form-item label="优先级" name="priority"><a-select v-model:value="orderForm.priority" :options="priorityOptions" /></a-form-item></a-col>
@@ -253,9 +250,9 @@ const orderColumns = [{ title: "工单", key: "order", width: 230 }, { title: "�
 const equipmentColumns = [{ title: "设备", key: "equipment", width: 250 }, { title: "客户 / 合同", key: "customer", width: 230 }, { title: "安装地址", key: "site", width: 300 }, { title: "下次服务", key: "maintenance", width: 170 }, { title: "证书要求", dataIndex: "requiredCertificate", width: 150 }, { title: "服务历史", key: "history", width: 110 }, { title: "状态", key: "status", width: 120 }];
 const planColumns = [{ title: "计划", key: "plan", width: 260 }, { title: "设备", key: "asset", width: 250 }, { title: "合同", dataIndex: "contractCode", width: 180 }, { title: "周期", key: "cycle", width: 120 }, { title: "下次执行", key: "due", width: 190 }, { title: "上次生成", dataIndex: "lastGeneratedDate", width: 130 }, { title: "状态", key: "status", width: 100 }];
 const materialColumns = [{ title: "物料", dataIndex: "partName" }, { title: "数量", dataIndex: "quantity", width: 100 }, { title: "单价", dataIndex: "unitCost", width: 120 }, { title: "金额", dataIndex: "amount", width: 120 }];
-const equipmentRules = { customerId: [{ required: true, message: "请选择客户" }], code: [{ required: true }], name: [{ required: true }], category: [{ required: true }], siteAddress: [{ required: true }], maintenanceCycleDays: [{ required: true }], nextMaintenanceDate: [{ required: true }] };
-const planRules = { assetId: [{ required: true, message: "请选择设备" }], code: [{ required: true }], planName: [{ required: true }], cycleDays: [{ required: true }], nextDueDate: [{ required: true }] };
-const orderRules = { code: [{ required: true }], source: [{ required: true }], workType: [{ required: true }], priority: [{ required: true }], title: [{ required: true }], customerId: [{ required: true }], plannedDate: [{ required: true }], siteAddress: [{ required: true }], problemDescription: [{ required: true }] };
+const equipmentRules = { customerId: [{ required: true, message: "请选择客户" }], code: [], name: [{ required: true }], category: [{ required: true }], siteAddress: [{ required: true }], maintenanceCycleDays: [{ required: true }], nextMaintenanceDate: [{ required: true }] };
+const planRules = { assetId: [{ required: true, message: "请选择设备" }], code: [], planName: [{ required: true }], cycleDays: [{ required: true }], nextDueDate: [{ required: true }] };
+const orderRules = { code: [], source: [{ required: true }], workType: [{ required: true }], priority: [{ required: true }], title: [{ required: true }], customerId: [{ required: true }], plannedDate: [{ required: true }], siteAddress: [{ required: true }], problemDescription: [{ required: true }] };
 const assignRules = { assigneeId: [{ required: true, message: "请选择工程师" }] }; const checkInRules = { location: [{ required: true, message: "请输入签到位置" }] }; const completeRules = { serviceResult: [{ required: true, message: "请填写处理结果" }] }; const acceptRules = { customerSigner: [{ required: true }], acceptanceNote: [{ required: true }] };
 
 onMounted(loadAll);

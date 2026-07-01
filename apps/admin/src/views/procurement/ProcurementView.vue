@@ -266,7 +266,6 @@
     <a-modal v-model:open="supplierOpen" title="新增供应商" width="720px" :confirm-loading="savingSupplier" @ok="handleCreateSupplier">
       <a-form ref="supplierFormRef" :model="supplierForm" :rules="supplierRules" layout="vertical">
         <a-row :gutter="16">
-          <a-col :xs="24" :md="8"><a-form-item label="供应商编码" name="code"><a-input v-model:value="supplierForm.code" placeholder="GYS-003" /></a-form-item></a-col>
           <a-col :xs="24" :md="16"><a-form-item label="供应商名称" name="name"><a-input v-model:value="supplierForm.name" /></a-form-item></a-col>
           <a-col :xs="24" :md="12"><a-form-item label="品类"><a-input v-model:value="supplierForm.category" /></a-form-item></a-col>
           <a-col :xs="24" :md="12"><a-form-item label="账期"><a-input v-model:value="supplierForm.settlementTerms" placeholder="例如：月结30天" /></a-form-item></a-col>
@@ -280,7 +279,6 @@
     <a-modal v-model:open="requestOpen" title="新增采购申请" width="760px" :confirm-loading="savingRequest" @ok="handleCreateRequest">
       <a-form ref="requestFormRef" :model="requestForm" :rules="requestRules" layout="vertical">
         <a-row :gutter="16">
-          <a-col :xs="24" :md="8"><a-form-item label="申请编码" name="code"><a-input v-model:value="requestForm.code" placeholder="CGSQ-202606-003" /></a-form-item></a-col>
           <a-col :xs="24" :md="8"><a-form-item label="申请人" name="requesterName"><a-input v-model:value="requestForm.requesterName" /></a-form-item></a-col>
           <a-col :xs="24" :md="8"><a-form-item label="期望到货"><a-input v-model:value="requestForm.expectedDate" type="date" /></a-form-item></a-col>
           <a-col :xs="24" :md="12"><a-form-item label="关联物料" name="partId"><a-select v-model:value="requestForm.partId" :options="partOptions" show-search option-filter-prop="label" placeholder="选择物料" @change="syncRequestPart" /></a-form-item></a-col>
@@ -308,7 +306,6 @@
     <a-modal v-model:open="orderOpen" title="根据审批申请创建采购订单" width="760px" :confirm-loading="savingOrder" @ok="handleCreateOrder">
       <a-form ref="orderFormRef" :model="orderForm" :rules="orderRules" layout="vertical">
         <a-row :gutter="16">
-          <a-col :xs="24" :md="8"><a-form-item label="订单编码" name="code"><a-input v-model:value="orderForm.code" placeholder="CGDD-202606-002" /></a-form-item></a-col>
           <a-col :xs="24" :md="16"><a-form-item label="关联采购申请" name="requestId"><a-select v-model:value="orderForm.requestId" :options="requestOptions" show-search option-filter-prop="label" placeholder="仅显示已审批且未下单的申请" @change="syncOrderRequest" /></a-form-item></a-col>
           <a-col :xs="24" :md="16"><a-form-item label="供应商" name="supplierId"><a-select v-model:value="orderForm.supplierId" :options="supplierOptions" show-search option-filter-prop="label" placeholder="停用供应商不会显示" /></a-form-item></a-col>
           <a-col :xs="24" :md="8"><a-form-item label="预计到货"><a-input v-model:value="orderForm.expectedDeliveryDate" type="date" /></a-form-item></a-col>
@@ -482,7 +479,7 @@ const costFilterOptions = [
 ];
 const supplierRules = { code: [{ required: true, message: "请输入供应商编码" }], name: [{ required: true, message: "请输入供应商名称" }] };
 const requestRules = {
-  code: [{ required: true, message: "请输入采购申请编码" }],
+  
   requesterName: [{ required: true, message: "请输入申请人" }],
   partId: [{ required: true, message: "请选择关联物料" }],
   quantity: [{ required: true, message: "请输入数量" }],
@@ -494,7 +491,7 @@ const approvalRules = {
   comment: [{ required: true, message: "请输入审批意见" }],
 };
 const orderRules = {
-  code: [{ required: true, message: "请输入采购订单编码" }],
+  
   requestId: [{ required: true, message: "请选择已审批采购申请" }],
   supplierId: [{ required: true, message: "请选择供应商" }],
   unitPrice: [{ required: true, message: "请输入含税单价" }],

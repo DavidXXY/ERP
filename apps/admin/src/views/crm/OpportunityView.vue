@@ -69,7 +69,6 @@
     <a-modal v-model:open="createOpen" title="新增商机" width="760px" :confirm-loading="saving" @ok="handleCreate">
       <a-form ref="createFormRef" :model="createForm" :rules="createRules" layout="vertical">
         <a-row :gutter="16">
-          <a-col :xs="24" :md="8"><a-form-item label="商机编号" name="code"><a-input v-model:value="createForm.code" /></a-form-item></a-col>
           <a-col :xs="24" :md="16"><a-form-item label="客户" name="customerId"><a-select v-model:value="createForm.customerId" show-search option-filter-prop="label" :options="customerOptions" /></a-form-item></a-col>
           <a-col :xs="24" :md="8"><a-form-item label="来源"><a-input v-model:value="createForm.source" /></a-form-item></a-col>
           <a-col :xs="24" :md="8"><a-form-item label="负责人" name="ownerName"><a-input v-model:value="createForm.ownerName" /></a-form-item></a-col>
@@ -145,7 +144,7 @@ const columns = [
 const createForm = reactive(initialCreateForm());
 const advanceForm = reactive({ stage: "QUALIFIED" as OpportunityStage, probability: 30, nextAction: "", nextActionAt: "" });
 const createRules = {
-  code: [{ required: true, message: "请输入商机编号" }],
+  code: [],
   customerId: [{ required: true, message: "请选择客户" }],
   needSummary: [{ required: true, message: "请输入客户需求" }],
   ownerName: [{ required: true, message: "请输入负责人" }],

@@ -28,7 +28,6 @@
       <a-alert v-if="selectedItem" class="section-alert" type="info" :message="`${selectedItem.code} · ${selectedItem.supplierName} · 可申请 ${formatMoney(selectedItem.availableAmount)}`" />
       <a-form ref="formRef" :model="form" :rules="rules" layout="vertical">
         <a-row :gutter="16">
-          <a-col :xs="24" :md="8"><a-form-item label="申请单号" name="code"><a-input v-model:value="form.code" placeholder="FKSQ-2026-001" /></a-form-item></a-col>
           <a-col :xs="24" :md="8"><a-form-item label="申请金额" name="requestedAmount"><a-input-number v-model:value="form.requestedAmount" :min="0.01" :max="selectedItem?.availableAmount" :precision="2" class="full-input" /></a-form-item></a-col>
           <a-col :xs="24" :md="8"><a-form-item label="申请日期" name="requestedDate"><a-input v-model:value="form.requestedDate" type="date" /></a-form-item></a-col>
           <a-col :xs="24" :md="8"><a-form-item label="申请人" name="applicantName"><a-input v-model:value="form.applicantName" /></a-form-item></a-col>
@@ -66,7 +65,7 @@ const columns = [
   { title: "到期日", dataIndex: "dueDate", width: 120 }, { title: "状态", key: "status", width: 160 },
   { title: "操作", key: "action", width: 130, fixed: "right" },
 ];
-const rules = { code: [{ required: true, message: "请输入申请单号" }], requestedAmount: [{ required: true, message: "请输入申请金额" }], requestedDate: [{ required: true }], applicantName: [{ required: true, message: "请输入申请人" }], purpose: [{ required: true, message: "请输入付款用途" }] };
+const rules = { code: [], requestedAmount: [{ required: true, message: "请输入申请金额" }], requestedDate: [{ required: true }], applicantName: [{ required: true, message: "请输入申请人" }], purpose: [{ required: true, message: "请输入付款用途" }] };
 const filteredItems = computed(() => items.value.filter((item) => {
   const term = keyword.value.trim().toLowerCase();
   const text = `${item.code} ${item.orderCode} ${item.supplierName}`.toLowerCase();

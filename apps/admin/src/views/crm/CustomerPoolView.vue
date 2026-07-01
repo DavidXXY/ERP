@@ -195,7 +195,6 @@
         <a-tabs v-model:active-key="formTab" class="customer-form-tabs">
           <a-tab-pane key="base" tab="基本资料">
             <a-row :gutter="16">
-              <a-col :xs="24" :md="8"><a-form-item label="客户编码" name="code"><a-input v-model:value="formState.code" :disabled="Boolean(editingCustomerId)" placeholder="例如 KH-2026-001" /></a-form-item></a-col>
               <a-col :xs="24" :md="16"><a-form-item label="客户名称" name="name"><a-input v-model:value="formState.name" /></a-form-item></a-col>
               <a-col :xs="24" :md="8"><a-form-item label="行业" name="industry"><a-input v-model:value="formState.industry" /></a-form-item></a-col>
               <a-col :xs="24" :md="8"><a-form-item label="客户等级" name="level"><a-select v-model:value="formState.level" :options="levelOptions" /></a-form-item></a-col>
@@ -324,7 +323,7 @@ const formState = reactive<CustomerFormState>(initialForm());
 
 const levelOptions = [{ label: "战略客户", value: "STRATEGIC" }, { label: "重点客户", value: "KEY" }, { label: "普通客户", value: "NORMAL" }];
 const riskOptions = [{ label: "正常", value: "NORMAL" }, { label: "逾期", value: "OVERDUE" }, { label: "续约风险", value: "RENEWAL_RISK" }];
-const rules = { code: [{ required: true, message: "请输入客户编码" }], name: [{ required: true, message: "请输入客户名称" }], industry: [{ required: true, message: "请输入行业" }], ownerName: [{ required: true, message: "请输入负责人" }] };
+const rules = { code: [], name: [{ required: true, message: "请输入客户名称" }], industry: [{ required: true, message: "请输入行业" }], ownerName: [{ required: true, message: "请输入负责人" }] };
 const columns = [{ title: "客户", key: "name", width: 210 }, { title: "等级 / 行业", key: "level", width: 120 }, { title: "主要联系人", key: "contact", width: 180 }, { title: "项目地址", key: "site", width: 90 }, { title: "付款习惯", key: "payment", width: 160 }, { title: "风险", key: "risk", width: 90 }, { title: "操作", key: "action", width: 80, fixed: "right" }];
 const opportunityColumns = [{ title: "商机", key: "opportunity", width: 150 }, { title: "需求", dataIndex: "needSummary", width: 280 }, { title: "阶段", key: "stage", width: 130 }, { title: "预计金额", key: "amount", width: 130 }, { title: "下一步动作", key: "nextAction", width: 220 }, { title: "负责人", dataIndex: "ownerName", width: 110 }];
 const contractColumns = [{ title: "合同", key: "contract", width: 260 }, { title: "期限", key: "period", width: 220 }, { title: "服务周期", dataIndex: "serviceCycle", width: 150 }, { title: "金额", key: "amount", width: 130 }, { title: "状态", key: "status", width: 100 }];

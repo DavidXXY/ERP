@@ -1,9 +1,10 @@
 package com.company.ops.api.modules.project.service;
 
 import com.company.ops.api.common.exception.BusinessException;
-import com.company.ops.api.common.service.CodeGenerator;
 import com.company.ops.api.modules.crm.domain.Customer;
+import com.company.ops.api.modules.crm.domain.ServiceContract;
 import com.company.ops.api.modules.crm.repository.CustomerRepository;
+import com.company.ops.api.modules.crm.repository.ServiceContractRepository;
 import com.company.ops.api.modules.project.domain.Project;
 import com.company.ops.api.modules.project.domain.ProjectApprovalStatus;
 import com.company.ops.api.modules.project.domain.ProjectBudgetItem;
@@ -42,15 +43,16 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ProjectService {
 
-  private CodeGenerator codeGenerator;
   private final ProjectRepository projectRepository;
   private final ProjectBudgetItemRepository budgetRepository;
   private final ProjectCostEntryRepository costRepository;
   private final ProjectStageRecordRepository stageRecordRepository;
   private final CustomerRepository customerRepository;
   private final DataScopeService dataScopeService;
+  private final ServiceContractRepository contractRepository;
 
   public ProjectService(
+      ServiceContractRepository contractRepository,
       ProjectRepository projectRepository,
       ProjectBudgetItemRepository budgetRepository,
       ProjectCostEntryRepository costRepository,
@@ -58,13 +60,13 @@ public class ProjectService {
       CustomerRepository customerRepository,
       DataScopeService dataScopeService
   ) {
-    this.codeGenerator = codeGenerator;
     this.projectRepository = projectRepository;
     this.budgetRepository = budgetRepository;
     this.costRepository = costRepository;
     this.stageRecordRepository = stageRecordRepository;
     this.customerRepository = customerRepository;
     this.dataScopeService = dataScopeService;
+    this.contractRepository = contractRepository;
   }
 
   @Transactional(readOnly = true)
@@ -73,7 +75,7 @@ public class ProjectService {
     projects = projects.stream().filter(project -> dataScopeService.canViewOwner(project.getManagerName())).toList();
     Map<UUID, String> customerNames = loadCustomerNames(projects);
     return projects.stream()
-        .map(project -> toResponse(project, customerNames.get(project.getCustomerId())))
+        .map(project -> toResponse(project, customerNames.get(project.getCustomerId()), null))
         .toList();
   }
 
@@ -86,8 +88,7 @@ public class ProjectService {
 
   @Transactional
   public ProjectDetailResponse createProject(CreateProjectRequest request) {
-    String projectCode = request.code() != null ? request.code() : codeGenerator.generate("PROJECT");
-    if (projectRepository.existsByCode(projectCode)) {
+    if (projectRepository.existsByCode(request.code())) {
       throw new BusinessException("项目编码已存在");
     }
     Customer customer = customerRepository.findById(request.customerId())
@@ -102,7 +103,7 @@ public class ProjectService {
         .reduce(BigDecimal.ZERO, BigDecimal::add);
     Project project = new Project();
     project.setCustomerId(request.customerId());
-    project.setCode(projectCode);
+    project.setCode(request.code());
     project.setName(request.name());
     project.setProjectType(request.projectType());
     project.setManagerName(request.managerName());
@@ -127,7 +128,7 @@ public class ProjectService {
       return entity;
     }).toList();
     budgetRepository.saveAll(items);
-    return toDetail(saved, customer.getName());
+    return toDetail(saved);
   }
 
   @Transactional
@@ -160,8 +161,7 @@ public class ProjectService {
     if (request.progress() < project.getProgress()) {
       throw new BusinessException("项目进度不能回退");
     }
-    if (request.targetStage() == ProjectStage.WARRANTY && project.getWarrantyEndDate(),
-        null, null, null, null == null) {
+    if (request.targetStage() == ProjectStage.WARRANTY && project.getWarrantyEndDate() == null) {
       throw new BusinessException("进入质保阶段前必须填写质保截止日期");
     }
     if (request.targetStage() == ProjectStage.CLOSED && request.progress() != 100) {
@@ -212,10 +212,11 @@ public class ProjectService {
     String customerName = customerRepository.findById(project.getCustomerId())
         .map(Customer::getName)
         .orElse(null);
-    return toDetail(project, customerName);
+    ServiceContract contract = project.getContractId() == null ? null : contractRepository.findById(project.getContractId()).orElse(null);
+    return toDetail(project, customerName, contract);
   }
 
-  private ProjectDetailResponse toDetail(Project project, String customerName) {
+  private ProjectDetailResponse toDetail(Project project, String customerName, ServiceContract contract) {
     List<ProjectBudgetItem> budgetItems = budgetRepository.findByProjectIdOrderByCategoryAsc(project.getId());
     List<ProjectCostEntry> costEntries = costRepository.findByProjectIdOrderByIncurredDateDescCreatedAtDesc(project.getId());
     Map<ProjectCostCategory, BigDecimal> actualByCategory = new EnumMap<>(ProjectCostCategory.class);
@@ -255,16 +256,20 @@ public class ProjectService {
             item.getChangedAt()
         ))
         .toList();
-    return new ProjectDetailResponse(toResponse(project, customerName), budgets, costs, stages);
+    return new ProjectDetailResponse(toResponse(project, customerName, contract), budgets, costs, stages);
   }
 
-  private ProjectResponse toResponse(Project project, String customerName) {
+  private ProjectResponse toResponse(Project project, String customerName, ServiceContract contract) {
     BigDecimal actualCost = amount(project.getActualCost());
     BigDecimal budgetAmount = amount(project.getBudgetAmount());
     return new ProjectResponse(
         project.getId(),
         project.getCustomerId(),
         customerName,
+        project.getContractId(),
+        contract == null ? null : contract.getCode(),
+        contract == null ? null : contract.getProjectName(),
+        contract == null ? null : contract.getStatus(),
         project.getCode(),
         project.getName(),
         project.getProjectType(),
@@ -283,8 +288,7 @@ public class ProjectService {
         amount(project.getContractAmount()).subtract(actualCost),
         budgetAmount.subtract(actualCost),
         project.getProgress(),
-        project.getWarrantyEndDate(),
-        null, null, null, null
+        project.getWarrantyEndDate()
     );
   }
 

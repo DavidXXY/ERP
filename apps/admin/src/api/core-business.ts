@@ -16,6 +16,7 @@ export type ProjectApprovalStatus = "PENDING" | "APPROVED" | "REJECTED";
 export type ProjectCostCategory = "LABOR" | "MATERIAL" | "SUBCONTRACT" | "TRAVEL" | "OTHER";
 export type ProjectCostSource = "MANUAL" | "INVENTORY" | "PROCUREMENT" | "EXPENSE" | "SUBCONTRACT";
 
+export type ContractSummary = { id: string; code: string; projectName: string; amount: number; startDate: string; endDate: string; status: string; };
 export type Project = {
   id: string;
   customerId?: string;
@@ -25,6 +26,10 @@ export type Project = {
   projectType: ProjectType;
   managerName: string;
   siteAddress: string;
+  contractId?: string;
+  contractCode?: string;
+  contractProjectName?: string;
+  contractStatus?: string;
   contractAmount: number;
   plannedStartDate?: string;
   plannedEndDate?: string;

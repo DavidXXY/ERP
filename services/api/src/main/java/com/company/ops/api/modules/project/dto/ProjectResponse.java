@@ -7,11 +7,17 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.UUID;
+import jakarta.annotation.Nullable;
+import com.company.ops.api.modules.crm.domain.ContractStatus;
 
 public record ProjectResponse(
     UUID id,
     UUID customerId,
     String customerName,
+    @Nullable UUID contractId,
+    @Nullable String contractCode,
+    @Nullable String contractProjectName,
+    @Nullable ContractStatus contractStatus,
     String code,
     String name,
     ProjectType projectType,

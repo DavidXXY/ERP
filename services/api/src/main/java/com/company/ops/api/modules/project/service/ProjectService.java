@@ -160,7 +160,8 @@ public class ProjectService {
     if (request.progress() < project.getProgress()) {
       throw new BusinessException("项目进度不能回退");
     }
-    if (request.targetStage() == ProjectStage.WARRANTY && project.getWarrantyEndDate() == null) {
+    if (request.targetStage() == ProjectStage.WARRANTY && project.getWarrantyEndDate(),
+        null, null, null, null == null) {
       throw new BusinessException("进入质保阶段前必须填写质保截止日期");
     }
     if (request.targetStage() == ProjectStage.CLOSED && request.progress() != 100) {
@@ -282,7 +283,8 @@ public class ProjectService {
         amount(project.getContractAmount()).subtract(actualCost),
         budgetAmount.subtract(actualCost),
         project.getProgress(),
-        project.getWarrantyEndDate()
+        project.getWarrantyEndDate(),
+        null, null, null, null
     );
   }
 

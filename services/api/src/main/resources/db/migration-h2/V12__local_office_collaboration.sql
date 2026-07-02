@@ -89,7 +89,8 @@ merge into sys_permissions (id, tenant_id, code, name, module, created_at, updat
 ('00000000-0000-4000-8000-000000002910','default','office:document:view','电子档案查看','office',current_timestamp,current_timestamp),
 ('00000000-0000-4000-8000-000000002911','default','office:document:upload','电子档案上传','office',current_timestamp,current_timestamp),
 ('00000000-0000-4000-8000-000000002912','default','office:notification:view','消息中心查看','office',current_timestamp,current_timestamp),
-('00000000-0000-4000-8000-000000002913','default','office:audit:view','操作审计查看','office',current_timestamp,current_timestamp);
+('00000000-0000-4000-8000-000000002913','default','office:audit:view','操作审计查看','office',current_timestamp,current_timestamp),
+('00000000-0000-4000-8000-000000002914','default','office:document:delete','电子档案删除','office',current_timestamp,current_timestamp);
 
 insert into sys_role_permissions (role_id, permission_id)
 select role.id, permission.id from sys_roles role join sys_permissions permission on permission.tenant_id=role.tenant_id

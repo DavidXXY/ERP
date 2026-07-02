@@ -193,6 +193,12 @@ export type ProcessQuoteCustomerResultPayload = {
   operatorName: string;
 };
 
+export type ReceivableItem = {
+  receivableCode?: string;
+  amount: number;
+  dueDate: string;
+};
+
 export type ConvertQuotePayload = {
   contractCode?: string;
   projectName?: string;
@@ -200,9 +206,7 @@ export type ConvertQuotePayload = {
   startDate?: string;
   endDate?: string;
   serviceCycle?: string;
-  receivableCode?: string;
-  firstReceivableAmount?: number;
-  firstReceivableDueDate?: string;
+  receivables: ReceivableItem[];
 };
 
 export type QuoteRevision = {
@@ -279,7 +283,7 @@ export type Receivable = {
 export type QuoteConversionResult = {
   quote: QuotePlan;
   contract?: ServiceContract;
-  receivable?: Receivable;
+  receivables: Receivable[];
 };
 
 export type Renewal = {
@@ -376,10 +380,22 @@ export function updateCustomer(id: string, payload: UpdateCustomerPayload) {
   });
 }
 
+export function deleteCustomer(id: string) {
+  return request<void>({ method: "DELETE", url: "/crm/customers/" + id });
+}
+
 export function listOpportunities() {
   return request<Opportunity[]>({ method: "GET", url: "/crm/opportunities" });
 }
 
+
+export function getOpportunity(id: string) {
+  return request<Opportunity>({ method: "GET", url: "/crm/opportunities/" + id });
+}
+
+export function updateOpportunity(id: string, payload: CreateOpportunityPayload) {
+  return request<Opportunity>({ method: "PUT", url: "/crm/opportunities/" + id, data: payload });
+}
 export function createOpportunity(payload: CreateOpportunityPayload) {
   return request<Opportunity>({ method: "POST", url: "/crm/opportunities", data: payload });
 }
@@ -424,6 +440,10 @@ export function listContracts() {
   return request<ServiceContract[]>({ method: "GET", url: "/crm/contracts" });
 }
 
+export function getContract(id: string) {
+  return request<ServiceContract>({ method: "GET", url: "/crm/contracts/" + id });
+}
+
 export function listFollowUps() {
   return request<FollowUp[]>({ method: "GET", url: "/crm/follow-ups" });
 }
@@ -440,6 +460,26 @@ export function listReceivables() {
   return request<Receivable[]>({ method: "GET", url: "/crm/receivables" });
 }
 
+export function getQuote(id: string) {
+  return request<QuotePlan>({ method: "GET", url: "/crm/quotes/" + id });
+}
+
+export function deleteOpportunity(id: string) {
+  return request<void>({ method: "DELETE", url: "/crm/opportunities/" + id });
+}
+
+export function deleteQuote(id: string) {
+  return request<void>({ method: "DELETE", url: "/crm/quotes/" + id });
+}
+
+export function deleteContract(id: string) {
+  return request<void>({ method: "DELETE", url: "/crm/contracts/" + id });
+}
+
+export function deleteFollowUp(id: string) {
+  return request<void>({ method: "DELETE", url: "/crm/follow-ups/" + id });
+}
+
 export function registerReceivableInvoice(id: string, payload: { invoiceNo: string; invoiceDate: string }) {
   return request<Receivable>({ method: "POST", url: `/crm/receivables/${id}/invoice`, data: payload });
 }
@@ -450,4 +490,38 @@ export function recordReceivableReceipt(id: string, payload: { amount: number; r
 
 export function listCustomerProfiles() {
   return request<CustomerProfile[]>({ method: "GET", url: "/crm/profiles" });
+}
+
+// ============ CrmAttachment ============
+export type CrmAttachment = {
+  id: string;
+  entityType: string;
+  entityId: string;
+  attachmentType?: string;
+  fileName: string;
+  fileSize: number;
+  mimeType?: string;
+  uploadedAt: string;
+  uploadedBy: string;
+};
+
+export function listAttachments(entityType: string, entityId: string) {
+  return request<CrmAttachment[]>({ method: "GET", url: "/crm/attachments", params: { entityType, entityId } });
+}
+
+export function uploadAttachment(entityType: string, entityId: string, attachmentType: string | undefined, file: File) {
+  const formData = new FormData();
+  formData.append("entityType", entityType);
+  formData.append("entityId", entityId);
+  if (attachmentType) formData.append("attachmentType", attachmentType);
+  formData.append("file", file);
+  return request<CrmAttachment>({ method: "POST", url: "/crm/attachments/upload", data: formData, headers: { "Content-Type": "multipart/form-data" } });
+}
+
+export function deleteAttachment(id: string) {
+  return request<void>({ method: "DELETE", url: "/crm/attachments/" + id });
+}
+
+export function getAttachmentDownloadUrl(id: string): string {
+  return "/api/crm/attachments/" + id + "/download";
 }

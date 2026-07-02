@@ -50,16 +50,34 @@ export const routes: RouteRecordRaw[] = [
         meta: { title: "线索商机", permission: "crm:opportunity:view" },
       },
       {
+        path: "crm/opportunities/:id",
+        name: "crm-opportunity-detail",
+        component: () => import("@/views/crm/OpportunityDetailView.vue"),
+        meta: { title: "商机详情", permission: "crm:opportunity:view" },
+      },
+      {
         path: "crm/quotes",
         name: "crm-quotes",
         component: () => import("@/views/crm/QuotePlanView.vue"),
         meta: { title: "报价方案", permission: "crm:quote:view" },
       },
       {
+        path: "crm/quotes/:id",
+        name: "crm-quote-detail",
+        component: () => import("@/views/crm/QuotePlanDetailView.vue"),
+        meta: { title: "报价详情", permission: "crm:quote:view" },
+      },
+      {
         path: "crm/contracts",
         name: "crm-contracts",
         component: () => import("@/views/crm/ContractView.vue"),
         meta: { title: "客户合同", permission: "crm:contract:view" },
+      },
+      {
+        path: "crm/contracts/:id",
+        name: "crm-contract-detail",
+        component: () => import("@/views/crm/ContractDetailView.vue"),
+        meta: { title: "合同详情", permission: "crm:contract:view" },
       },
       {
         path: "crm/follow-ups",
@@ -81,9 +99,7 @@ export const routes: RouteRecordRaw[] = [
       },
       {
         path: "crm/profiles",
-        name: "crm-profiles",
-        component: () => import("@/views/crm/CustomerProfileView.vue"),
-        meta: { title: "客户经营画像", permission: "crm:profile:view" },
+        redirect: "/crm/customers",
       },
       {
         path: "procurement",

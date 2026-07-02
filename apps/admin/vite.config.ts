@@ -19,7 +19,6 @@ export default defineConfig({
               name: "ant-design-vendor",
               test: /node_modules[\\/](?:ant-design-vue|@ant-design)[\\/]/,
               priority: 20,
-              maxSize: 450_000,
             },
             {
               name: "vendor",

@@ -132,3 +132,23 @@ export function formatMoney(value?: number) {
     maximumFractionDigits: 0,
   }).format(value || 0);
 }
+
+/**
+ * Generate a business code with the given prefix.
+ * Format: PREFIX-YYYYMMDD-HHmmss
+ * Used by Opportunities (SJ), Quotes (BJ), and Contracts (HT)
+ * so the suffix is consistent across modules.
+ */
+export function generateCode(prefix: string) {
+  const now = new Date();
+  const stamp = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, "0"),
+    String(now.getDate()).padStart(2, "0"),
+  ].join("");
+  const seq = [
+    String(now.getHours()).padStart(2, "0"),
+    String(now.getMinutes()).padStart(2, "0"),
+  ].join("");
+  return prefix + "-" + stamp + "-" + seq;
+}

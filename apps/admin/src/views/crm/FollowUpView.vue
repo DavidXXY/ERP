@@ -26,6 +26,17 @@
           </template>
           <template v-else-if="column.key === 'followedAt'">{{ formatDateTime(record.followedAt) }}</template>
           <template v-else-if="column.key === 'nextAction'">{{ record.nextAction || "-" }}</template>
+          <template v-else-if="column.key === 'action'">
+            <span @click.stop>
+              <a-popconfirm
+                v-if="auth.user?.roles.includes('ADMIN')"
+                title="确实删除此跟进记录？"
+                @confirm="handleDeleteFollowUp(record)"
+              >
+                <a-button size="small" type="link" danger>删除</a-button>
+              </a-popconfirm>
+            </span>
+          </template>
         </template>
       </a-table>
     </a-card>
@@ -51,7 +62,7 @@
 import { computed, onMounted, reactive, ref } from "vue";
 import { message } from "ant-design-vue";
 import { useRoute, useRouter } from "vue-router";
-import { createFollowUp, listCustomers, listFollowUps, listOpportunities, type CustomerSummary, type FollowUp, type FollowUpType, type Opportunity } from "@/api/crm";
+import { createFollowUp, deleteFollowUp, listCustomers, listFollowUps, listOpportunities, type CustomerSummary, type FollowUp, type FollowUpType, type Opportunity } from "@/api/crm";
 import { useAuthStore } from "@/stores/auth";
 import { followUpTypeColor, followUpTypeLabel, followUpTypeOptions } from "./crm-options";
 
@@ -84,6 +95,7 @@ const columns = [
   { title: "发生时间", key: "followedAt", width: 170 },
   { title: "下一步动作", key: "nextAction", width: 260 },
   { title: "负责人", dataIndex: "ownerName", width: 110 },
+  { title: "操作", key: "action", width: 100 }, 
 ];
 const customerOptions = computed(() => customers.value.map((item) => ({ label: `${item.name}（${item.code}）`, value: item.id })));
 const availableOpportunityOptions = computed(() => opportunities.value
@@ -128,6 +140,16 @@ function openCreate(customerId?: string) {
   Object.assign(form, initialForm(), { customerId });
   syncOpportunity();
   createOpen.value = true;
+}
+
+async function handleDeleteFollowUp(record: any) {
+  try {
+    await deleteFollowUp(record.id);
+    message.success("跟进记录已删除");
+    await loadData();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "删除失败");
+  }
 }
 
 async function handleCreate() {

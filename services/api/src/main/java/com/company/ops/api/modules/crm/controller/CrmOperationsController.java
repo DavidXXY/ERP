@@ -21,6 +21,8 @@ import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.RegisterInvoiceRequ
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.RenewalResponse;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.UpdateQuoteRequest;
 import com.company.ops.api.modules.crm.service.CrmOperationsService;
+import com.company.ops.api.modules.system.security.UserPrincipal;
+import org.springframework.security.core.context.SecurityContextHolder;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
@@ -30,6 +32,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -49,6 +52,12 @@ public class CrmOperationsController {
   @PreAuthorize("hasAuthority('crm:opportunity:view')")
   public ApiResponse<List<OpportunityResponse>> listOpportunities() {
     return ApiResponse.ok(crmOperationsService.listOpportunities());
+  }
+
+  @GetMapping("/opportunities/{id}")
+  @PreAuthorize("hasAuthority('crm:opportunity:view')")
+  public ApiResponse<OpportunityResponse> getOpportunity(@PathVariable UUID id) {
+    return ApiResponse.ok(crmOperationsService.getOpportunity(id));
   }
 
   @PostMapping("/opportunities")
@@ -73,6 +82,12 @@ public class CrmOperationsController {
   @PreAuthorize("hasAuthority('crm:quote:view')")
   public ApiResponse<List<QuoteResponse>> listQuotes() {
     return ApiResponse.ok(crmOperationsService.listQuotes());
+  }
+
+  @GetMapping("/quotes/{id}")
+  @PreAuthorize("hasAuthority('crm:quote:view')")
+  public ApiResponse<QuoteResponse> getQuote(@PathVariable UUID id) {
+    return ApiResponse.ok(crmOperationsService.getQuote(id));
   }
 
   @PostMapping("/quotes")
@@ -136,6 +151,12 @@ public class CrmOperationsController {
     return ApiResponse.ok(crmOperationsService.listContracts());
   }
 
+  @GetMapping("/contracts/{id}")
+  @PreAuthorize("hasAuthority('crm:contract:view')")
+  public ApiResponse<ContractResponse> getContract(@PathVariable UUID id) {
+    return ApiResponse.ok(crmOperationsService.getContract(id));
+  }
+
   @GetMapping("/follow-ups")
   @PreAuthorize("hasAuthority('crm:followup:view')")
   public ApiResponse<List<FollowUpResponse>> listFollowUps() {
@@ -179,6 +200,46 @@ public class CrmOperationsController {
       @Valid @RequestBody RecordReceiptRequest request
   ) {
     return ApiResponse.ok(crmOperationsService.recordReceipt(id, request));
+  }
+
+  @DeleteMapping("/opportunities/{id}")
+  public ApiResponse<Void> deleteOpportunity(@PathVariable UUID id) {
+    UserPrincipal principal = (UserPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+    if (!principal.roleCodes().contains("ADMIN")) {
+      return ApiResponse.fail("删除需要管理员权限");
+    }
+    crmOperationsService.deleteOpportunity(id);
+    return ApiResponse.ok(null);
+  }
+
+  @DeleteMapping("/quotes/{id}")
+  public ApiResponse<Void> deleteQuote(@PathVariable UUID id) {
+    UserPrincipal principal = (UserPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+    if (!principal.roleCodes().contains("ADMIN")) {
+      return ApiResponse.fail("删除需要管理员权限");
+    }
+    crmOperationsService.deleteQuote(id);
+    return ApiResponse.ok(null);
+  }
+
+  @DeleteMapping("/contracts/{id}")
+  public ApiResponse<Void> deleteContract(@PathVariable UUID id) {
+    UserPrincipal principal = (UserPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+    if (!principal.roleCodes().contains("ADMIN")) {
+      return ApiResponse.fail("删除需要管理员权限");
+    }
+    crmOperationsService.deleteContract(id);
+    return ApiResponse.ok(null);
+  }
+
+  @DeleteMapping("/follow-ups/{id}")
+  public ApiResponse<Void> deleteFollowUp(@PathVariable UUID id) {
+    UserPrincipal principal = (UserPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+    if (!principal.roleCodes().contains("ADMIN")) {
+      return ApiResponse.fail("删除需要管理员权限");
+    }
+    crmOperationsService.deleteFollowUp(id);
+    return ApiResponse.ok(null);
   }
 
   @GetMapping("/profiles")

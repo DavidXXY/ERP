@@ -18,7 +18,6 @@ import com.company.ops.api.modules.office.domain.OutsourceStatus;
 import com.company.ops.api.modules.office.domain.SystemNotification;
 import com.company.ops.api.modules.office.dto.OfficeDtos.ApprovalActionResponse;
 import com.company.ops.api.modules.office.dto.OfficeDtos.ApprovalResponse;
-import com.company.ops.api.modules.office.dto.OfficeDtos.AuditResponse;
 import com.company.ops.api.modules.office.dto.OfficeDtos.CompleteOutsourceRequest;
 import com.company.ops.api.modules.office.dto.OfficeDtos.CreateApprovalRequest;
 import com.company.ops.api.modules.office.dto.OfficeDtos.CreateExpenseRequest;
@@ -38,7 +37,6 @@ import com.company.ops.api.modules.office.repository.ApprovalActionRepository;
 import com.company.ops.api.modules.office.repository.ApprovalRequestRepository;
 import com.company.ops.api.modules.office.repository.DocumentFileRepository;
 import com.company.ops.api.modules.office.repository.ExpenseClaimRepository;
-import com.company.ops.api.modules.office.repository.OperationAuditRepository;
 import com.company.ops.api.modules.office.repository.OutsourceOrderRepository;
 import com.company.ops.api.modules.office.repository.SystemNotificationRepository;
 import com.company.ops.api.modules.procurement.domain.Supplier;
@@ -58,6 +56,10 @@ import java.nio.file.StandardCopyOption;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.ArrayList;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -76,7 +78,6 @@ public class OfficeService {
   private final OutsourceOrderRepository outsourceRepository;
   private final DocumentFileRepository documentRepository;
   private final SystemNotificationRepository notificationRepository;
-  private final OperationAuditRepository auditRepository;
   private final SupplierRepository supplierRepository;
   private final ProjectRepository projectRepository;
   private final WorkOrderRepository workOrderRepository;
@@ -88,14 +89,14 @@ public class OfficeService {
   public OfficeService(ApprovalRequestRepository approvalRepository, ApprovalActionRepository actionRepository,
                        ExpenseClaimRepository expenseRepository, OutsourceOrderRepository outsourceRepository,
                        DocumentFileRepository documentRepository, SystemNotificationRepository notificationRepository,
-                       OperationAuditRepository auditRepository, SupplierRepository supplierRepository,
+                       SupplierRepository supplierRepository,
                        ProjectRepository projectRepository, WorkOrderRepository workOrderRepository,
                        ProjectService projectService, SystemUserRepository userRepository, LedgerService ledgerService,
                        @Value("${ops.storage.local-path:.local-data/uploads}") String storagePath) {
     this.approvalRepository = approvalRepository; this.actionRepository = actionRepository;
     this.expenseRepository = expenseRepository; this.outsourceRepository = outsourceRepository;
     this.documentRepository = documentRepository; this.notificationRepository = notificationRepository;
-    this.auditRepository = auditRepository; this.supplierRepository = supplierRepository;
+    this.supplierRepository = supplierRepository;
     this.projectRepository = projectRepository; this.workOrderRepository = workOrderRepository;
     this.projectService = projectService; this.userRepository = userRepository;
     this.ledgerService = ledgerService;
@@ -232,7 +233,32 @@ public class OfficeService {
   public List<SupplierOption> suppliers() { return supplierRepository.findAllByOrderByCreatedAtDesc().stream().map(item -> new SupplierOption(item.getId(), item.getCode(), item.getName())).toList(); }
 
   @Transactional(readOnly = true)
-  public List<DocumentResponse> listDocuments() { return documentRepository.findAllByOrderByCreatedAtDesc().stream().map(this::toDocument).toList(); }
+  public List<DocumentResponse> listDocuments() {
+    return documentRepository.findAllByOrderByCreatedAtDesc().stream().map(this::toDocument).toList();
+  }
+
+  @Transactional(readOnly = true)
+  public Page<DocumentResponse> listDocuments(
+      String bizType, UUID bizId, int page, int size) {
+    Pageable p = PageRequest.of(page, size);
+    if (bizType != null && bizId != null) {
+      return documentRepository.findByBizTypeAndBizIdOrderByCreatedAtDesc(bizType, bizId, p).map(this::toDocument);
+    } else if (bizType != null) {
+      return documentRepository.findByBizTypeOrderByCreatedAtDesc(bizType, p).map(this::toDocument);
+    }
+    return documentRepository.findAllByOrderByCreatedAtDesc(p).map(this::toDocument);
+  }
+
+  @Transactional(readOnly = true)
+  public List<DocumentResponse> listDocumentsByBiz(String bizType, UUID bizId) {
+    return documentRepository.findByBizTypeAndBizIdOrderByCreatedAtDesc(bizType, bizId).stream()
+        .map(this::toDocument).toList();
+  }
+
+  @Transactional(readOnly = true)
+  public long getDocumentCount(String bizType, UUID bizId) {
+    return documentRepository.countByBizTypeAndBizId(bizType, bizId);
+  }
 
   @Transactional
   public DocumentResponse storeDocument(String bizType, UUID bizId, MultipartFile file) {
@@ -253,9 +279,59 @@ public class OfficeService {
     } catch (IOException error) { throw new BusinessException("文件保存失败"); }
   }
 
+  @Transactional
+  public List<DocumentResponse> storeDocuments(String bizType, UUID bizId, List<MultipartFile> files) {
+    if (files == null || files.isEmpty()) throw new BusinessException("上传文件列表不能为空");
+    List<DocumentResponse> results = new ArrayList<>();
+    for (MultipartFile file : files) {
+      results.add(storeDocument(bizType, bizId, file));
+    }
+    return results;
+  }
+
+  @Transactional
+  public void deleteDocument(UUID id) {
+    DocumentFile item = documentRepository.findById(id).orElseThrow(() -> new BusinessException("档案不存在"));
+    try {
+      Path file = storageRoot.resolve(item.getObjectKey()).normalize();
+      if (file.startsWith(storageRoot)) Files.deleteIfExists(file);
+    } catch (IOException error) { /* file already missing, still delete the record */ }
+    documentRepository.delete(item);
+  }
+
+  @Transactional
+  public void deleteDocumentsByBiz(String bizType, UUID bizId) {
+    List<DocumentFile> items = documentRepository.findByBizTypeAndBizIdOrderByCreatedAtDesc(bizType, bizId);
+    for (DocumentFile item : items) {
+      try {
+        Path file = storageRoot.resolve(item.getObjectKey()).normalize();
+        if (file.startsWith(storageRoot)) Files.deleteIfExists(file);
+      } catch (IOException error) { /* skip */ }
+    }
+    documentRepository.deleteByBizTypeAndBizId(bizType, bizId);
+  }
+
+  @Transactional
+  public DocumentResponse updateDocumentName(UUID id, String newName) {
+    if (newName == null || newName.isBlank()) throw new BusinessException("文件名不能为空");
+    if (newName.length() > 240) throw new BusinessException("文件名不能超过240个字符");
+    DocumentFile item = documentRepository.findById(id).orElseThrow(() -> new BusinessException("档案不存在"));
+    item.setFileName(newName.trim());
+    return toDocument(documentRepository.save(item));
+  }
+
   @Transactional(readOnly = true)
   public DocumentFile requireDocument(UUID id) { return documentRepository.findById(id).orElseThrow(() -> new BusinessException("档案不存在")); }
+
   public Resource loadDocument(DocumentFile item) {
+    try {
+      Path file = storageRoot.resolve(item.getObjectKey()).normalize();
+      if (!file.startsWith(storageRoot) || !Files.exists(file)) throw new BusinessException("档案文件不存在");
+      return new UrlResource(file.toUri());
+    } catch (IOException error) { throw new BusinessException("档案读取失败"); }
+  }
+
+  public Resource loadDocumentForPreview(DocumentFile item) {
     try {
       Path file = storageRoot.resolve(item.getObjectKey()).normalize();
       if (!file.startsWith(storageRoot) || !Files.exists(file)) throw new BusinessException("档案文件不存在");
@@ -271,7 +347,6 @@ public class OfficeService {
     item.setRead(true); item.setReadAt(OffsetDateTime.now()); return toNotification(notificationRepository.save(item));
   }
   @Transactional(readOnly = true)
-  public List<AuditResponse> audits() { return auditRepository.findTop200ByOrderByCreatedAtDesc().stream().map(item -> new AuditResponse(item.getId(), item.getUsername(), item.getHttpMethod(), item.getRequestPath(), item.getResponseStatus(), item.getClientIp(), item.getDurationMs(), item.getCreatedAt())).toList(); }
 
   private ApprovalRequest createApprovalEntity(String code, ApprovalType type, String title, String sourceNo, BigDecimal amount, String applicant, String content) {
     if (approvalRepository.existsByCode(code)) throw new BusinessException("审批单号已存在");

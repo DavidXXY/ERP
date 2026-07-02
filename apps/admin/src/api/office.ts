@@ -30,8 +30,34 @@ export function listOutsourcing() { return request<Outsource[]>({ method: "GET",
 export function createOutsource(data: { code: string; supplierId: string; projectId?: string; workOrderId?: string; serviceType: string; description: string; amount: number; plannedDate: string; applicantName: string }) { return request<Outsource>({ method: "POST", url: "/office/outsourcing", data }); }
 export function completeOutsource(id: string, data: { acceptanceNote: string }) { return request<Outsource>({ method: "POST", url: `/office/outsourcing/${id}/complete`, data }); }
 export function listDocuments() { return request<DocumentRecord[]>({ method: "GET", url: "/office/documents" }); }
+export function searchDocuments(bizType?: string, bizId?: string, page = 0, size = 20) {
+  const params: Record<string, string | number> = { page, size };
+  if (bizType) params.bizType = bizType;
+  if (bizId) params.bizId = bizId;
+  return request<{ content: DocumentRecord[]; totalElements: number; number: number; size: number }>({ method: "GET", url: "/office/documents/search", params });
+}
+export function listDocumentsByBiz(bizType: string, bizId?: string) {
+  const params: Record<string, string> = { bizType };
+  if (bizId) params.bizId = bizId;
+  return request<DocumentRecord[]>({ method: "GET", url: "/office/documents/by-biz", params });
+}
+export function getDocumentCount(bizType: string, bizId?: string) {
+  const params: Record<string, string> = { bizType };
+  if (bizId) params.bizId = bizId;
+  return request<number>({ method: "GET", url: "/office/documents/count", params });
+}
 export function uploadDocument(data: { bizType: string; bizId?: string; file: File }) { const form = new FormData(); form.append("bizType", data.bizType); if (data.bizId) form.append("bizId", data.bizId); form.append("file", data.file); return request<DocumentRecord>({ method: "POST", url: "/office/documents", data: form }); }
+export function uploadDocuments(data: { bizType: string; bizId?: string; files: File[] }) {
+  const form = new FormData(); form.append("bizType", data.bizType);
+  if (data.bizId) form.append("bizId", data.bizId);
+  data.files.forEach(f => form.append("files", f));
+  return request<DocumentRecord[]>({ method: "POST", url: "/office/documents/batch", data: form });
+}
+export function updateDocumentName(id: string, fileName: string) { return request<DocumentRecord>({ method: "PUT", url: `/office/documents/${id}`, params: { fileName } }); }
+export function deleteDocument(id: string) { return request<void>({ method: "DELETE", url: `/office/documents/${id}` }); }
+export function deleteDocumentsByBiz(bizType: string, bizId: string) { return request<void>({ method: "DELETE", url: "/office/documents/by-biz", params: { bizType, bizId } }); }
 export async function downloadDocument(item: DocumentRecord) { const response = await http.get<Blob>(`/office/documents/${item.id}/download`, { responseType: "blob" }); const url = URL.createObjectURL(response.data); const anchor = document.createElement("a"); anchor.href = url; anchor.download = item.fileName; anchor.click(); URL.revokeObjectURL(url); }
+export async function previewDocument(item: DocumentRecord) { window.open(`/api/office/documents/${item.id}/preview`, "_blank"); }
 export function listNotifications() { return request<NotificationRecord[]>({ method: "GET", url: "/office/notifications" }); }
 export function readNotification(id: string) { return request<NotificationRecord>({ method: "POST", url: `/office/notifications/${id}/read` }); }
 export function refreshNotifications() { return request<number>({ method: "POST", url: "/office/notifications/refresh" }); }

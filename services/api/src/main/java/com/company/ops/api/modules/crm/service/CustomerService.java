@@ -35,6 +35,9 @@ public class CustomerService {
   private final FollowUpRepository followUpRepository;
   private final DataScopeService dataScopeService;
 
+  @jakarta.persistence.PersistenceContext
+  private jakarta.persistence.EntityManager entityManager;
+
   public CustomerService(
       CodeGenerator codeGenerator,
       CustomerRepository customerRepository,
@@ -277,6 +280,30 @@ public class CustomerService {
     if (!dataScopeService.canViewOwner(ownerName)) {
       throw new BusinessException("无权将客户分配给该负责人");
     }
+  }
+
+  @Transactional
+  public void deleteCustomer(UUID id) {
+    if (!customerRepository.existsById(id)) {
+      throw new BusinessException("客户不存在");
+    }
+    // Cascade delete all related records
+    entityManager.createNativeQuery("DELETE FROM crm_follow_ups WHERE customer_id = ?1").setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("DELETE FROM crm_opportunities WHERE customer_id = ?1").setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("DELETE FROM fin_receivable_receipts WHERE receivable_id IN (SELECT id FROM fin_receivables WHERE customer_id = ?1)").setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("UPDATE fin_receivables SET contract_id = NULL WHERE customer_id = ?1").setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("DELETE FROM fin_receivables WHERE customer_id = ?1").setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("DELETE FROM crm_quote_revisions WHERE quote_id IN (SELECT id FROM crm_quote_plans WHERE customer_id = ?1)").setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("DELETE FROM crm_quote_approval_records WHERE quote_id IN (SELECT id FROM crm_quote_plans WHERE customer_id = ?1)").setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("DELETE FROM crm_quote_plans WHERE customer_id = ?1").setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("DELETE FROM crm_service_contracts WHERE customer_id = ?1").setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("DELETE FROM crm_customer_contacts WHERE customer_id = ?1").setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("DELETE FROM crm_customer_sites WHERE customer_id = ?1").setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("DELETE FROM project_budget_items WHERE project_id IN (SELECT id FROM project_projects WHERE customer_id = ?1)").setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("DELETE FROM project_cost_entries WHERE project_id IN (SELECT id FROM project_projects WHERE customer_id = ?1)").setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("DELETE FROM project_stage_records WHERE project_id IN (SELECT id FROM project_projects WHERE customer_id = ?1)").setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("DELETE FROM project_projects WHERE customer_id = ?1").setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("DELETE FROM crm_customers WHERE id = ?1").setParameter(1, id).executeUpdate();
   }
 
   private CustomerSummaryResponse toSummary(Customer customer) {

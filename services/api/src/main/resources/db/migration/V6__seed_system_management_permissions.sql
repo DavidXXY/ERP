@@ -15,4 +15,5 @@ insert into sys_permissions (
 insert into sys_role_permissions (role_id, permission_id)
 select '00000000-0000-4000-8000-000000000101'::uuid, id
 from sys_permissions
-where tenant_id = 'default' and code like 'system:%';
+where tenant_id = 'default' and code like 'system:%'
+on conflict (role_id, permission_id) do nothing;

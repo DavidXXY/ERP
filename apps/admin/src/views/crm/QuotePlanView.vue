@@ -18,14 +18,16 @@
       <div class="quote-toolbar">
         <a-input v-model:value="keyword" allow-clear placeholder="搜索报价编号、客户或服务范围" />
         <a-select v-model:value="statusFilter" :options="statusOptions" />
+        <a-checkbox v-model:checked="showConverted">显示已转合同</a-checkbox>
       </div>
 
       <a-table
         :columns="columns"
         :data-source="filteredQuotes"
         :loading="loading"
-        :row-key="(record: QuotePlan) => record.id"
+        :row-key="(record: any) => record.id"
         :scroll="{ x: 1280 }"
+        :customRow="(record: any) => ({ onClick: (e: any) => { if (e.target?.closest?.('button,a,.ant-btn,.ant-tag,.ant-popconfirm,.ant-dropdown-trigger,input,select,[role=button]')) return; router.push('/crm/quotes/' + record.id) } })"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'quote'">
@@ -96,6 +98,15 @@
                 转合同
               </a-button>
               <a-button size="small" type="link" @click="openRevisions(record)">版本记录</a-button>
+              <span @click.stop>
+                <a-popconfirm
+                  v-if="auth.user?.roles.includes('ADMIN')"
+                  title="确实删除此报价？"
+                  @confirm="handleDeleteQuote(record)"
+                >
+                  <a-button size="small" type="link" danger>删除</a-button>
+                </a-popconfirm>
+              </span>
             </a-space>
           </template>
         </template>
@@ -195,7 +206,7 @@
         type="success"
         show-icon
         :message="`${selectedQuote.code} V${selectedQuote.versionNo} 已获客户接受`"
-        description="确认后生成合同；如填写首期金额，同时生成首期应收并将关联商机标记为赢单。"
+        description="确认后生成合同及全部应收，同时将关联商机标记为赢单。"
       />
       <a-form ref="conversionFormRef" :model="conversionForm" :rules="conversionRules" layout="vertical">
         <a-divider>合同信息</a-divider>
@@ -208,12 +219,7 @@
           <a-col :xs="24" :md="8"><a-form-item label="服务周期"><a-input v-model:value="conversionForm.serviceCycle" /></a-form-item></a-col>
         </a-row>
 
-        <a-divider>首期应收</a-divider>
-        <a-row :gutter="16">
-          <a-col :xs="24" :md="8"><a-form-item label="应收单号" name="receivableCode"><a-input v-model:value="conversionForm.receivableCode" /></a-form-item></a-col>
-          <a-col :xs="24" :md="8"><a-form-item label="首期金额" name="firstReceivableAmount"><a-input-number v-model:value="conversionForm.firstReceivableAmount" :min="0" :max="selectedQuote?.amount" class="full-input" /></a-form-item></a-col>
-          <a-col :xs="24" :md="8"><a-form-item label="到期日" name="firstReceivableDueDate"><a-input v-model:value="conversionForm.firstReceivableDueDate" type="date" /></a-form-item></a-col>
-        </a-row>
+        <a-divider>应收账款分期</a-divider><div class="receivable-summary" style="margin-bottom: 12px"><a-statistic title="合同总额" :value="selectedQuote?.amount || 0" :formatter="moneyFormatter" style="display: inline-block; margin-right: 32px" /><a-statistic title="已分配" :value="receivableAllocated" :formatter="moneyFormatter" style="display: inline-block; margin-right: 32px" /><a-statistic title="剩余" :value="Math.max(0, (selectedQuote?.amount || 0) - receivableAllocated)" :formatter="moneyFormatter" style="display: inline-block" :value-style="{ color: receivableAllocated > (selectedQuote?.amount || 0) ? '#ff4d4f' : '#52c41a' }" /></div><a-table :data-source="conversionForm.receivables" :columns="receivableColumns" :pagination="false" row-key="rowKey" size="small"><template #bodyCell="{ column, record, index }"><template v-if="column.key === 'amount'"><a-input-number v-model:value="record.amount" :min="0" :precision="2" style="width: 100%" @change="(val: any) => syncReceivable(index, 'amount', val)" /></template><template v-else-if="column.key === 'ratio'"><a-input-number v-model:value="record.ratio" :min="0" :max="100" :precision="1" style="width: 100%" @change="(val: any) => syncReceivable(index, 'ratio', val)" /></template><template v-else-if="column.key === 'dueDate'"><a-input v-model:value="record.dueDate" type="date" style="width: 100%" /></template><template v-else-if="column.key === 'action'"><a-button type="link" danger size="small" @click="removeReceivable(index)">删除</a-button></template></template></a-table><a-button type="dashed" block style="margin-top: 8px" @click="addReceivable">+ 新增分期</a-button>
       </a-form>
     </a-modal>
 
@@ -231,7 +237,7 @@
         :data-source="revisions"
         :loading="revisionLoading"
         :pagination="false"
-        :row-key="(record: QuoteRevision) => record.id"
+        :row-key="(record: any) => record.id"
         :scroll="{ x: 760 }"
       >
         <template #bodyCell="{ column, record }">
@@ -252,6 +258,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
+import { useRouter } from "vue-router";
 import { message } from "ant-design-vue";
 import {
   convertQuote,
@@ -271,8 +278,10 @@ import {
   type QuoteStatus,
 } from "@/api/crm";
 import { useAuthStore } from "@/stores/auth";
-import { formatMoney, quoteStatusColor, quoteStatusLabel } from "./crm-options";
+import { formatMoney, generateCode, quoteStatusColor, quoteStatusLabel } from "./crm-options";
+import { deleteQuote } from "@/api/crm";
 
+const router = useRouter();
 const auth = useAuthStore();
 const quotes = ref<QuotePlan[]>([]);
 const opportunities = ref<Opportunity[]>([]);
@@ -294,6 +303,7 @@ const editingQuote = ref<QuotePlan | null>(null);
 const revisionQuote = ref<QuotePlan | null>(null);
 const keyword = ref("");
 const statusFilter = ref<QuoteStatus | "ALL">("ALL");
+const showConverted = ref(false);
 const form = reactive(initialForm());
 const approvalForm = reactive(initialApprovalForm());
 const customerResultForm = reactive(initialCustomerResultForm());
@@ -338,6 +348,40 @@ const statusOptions = [
   { label: "客户已拒绝", value: "CUSTOMER_DECLINED" },
   { label: "已转合同", value: "CONVERTED" },
 ];
+;
+const receivableAllocated = computed(() =>
+  (conversionForm.receivables || []).reduce((sum, r) => sum + Number(r.amount || 0), 0)
+);
+const receivableColumns = [
+  { title: "应收金额", key: "amount", width: 160 },
+  { title: "比例(%)", key: "ratio", width: 120 },
+  { title: "到期日", key: "dueDate", width: 140 },
+  { title: "操作", key: "action", width: 70 },
+];
+function addReceivable() {
+  conversionForm.receivables.push({
+    rowKey: "r" + Date.now(),
+    receivableCode: "",
+    amount: 0,
+    ratio: 0,
+    dueDate: "",
+  });
+}
+function removeReceivable(index: number) {
+  conversionForm.receivables.splice(index, 1);
+}
+function syncReceivable(index: number, field: string, value: string | number) {
+  const item = conversionForm.receivables[index];
+  if (!item) return;
+  const total = Number(selectedQuote.value?.amount || 0);
+  if (total <= 0) return;
+  if (field === "amount") {
+    item.ratio = Math.round(Number(value || 0) / total * 100 * 10) / 10;
+  } else if (field === "ratio") {
+    item.amount = Math.round(total * Number(value || 0) / 100 * 100) / 100;
+  }
+}
+
 const columns = [
   { title: "报价 / 客户", key: "quote", width: 250 },
   { title: "方案内容", key: "scope", width: 320 },
@@ -361,6 +405,7 @@ const filteredQuotes = computed(() => {
     const matchesStatus = statusFilter.value === "ALL" || item.status === statusFilter.value;
     const matchesKeyword = !normalized || [item.code, item.customerName, item.opportunityCode, item.serviceScope]
       .some((value) => value?.toLowerCase().includes(normalized));
+    if (!showConverted.value && item.status === "CONVERTED") return false;
     return matchesStatus && matchesKeyword;
   });
 });
@@ -404,7 +449,11 @@ function openEdit(record: QuotePlan) {
 }
 
 function syncCustomer(opportunityId: string) {
-  form.customerId = opportunities.value.find((item) => item.id === opportunityId)?.customerId;
+  const opp = opportunities.value.find((item) => item.id === opportunityId);
+  form.customerId = opp?.customerId;
+  if (opp?.code) {
+    form.code = "BJ-" + opp.code.replace(/^SJ-/, "");
+  }
 }
 
 async function handleSaveQuote() {
@@ -473,6 +522,7 @@ async function handleApproval() {
   saving.value = true;
   try {
     const result = await processQuoteApproval(selectedQuote.value.id, { ...approvalForm });
+    Object.assign(selectedQuote.value, result);
     approvalOpen.value = false;
     message.success(result.status === "APPROVED" ? "内部审批已通过，等待客户确认" : "报价已驳回，请修订后重新提交");
     await loadData();
@@ -501,6 +551,7 @@ async function handleCustomerResult() {
   saving.value = true;
   try {
     const result = await processQuoteCustomerResult(selectedQuote.value.id, { ...customerResultForm });
+    Object.assign(selectedQuote.value, result);
     customerResultOpen.value = false;
     message.success(result.status === "CUSTOMER_ACCEPTED" ? "客户已接受，可继续转合同" : "已登记客户拒绝，可继续修订报价");
     await loadData();
@@ -524,12 +575,22 @@ async function handleConversion() {
   try {
     const result = await convertQuote(selectedQuote.value.id, { ...conversionForm });
     conversionOpen.value = false;
-    message.success(`已生成合同 ${result.contract?.code || ""}`);
+    message.success(`已生成合同 ${result.contract?.code || ""}，共 ${result.receivables?.length || 0} 笔应收`);
     await loadData();
   } catch (error) {
     message.error(error instanceof Error ? error.message : "转合同失败");
   } finally {
     saving.value = false;
+  }
+}
+
+async function handleDeleteQuote(record: any) {
+  try {
+    await deleteQuote(record.id);
+    message.success("报价已删除");
+    await loadData();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "删除失败");
   }
 }
 
@@ -555,7 +616,7 @@ function initialForm() {
   return {
     customerId: undefined as string | undefined,
     opportunityId: undefined as string | undefined,
-    code: generateQuoteCode(),
+    code: generateCode("BJ"),
     serviceScope: "",
     inspectCycle: "",
     paymentNodes: "",
@@ -596,19 +657,13 @@ function initialConversionForm(record?: QuotePlan) {
     startDate: formatDate(today),
     endDate: formatDate(end),
     serviceCycle: record?.inspectCycle || "",
-    receivableCode: suffix ? `YS-${suffix}-01` : "",
-    firstReceivableAmount: Math.round(Number(record?.amount || 0) * 0.3),
-    firstReceivableDueDate: formatDate(due),
-  };
+    receivables: [
+      { rowKey: "r1", receivableCode: "", amount: Math.round(Number(record?.amount || 0) * 50 / 100), ratio: 50, dueDate: formatDate(new Date(Date.now() + 30*86400000)) },
+      { rowKey: "r2", receivableCode: "", amount: Number(record?.amount || 0) - Math.round(Number(record?.amount || 0) * 50 / 100), ratio: 50, dueDate: formatDate(new Date(Date.now() + 90*86400000)) },
+    ],  };
 }
 
-function generateQuoteCode() {
-  const now = new Date();
-  const stamp = [now.getFullYear(), now.getMonth() + 1, now.getDate(), now.getHours(), now.getMinutes(), now.getSeconds()]
-    .map((value) => String(value).padStart(2, "0"))
-    .join("");
-  return `BJ-${stamp}`;
-}
+
 
 function formatDate(value: Date) {
   return new Date(value.getTime() - value.getTimezoneOffset() * 60000).toISOString().slice(0, 10);

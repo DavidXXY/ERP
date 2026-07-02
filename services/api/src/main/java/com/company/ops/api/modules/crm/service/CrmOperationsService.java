@@ -74,6 +74,9 @@ public class CrmOperationsService {
   private final ReceivableReceiptRepository receiptRepository;
   private final LedgerService ledgerService;
 
+  @jakarta.persistence.PersistenceContext
+  private jakarta.persistence.EntityManager entityManager;
+
   public CrmOperationsService(
       CustomerRepository customerRepository,
       OpportunityRepository opportunityRepository,
@@ -106,6 +109,13 @@ public class CrmOperationsService {
         .map(Opportunity::getCustomerId)
         .toList());
     return opportunities.stream().map(item -> toOpportunity(item, customers)).toList();
+  }
+
+  @Transactional(readOnly = true)
+  public OpportunityResponse getOpportunity(UUID id) {
+    Opportunity opportunity = opportunityRepository.findById(id)
+        .orElseThrow(() -> new BusinessException("商机不存在"));
+    return toOpportunity(opportunity, customerMap(nullableId(opportunity.getCustomerId())));
   }
 
   @Transactional
@@ -156,12 +166,19 @@ public class CrmOperationsService {
     return quotes.stream().map(item -> toQuote(item, customers, opportunities)).toList();
   }
 
+  @Transactional(readOnly = true)
+  public QuoteResponse getQuote(UUID id) {
+    QuotePlan quote = quoteRepository.findById(id)
+        .orElseThrow(() -> new BusinessException("报价方案不存在"));
+    return toQuote(
+        quote,
+        customerMap(nullableId(quote.getCustomerId())),
+        opportunityMap(nullableId(quote.getOpportunityId()))
+    );
+  }
+
   @Transactional
   public QuoteResponse createQuote(CreateQuoteRequest request) {
-    String quoteCode = request.code() != null ? request.code() : codeGenerator.generate("QUOTE");
-    if (quoteRepository.existsByCode(quoteCode)) {
-      throw new BusinessException("报价编码已存在");
-    }
     validateCustomer(request.customerId());
     Opportunity opportunity = null;
     if (request.opportunityId() != null) {
@@ -171,6 +188,18 @@ public class CrmOperationsService {
           && !request.customerId().equals(opportunity.getCustomerId())) {
         throw new BusinessException("报价客户与关联商机客户不一致");
       }
+    }
+
+    String quoteCode;
+    if (request.code() != null) {
+      quoteCode = request.code();
+    } else if (opportunity != null && opportunity.getCode() != null) {
+      quoteCode = deriveCode(opportunity.getCode(), "BJ");
+    } else {
+      quoteCode = codeGenerator.generate("QUOTE");
+    }
+    if (quoteRepository.existsByCode(quoteCode)) {
+      throw new BusinessException("报价编码已存在");
     }
 
     UUID customerId = request.customerId() == null && opportunity != null
@@ -332,6 +361,13 @@ public class CrmOperationsService {
         .map(ServiceContract::getCustomerId)
         .toList());
     return contracts.stream().map(item -> toContract(item, customers)).toList();
+  }
+
+  @Transactional(readOnly = true)
+  public ContractResponse getContract(UUID id) {
+    ServiceContract contract = contractRepository.findById(id)
+        .orElseThrow(() -> new BusinessException("合同不存在"));
+    return toContract(contract, customerMap(nullableId(contract.getCustomerId())));
   }
 
   @Transactional(readOnly = true)
@@ -528,6 +564,55 @@ public class CrmOperationsService {
     }).toList();
   }
 
+  @Transactional
+  public void deleteOpportunity(UUID id) {
+    if (!opportunityRepository.existsById(id)) {
+      throw new BusinessException("商机不存在");
+    }
+    // Cascade delete related records
+    entityManager.createNativeQuery("DELETE FROM crm_follow_ups WHERE opportunity_id = ?1")
+        .setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("DELETE FROM crm_quote_revisions WHERE quote_id IN (SELECT id FROM crm_quote_plans WHERE opportunity_id = ?1)")
+        .setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("DELETE FROM crm_quote_approval_records WHERE quote_id IN (SELECT id FROM crm_quote_plans WHERE opportunity_id = ?1)")
+        .setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("DELETE FROM crm_quote_plans WHERE opportunity_id = ?1")
+        .setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("DELETE FROM crm_opportunities WHERE id = ?1")
+        .setParameter(1, id).executeUpdate();
+  }
+
+  @Transactional
+  public void deleteQuote(UUID id) {
+    if (!quoteRepository.existsById(id)) {
+      throw new BusinessException("报价方案不存在");
+    }
+    entityManager.createNativeQuery("DELETE FROM crm_quote_revisions WHERE quote_id = ?1")
+        .setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("DELETE FROM crm_quote_approval_records WHERE quote_id = ?1")
+        .setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("DELETE FROM crm_quote_plans WHERE id = ?1")
+        .setParameter(1, id).executeUpdate();
+  }
+
+  @Transactional
+  public void deleteContract(UUID id) {
+    if (!contractRepository.existsById(id)) {
+      throw new BusinessException("合同不存在");
+    }
+    // Disassociate receivables first (set contract_id to null via update)
+    entityManager.createNativeQuery("UPDATE fin_receivables SET contract_id = NULL WHERE contract_id = ?1")
+        .setParameter(1, id).executeUpdate();
+    contractRepository.deleteById(id);
+  }
+
+  @Transactional
+  public void deleteFollowUp(UUID id) {
+    FollowUp f = followUpRepository.findById(id)
+        .orElseThrow(() -> new BusinessException("跟进记录不存在"));
+    followUpRepository.delete(f);
+  }
+
   private OpportunityResponse toOpportunity(Opportunity item, Map<UUID, Customer> customers) {
     return new OpportunityResponse(
         item.getId(),
@@ -593,7 +678,9 @@ public class CrmOperationsService {
     if (quote.getCustomerId() == null) {
       throw new BusinessException("报价未关联客户，不能生成合同");
     }
-    String contractCode = request.contractCode() != null ? request.contractCode() : codeGenerator.generate("CONTRACT");
+    String contractCode = request.contractCode() != null
+        ? request.contractCode()
+        : (quote.getCode() != null ? deriveCode(quote.getCode(), "HT") : codeGenerator.generate("CONTRACT"));
     requireText(request.projectName(), "请输入合同项目名称");
     requireText(request.contractType(), "请选择合同类型");
     if (request.startDate() == null || request.endDate() == null) {
@@ -850,5 +937,11 @@ public class CrmOperationsService {
 
   private BigDecimal defaultAmount(BigDecimal value) {
     return value == null ? BigDecimal.ZERO : value;
+  }
+
+  private String deriveCode(String sourceCode, String targetPrefix) {
+    int firstDash = sourceCode.indexOf('-');
+    if (firstDash < 0) return null;
+    return targetPrefix + sourceCode.substring(firstDash);
   }
 }

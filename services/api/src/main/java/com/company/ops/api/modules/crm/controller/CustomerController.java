@@ -6,6 +6,8 @@ import com.company.ops.api.modules.crm.dto.CustomerDetailResponse;
 import com.company.ops.api.modules.crm.dto.CustomerSummaryResponse;
 import com.company.ops.api.modules.crm.dto.UpdateCustomerRequest;
 import com.company.ops.api.modules.crm.service.CustomerService;
+import com.company.ops.api.modules.system.security.UserPrincipal;
+import org.springframework.security.core.context.SecurityContextHolder;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
@@ -15,6 +17,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -56,5 +59,16 @@ public class CustomerController {
       @Valid @RequestBody UpdateCustomerRequest request
   ) {
     return ApiResponse.ok(customerService.updateCustomer(id, request));
+  }
+
+  @DeleteMapping("/{id}")
+  @PreAuthorize("isAuthenticated()")
+  public ApiResponse<Void> deleteCustomer(@PathVariable UUID id) {
+    UserPrincipal principal = (UserPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+    if (!principal.roleCodes().contains("ADMIN")) {
+      return ApiResponse.fail("删除需要管理员权限");
+    }
+    customerService.deleteCustomer(id);
+    return ApiResponse.ok(null);
   }
 }

@@ -27,7 +27,9 @@
     "infra:up": "docker compose -f infra/docker-compose.yml up -d",
     "infra:down": "docker compose -f infra/docker-compose.yml down",
     "tools:install": "bash scripts/install-local-tools.sh",
-    "data:backup": "bash scripts/backup-data.sh"
+    "data:backup": "bash scripts/backup-data.sh",
+    "test-bot": "node scripts/test-bot.js",
+    "test-bot:fix": "node scripts/test-bot.js --fix"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",

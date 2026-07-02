@@ -9,11 +9,7 @@ alter table sys_permissions add column if not exists built_in boolean not null d
 update sys_roles set built_in = true where code in ('ADMIN', 'CRM_MANAGER');
 update sys_permissions set built_in = true;
 
--- [now in V1] create table if not exists sys_role_data_organizations (
-  role_id uuid not null references sys_roles(id) on delete cascade,
-  organization_id uuid not null references sys_organizations(id),
-  primary key (role_id, organization_id)
-);
+-- sys_role_data_organizations is created by V1 for fresh installations.
 
 update sys_organizations
 set parent_id = (select id from sys_organizations where code = 'ROOT')

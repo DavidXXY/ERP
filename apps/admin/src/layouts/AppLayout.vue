@@ -41,7 +41,6 @@
           <a-menu-item v-if="auth.can('crm:followup:view')" key="/crm/follow-ups">跟进回访</a-menu-item>
           <a-menu-item v-if="auth.can('crm:renewal:view')" key="/crm/renewals">续约管理</a-menu-item>
           <a-menu-item v-if="auth.can('crm:receivable:view')" key="/crm/receivables">合同应收</a-menu-item>
-          <a-menu-item v-if="auth.can('crm:profile:view')" key="/crm/profiles">客户经营画像</a-menu-item>
         </a-sub-menu>
 
         <a-menu-item v-if="auth.can('procurement:view')" key="/procurement">

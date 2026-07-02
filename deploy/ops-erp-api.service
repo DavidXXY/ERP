@@ -1,0 +1,21 @@
+[Unit]
+Description=Engineering Ops ERP API
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=ops-erp
+Group=ops-erp
+WorkingDirectory=/opt/engineering-ops-erp
+EnvironmentFile=/etc/ops-erp/ops-erp.env
+ExecStart=/usr/bin/java -XX:MaxRAMPercentage=50 -jar /opt/engineering-ops-erp/ops-erp-api.jar
+Restart=on-failure
+RestartSec=5
+SuccessExitStatus=143
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -41,7 +41,7 @@ public class CodeGenerator {
     Map.entry("CODE_SEQUENCE", "SEQ")
   );
 
-  private static final int DEFAULT_WIDTH = 5;
+  private static final int DEFAULT_WIDTH = 4;
 
   private final CodeSequenceRepository codeSequenceRepository;
 
@@ -60,7 +60,7 @@ public class CodeGenerator {
     long number = seq.getNextNumber();
     seq.setNextNumber(number + 1);
     codeSequenceRepository.save(seq);
-    String datePart = LocalDate.now().format(DateTimeFormatter.ofPattern("yyMMdd"));
+    String datePart = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
     return prefix + "-" + datePart + "-" + String.format("%0" + DEFAULT_WIDTH + "d", number);
   }
 }

@@ -63,6 +63,15 @@
               <a-space :size="2">
                 <a-button type="text" size="small" title="查看客户" aria-label="查看客户" @click.stop="selectCustomer(record.id)"><template #icon><EyeOutlined /></template></a-button>
                 <a-button v-if="auth.can('crm:customer:update')" type="text" size="small" title="编辑客户" aria-label="编辑客户" @click.stop="openEdit(record.id)"><template #icon><EditOutlined /></template></a-button>
+                <a-popconfirm
+                  v-if="auth.user?.roles.includes('ADMIN')"
+                  title="确实删除此客户？这将同时删除所有关联数据（商机、合同、报价、跟进等）"
+                  @confirm="handleDeleteCustomer(record)"
+                >
+                  <span @click.stop>
+                    <a-button type="text" size="small" danger title="删除客户"><template #icon><DeleteOutlined /></template></a-button>
+                  </span>
+                </a-popconfirm>
               </a-space>
             </template>
           </template>
@@ -98,21 +107,27 @@
       </template>
       <template #extra>
         <a-space v-if="selectedDetail">
-          <a-button v-if="auth.can('crm:followup:create')" @click="createFollowUpForCustomer"><template #icon><PlusOutlined /></template>新增跟进</a-button>
-          <a-button v-if="auth.can('crm:customer:update')" type="primary" @click="openEdit(selectedDetail.id)"><template #icon><EditOutlined /></template>编辑档案</a-button>
+          <template v-if="editing">
+            <a-button @click="cancelEdit">取消</a-button>
+            <a-button type="primary" :loading="saving" @click="saveCustomer">保存</a-button>
+          </template>
+          <template v-else>
+            <a-button v-if="auth.can('crm:followup:create')" @click="createFollowUpForCustomer"><template #icon><PlusOutlined /></template>新增跟进</a-button>
+            <a-button v-if="auth.can('crm:customer:update')" type="primary" @click="openEdit(selectedDetail.id)"><template #icon><EditOutlined /></template>编辑档案</a-button>
+          </template>
         </a-space>
       </template>
 
       <a-spin :spinning="detailLoading">
         <template v-if="selectedDetail">
-          <div class="customer-metric-band">
+          <div v-if="!editing" class="customer-metric-band">
             <div><span>已签合同</span><strong>{{ selectedDetail.metrics.contractCount }} 份</strong></div>
             <div><span>合同总额</span><strong>{{ formatMoney(selectedDetail.metrics.contractAmount) }}</strong></div>
             <div><span>待收款项</span><strong :class="{ 'customer-risk-value': selectedDetail.metrics.outstandingAmount > 0 }">{{ formatMoney(selectedDetail.metrics.outstandingAmount) }}</strong></div>
             <div><span>已核销</span><strong>{{ formatMoney(selectedDetail.metrics.settledAmount) }}</strong></div>
           </div>
 
-          <a-tabs v-model:active-key="detailTab" class="customer-detail-tabs">
+          <a-tabs v-if="!editing" v-model:active-key="detailTab" class="customer-detail-tabs">
             <a-tab-pane key="profile" tab="客户档案">
               <div class="customer-detail-grid">
                 <section class="customer-detail-section">
@@ -186,7 +201,59 @@
               </div>
             </a-tab-pane>
           </a-tabs>
-        </template>
+
+          <a-form v-else ref="formRef" :model="formState" :rules="rules" layout="vertical">
+            <a-row :gutter="16">
+              <a-col :xs="24" :md="12"><a-form-item label="客户名称" name="name"><a-input v-model:value="formState.name" /></a-form-item></a-col>
+              <a-col :xs="24" :md="12"><a-form-item label="行业" name="industry"><a-input v-model:value="formState.industry" /></a-form-item></a-col>
+              <a-col :xs="24" :md="8"><a-form-item label="客户等级" name="level"><a-select v-model:value="formState.level" :options="levelOptions" /></a-form-item></a-col>
+              <a-col :xs="24" :md="8"><a-form-item label="负责人" name="ownerName"><a-input v-model:value="formState.ownerName" /></a-form-item></a-col>
+              <a-col :xs="24" :md="8"><a-form-item label="风险状态"><a-select v-model:value="formState.riskStatus" :options="riskOptions" /></a-form-item></a-col>
+              <a-col :xs="24" :md="12"><a-form-item label="付款习惯"><a-input v-model:value="formState.paymentHabit" /></a-form-item></a-col>
+              <a-col :xs="24" :md="12"><a-form-item label="风险说明"><a-textarea v-model:value="formState.riskNote" :rows="2" /></a-form-item></a-col>
+              <a-col :span="24"><a-divider>开票资料</a-divider></a-col>
+              <a-col :span="24"><a-form-item label="发票抬头"><a-input v-model:value="formState.invoiceTitle" /></a-form-item></a-col>
+              <a-col :xs="24" :md="12"><a-form-item label="纳税人识别号"><a-input v-model:value="formState.taxNo" /></a-form-item></a-col>
+              <a-col :xs="24" :md="12"><a-form-item label="注册电话"><a-input v-model:value="formState.registeredPhone" /></a-form-item></a-col>
+              <a-col :xs="24" :md="12"><a-form-item label="开户银行"><a-input v-model:value="formState.bankName" /></a-form-item></a-col>
+              <a-col :xs="24" :md="12"><a-form-item label="银行账号"><a-input v-model:value="formState.bankAccount" /></a-form-item></a-col>
+              <a-col :span="24"><a-form-item label="注册地址"><a-input v-model:value="formState.registeredAddress" /></a-form-item></a-col>
+            </a-row>
+
+<div style="margin-top: 16px">
+  <a-divider>企业联系人</a-divider>
+  <div class="customer-form-list-header">
+    <h3>联系人</h3>
+    <a-button @click="addContact"><template #icon><PlusOutlined /></template>添加联系人</a-button>
+  </div>
+  <div class="customer-form-list">
+    <div v-for="(contact, index) in formState.contacts" :key="contact.key" class="customer-contact-form-row">
+      <label>姓名<a-input v-model:value="contact.name" placeholder="联系人姓名" /></label>
+      <label>职务<a-input v-model:value="contact.title" placeholder="部门或职务" /></label>
+      <label>电话<a-input v-model:value="contact.phone" /></label>
+      <label>邮箱<a-input v-model:value="contact.email" /></label>
+      <label class="customer-primary-switch">主要联系人<a-switch :checked="contact.primaryContact" @change="setPrimaryContact(index, Boolean($event))" /></label>
+      <a-button danger type="text" title="删除联系人" aria-label="删除联系人" @click="removeContact(index)"><template #icon><DeleteOutlined /></template></a-button>
+    </div>
+  </div>
+</div>
+<div style="margin-top: 16px">
+  <a-divider>企业地址</a-divider>
+  <div class="customer-form-list-header">
+    <h3>项目地址</h3>
+    <a-button @click="addSite"><template #icon><PlusOutlined /></template>添加地址</a-button>
+  </div>
+  <div class="customer-form-list">
+    <div v-for="(site, index) in formState.sites" :key="site.key" class="customer-site-form-row">
+      <label>地址名称<a-input v-model:value="site.name" placeholder="例如总部、项目现场" /></label>
+      <label>详细地址<a-input v-model:value="site.address" /></label>
+      <a-button danger type="text" title="删除项目地址" aria-label="删除项目地址" @click="removeSite(index)"><template #icon><DeleteOutlined /></template></a-button>
+    </div>
+  </div>
+</div>
+
+          </a-form>
+          </template>
       </a-spin>
     </a-drawer>
 
@@ -258,6 +325,7 @@ import {
   createCustomer,
   getCustomer,
   listCustomers,
+  deleteCustomer,
   updateCustomer,
   type CustomerDetail,
   type CustomerLevel,
@@ -280,6 +348,7 @@ import {
   receivableStatusLabel,
   riskColor,
   riskLabel,
+  generateCode,
 } from "./crm-options";
 
 type ContactForm = { key: string; name: string; title: string; phone: string; email: string; primaryContact: boolean };
@@ -314,6 +383,7 @@ const saving = ref(false);
 const detailOpen = ref(false);
 const formOpen = ref(false);
 const editingCustomerId = ref("");
+const editing = ref(false);
 const detailTab = ref("profile");
 const formTab = ref("base");
 const errorMessage = ref("");
@@ -324,7 +394,7 @@ const formState = reactive<CustomerFormState>(initialForm());
 const levelOptions = [{ label: "战略客户", value: "STRATEGIC" }, { label: "重点客户", value: "KEY" }, { label: "普通客户", value: "NORMAL" }];
 const riskOptions = [{ label: "正常", value: "NORMAL" }, { label: "逾期", value: "OVERDUE" }, { label: "续约风险", value: "RENEWAL_RISK" }];
 const rules = { code: [], name: [{ required: true, message: "请输入客户名称" }], industry: [{ required: true, message: "请输入行业" }], ownerName: [{ required: true, message: "请输入负责人" }] };
-const columns = [{ title: "客户", key: "name", width: 210 }, { title: "等级 / 行业", key: "level", width: 120 }, { title: "主要联系人", key: "contact", width: 180 }, { title: "项目地址", key: "site", width: 90 }, { title: "付款习惯", key: "payment", width: 160 }, { title: "风险", key: "risk", width: 90 }, { title: "操作", key: "action", width: 80, fixed: "right" }];
+const columns = [{ title: "客户", key: "name", width: 210 }, { title: "客户编码", dataIndex: "code", width: 160 }, { title: "等级 / 行业", key: "level", width: 120 }, { title: "主要联系人", key: "contact", width: 180 }, { title: "项目地址", key: "site", width: 90 }, { title: "付款习惯", key: "payment", width: 160 }, { title: "风险", key: "risk", width: 90 }, { title: "操作", key: "action", width: 80, fixed: "right" }];
 const opportunityColumns = [{ title: "商机", key: "opportunity", width: 150 }, { title: "需求", dataIndex: "needSummary", width: 280 }, { title: "阶段", key: "stage", width: 130 }, { title: "预计金额", key: "amount", width: 130 }, { title: "下一步动作", key: "nextAction", width: 220 }, { title: "负责人", dataIndex: "ownerName", width: 110 }];
 const contractColumns = [{ title: "合同", key: "contract", width: 260 }, { title: "期限", key: "period", width: 220 }, { title: "服务周期", dataIndex: "serviceCycle", width: 150 }, { title: "金额", key: "amount", width: 130 }, { title: "状态", key: "status", width: 100 }];
 const receivableColumns = [{ title: "应收单", key: "receivable", width: 190 }, { title: "应收 / 已收", key: "amount", width: 250 }, { title: "到期日", dataIndex: "dueDate", width: 120 }, { title: "开票信息", key: "invoice", width: 170 }, { title: "状态", key: "status", width: 100 }];
@@ -374,8 +444,19 @@ function customerInitial(name: string) { return name.trim().slice(0, 1) || "客"
 function openCreate() {
   editingCustomerId.value = "";
   resetForm(initialForm(auth.user?.displayName || ""));
+  formState.code = generateCode("KH");
   formTab.value = "base";
   formOpen.value = true;
+}
+
+async function handleDeleteCustomer(record: any) {
+  try {
+    await deleteCustomer(record.id);
+    message.success("客户已删除");
+    await loadCustomers();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "删除失败");
+  }
 }
 
 async function openEdit(id: string) {
@@ -384,11 +465,16 @@ async function openEdit(id: string) {
     const detail = selectedDetail.value?.id === id ? selectedDetail.value : await getCustomer(id);
     selectedDetail.value = detail;
     editingCustomerId.value = id;
+    editing.value = true;
     resetForm(formFromDetail(detail));
-    formTab.value = "base";
-    formOpen.value = true;
   } catch (error) { message.error(error instanceof Error ? error.message : "客户档案加载失败"); }
   finally { detailLoading.value = false; }
+}
+
+function cancelEdit() {
+  editing.value = false;
+  editingCustomerId.value = "";
+  if (selectedDetail.value) resetForm(formFromDetail(selectedDetail.value));
 }
 
 async function saveCustomer() {
@@ -405,6 +491,7 @@ async function saveCustomer() {
       ? await updateCustomer(editingCustomerId.value, payload)
       : await createCustomer({ code: formState.code, ...payload });
     formOpen.value = false;
+    editing.value = false;
     message.success(editingCustomerId.value ? "客户档案已更新" : "客户已创建");
     await loadCustomers();
     selectedDetail.value = saved;

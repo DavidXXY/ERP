@@ -17,18 +17,19 @@
         <a-col :xs="12" :lg="6"><a-statistic title="待办已到期" :value="overdueActionCount" suffix="项" /></a-col>
       </a-row>
 
-      <a-space wrap class="table-toolbar">
+            <a-space wrap class="table-toolbar">
         <a-select v-model:value="stageFilter" allow-clear placeholder="全部阶段" :options="stageOptions" style="width: 150px" />
         <a-input v-model:value="keyword" allow-clear placeholder="搜索客户、商机编号、需求" style="width: 280px" />
       </a-space>
 
-      <a-table
+            <a-table
         :columns="columns"
         :data-source="filteredOpportunities"
         :loading="loading"
-        :row-key="(record: Opportunity) => record.id"
+        :row-key="(record: any) => record.id"
         :pagination="{ pageSize: 10 }"
         :scroll="{ x: 1180 }"
+        :customRow="(record: any) => ({ onClick: (e: any) => { if (e.target?.closest?.('button,a,.ant-btn,.ant-tag,.ant-popconfirm,.ant-dropdown-trigger,input,select,[role=button]')) return; router.push('/crm/opportunities/' + record.id) } })"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'opportunity'">
@@ -57,10 +58,28 @@
               size="small"
               type="link"
               :disabled="record.stage === 'WON' || record.stage === 'LOST'"
-              @click="openAdvance(record)"
+              @click.stop="openAdvance(record)"
             >
               推进
             </a-button>
+            <a-button
+              v-if="auth.can('crm:opportunity:update') && record.stage !== 'WON' && record.stage !== 'LOST'"
+              size="small"
+              type="link"
+              danger
+              @click.stop="openMarkLost(record)"
+            >
+              丢单
+            </a-button>
+            <span @click.stop>
+              <a-popconfirm
+                v-if="auth.user?.roles.includes('ADMIN')"
+                title="确实删除此商机？"
+                @confirm="handleDeleteOpportunity(record)"
+              >
+                <a-button size="small" type="link" danger>删除</a-button>
+              </a-popconfirm>
+            </span>
           </template>
         </template>
       </a-table>
@@ -69,9 +88,9 @@
     <a-modal v-model:open="createOpen" title="新增商机" width="760px" :confirm-loading="saving" @ok="handleCreate">
       <a-form ref="createFormRef" :model="createForm" :rules="createRules" layout="vertical">
         <a-row :gutter="16">
-          <a-col :xs="24" :md="16"><a-form-item label="客户" name="customerId"><a-select v-model:value="createForm.customerId" show-search option-filter-prop="label" :options="customerOptions" /></a-form-item></a-col>
-          <a-col :xs="24" :md="8"><a-form-item label="来源"><a-input v-model:value="createForm.source" /></a-form-item></a-col>
-          <a-col :xs="24" :md="8"><a-form-item label="负责人" name="ownerName"><a-input v-model:value="createForm.ownerName" /></a-form-item></a-col>
+          <a-col :xs="24"><a-form-item label="客户" name="customerId"><a-select v-model:value="createForm.customerId" show-search option-filter-prop="label" :options="customerOptions" /></a-form-item></a-col>
+
+          <a-col :xs="24" :md="8"><a-form-item label="负责人" name="ownerName"><a-select v-model:value="createForm.ownerName" :options="userOptions" show-search option-filter-prop="label" placeholder="选择负责人" /></a-form-item></a-col>
           <a-col :xs="24" :md="8"><a-form-item label="预计金额"><a-input-number v-model:value="createForm.expectedAmount" :min="0" class="full-input" /></a-form-item></a-col>
           <a-col :span="24"><a-form-item label="客户需求" name="needSummary"><a-textarea v-model:value="createForm.needSummary" :rows="3" /></a-form-item></a-col>
           <a-col :xs="24" :md="16"><a-form-item label="下一步动作"><a-input v-model:value="createForm.nextAction" /></a-form-item></a-col>
@@ -91,6 +110,14 @@
         </a-row>
       </a-form>
     </a-modal>
+
+    <a-modal v-model:open="markLostOpen" title="标记为丢单" width="480px" :confirm-loading="saving" @ok="handleConfirmMarkLost">
+      <a-form layout="vertical">
+        <a-form-item label="丢单原因" required>
+          <a-textarea v-model:value="lostReason" :rows="3" placeholder="请说明丢单原因" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
@@ -100,16 +127,20 @@ import { message } from "ant-design-vue";
 import { useRoute, useRouter } from "vue-router";
 import {
   advanceOpportunity,
+  createFollowUp,
   createOpportunity,
+  deleteOpportunity,
   listCustomers,
   listOpportunities,
   type CustomerSummary,
   type Opportunity,
   type OpportunityStage,
 } from "@/api/crm";
+import { listUsersApi, type UserResponse } from "@/api/system";
 import { useAuthStore } from "@/stores/auth";
 import {
   formatMoney,
+  generateCode,
   opportunityStageColor,
   opportunityStageLabel,
   opportunityStageOptions,
@@ -120,11 +151,16 @@ const route = useRoute();
 const router = useRouter();
 const opportunities = ref<Opportunity[]>([]);
 const customers = ref<CustomerSummary[]>([]);
+const users = ref<UserResponse[]>([]);
 const loading = ref(false);
 const saving = ref(false);
 const createOpen = ref(false);
+const markLostOpen = ref(false);
+const markLostRecord = ref<Opportunity | null>(null);
+const lostReason = ref("");
 const advanceOpen = ref(false);
 const createFormRef = ref();
+
 const advanceFormRef = ref();
 const selectedOpportunity = ref<Opportunity | null>(null);
 const stageFilter = ref<OpportunityStage>();
@@ -142,6 +178,7 @@ const columns = [
 ];
 
 const createForm = reactive(initialCreateForm());
+
 const advanceForm = reactive({ stage: "QUALIFIED" as OpportunityStage, probability: 30, nextAction: "", nextActionAt: "" });
 const createRules = {
   code: [],
@@ -156,14 +193,20 @@ const advanceRules = {
   nextActionAt: [{ required: true, message: "请选择计划日期" }],
 };
 
-const customerOptions = computed(() => customers.value.map((item) => ({ label: `${item.name}（${item.code}）`, value: item.id })));
+const customerOptions = computed(() => customers.value.map((item) => ({ label: item.code ? `${item.name}（${item.code}）` : item.name, value: item.id })));
+const userOptions = computed(() => users.value.map((u) => ({ label: u.displayName, value: u.displayName })));
 const filteredOpportunities = computed(() => {
   const term = keyword.value.trim().toLowerCase();
-  return opportunities.value.filter((item) => {
+  const results = opportunities.value.filter((item) => {
     const matchesStage = !stageFilter.value || item.stage === stageFilter.value;
     const text = `${item.code} ${item.customerName} ${item.needSummary}`.toLowerCase();
     return matchesStage && (!term || text.includes(term));
   });
+  results.sort((a, b) => {
+    const getOrder = (s: string) => s === "WON" ? 2 : s === "LOST" ? 3 : 1;
+    return getOrder(a.stage) - getOrder(b.stage);
+  });
+  return results;
 });
 const activeItems = computed(() => opportunities.value.filter((item) => item.stage !== "WON" && item.stage !== "LOST"));
 const activeCount = computed(() => activeItems.value.length);
@@ -177,7 +220,7 @@ onMounted(async () => {
   if (route.query.create === "1" && customerId && customers.value.some(customer => customer.id === customerId)) {
     openCreate({
       customerId,
-      source: "合同续约",
+
       needSummary: typeof route.query.need === "string" ? route.query.need : "原合同续约",
       expectedAmount: Number(route.query.amount || 0),
       nextAction: "确认续约服务范围、付款节点和合同周期",
@@ -191,7 +234,7 @@ onMounted(async () => {
 async function loadData() {
   loading.value = true;
   try {
-    [opportunities.value, customers.value] = await Promise.all([listOpportunities(), listCustomers()]);
+    [opportunities.value, customers.value, users.value] = await Promise.all([listOpportunities(), listCustomers(), listUsersApi(1, 9999).then(r => r.content)]);
   } catch (error) {
     message.error(error instanceof Error ? error.message : "商机加载失败");
   } finally {
@@ -218,7 +261,7 @@ async function handleCreate() {
 function openCreate(prefill: Partial<ReturnType<typeof initialCreateForm>> = {}) {
   const customer = prefill.customerId ? customers.value.find(item => item.id === prefill.customerId) : undefined;
   Object.assign(createForm, initialCreateForm(), {
-    code: generateOpportunityCode(),
+    code: generateCode("SJ"),
     ownerName: customer?.ownerName || auth.user?.displayName || "",
     ...prefill,
   });
@@ -230,10 +273,57 @@ function openAdvance(record: Opportunity) {
   Object.assign(advanceForm, {
     stage: nextStage(record.stage),
     probability: Math.max(record.probability, defaultProbability(nextStage(record.stage))),
-    nextAction: record.nextAction || "",
-    nextActionAt: record.nextActionAt || "",
+    nextAction: record.nextAction || "待确定",
+    nextActionAt: record.nextActionAt || dateAfterDays(7),
   });
   advanceOpen.value = true;
+}
+
+async function handleDeleteOpportunity(record: Opportunity) {
+  try {
+    await deleteOpportunity(record.id);
+    message.success("商机已删除");
+    await loadData();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "删除失败");
+  }
+}
+
+function openMarkLost(record: Opportunity) {
+  markLostRecord.value = record;
+  lostReason.value = "";
+  markLostOpen.value = true;
+}
+
+async function handleConfirmMarkLost() {
+  if (!lostReason.value.trim()) {
+    message.warning("请输入丢单原因");
+    return;
+  }
+  const record = markLostRecord.value;
+  if (!record) return;
+  saving.value = true;
+  try {
+    await advanceOpportunity(record.id, { stage: "LOST", probability: 0, nextAction: "已标记为丢单", nextActionAt: new Date().toISOString().slice(0, 10) });
+    try {
+      await createFollowUp({
+        customerId: record.customerId!,
+        opportunityId: record.id,
+        type: "VISIT" as const,
+        subject: "商机推进至「丢单」",
+        content: `丢单原因：${lostReason.value}`,
+        followedAt: new Date().toISOString(),
+        ownerName: auth.user?.displayName || "",
+      });
+    } catch {}
+    markLostOpen.value = false;
+    message.success("商机已标记为丢单");
+    await loadData();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "操作失败");
+  } finally {
+    saving.value = false;
+  }
 }
 
 async function handleAdvance() {
@@ -241,7 +331,19 @@ async function handleAdvance() {
   if (!selectedOpportunity.value) return;
   saving.value = true;
   try {
-    await advanceOpportunity(selectedOpportunity.value.id, { ...advanceForm });
+    const result = await advanceOpportunity(selectedOpportunity.value.id, { ...advanceForm, nextActionAt: advanceForm.nextActionAt || dateAfterDays(7), nextAction: advanceForm.nextAction || "待确定" });
+    try {
+      await createFollowUp({
+        customerId: selectedOpportunity.value.customerId!,
+        opportunityId: selectedOpportunity.value.id,
+        type: "VISIT" as const,
+        subject: `商机推进至「${opportunityStageLabel(result.stage)}」`,
+        content: `阶段推进：${opportunityStageLabel(selectedOpportunity.value.stage)} → ${opportunityStageLabel(result.stage)}，成功率 ${result.probability}%`,
+        followedAt: new Date().toISOString(),
+        nextAction: result.nextAction || undefined,
+        ownerName: auth.user?.displayName || "",
+      });
+    } catch { /* auto-record is supplementary */ }
     advanceOpen.value = false;
     message.success("商机阶段已推进");
     await loadData();
@@ -267,15 +369,10 @@ function defaultProbability(stage: OpportunityStage) {
 }
 
 function initialCreateForm() {
-  return { customerId: undefined as string | undefined, code: "", source: "", needSummary: "", expectedAmount: 0, nextAction: "", nextActionAt: "", ownerName: "" };
+  return { customerId: undefined as string | undefined, code: "", needSummary: "", expectedAmount: 0, nextAction: "", nextActionAt: "", ownerName: "" };
 }
 
-function generateOpportunityCode() {
-  const date = new Date();
-  const stamp = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, "0")}${String(date.getDate()).padStart(2, "0")}`;
-  const time = `${String(date.getHours()).padStart(2, "0")}${String(date.getMinutes()).padStart(2, "0")}${String(date.getSeconds()).padStart(2, "0")}`;
-  return `SJ-${stamp}-${time}`;
-}
+
 
 function dateAfterDays(days: number) {
   const date = new Date();

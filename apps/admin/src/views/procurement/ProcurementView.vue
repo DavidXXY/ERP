@@ -36,12 +36,27 @@
               </a-button>
               <a-tag color="orange">待审批 {{ pendingApprovalCount }}</a-tag>
             </a-space>
+            <a-space class="filter-space">
+              <a-select v-model:value="requestFilters.status" allow-clear placeholder="申请状态" style="width:130px" :options="requestStatusOptions" />
+              <a-select v-model:value="requestFilters.approvalStatus" allow-clear placeholder="审批状态" style="width:120px" :options="requestApprovalOptions" />
+              <a-select v-model:value="requestFilters.costType" allow-clear placeholder="成本归属" style="width:120px" :options="costTypeOptions" />
+              <a-input-search v-model:value="requestFilters.search" placeholder="搜索申请编号/物料/申请人" style="width:260px" @search="handleRequestFilter" />
+              <a-button @click="handleRequestFilter">查询</a-button>
+            </a-space>
           </div>
           <a-table
             :columns="requestColumns"
             :data-source="purchaseRequests"
-            :loading="loading"
-            :pagination="{ pageSize: 8 }"
+            :loading="requestLoading"
+            :pagination="{
+              current: requestPage + 1,
+              pageSize: requestSize,
+              total: requestTotal,
+              showSizeChanger: true,
+              showQuickJumper: true,
+              showTotal: (total: number) => `共 ${total} 条`,
+              onChange: handleRequestPageChange,
+            }"
             :row-key="(record: PurchaseRequest) => record.id"
             :scroll="{ x: 1120 }"
             size="middle"
@@ -68,15 +83,27 @@
                 </span>
               </template>
               <template v-else-if="column.key === 'action'">
-                <a-button
-                  v-if="auth.can('procurement:request:approve') && record.approvalStatus === 'PENDING'"
-                  type="link"
-                  size="small"
-                  @click="openApproval(record)"
-                >
-                  审批处理
-                </a-button>
-                <span v-else class="muted">无需处理</span>
+                <a-space>
+                  <a-button
+                    v-if="auth.can('procurement:purchase:create') && (record.approvalStatus === 'PENDING' || record.approvalStatus === 'REJECTED')"
+                    type="link"
+                    size="small"
+                    @click="openEditRequest(record)"
+                  >
+                    编辑
+                  </a-button>
+                  <a-button
+                    v-if="auth.can('procurement:request:approve') && record.approvalStatus === 'PENDING'"
+                    type="link"
+                    size="small"
+                    @click="openApproval(record)"
+                  >
+                    审批处理
+                  </a-button>
+                  <span v-else-if="!auth.can('procurement:purchase:create') || (record.approvalStatus !== 'PENDING' && record.approvalStatus !== 'REJECTED')" class="muted">
+                    {{ record.approvalStatus === 'APPROVED' ? '已审批' : record.approvalStatus === 'REJECTED' ? '已驳回' : '无需处理' }}
+                  </span>
+                </a-space>
               </template>
             </template>
           </a-table>
@@ -90,13 +117,28 @@
                 根据审批申请下单
               </a-button>
               <span class="muted">当前有 {{ requestOptions.length }} 条已审批申请可下单</span>
+              <a-button style="float:right" size="small" @click="handleOrderFilter">刷新列表</a-button>
+            </a-space>
+            <a-space class="filter-space">
+              <a-select v-model:value="orderFilters.status" allow-clear placeholder="订单状态" style="width:130px" :options="orderStatusOptions" />
+              <a-select v-model:value="orderFilters.costType" allow-clear placeholder="成本归属" style="width:120px" :options="costTypeOptions" />
+              <a-input-search v-model:value="orderFilters.search" placeholder="搜索订单编号/物料" style="width:220px" @search="handleOrderFilter" />
+              <a-button @click="handleOrderFilter">查询</a-button>
             </a-space>
           </div>
           <a-table
             :columns="orderColumns"
             :data-source="purchaseOrders"
-            :loading="loading"
-            :pagination="{ pageSize: 8 }"
+            :loading="orderLoading"
+            :pagination="{
+              current: orderPage + 1,
+              pageSize: orderSize,
+              total: orderTotal,
+              showSizeChanger: true,
+              showQuickJumper: true,
+              showTotal: (total: number) => `共 ${total} 条`,
+              onChange: handleOrderPageChange,
+            }"
             :row-key="(record: PurchaseOrder) => record.id"
             :scroll="{ x: 1280 }"
             size="middle"
@@ -129,16 +171,29 @@
               <template v-else-if="column.key === 'status'">
                 <a-tag :color="orderColor(record.status)">{{ orderLabel(record.status) }}</a-tag>
               </template>
-              <template v-else-if="column.key === 'action'">
-                <a-button
-                  v-if="auth.can('procurement:order:receive') && canReceive(record)"
-                  type="link"
-                  size="small"
-                  @click="openReceipt(record)"
-                >
-                  到货入库
-                </a-button>
-                <span v-else class="muted">{{ record.status === 'RECEIVED' ? '已全部入库' : '无需处理' }}</span>
+                            <template v-else-if="column.key === 'action'">
+                <a-space>
+                  <a-button
+                    v-if="auth.can('procurement:order:receive') && canReceive(record)"
+                    type="link"
+                    size="small"
+                    @click="openReceipt(record)"
+                  >
+                    到货入库
+                  </a-button>
+                  <a-button
+                    v-if="auth.can('procurement:purchase:create') && record.status === 'ORDERED'"
+                    type="link"
+                    size="small"
+                    danger
+                    @click="handleCancelOrder(record)"
+                  >
+                    取消订单
+                  </a-button>
+                  <span v-else class="muted">
+                    {{ record.status === 'RECEIVED' ? '已全部入库' : record.status === 'CANCELLED' ? '已取消' : '无需处理' }}
+                  </span>
+                </a-space>
               </template>
             </template>
           </a-table>
@@ -276,7 +331,7 @@
       </a-form>
     </a-modal>
 
-    <a-modal v-model:open="requestOpen" title="新增采购申请" width="760px" :confirm-loading="savingRequest" @ok="handleCreateRequest">
+    <a-modal v-model:open="requestOpen" :title="editingRequestId ? '编辑采购申请' : '新增采购申请'" width="760px" :confirm-loading="savingRequest" @ok="handleSaveRequest">
       <a-form ref="requestFormRef" :model="requestForm" :rules="requestRules" layout="vertical">
         <a-row :gutter="16">
           <a-col :xs="24" :md="8"><a-form-item label="申请人" name="requesterName"><a-input v-model:value="requestForm.requesterName" /></a-form-item></a-col>
@@ -334,11 +389,12 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
-import { message } from "ant-design-vue";
+import { message, Modal } from "ant-design-vue";
 import PlusOutlined from "@ant-design/icons-vue/PlusOutlined";
 import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
 import ShoppingCartOutlined from "@ant-design/icons-vue/ShoppingCartOutlined";
 import {
+  cancelPurchaseOrder,
   createPurchaseOrder,
   createPurchaseRequest,
   createSupplier,
@@ -351,6 +407,7 @@ import {
   listPurchaseRequests,
   listSuppliers,
   processPurchaseRequestApproval,
+  updatePurchaseRequest,
   receivePurchaseOrder,
   type ApprovalStatus,
   type CreatePurchaseOrderPayload,
@@ -387,8 +444,32 @@ const costTargets = ref<ProcurementCostTargetOptions>({ projects: [], department
 const costFilter = ref<"ALL" | ProcurementCostType>("ALL");
 const parts = ref<InventoryPart[]>([]);
 const loading = ref(false);
+const requestLoading = ref(false);
+const orderLoading = ref(false);
 const errorMessage = ref("");
+
+// Pagination state
+const requestPage = ref(0);
+const requestSize = ref(10);
+const requestTotal = ref(0);
+const orderPage = ref(0);
+const orderSize = ref(10);
+const orderTotal = ref(0);
+
+// Filter state
+const requestFilters = reactive<{ status?: PurchaseRequestStatus; approvalStatus?: ApprovalStatus; costType?: ProcurementCostType; search: string }>({
+  status: undefined,
+  approvalStatus: undefined,
+  costType: undefined,
+  search: "",
+});
+const orderFilters = reactive<{ status?: PurchaseOrderStatus; costType?: ProcurementCostType; search: string }>({
+  status: undefined,
+  costType: undefined,
+  search: "",
+});
 const supplierOpen = ref(false);
+const editingRequestId = ref<string | null>(null);
 const requestOpen = ref(false);
 const approvalOpen = ref(false);
 const orderOpen = ref(false);
@@ -411,22 +492,42 @@ const approvalForm = reactive<ApprovalForm>(initialApprovalForm());
 const orderForm = reactive<CreatePurchaseOrderPayload>(initialOrderForm());
 const receiptForm = reactive<ReceiptForm>(initialReceiptForm());
 
+// Filter options
+const requestStatusOptions = [
+  { value: "SUBMITTED", label: "已提交" },
+  { value: "APPROVED", label: "已审批" },
+  { value: "ORDERED", label: "已下单" },
+  { value: "RECEIVED", label: "已到货" },
+  { value: "CANCELLED", label: "已取消" },
+];
+const requestApprovalOptions = [
+  { value: "PENDING", label: "待审批" },
+  { value: "APPROVED", label: "审批通过" },
+  { value: "REJECTED", label: "已驳回" },
+];
+const orderStatusOptions = [
+  { value: "ORDERED", label: "已下单" },
+  { value: "PARTIAL_RECEIVED", label: "部分到货" },
+  { value: "RECEIVED", label: "已到货" },
+  { value: "CANCELLED", label: "已取消" },
+];
+
 const requestColumns = [
-  { title: "申请", key: "code", width: 260 },
+  { title: "申请", key: "code", width: 260, sorter: true },
   { title: "物料 / 数量", key: "part", width: 210 },
   { title: "成本归属", key: "costTarget", width: 220 },
-  { title: "期望到货", dataIndex: "expectedDate", width: 120 },
+  { title: "期望到货", dataIndex: "expectedDate", width: 120, sorter: true },
   { title: "状态 / 审批", key: "status", width: 300 },
   { title: "操作", key: "action", width: 120, fixed: "right" },
 ];
 const orderColumns = [
-  { title: "订单", key: "code", width: 230 },
+  { title: "订单", key: "code", width: 230, sorter: true },
   { title: "供应商", dataIndex: "supplierName", width: 200 },
   { title: "物料 / 单价", key: "part", width: 220 },
   { title: "成本归属", key: "costTarget", width: 200 },
   { title: "已收 / 订购", key: "quantity", width: 160 },
-  { title: "订单金额", key: "amount", width: 140 },
-  { title: "预计到货", dataIndex: "expectedDeliveryDate", width: 120 },
+  { title: "订单金额", key: "amount", width: 140, sorter: true },
+  { title: "预计到货", dataIndex: "expectedDeliveryDate", width: 120, sorter: true },
   { title: "状态", key: "status", width: 110 },
   { title: "操作", key: "action", width: 120, fixed: "right" },
 ];
@@ -550,7 +651,23 @@ async function loadData() {
 }
 
 function openSupplier() { Object.assign(supplierForm, initialSupplierForm()); supplierOpen.value = true; }
-function openRequest() { Object.assign(requestForm, initialRequestForm()); requestOpen.value = true; }
+function openEditRequest(record: PurchaseRequest) {
+  editingRequestId.value = record.id;
+  Object.assign(requestForm, {
+    requesterName: record.requesterName,
+    partId: record.partId as any,
+    partName: record.partName,
+    quantity: record.quantity,
+    expectedDate: record.expectedDate,
+    reason: record.reason || '',
+    costType: record.costType,
+    projectId: record.projectId as any,
+    departmentId: record.departmentId as any,
+  });
+  requestOpen.value = true;
+}
+
+function openRequest() { editingRequestId.value = null; Object.assign(requestForm, initialRequestForm()); requestOpen.value = true; }
 function openApproval(record: PurchaseRequest) {
   selectedRequest.value = record;
   Object.assign(approvalForm, initialApprovalForm());
@@ -588,12 +705,41 @@ async function handleCreateSupplier() {
   catch (error) { message.error(error instanceof Error ? error.message : "供应商新增失败"); }
   finally { savingSupplier.value = false; }
 }
-async function handleCreateRequest() {
+async function handleSaveRequest() {
   await requestFormRef.value?.validate();
   savingRequest.value = true;
-  try { await createPurchaseRequest({ ...requestForm }); requestOpen.value = false; message.success("采购申请已提交审批"); await loadData(); }
-  catch (error) { message.error(error instanceof Error ? error.message : "采购申请新增失败"); }
+  try {
+    if (editingRequestId.value) {
+      await updatePurchaseRequest(editingRequestId.value, { ...requestForm });
+      message.success("采购申请已更新");
+    } else {
+      await createPurchaseRequest({ ...requestForm });
+      message.success("采购申请已提交审批");
+    }
+    requestOpen.value = false;
+    editingRequestId.value = null;
+    await loadRequests();
+  } catch (error) { message.error(error instanceof Error ? error.message : "操作失败"); }
   finally { savingRequest.value = false; }
+
+function handleCancelOrder(record: PurchaseOrder) {
+  Modal.confirm({
+    title: "确认取消订单",
+    content: "确定要取消订单 " + record.code + " 吗？此操作不可撤销。",
+    okText: "确认取消",
+    okType: "danger",
+    cancelText: "暂不取消",
+    onOk: async () => {
+      try {
+        await cancelPurchaseOrder(record.id);
+        message.success("采购订单已取消");
+        await loadOrders();
+      } catch (error) {
+        message.error(error instanceof Error ? error.message : "取消失败");
+      }
+    },
+  });
+}
 }
 async function handleApproval() {
   if (!selectedRequest.value) return;
@@ -603,14 +749,14 @@ async function handleApproval() {
     await processPurchaseRequestApproval(selectedRequest.value.id, { ...approvalForm });
     approvalOpen.value = false;
     message.success(approvalForm.decision === "APPROVED" ? "采购申请已审批通过" : "采购申请已驳回");
-    await loadData();
+    await loadRequests();
   } catch (error) { message.error(error instanceof Error ? error.message : "审批处理失败"); }
   finally { savingApproval.value = false; }
 }
 async function handleCreateOrder() {
   await orderFormRef.value?.validate();
   savingOrder.value = true;
-  try { await createPurchaseOrder({ ...orderForm }); orderOpen.value = false; activeTab.value = "orders"; message.success("采购订单已创建"); await loadData(); }
+  try { await createPurchaseOrder({ ...orderForm }); orderOpen.value = false; activeTab.value = "orders"; message.success("采购订单已创建"); await loadOrders(); }
   catch (error) { message.error(error instanceof Error ? error.message : "采购订单新增失败"); }
   finally { savingOrder.value = false; }
 }

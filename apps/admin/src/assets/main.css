@@ -350,3 +350,7 @@ body {
     gap: 2px !important;
   }
 }
+
+/* Procurement filters */
+.filter-space { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; }
+.table-toolbar .ant-space { width: 100%; }

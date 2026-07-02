@@ -34,6 +34,7 @@
         >
           <template #icon><TeamOutlined /></template>
           <template #title>CRM</template>
+          <a-menu-item v-if="auth.can('crm:dashboard:view')" key="/crm/dashboard">CRM仪表盘</a-menu-item>
           <a-menu-item v-if="auth.can('crm:customer:view')" key="/crm/customers">客户池</a-menu-item>
           <a-menu-item v-if="auth.can('crm:opportunity:view')" key="/crm/opportunities">线索商机</a-menu-item>
           <a-menu-item v-if="auth.can('crm:quote:view')" key="/crm/quotes">报价方案</a-menu-item>
@@ -62,10 +63,14 @@
           <a-menu-item v-if="auth.can('maintenance:equipment:view')" key="/maintenance/equipment">资产设备</a-menu-item>
           <a-menu-item v-if="auth.can('maintenance:plan:view')" key="/maintenance/plans">服务计划</a-menu-item>
         </a-sub-menu>
-        <a-menu-item v-if="canAccessHumanResources" key="/hr">
+        <a-sub-menu v-if="canAccessHumanResources" key="hr">
           <template #icon><CalendarOutlined /></template>
-          <span>人事管理</span>
-        </a-menu-item>
+          <template #title>人事管理</template>
+          <a-menu-item key="/hr">员工中心</a-menu-item>
+          <a-menu-item v-if="auth.can('qualification:employee:view')" key="/hr/lifecycle">入转调离</a-menu-item>
+          <a-menu-item v-if="auth.can('workforce:view')" key="/hr/leaves">请假管理</a-menu-item>
+          <a-menu-item v-if="auth.can('qualification:employee:view')" key="/hr/analytics">人力分析</a-menu-item>
+        </a-sub-menu>
         <a-sub-menu v-if="canAccessQualification" key="qualification">
           <template #icon><SafetyCertificateOutlined /></template>
           <template #title>资质管理</template>
@@ -100,6 +105,7 @@
         >
           <template #icon><SettingOutlined /></template>
           <template #title>系统设置</template>
+          <a-menu-item v-if="auth.can('system:view')" key="/system/health">系统运行情况</a-menu-item>
           <a-menu-item v-if="auth.can('system:organization:view')" key="/system/organizations">组织架构</a-menu-item>
           <a-menu-item v-if="auth.can('system:role:view')" key="/system/roles">角色管理</a-menu-item>
           <a-menu-item v-if="auth.can('system:permission:view')" key="/system/permissions">权限管理</a-menu-item>

@@ -246,7 +246,14 @@ async function handleCreate() {
   await createFormRef.value?.validate();
   saving.value = true;
   try {
-    await createOpportunity({ ...createForm, stage: "LEAD", probability: 10 });
+    const payload = {
+      ...createForm,
+      stage: "LEAD" as const,
+      probability: 10,
+      nextActionAt: createForm.nextActionAt || undefined,
+      nextAction: createForm.nextAction || undefined,
+    };
+    await createOpportunity(payload);
     Object.assign(createForm, initialCreateForm());
     createOpen.value = false;
     message.success("商机已创建");

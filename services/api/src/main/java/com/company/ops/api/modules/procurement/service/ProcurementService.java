@@ -61,12 +61,14 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.util.StringUtils;
 
 @Service
 public class ProcurementService {
 
-  private CodeGenerator codeGenerator;
+  private final CodeGenerator codeGenerator;
   private final SupplierRepository supplierRepository;
   private final PurchaseRequestRepository requestRepository;
   private final PurchaseRequestApprovalRecordRepository requestApprovalRepository;
@@ -81,6 +83,7 @@ public class ProcurementService {
   private final SystemOrganizationRepository organizationRepository;
 
   public ProcurementService(
+      CodeGenerator codeGenerator,
       SupplierRepository supplierRepository,
       PurchaseRequestRepository requestRepository,
       PurchaseRequestApprovalRecordRepository requestApprovalRepository,
@@ -114,6 +117,11 @@ public class ProcurementService {
     return supplierRepository.findAllByOrderByCreatedAtDesc().stream()
         .map(this::toSupplierResponse)
         .toList();
+  }
+
+  @Transactional(readOnly = true)
+  public Page<SupplierResponse> listSuppliers(Pageable pageable) {
+    return supplierRepository.findAll(pageable).map(this::toSupplierResponse);
   }
 
   @Transactional
@@ -177,6 +185,14 @@ public class ProcurementService {
     return requestRepository.findAllByOrderByCreatedAtDesc().stream()
         .map(this::toPurchaseRequestResponse)
         .toList();
+  }
+
+  @Transactional(readOnly = true)
+  public Page<PurchaseRequestResponse> listPurchaseRequests(
+      PurchaseRequestStatus status, ApprovalStatus approvalStatus,
+      ProcurementCostType costType, String search, Pageable pageable) {
+    return requestRepository.findByFilters(status, approvalStatus, costType, search, pageable)
+        .map(this::toPurchaseRequestResponse);
   }
 
   @Transactional
@@ -247,10 +263,61 @@ public class ProcurementService {
     return toPurchaseRequestResponse(purchaseRequest);
   }
 
+  @Transactional
+  public PurchaseRequestResponse updatePurchaseRequest(
+      UUID id, CreatePurchaseRequestRequest request) {
+    PurchaseRequest purchaseRequest = requestRepository.findById(id)
+        .orElseThrow(() -> new BusinessException("采购申请不存在"));
+    if (purchaseRequest.getApprovalStatus() == ApprovalStatus.APPROVED
+        || purchaseRequest.getStatus() == PurchaseRequestStatus.RECEIVED
+        || purchaseRequest.getStatus() == PurchaseRequestStatus.CANCELLED) {
+      throw new BusinessException("该申请当前状态不可编辑");
+    }
+    purchaseRequest.setRequesterName(request.requesterName());
+    purchaseRequest.setPartId(request.partId());
+    if (request.partId() != null) {
+      InventoryPart part = partRepository.findById(request.partId())
+          .orElseThrow(() -> new BusinessException("物料不存在"));
+      purchaseRequest.setPartName(part.getName());
+    } else {
+      purchaseRequest.setPartName(request.partName());
+    }
+    purchaseRequest.setQuantity(request.quantity());
+    purchaseRequest.setExpectedDate(request.expectedDate());
+    purchaseRequest.setReason(request.reason());
+    purchaseRequest.setCostType(request.costType());
+    purchaseRequest.setProjectId(request.projectId());
+    purchaseRequest.setDepartmentId(request.departmentId());
+    CostTarget costTarget = resolveCostTarget(
+        request.costType(), request.projectId(), request.departmentId());
+    purchaseRequest.setCostTargetCode(costTarget.code());
+    purchaseRequest.setCostTargetName(costTarget.name());
+    // If was rejected, reset to PENDING for re-approval
+    if (purchaseRequest.getApprovalStatus() == ApprovalStatus.REJECTED) {
+      purchaseRequest.setApprovalStatus(ApprovalStatus.PENDING);
+    }
+    return toPurchaseRequestResponse(requestRepository.save(purchaseRequest));
+  }
+
   @Transactional(readOnly = true)
   public List<PurchaseOrderResponse> listPurchaseOrders() {
     List<PurchaseOrder> orders = orderRepository.findAllByOrderByCreatedAtDesc();
     return mapOrders(orders);
+  }
+
+  @Transactional(readOnly = true)
+  public Page<PurchaseOrderResponse> listPurchaseOrders(
+      PurchaseOrderStatus status, ProcurementCostType costType,
+      String search, Pageable pageable) {
+    Page<PurchaseOrder> page = orderRepository.findByFilters(status, costType, search, pageable);
+    // Batch-load suppliers
+    Map<UUID, Supplier> supplierMap = supplierRepository.findAllById(
+        page.getContent().stream().map(PurchaseOrder::getSupplierId).distinct().toList()
+    ).stream().collect(Collectors.toMap(Supplier::getId, Function.identity()));
+    Map<UUID, PurchaseRequest> requestMap = requestRepository.findAllById(
+        page.getContent().stream().map(PurchaseOrder::getRequestId).filter(java.util.Objects::nonNull).distinct().toList()
+    ).stream().collect(Collectors.toMap(PurchaseRequest::getId, Function.identity()));
+    return page.map(order -> toPurchaseOrderResponse(order, supplierMap.get(order.getSupplierId()), requestMap.get(order.getRequestId())));
   }
 
   @Transactional
@@ -306,8 +373,31 @@ public class ProcurementService {
   }
 
   @Transactional
+  public PurchaseOrderResponse cancelPurchaseOrder(UUID id) {
+    PurchaseOrder order = orderRepository.findByIdForUpdate(id)
+        .orElseThrow(() -> new BusinessException("采购订单不存在"));
+    if (order.getStatus() != PurchaseOrderStatus.ORDERED) {
+      throw new BusinessException("只有已下单的订单才能取消");
+    }
+    order.setStatus(PurchaseOrderStatus.CANCELLED);
+    PurchaseOrder saved = orderRepository.save(order);
+    // Revert the associated purchase request back to APPROVED
+    if (order.getRequestId() != null) {
+      PurchaseRequest pr = requestRepository.findById(order.getRequestId()).orElse(null);
+      if (pr != null && pr.getStatus() == PurchaseRequestStatus.ORDERED) {
+        pr.setStatus(PurchaseRequestStatus.APPROVED);
+        requestRepository.save(pr);
+      }
+    }
+    Supplier supplier = supplierRepository.findById(order.getSupplierId()).orElse(null);
+    PurchaseRequest purchaseRequest = order.getRequestId() != null
+        ? requestRepository.findById(order.getRequestId()).orElse(null) : null;
+    return toPurchaseOrderResponse(saved, supplier, purchaseRequest);
+  }
+
+  @Transactional
   public ReceivePurchaseOrderResult receiveOrder(UUID id, ReceivePurchaseOrderRequest request) {
-    PurchaseOrder order = orderRepository.findById(id)
+    PurchaseOrder order = orderRepository.findByIdForUpdate(id)
         .orElseThrow(() -> new BusinessException("采购订单不存在"));
     if (order.getStatus() != PurchaseOrderStatus.ORDERED
         && order.getStatus() != PurchaseOrderStatus.PARTIAL_RECEIVED) {

@@ -301,3 +301,52 @@ export function deleteOrganizationApi(id: string) {
     url: `/organizations/${id}`,
   });
 }
+
+// --- System Health ---
+
+export type SystemHealthResponse = {
+  operatingSystem: {
+    name: string;
+    version: string;
+    architecture: string;
+    availableProcessors: number;
+    systemLoadAverage: number;
+    processCpuLoad?: number;
+    systemCpuLoad?: number;
+  };
+  cpu: {
+    availableProcessors: number;
+    systemLoadAverage: number;
+    processCpuLoad: number;
+    systemCpuLoad: number;
+  };
+  memory: {
+    heap: { init: number; used: number; committed: number; max: number };
+    nonHeap: { init: number; used: number; committed: number; max: number };
+    totalPhysicalMemory?: number;
+    freePhysicalMemory?: number;
+  };
+  jvm: {
+    javaVersion: string;
+    javaVendor: string;
+    jvmName: string;
+    jvmVersion: string;
+    jvmVendor: string;
+    uptime: number;
+    inputArguments: string[];
+    startTime: number;
+  };
+  disk: {
+    path: string;
+    totalSpace: number;
+    freeSpace: number;
+    usableSpace: number;
+  }[];
+};
+
+export function getSystemHealthApi() {
+  return request<SystemHealthResponse>({
+    method: "GET",
+    url: "/system/health",
+  });
+}

@@ -6,11 +6,15 @@ import InventoryPartsView from "@/views/inventory/InventoryPartsView.vue";
 import ProcurementView from "@/views/procurement/ProcurementView.vue";
 import ProjectManagementView from "@/views/project/ProjectManagementView.vue";
 import HumanResourcesView from "@/views/hr/HumanResourcesView.vue";
+import EmployeeDetailView from "@/views/hr/EmployeeDetailView.vue";
+import EmployeeLifecycleView from "@/views/hr/EmployeeLifecycleView.vue";
+import LeaveManagementView from "@/views/hr/LeaveManagementView.vue";
+import HrAnalyticsView from "@/views/hr/HrAnalyticsView.vue";
 import LoginView from "@/views/system/LoginView.vue";
-import PlaceholderView from "@/views/system/PlaceholderView.vue";
 import RoleManagementView from "@/views/system/RoleManagementView.vue";
 import PermissionManagementView from "@/views/system/PermissionManagementView.vue";
 import OrganizationView from "@/views/system/OrganizationView.vue";
+import SystemHealthView from "@/views/system/SystemHealthView.vue";
 import { useAuthStore } from "@/stores/auth";
 
 export const routes: RouteRecordRaw[] = [
@@ -152,6 +156,30 @@ export const routes: RouteRecordRaw[] = [
         redirect: { path: "/hr", query: { tab: "workforce" } },
       },
       {
+        path: "hr/employees/:employeeId",
+        name: "hr-employee-detail",
+        component: EmployeeDetailView,
+        meta: { title: "员工档案详情", permission: "qualification:employee:view" },
+      },
+      {
+        path: "hr/lifecycle",
+        name: "hr-lifecycle",
+        component: EmployeeLifecycleView,
+        meta: { title: "入转调离", permissions: ["qualification:employee:view"] },
+      },
+      {
+        path: "hr/leaves",
+        name: "hr-leaves",
+        component: LeaveManagementView,
+        meta: { title: "请假管理", permissions: ["workforce:view", "qualification:employee:view"] },
+      },
+      {
+        path: "hr/analytics",
+        name: "hr-analytics",
+        component: HrAnalyticsView,
+        meta: { title: "人力分析", permissions: ["qualification:employee:view"] },
+      },
+      {
         path: "qualification",
         redirect: "/qualification/dashboard",
       },
@@ -264,8 +292,14 @@ export const routes: RouteRecordRaw[] = [
       {
         path: "system",
         name: "system",
-        component: PlaceholderView,
+        redirect: "/system/health",
         meta: { title: "系统设置", permission: "system:view", description: "组织、用户、角色、数据范围、操作日志。" },
+      },
+      {
+        path: "system/health",
+        name: "system-health",
+        component: SystemHealthView,
+        meta: { title: "系统运行情况", permission: "system:view" },
       },
       {
         path: "system/users",

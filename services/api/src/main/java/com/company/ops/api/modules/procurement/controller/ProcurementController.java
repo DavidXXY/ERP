@@ -13,18 +13,28 @@ import com.company.ops.api.modules.procurement.dto.PurchaseOrderResponse;
 import com.company.ops.api.modules.procurement.dto.PurchaseRequestResponse;
 import com.company.ops.api.modules.procurement.dto.ReceivePurchaseOrderRequest;
 import com.company.ops.api.modules.procurement.dto.ReceivePurchaseOrderResult;
+import com.company.ops.api.modules.procurement.domain.PurchaseRequestStatus;
+import com.company.ops.api.modules.procurement.domain.ApprovalStatus;
+import com.company.ops.api.modules.procurement.domain.ProcurementCostType;
+import com.company.ops.api.modules.procurement.domain.PurchaseOrderStatus;
 import com.company.ops.api.modules.procurement.dto.SupplierResponse;
 import com.company.ops.api.modules.procurement.service.ProcurementService;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -40,8 +50,10 @@ public class ProcurementController {
 
   @GetMapping("/suppliers")
   @PreAuthorize("hasAuthority('procurement:view')")
-  public ApiResponse<List<SupplierResponse>> listSuppliers() {
-    return ApiResponse.ok(procurementService.listSuppliers());
+  public ApiResponse<Page<SupplierResponse>> listSuppliers(
+      @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
+  ) {
+    return ApiResponse.ok(procurementService.listSuppliers(pageable));
   }
 
   @PostMapping("/suppliers")
@@ -65,8 +77,17 @@ public class ProcurementController {
 
   @GetMapping("/requests")
   @PreAuthorize("hasAuthority('procurement:view')")
-  public ApiResponse<List<PurchaseRequestResponse>> listPurchaseRequests() {
-    return ApiResponse.ok(procurementService.listPurchaseRequests());
+  public ApiResponse<Page<PurchaseRequestResponse>> listPurchaseRequests(
+      @RequestParam(required = false) String status,
+      @RequestParam(required = false) String approvalStatus,
+      @RequestParam(required = false) String costType,
+      @RequestParam(required = false) String search,
+      @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
+  ) {
+    PurchaseRequestStatus s = status != null ? PurchaseRequestStatus.valueOf(status) : null;
+    ApprovalStatus a = approvalStatus != null ? ApprovalStatus.valueOf(approvalStatus) : null;
+    ProcurementCostType c = costType != null ? ProcurementCostType.valueOf(costType) : null;
+    return ApiResponse.ok(procurementService.listPurchaseRequests(s, a, c, search, pageable));
   }
 
   @PostMapping("/requests")
@@ -87,10 +108,26 @@ public class ProcurementController {
     return ApiResponse.ok(procurementService.processRequestApproval(id, request));
   }
 
+  @PutMapping("/requests/{id}")
+  @PreAuthorize("hasAuthority('procurement:purchase:create')")
+  public ApiResponse<PurchaseRequestResponse> updatePurchaseRequest(
+      @PathVariable UUID id,
+      @Valid @RequestBody CreatePurchaseRequestRequest request
+  ) {
+    return ApiResponse.ok(procurementService.updatePurchaseRequest(id, request));
+  }
+
   @GetMapping("/orders")
   @PreAuthorize("hasAuthority('procurement:view')")
-  public ApiResponse<List<PurchaseOrderResponse>> listPurchaseOrders() {
-    return ApiResponse.ok(procurementService.listPurchaseOrders());
+  public ApiResponse<Page<PurchaseOrderResponse>> listPurchaseOrders(
+      @RequestParam(required = false) String status,
+      @RequestParam(required = false) String costType,
+      @RequestParam(required = false) String search,
+      @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
+  ) {
+    PurchaseOrderStatus s = status != null ? PurchaseOrderStatus.valueOf(status) : null;
+    ProcurementCostType c = costType != null ? ProcurementCostType.valueOf(costType) : null;
+    return ApiResponse.ok(procurementService.listPurchaseOrders(s, c, search, pageable));
   }
 
   @PostMapping("/orders")
@@ -100,6 +137,12 @@ public class ProcurementController {
       @Valid @RequestBody CreatePurchaseOrderRequest request
   ) {
     return ApiResponse.ok(procurementService.createPurchaseOrder(request));
+  }
+
+  @PostMapping("/orders/{id}/cancel")
+  @PreAuthorize("hasAuthority('procurement:order:receive')")
+  public ApiResponse<PurchaseOrderResponse> cancelPurchaseOrder(@PathVariable UUID id) {
+    return ApiResponse.ok(procurementService.cancelPurchaseOrder(id));
   }
 
   @PostMapping("/orders/{id}/receipts")

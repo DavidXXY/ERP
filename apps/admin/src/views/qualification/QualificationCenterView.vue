@@ -245,6 +245,11 @@
     </a-modal>
 
     <a-drawer v-model:open="employeeDetailOpen" title="员工档案详情" width="960px">
+      <template v-if="employeeDetail" #extra>
+        <a-button type="link" size="small" @click="goToDetail">
+          <template #icon><ArrowRightOutlined /></template>查看完整档案
+        </a-button>
+      </template>
       <template v-if="employeeDetail">
         <a-descriptions bordered :column="2" size="small"><a-descriptions-item label="姓名">{{ employeeDetail.employee.name }}</a-descriptions-item><a-descriptions-item label="状态">{{ employmentLabel(employeeDetail.employee.employmentStatus) }}</a-descriptions-item><a-descriptions-item label="工号">{{ employeeDetail.employee.workNo || '-' }}</a-descriptions-item><a-descriptions-item label="部门岗位">{{ employeeDetail.employee.organizationName || '未分配' }} / {{ employeeDetail.employee.position || '-' }}</a-descriptions-item><a-descriptions-item label="组织路径" :span="2">{{ employeeDetail.employee.organizationPath || '未分配组织' }}</a-descriptions-item><a-descriptions-item label="身份证号">{{ employeeDetail.employee.idCard || '-' }}</a-descriptions-item><a-descriptions-item label="手机号">{{ employeeDetail.employee.phone || '-' }}</a-descriptions-item><a-descriptions-item label="社保单位">{{ employeeDetail.employee.socialSecurityUnit || '-' }}</a-descriptions-item><a-descriptions-item label="社保截止">{{ employeeDetail.employee.socialSecurityEnd || '-' }}</a-descriptions-item></a-descriptions>
         <a-tabs v-model:active-key="employeeDetailTab" class="employee-detail-tabs">
@@ -431,6 +436,7 @@ async function saveEmployee() { await employeeFormRef.value?.validate(); saving.
 async function removeEmployee(id: string) { await deleteQualificationEmployee(id); message.success("人员档案已删除"); await refreshReferences(); await loadEmployees(); }
 async function showEmployee(id: string) { employeeDetail.value = await getQualificationEmployee(id); employeeDetailTab.value = "contracts"; employeeDetailOpen.value = true; }
 function employeeRow(record: QualificationEmployee) { return { onDblclick: () => showEmployee(record.id) }; }
+function goToDetail() { if (!employeeDetail.value) return; window.open(`/hr/employees/${employeeDetail.value.employee.id}`, '_blank'); }
 function openEmployeeContract(record?: EmployeeContract) { employeeContractEditingId.value = record?.id || ""; Object.assign(employeeContractForm, record ? { ...record, attachments: [...record.attachments] } : emptyEmployeeContract()); employeeContractOpen.value = true; }
 async function saveEmployeeContract() { await employeeContractFormRef.value?.validate(); if (!employeeDetail.value) return; saving.value = true; try { if (employeeContractEditingId.value) await updateEmployeeContract(employeeContractEditingId.value, employeeContractForm); else await createEmployeeContract(employeeDetail.value.employee.id, employeeContractForm); employeeContractOpen.value = false; message.success("员工合同已保存"); await reloadEmployeeDetail(); } catch (error) { message.error(error instanceof Error ? error.message : "合同保存失败"); } finally { saving.value = false; } }
 async function removeEmployeeContract(id: string) { await deleteEmployeeContract(id); message.success("员工合同已删除"); await reloadEmployeeDetail(); }

@@ -1050,6 +1050,32 @@ public class CrmOperationsService {
     }
   }
 
+  @Transactional
+  public OpportunityResponse updateOpportunity(UUID id, CreateOpportunityRequest request) {
+    Opportunity opp = opportunityRepository.findById(id)
+        .orElseThrow(() -> new BusinessException("\u5546\u673a\u4e0d\u5b58\u5728"));
+    if (request.customerId() != null) opp.setCustomerId(request.customerId());
+    if (request.needSummary() != null) opp.setNeedSummary(request.needSummary());
+    if (request.expectedAmount() != null) opp.setExpectedAmount(BigDecimal.valueOf(request.expectedAmount()));
+    if (request.nextAction() != null) opp.setNextAction(request.nextAction());
+    if (request.nextActionAt() != null) opp.setNextActionAt(request.nextActionAt());
+    if (request.ownerName() != null) opp.setOwnerName(request.ownerName());
+    return toOpportunity(opportunityRepository.save(opp), customerMap(nullableId(opp.getCustomerId())));
+  }
+
+  @Transactional
+  public ContractResponse updateContract(UUID id, UpdateContractRequest request) {
+    ServiceContract contract = contractRepository.findById(id)
+        .orElseThrow(() -> new BusinessException("\u5408\u540c\u4e0d\u5b58\u5728"));
+    if (request.projectName() != null) contract.setProjectName(request.projectName());
+    if (request.contractType() != null) contract.setContractType(request.contractType());
+    if (request.amount() != null) contract.setAmount(request.amount());
+    if (request.serviceCycle() != null) contract.setServiceCycle(request.serviceCycle());
+    if (request.startDate() != null) contract.setStartDate(request.startDate());
+    if (request.endDate() != null) contract.setEndDate(request.endDate());
+    return toContract(contractRepository.save(contract), customerMap(nullableId(contract.getCustomerId())));
+  }
+
   public java.util.List<ContractChangeResponse> listContractChanges(UUID contractId) {
     return changeRepository.findByContractIdOrderByCreatedAtDesc(contractId)
         .stream().map(this::toContractChangeResponse).toList();

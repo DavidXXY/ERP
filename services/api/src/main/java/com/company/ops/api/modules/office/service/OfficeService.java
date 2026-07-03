@@ -379,9 +379,19 @@ public class OfficeService {
   private void processOutsourceSource(ApprovalRequest approval) {
     outsourceRepository.findByApprovalRequestId(approval.getId()).ifPresent(item -> {
       item.setStatus(approval.getStatus() == ApprovalStatus.APPROVED ? OutsourceStatus.APPROVED : OutsourceStatus.REJECTED);
-      outsourceRepository.save(item);
     });
   }
+
+  public int refreshNotifications() {
+    long count = approvalRepository.findAll().stream()
+        .filter(a -> a.getStatus() == com.company.ops.api.modules.office.domain.ApprovalStatus.PENDING)
+        .count();
+    return (int) count;
+  }
+
+  public java.util.List listAudits() {
+  }
+
 
   private void notify(String type, String title, String content, String relatedType, UUID relatedId) {
     SystemNotification item = new SystemNotification(); item.setType(type); item.setTitle(title); item.setContent(content);
@@ -396,4 +406,17 @@ public class OfficeService {
   private Map<UUID, Supplier> supplierMap(List<UUID> ids) { return ids.isEmpty() ? Map.of() : supplierRepository.findAllById(ids.stream().distinct().toList()).stream().collect(Collectors.toMap(Supplier::getId, Function.identity())); }
   private Map<UUID, Project> projectMap(List<UUID> ids) { return ids.isEmpty() ? Map.of() : projectRepository.findAllById(ids.stream().distinct().toList()).stream().collect(Collectors.toMap(Project::getId, Function.identity())); }
   private Map<UUID, WorkOrder> workOrderMap(List<UUID> ids) { return ids.isEmpty() ? Map.of() : workOrderRepository.findAllById(ids.stream().distinct().toList()).stream().collect(Collectors.toMap(WorkOrder::getId, Function.identity())); }
+}
+
+  public int refreshNotifications() {
+    long count = approvalRepository.findAll().stream()
+        .filter(a -> a.getStatus() == com.company.ops.api.modules.office.domain.ApprovalStatus.PENDING)
+        .count();
+    return (int) count;
+  }
+
+  public java.util.List listAudits() {
+    return java.util.List.of();
+  }
+
 }

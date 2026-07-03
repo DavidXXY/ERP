@@ -278,6 +278,15 @@ public final class CrmOperationsDtos {
   ) {
   }
 
+    public record UpdateContractRequest(
+      @Size(max = 120) String projectName,
+      @Size(max = 40) String contractType,
+      BigDecimal amount,
+      @Size(max = 80) String serviceCycle,
+      String startDate,
+      String endDate
+  ) {}
+
   public record CreateContractChangeRequest(
       String changeData,
       @NotBlank @Size(max = 500) String reason,

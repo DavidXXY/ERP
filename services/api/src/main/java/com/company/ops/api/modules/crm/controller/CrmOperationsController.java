@@ -289,6 +289,24 @@ public class CrmOperationsController {
     return ApiResponse.ok(crmOperationsService.approveContractChange(id, request.operatorName(), request.comment()));
   }
 
+  @PutMapping("/opportunities/{id}")
+  @PreAuthorize("hasAuthority('crm:opportunity:update')")
+  public ApiResponse<OpportunityResponse> updateOpportunity(
+      @PathVariable UUID id,
+      @Valid @RequestBody CreateOpportunityRequest request
+  ) {
+    return ApiResponse.ok(crmOperationsService.updateOpportunity(id, request));
+  }
+
+  @PutMapping("/contracts/{id}")
+  @PreAuthorize("hasAuthority('crm:contract:update')")
+  public ApiResponse<ContractResponse> updateContract(
+      @PathVariable UUID id,
+      @Valid @RequestBody UpdateContractRequest request
+  ) {
+    return ApiResponse.ok(crmOperationsService.updateContract(id, request));
+  }
+
   @PostMapping("/contract-changes/{id}/reject")
   @PreAuthorize("hasAuthority('crm:contract:update')")
   public ApiResponse<ContractChangeResponse> rejectContractChange(

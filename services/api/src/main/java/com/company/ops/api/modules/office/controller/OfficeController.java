@@ -124,6 +124,16 @@ public class OfficeController {
   }
   @GetMapping("/notifications") @PreAuthorize("hasAuthority('office:notification:view')")
   public ApiResponse<List<NotificationResponse>> notifications() { return ApiResponse.ok(service.notifications()); }
+  @PostMapping("/notifications/refresh") @PreAuthorize("hasAuthority('office:notification:view')")
+  public ApiResponse<Integer> refreshNotifications() {
+    return ApiResponse.ok(officeService.refreshNotifications());
+  }
+
+  @GetMapping("/audits") @PreAuthorize("hasAuthority('office:audit:view')")
+  public ApiResponse<java.util.List> listAudits() {
+    return ApiResponse.ok(officeService.listAudits());
+  }
+
   @PostMapping("/notifications/{id}/read") @PreAuthorize("hasAuthority('office:notification:view')")
   public ApiResponse<NotificationResponse> readNotification(@PathVariable UUID id) { return ApiResponse.ok(service.readNotification(id)); }
 }

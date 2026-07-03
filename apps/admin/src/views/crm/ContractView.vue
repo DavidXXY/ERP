@@ -35,7 +35,7 @@
           <template v-else-if="column.key === 'action'">
             <span @click.stop>
               <a-popconfirm
-                v-if="auth.user?.roles.includes('ADMIN')"
+                v-if="auth.can('crm:contract:delete')"
                 title="确实删除此合同？"
                 @confirm="handleDeleteContract(record)"
               >

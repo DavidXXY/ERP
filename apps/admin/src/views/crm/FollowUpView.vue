@@ -63,7 +63,7 @@
             </template>
             <template v-else-if="column.key === 'action'">
               <span @click.stop>
-                <a-popconfirm v-if="auth.user?.roles.includes('ADMIN')" title="确实删除此跟进记录？" @confirm="handleDeleteFollowUp(record)">
+                <a-popconfirm v-if="auth.can('crm:followup:delete')" title="确实删除此跟进记录？" @confirm="handleDeleteFollowUp(record)">
                   <a-button size="small" type="link" danger>删除</a-button>
                 </a-popconfirm>
               </span>

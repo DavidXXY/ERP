@@ -75,7 +75,7 @@
             </a-button>
             <span @click.stop>
               <a-popconfirm
-                v-if="auth.user?.roles.includes('ADMIN')"
+                v-if="auth.can('crm:opportunity:delete')"
                 title="确实删除此商机？"
                 @confirm="handleDeleteOpportunity(record)"
               >

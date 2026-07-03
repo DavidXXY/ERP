@@ -65,7 +65,7 @@
                 <a-button type="text" size="small" title="查看客户" aria-label="查看客户" @click.stop="selectCustomer(record.id)"><template #icon><EyeOutlined /></template></a-button>
                 <a-button v-if="auth.can('crm:customer:update')" type="text" size="small" title="编辑客户" aria-label="编辑客户" @click.stop="openEdit(record.id)"><template #icon><EditOutlined /></template></a-button>
                 <a-popconfirm
-                  v-if="auth.user?.roles.includes('ADMIN')"
+                  v-if="auth.can('crm:customer:delete')"
                   title="确实删除此客户？这将同时删除所有关联数据（商机、合同、报价、跟进等）"
                   @confirm="handleDeleteCustomer(record)"
                 >

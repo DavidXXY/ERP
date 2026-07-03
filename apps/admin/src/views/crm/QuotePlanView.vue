@@ -101,7 +101,7 @@
               <a-button size="small" type="link" @click="openRevisions(record)">版本记录</a-button>
               <span @click.stop>
                 <a-popconfirm
-                  v-if="auth.user?.roles.includes('ADMIN')"
+                  v-if="auth.can('crm:quote:delete')"
                   title="确实删除此报价？"
                   @confirm="handleDeleteQuote(record)"
                 >

@@ -1478,3 +1478,8 @@ td small {
     text-align: left;
   }
 }
+
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

@@ -56,13 +56,6 @@
           <template #icon><InboxOutlined /></template>
           <span>库存管理</span>
         </a-menu-item>
-        <a-sub-menu v-if="canAccessMaintenance" key="maintenance">
-          <template #icon><ToolOutlined /></template>
-          <template #title>服务管理</template>
-          <a-menu-item v-if="auth.can('maintenance:workorder:view')" key="/maintenance/work-orders">服务工单</a-menu-item>
-          <a-menu-item v-if="auth.can('maintenance:equipment:view')" key="/maintenance/equipment">资产设备</a-menu-item>
-          <a-menu-item v-if="auth.can('maintenance:plan:view')" key="/maintenance/plans">服务计划</a-menu-item>
-        </a-sub-menu>
         <a-sub-menu v-if="canAccessHumanResources" key="hr">
           <template #icon><CalendarOutlined /></template>
           <template #title>人事管理</template>
@@ -70,6 +63,7 @@
           <a-menu-item v-if="auth.can('qualification:employee:view')" key="/hr/lifecycle">入转调离</a-menu-item>
           <a-menu-item v-if="auth.can('workforce:view')" key="/hr/leaves">请假管理</a-menu-item>
           <a-menu-item v-if="auth.can('qualification:employee:view')" key="/hr/analytics">人力分析</a-menu-item>
+          <a-menu-item v-if="auth.can('qualification:employee:manage')" key="/hr/leave-balances">请假额度</a-menu-item>
         </a-sub-menu>
         <a-sub-menu v-if="canAccessQualification" key="qualification">
           <template #icon><SafetyCertificateOutlined /></template>
@@ -164,7 +158,6 @@ import SafetyCertificateOutlined from "@ant-design/icons-vue/SafetyCertificateOu
 import SettingOutlined from "@ant-design/icons-vue/SettingOutlined";
 import ShoppingCartOutlined from "@ant-design/icons-vue/ShoppingCartOutlined";
 import TeamOutlined from "@ant-design/icons-vue/TeamOutlined";
-import ToolOutlined from "@ant-design/icons-vue/ToolOutlined";
 import WalletOutlined from "@ant-design/icons-vue/WalletOutlined";
 import UserOutlined from "@ant-design/icons-vue/UserOutlined";
 import { useAppStore } from "@/stores/app";
@@ -174,7 +167,7 @@ const app = useAppStore();
 const auth = useAuthStore();
 const route = useRoute();
 const router = useRouter();
-const openKeys = ref<string[]>(route.path.startsWith("/finance") ? ["finance"] : route.path.startsWith("/office") ? ["office"] : route.path.startsWith("/maintenance") ? ["maintenance"] : route.path.startsWith("/qualification") ? ["qualification"] : route.path.startsWith("/system") ? ["system"] : route.path.startsWith("/crm") ? ["crm"] : []);
+const openKeys = ref<string[]>(route.path.startsWith("/finance") ? ["finance"] : route.path.startsWith("/office") ? ["office"] : route.path.startsWith("/qualification") ? ["qualification"] : route.path.startsWith("/system") ? ["system"] : route.path.startsWith("/crm") ? ["crm"] : []);
 
 const activeKey = computed(() => route.path);
 const canAccessCrm = computed(() => [
@@ -196,7 +189,6 @@ const canAccessFinance = computed(() => [
   "finance:payment:execute",
   "finance:ledger:view",
 ].some((permission) => auth.can(permission)));
-const canAccessMaintenance = computed(() => ["maintenance:view", "maintenance:equipment:view", "maintenance:plan:view", "maintenance:workorder:view"].some((permission) => auth.can(permission)));
 const canAccessHumanResources = computed(() => ["qualification:employee:view", "qualification:certificate:view", "workforce:view"].some((permission) => auth.can(permission)));
 const canAccessQualification = computed(() => ["qualification:view", "qualification:company:view", "qualification:tender:view", "qualification:warning:view"].some((permission) => auth.can(permission)));
 const canAccessOffice = computed(() => ["office:view", "office:approval:view", "office:expense:view", "office:outsource:view", "office:document:view", "office:notification:view", "office:audit:view"].some((permission) => auth.can(permission)));

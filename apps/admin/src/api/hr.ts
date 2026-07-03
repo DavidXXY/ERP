@@ -1,4 +1,4 @@
-import { request } from "./http";
+import { request, http } from "./http";
 import type { EmployeeResponse, PersonnelCertificateResponse } from "./qualification";
 
 // ====== Types ======
@@ -217,7 +217,63 @@ export function approveLeave(id: string, data: ApprovePayload) {
   return request<LeaveRecord>({ method: "POST", url: `/hr/leaves/${id}/approve`, data });
 }
 
+
+// ====== Leave Balance ======
+export interface LeaveBalanceRecord {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  leaveType: string;
+  year: number;
+  totalDays: number;
+  usedDays: number;
+  remainingDays: number;
+}
+
+export interface LeaveBalancePayload {
+  leaveType: string;
+  year: number;
+  totalDays: number;
+  usedDays: number;
+}
+
 // ====== Analytics ======
 export function getHrAnalytics() {
   return request<HrAnalytics>({ method: "GET", url: "/hr/analytics" });
+}
+
+// ====== Leave Balance ======
+export function listEmployeeLeaveBalances(employeeId: string) {
+  return request<LeaveBalanceRecord[]>({ method: "GET", url: `/hr/employees/${employeeId}/leave-balances` });
+}
+export function listAllLeaveBalances() {
+  return request<LeaveBalanceRecord[]>({ method: "GET", url: "/hr/leave-balances" });
+}
+export function setLeaveBalance(employeeId: string, data: LeaveBalancePayload) {
+  return request<LeaveBalanceRecord>({ method: "POST", url: `/hr/employees/${employeeId}/leave-balances`, data });
+}
+export function initLeaveBalances(employeeId: string) {
+  return request<void>({ method: "POST", url: `/hr/employees/${employeeId}/init-leave-balances` });
+}
+
+// ====== Excel Import/Export ======
+export async function exportEmployeesExcel() {
+  const response = await http.get<Blob>("/hr/export/employees", { responseType: "blob" });
+  const url = URL.createObjectURL(response.data);
+  const anchor = document.createElement("a");
+  anchor.href = url; anchor.download = "hr-employees.xlsx";
+  anchor.click(); URL.revokeObjectURL(url);
+}
+export async function downloadImportTemplate() {
+  const response = await http.get<Blob>("/hr/export/template", { responseType: "blob" });
+  const url = URL.createObjectURL(response.data);
+  const anchor = document.createElement("a");
+  anchor.href = url; anchor.download = "hr-import-template.xlsx";
+  anchor.click(); URL.revokeObjectURL(url);
+}
+export function importEmployeesExcel(file: File, operatorName?: string) {
+  const form = new FormData();
+  form.append("file", file);
+  if (operatorName) form.append("operatorName", operatorName);
+  return request<{ success: number; fail: number; errors: string[] }>({ method: "POST", url: "/hr/import/employees", data: form });
 }

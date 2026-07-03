@@ -98,4 +98,21 @@ public final class HrDtos {
     ) {}
     public record CategoryCount(String name, long count) {}
     public record LifecycleSummary(String date, String employeeName, String type, String detail) {}
+
+
+    // Leave balance
+    public record LeaveBalanceRequest(
+        @NotBlank @Size(max = 40) String leaveType,
+        int year, double totalDays, double usedDays
+    ) {}
+    public record LeaveBalanceResponse(
+        UUID id, UUID employeeId, String employeeName, String leaveType,
+        int year, double totalDays, double usedDays, double remainingDays
+    ) {}
+    public record LeaveBalanceBatchInitRequest(
+        List<BalanceInitItem> items
+    ) {}
+    public record BalanceInitItem(
+        UUID employeeId, String leaveType, int year, double totalDays
+    ) {}
 }

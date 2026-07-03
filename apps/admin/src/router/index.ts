@@ -10,6 +10,7 @@ import EmployeeDetailView from "@/views/hr/EmployeeDetailView.vue";
 import EmployeeLifecycleView from "@/views/hr/EmployeeLifecycleView.vue";
 import LeaveManagementView from "@/views/hr/LeaveManagementView.vue";
 import HrAnalyticsView from "@/views/hr/HrAnalyticsView.vue";
+import LeaveBalanceView from "@/views/hr/LeaveBalanceView.vue";
 import LoginView from "@/views/system/LoginView.vue";
 import RoleManagementView from "@/views/system/RoleManagementView.vue";
 import PermissionManagementView from "@/views/system/PermissionManagementView.vue";
@@ -124,28 +125,6 @@ export const routes: RouteRecordRaw[] = [
         meta: { title: "库存管理", permission: "inventory:view", description: "物料档案、入库、领用、归还、盘点和安全库存。" },
       },
       {
-        path: "maintenance",
-        redirect: "/maintenance/work-orders",
-      },
-      {
-        path: "maintenance/work-orders",
-        name: "maintenance-work-orders",
-        component: () => import("@/views/maintenance/MaintenanceCenterView.vue"),
-        meta: { title: "服务工单", permission: "maintenance:workorder:view" },
-      },
-      {
-        path: "maintenance/equipment",
-        name: "maintenance-equipment",
-        component: () => import("@/views/maintenance/MaintenanceCenterView.vue"),
-        meta: { title: "资产设备", permission: "maintenance:equipment:view" },
-      },
-      {
-        path: "maintenance/plans",
-        name: "maintenance-plans",
-        component: () => import("@/views/maintenance/MaintenanceCenterView.vue"),
-        meta: { title: "服务计划", permission: "maintenance:plan:view" },
-      },
-      {
         path: "hr",
         name: "human-resources",
         component: HumanResourcesView,
@@ -178,6 +157,12 @@ export const routes: RouteRecordRaw[] = [
         name: "hr-analytics",
         component: HrAnalyticsView,
         meta: { title: "人力分析", permissions: ["qualification:employee:view"] },
+      },
+      {
+        path: "hr/leave-balances",
+        name: "hr-leave-balances",
+        component: LeaveBalanceView,
+        meta: { title: "请假额度", permissions: ["qualification:employee:manage"] },
       },
       {
         path: "qualification",

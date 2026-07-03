@@ -231,7 +231,7 @@ const dataScopeDescriptions: Record<string, string> = {
 };
 const moduleLabels: Record<string, string> = {
   system: "系统设置", dashboard: "经营驾驶舱", crm: "CRM", procurement: "供应链采购",
-  project: "项目管理", inventory: "库存管理", maintenance: "服务管理", workforce: "人事管理",
+  project: "项目管理", inventory: "库存管理", workforce: "人事管理",
   qualification: "资质管理", office: "OA协同", finance: "财务资金", bi: "经营分析",
 };
 

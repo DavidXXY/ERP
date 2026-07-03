@@ -1,0 +1,91 @@
+# ═══════════════════════════════════════════
+# 生产环境配置（通过 --spring.profiles.active=prod 激活）
+# 所有敏感值通过 ops-erp.env 环境变量文件注入
+# ═══════════════════════════════════════════
+
+spring:
+  # 数据源 — 生产用 PostgreSQL（由 docker-compose 或外部提供）
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      idle-timeout: 300000
+      connection-timeout: 20000
+      max-lifetime: 1200000
+
+  # JPA — 生产环境关闭 SQL 日志
+  jpa:
+    show-sql: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: false
+
+  # Redis — 生产环境开启（会话缓存、数据缓存）
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+      password: ${REDIS_PASSWORD:}
+      timeout: 3000
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 2
+
+  # 文件上传大小
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 100MB
+
+  # Flyway — 校验迁移脚本完整性
+  flyway:
+    enabled: true
+    validate-on-migrate: true
+    clean-disabled: true
+
+# 服务端端口（Nginx 反向代理用）
+server:
+  port: 8080
+  compression:
+    enabled: true
+    mime-types: application/json,application/javascript,text/css,text/html
+    min-response-size: 1024
+
+# Actuator — 生产环境只暴露 health
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+      base-path: /actuator
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when-authorized
+
+# Swagger — 生产环境建议关闭，或加权限控制
+springdoc:
+  api-docs:
+    enabled: true   # 如有安全要求可改为 false
+  swagger-ui:
+    enabled: true   # 如有安全要求可改为 false
+    path: /swagger-ui
+
+# 业务配置
+ops:
+  security:
+    jwt-secret: ${JWT_SECRET}
+    jwt-expire-minutes: ${JWT_EXPIRE_MINUTES:720}
+  storage:
+    endpoint: ${MINIO_ENDPOINT}
+    access-key: ${MINIO_ACCESS_KEY}
+    secret-key: ${MINIO_SECRET_KEY}
+    bucket: ${MINIO_BUCKET:ops-erp}

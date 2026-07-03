@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useRef, useEffect } from "react";
 import { createRoot } from "react-dom/client";
+import { login, getToken, fetchFinanceOverview, fetchReceivables, fetchPayables, registerInvoice, recordReceipt, type ReceivableResponse, type FinancePayableResponse, type FinanceOverviewResponse } from "./api";
 import {
   Activity,
   Archive,
@@ -131,6 +132,15 @@ type Receivable = {
   amount: number;
   due: string;
   status: "待开票" | "待回款" | "已核销" | "逾期";
+};
+
+type Payable = {
+  id: string;
+  source: string;
+  supplier: string;
+  amount: number;
+  due: string;
+  status: "待付款" | "逾期" | "已付款";
 };
 
 type Approval = {
@@ -436,6 +446,12 @@ const initialReceivables: Receivable[] = [
     due: "2026-06-20",
     status: "逾期",
   },
+];
+
+const initialPayables: Payable[] = [
+  { id: "YF-202606-051", source: "CG-202606-1128", supplier: "上海电气控制", amount: 11840, due: "2026-07-15", status: "待付款" },
+  { id: "YF-202606-052", source: "WB-202606-033", supplier: "新澄劳务", amount: 56000, due: "2026-07-05", status: "逾期" },
+  { id: "YF-202606-053", source: "SP-202606-276", supplier: "员工报销-周舟", amount: 2360, due: "2026-06-25", status: "已付款" },
 ];
 
 const initialApprovals: Approval[] = [
@@ -1027,6 +1043,7 @@ function App() {
   const [selectedCustomerId, setSelectedCustomerId] = useState(crmCustomers[0].id);
   const [receivables, setReceivables] =
     useState<Receivable[]>(initialReceivables);
+  const [payables, setPayables] = useState<Payable[]>(initialPayables);
   const [approvals, setApprovals] = useState<Approval[]>(initialApprovals);
   const [events, setEvents] = useState<FlowEvent[]>(initialEvents);
   const [selectedContractId, setSelectedContractId] = useState(contracts[0].id);
@@ -1034,6 +1051,135 @@ function App() {
   const [selectedOrderId, setSelectedOrderId] = useState(initialOrders[0].id);
   const [fault, setFault] = useState("变频器报警，现场无法复位");
   const [toast, setToast] = useState("企业一体化管理系统已加载");
+  const [initializing, setInitializing] = useState(true);
+  const receivableApiData = useRef<Map<string, ReceivableResponse>>(new Map());
+  const payableApiData = useRef<Map<string, FinancePayableResponse>>(new Map());
+
+  // Auto-login + fetch on mount
+  useEffect(() => {
+    const init = async () => {
+      try {
+        if (!getToken()) await login("admin", "Admin@123");
+        setToast("已连接到服务器");
+        const [rcList, pyList] = await Promise.all([
+          fetchReceivables(),
+          fetchPayables(),
+        ]);
+
+        // Map receivable status
+        const mapRc = (s: string) =>
+          s === "INVOICE_PENDING" ? "待开票" as const
+          : s === "PAYMENT_PENDING" ? "待回款" as const
+          : s === "SETTLED" ? "已核销" as const
+          : "逾期" as const;
+
+        receivableApiData.current.clear();
+        const mappedRc: Receivable[] = rcList.map((r: ReceivableResponse) => {
+          receivableApiData.current.set(r.code, r);
+          return { id: r.code, source: r.sourceNo || r.contractCode, customer: r.customerName, amount: r.amount, due: r.dueDate, status: mapRc(r.status) };
+        });
+        setReceivables(mappedRc);
+
+        payableApiData.current.clear();
+        const mappedPy: Payable[] = pyList.map((p: FinancePayableResponse) => ({
+          id: p.code, source: p.orderCode, supplier: p.supplierName,
+          amount: p.outstandingAmount, due: p.dueDate,
+          status: p.overdue || (p.status === "PENDING" && new Date(p.dueDate) < new Date()) ? "逾期" as const
+                  : p.status === "PAID" ? "已付款" as const
+                  : "待付款" as const,
+        }));
+        pyList.forEach((p: FinancePayableResponse) => payableApiData.current.set(p.code, p));
+        setPayables(mappedPy);
+
+        setToast("已加载后端数据");
+      } catch (e) {
+        console.warn("后端未连接，使用 mock 数据", e);
+        setToast("离线模式 — 使用演示数据");
+      } finally {
+        setInitializing(false);
+      }
+    };
+    init();
+  }, []);
+
+
+  function handleInvoice(code: string) {
+    const apiItem = receivableApiData.current.get(code);
+    if (apiItem) {
+      const today = new Date().toISOString().slice(0, 10);
+      registerInvoice(apiItem.id, "INV-" + Date.now(), today)
+        .then(() => fetchReceivables())
+        .then((rcList) => {
+          const mapRc = (s: string) =>
+            s === "INVOICE_PENDING" ? "待开票" as const
+            : s === "PAYMENT_PENDING" ? "待回款" as const
+            : s === "SETTLED" ? "已核销" as const
+            : "逾期" as const;
+          receivableApiData.current.clear();
+          const mapped = rcList.map((r: ReceivableResponse) => {
+            receivableApiData.current.set(r.code, r);
+            return { id: r.code, source: r.sourceNo || r.contractCode, customer: r.customerName, amount: r.amount, due: r.dueDate, status: mapRc(r.status) } as Receivable;
+          });
+          setReceivables(mapped);
+          pushEvent("应收开票", code + " 已开票", "good");
+        })
+        .catch((err) => pushEvent("开票失败", err.message, "danger"));
+    } else {
+      setReceivables((current) =>
+        current.map((item) =>
+          item.id === code && item.status === "待开票"
+            ? { ...item, status: "待回款" as const }
+            : item
+        )
+      );
+      pushEvent("应收开票(离线)", code + " 已标记开票", "good");
+    }
+  }
+
+  function handleCollect(code: string) {
+    const apiItem = receivableApiData.current.get(code);
+    if (apiItem) {
+      const today = new Date().toISOString().slice(0, 10);
+      recordReceipt(apiItem.id, apiItem.outstandingAmount || apiItem.amount, today, "RC-" + Date.now(), "系统管理员")
+        .then(() => fetchReceivables())
+        .then((rcList) => {
+          const mapRc = (s: string) =>
+            s === "INVOICE_PENDING" ? "待开票" as const
+            : s === "PAYMENT_PENDING" ? "待回款" as const
+            : s === "SETTLED" ? "已核销" as const
+            : "逾期" as const;
+          receivableApiData.current.clear();
+          const mapped = rcList.map((r: ReceivableResponse) => {
+            receivableApiData.current.set(r.code, r);
+            return { id: r.code, source: r.sourceNo || r.contractCode, customer: r.customerName, amount: r.amount, due: r.dueDate, status: mapRc(r.status) } as Receivable;
+          });
+          setReceivables(mapped);
+          pushEvent("回款登记", code + " 回款已登记", "good");
+        })
+        .catch((err) => pushEvent("回款失败", err.message, "danger"));
+    } else {
+      setReceivables((current) =>
+        current.map((item) =>
+          item.id === code && item.status === "待回款"
+            ? { ...item, status: "已核销" as const }
+            : item
+        )
+      );
+      pushEvent("回款登记(离线)", code + " 已标记回款", "good");
+    }
+  }
+
+  function handleWriteOff(code: string) {
+    setReceivables((current) =>
+      current.map((item) =>
+        item.id === code
+          ? { ...item, status: "已核销" as const }
+          : item
+      )
+    );
+    pushEvent("应收核销", code + " 已手动核销", "good");
+  }
+
 
   const selectedModule =
     modules.find((item) => item.id === activeModule) ||
@@ -1056,6 +1202,10 @@ function App() {
       .filter((item) => item.status !== "已核销")
       .reduce((sum, item) => sum + item.amount, 0);
     const cost = orders.reduce((sum, item) => sum + item.cost, 0);
+    const payableTotal = payables
+      .filter((item) => item.status !== "已付款")
+      .reduce((sum, item) => sum + item.amount, 0);
+    const overduePayable = payables.filter((item) => item.status === "逾期").length;
     const revenue = contracts.reduce((sum, item) => sum + item.amount, 0);
     const gross = revenue - projects.reduce((sum, item) => sum + item.cost, 0);
     return {
@@ -1065,11 +1215,13 @@ function App() {
       overdue,
       pendingApprovals,
       receivableTotal,
+      payableTotal,
+      overduePayable,
       cost,
       revenue,
       gross,
     };
-  }, [orders, parts, receivables, approvals]);
+  }, [orders, parts, receivables, payables, approvals]);
 
   const pushEvent = (title: string, detail: string, tone: Tone) => {
     const event: FlowEvent = {
@@ -1374,6 +1526,24 @@ function App() {
 
   return (
     <div className="app-shell">
+        {initializing && (
+          <div style={{
+            position: "fixed" as const, inset: 0, zIndex: 9999,
+            display: "flex", flexDirection: "column",
+            alignItems: "center", justifyContent: "center",
+            background: "#f5f6f4", gap: 16,
+            fontFamily: "Inter, system-ui, sans-serif",
+          }}>
+            <div style={{
+              width: 40, height: 40,
+              border: "3px solid #dfe5df",
+              borderTopColor: "#1f6a5b",
+              borderRadius: "50%",
+              animation: "spin 0.8s linear infinite",
+            }} />
+            <p style={{ color: "#52605c", fontSize: 14, margin: 0 }}>连接服务器中...</p>
+          </div>
+        )}
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-mark">
@@ -2681,9 +2851,11 @@ function App() {
       <div className="page-stack">
         <section className="metric-grid">
           <MetricCard icon={WalletCards} label="应收余额" value={formatMoney(metrics.receivableTotal)} meta="合同 + 单次维修" tone="warn" />
-          <MetricCard icon={Coins} label="应付余额" value={formatMoney(132400)} meta="采购 + 外包 + 报销" tone="info" />
+          <MetricCard icon={Coins} label="应付余额" value={formatMoney(metrics.payableTotal)} meta="采购 + 外包 + 报销" tone="info" />
           <MetricCard icon={CheckCircle2} label="本月核销" value={formatMoney(486000)} meta="回款率 82%" tone="good" />
-          <MetricCard icon={CircleAlert} label="逾期笔数" value={`${metrics.overdue}笔`} meta="催收台账" tone="danger" />
+          <MetricCard icon={CircleAlert} label="应收逾期" value={`${metrics.overdue}笔`} meta="催收台账" tone="danger" />
+          <MetricCard icon={CircleAlert} label="应付逾期" value={`${metrics.overduePayable}笔`} meta="逾期付款" tone="danger" />
+          <MetricCard icon={TrendingUp} label="可用资金" value={formatMoney(metrics.receivableTotal - metrics.payableTotal + 486000)} meta="应收 - 应付 + 回款" tone="info" />
         </section>
         <section className="split-grid">
           <div className="panel">
@@ -2691,7 +2863,17 @@ function App() {
             <ReceivableList />
           </div>
           <div className="panel">
-            <SectionTitle icon={Coins} title="业务凭证线索" right="总账同步" />
+            <SectionTitle icon={Coins} title="应付款" right="付款 / 核销" />
+            <PayableList />
+          </div>
+        </section>
+        <section className="split-grid">
+          <div className="panel">
+            <SectionTitle icon={TrendingUp} title="应收账龄分布" right="到期分析" />
+            <AgingPanel />
+          </div>
+          <div className="panel">
+            <SectionTitle icon={ClipboardList} title="业务凭证线索" right="总账同步" />
             <LedgerTable />
           </div>
         </section>
@@ -3225,10 +3407,27 @@ function App() {
           <div className="money-row" key={item.id}>
             <div>
               <strong>{item.customer}</strong>
-              <span>{item.id} · {item.source} · {item.due}</span>
+              <span>{item.id} &middot; {item.source} &middot; {item.due}</span>
             </div>
             <b>{formatMoney(item.amount)}</b>
             <StatusTag tone={receivableTone(item.status)}>{item.status}</StatusTag>
+            <div className="row-actions">
+              {item.status === "待开票" && (
+                <button className="mini-action" type="button" onClick={() => handleInvoice(item.id)}>
+                  <ReceiptText size={13} /><span>开票</span>
+                </button>
+              )}
+              {item.status === "待回款" && (
+                <button className="mini-action" type="button" onClick={() => handleCollect(item.id)}>
+                  <CheckCircle2 size={13} /><span>回款登记</span>
+                </button>
+              )}
+              {(item.status === "待回款" || item.status === "逾期") && (
+                <button className="mini-action" type="button" onClick={() => handleWriteOff(item.id)}>
+                  <FileCheck2 size={13} /><span>核销</span>
+                </button>
+              )}
+            </div>
           </div>
         ))}
       </div>
@@ -3258,6 +3457,72 @@ function App() {
             ))}
           </tbody>
         </table>
+      </div>
+    );
+  }
+
+  function PayableList() {
+    const handlePay = (id: string) => {
+      setPayables((current) =>
+        current.map((item) =>
+          item.id === id && item.status !== "已付款"
+            ? { ...item, status: "已付款" as const }
+            : item
+        )
+      );
+      pushEvent("应付付款完成", `${id} 已标记为已付款`, "good");
+    };
+    return (
+      <div className="mini-list">
+        {payables.map((item) => (
+          <div className="money-row" key={item.id}>
+            <div>
+              <strong>{item.supplier}</strong>
+              <span>{item.id} &middot; {item.source} &middot; {item.due}</span>
+            </div>
+            <b>{formatMoney(item.amount)}</b>
+            <StatusTag tone={item.status === "已付款" ? "good" : item.status === "逾期" ? "danger" : "info"}>{item.status}</StatusTag>
+            <div className="row-actions">
+              {(item.status === "待付款" || item.status === "逾期") && (
+                <button className="mini-action" type="button" onClick={() => handlePay(item.id)}>
+                  <CheckCircle2 size={13} /><span>付款</span>
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  function AgingPanel() {
+    const now = new Date();
+    const buckets: Record<string, number> = { "0-30天": 0, "31-60天": 0, "61-90天": 0, "90天以上": 0 };
+    const total = receivables.filter(r => r.status !== "已核销").reduce((s, r) => s + r.amount, 0);
+    receivables.filter(r => r.status !== "已核销").forEach(r => {
+      const due = new Date(r.due);
+      const days = Math.floor((now.getTime() - due.getTime()) / (1000 * 60 * 60 * 24));
+      if (days <= 30) { buckets["0-30天"] += r.amount; }
+      else if (days <= 60) { buckets["31-60天"] += r.amount; }
+      else if (days <= 90) { buckets["61-90天"] += r.amount; }
+      else { buckets["90天以上"] += r.amount; }
+    });
+    return (
+      <div className="mini-list">
+        {Object.entries(buckets).map(([label, amount]) => {
+          const pct = total ? Math.round(amount / total * 100) : 0;
+          const tone: Tone = label === "90天以上" ? "danger" : label === "61-90天" ? "warn" : "info";
+          return (
+            <div className="money-row" key={label}>
+              <div>
+                <strong>{label}</strong>
+                <span>占应收 {pct}%</span>
+              </div>
+              <b>{formatMoney(amount)}</b>
+              <StatusTag tone={tone}>{pct}%</StatusTag>
+            </div>
+          );
+        })}
       </div>
     );
   }

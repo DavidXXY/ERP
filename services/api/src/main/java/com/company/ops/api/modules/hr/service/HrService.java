@@ -5,12 +5,14 @@ import com.company.ops.api.modules.hr.domain.EmergencyContact;
 import com.company.ops.api.modules.hr.domain.EmployeeEducation;
 import com.company.ops.api.modules.hr.domain.EmployeeLifecycleRecord;
 import com.company.ops.api.modules.hr.domain.EmployeeWorkExperience;
+import com.company.ops.api.modules.hr.domain.LeaveBalance;
 import com.company.ops.api.modules.hr.domain.LeaveRequest;
 import com.company.ops.api.modules.hr.dto.HrDtos.*;
 import com.company.ops.api.modules.hr.repository.EmergencyContactRepository;
 import com.company.ops.api.modules.hr.repository.EmployeeEducationRepository;
 import com.company.ops.api.modules.hr.repository.EmployeeLifecycleRecordRepository;
 import com.company.ops.api.modules.hr.repository.EmployeeWorkExperienceRepository;
+import com.company.ops.api.modules.hr.repository.LeaveBalanceRepository;
 import com.company.ops.api.modules.hr.repository.LeaveRequestRepository;
 import com.company.ops.api.modules.qualification.domain.QualificationEmployee;
 import com.company.ops.api.modules.qualification.repository.QualificationEmployeeRepository;
@@ -33,19 +35,22 @@ public class HrService {
     private final EmergencyContactRepository emergencyContactRepository;
     private final EmployeeLifecycleRecordRepository lifecycleRepository;
     private final LeaveRequestRepository leaveRequestRepository;
+    private final LeaveBalanceRepository leaveBalanceRepository;
 
     public HrService(QualificationEmployeeRepository employeeRepository,
                      EmployeeEducationRepository educationRepository,
                      EmployeeWorkExperienceRepository workExperienceRepository,
                      EmergencyContactRepository emergencyContactRepository,
                      EmployeeLifecycleRecordRepository lifecycleRepository,
-                     LeaveRequestRepository leaveRequestRepository) {
+                     LeaveRequestRepository leaveRequestRepository,
+                     LeaveBalanceRepository leaveBalanceRepository) {
         this.employeeRepository = employeeRepository;
         this.educationRepository = educationRepository;
         this.workExperienceRepository = workExperienceRepository;
         this.emergencyContactRepository = emergencyContactRepository;
         this.lifecycleRepository = lifecycleRepository;
         this.leaveRequestRepository = leaveRequestRepository;
+        this.leaveBalanceRepository = leaveBalanceRepository;
     }
 
     private QualificationEmployee findEmployee(UUID id) {
@@ -289,7 +294,12 @@ public class HrService {
         entity.setApprovedBy(req.operatorName());
         entity.setApprovedAt(java.time.LocalDateTime.now());
         entity.setApprovalRemark(req.remark());
-        return toLeaveResponse(leaveRequestRepository.save(entity));
+        var saved = leaveRequestRepository.save(entity);
+        // Deduct leave balance on approval
+        if (req.approved() && saved.getEmployee() != null) {
+            try { deductLeaveBalance(saved.getEmployee(), saved.getLeaveType(), saved.getTotalDays()); } catch (Exception ignored) {}
+        }
+        return toLeaveResponse(saved);
     }
 
     private LeaveResponse toLeaveResponse(LeaveRequest r) {
@@ -298,7 +308,75 @@ public class HrService {
             r.getReason(), r.getStatus(), r.getApprovedBy(), r.getApprovedAt(), r.getApprovalRemark());
     }
 
-    // ====== Analytics ======
+
+    // ====== Leave Balance ======
+    @Transactional(readOnly = true)
+    public List<LeaveBalanceResponse> listBalances(UUID employeeId) {
+        return leaveBalanceRepository.findByEmployeeIdOrderByLeaveTypeAsc(employeeId)
+            .stream().map(this::toBalanceResponse).toList();
+    }
+
+    @Transactional
+    public LeaveBalanceResponse setBalance(UUID employeeId, LeaveBalanceRequest req) {
+        var emp = findEmployee(employeeId);
+        var existing = leaveBalanceRepository.findByEmployeeIdAndLeaveTypeAndYear(employeeId, req.leaveType(), req.year());
+        LeaveBalance entity;
+        if (existing.isPresent()) {
+            entity = existing.get();
+            entity.setTotalDays(req.totalDays());
+            entity.setUsedDays(req.usedDays());
+        } else {
+            entity = new LeaveBalance();
+            entity.setEmployee(emp);
+            entity.setLeaveType(req.leaveType());
+            entity.setYear(req.year());
+            entity.setTotalDays(req.totalDays());
+            entity.setUsedDays(req.usedDays());
+        }
+        return toBalanceResponse(leaveBalanceRepository.save(entity));
+    }
+
+    @Transactional
+    public void batchInitBalances(UUID employeeId) {
+        int year = LocalDate.now().getYear();
+        // Auto-create default balances: annual 15 days, sick 12 days
+        var existingTypes = leaveBalanceRepository.findByEmployeeIdAndYear(employeeId, year)
+            .stream().map(LeaveBalance::getLeaveType).toList();
+        if (!existingTypes.contains("ANNUAL")) {
+            var bal = new LeaveBalance();
+            bal.setEmployee(findEmployee(employeeId));
+            bal.setLeaveType("ANNUAL"); bal.setYear(year); bal.setTotalDays(15);
+            leaveBalanceRepository.save(bal);
+        }
+        if (!existingTypes.contains("SICK")) {
+            var bal = new LeaveBalance();
+            bal.setEmployee(findEmployee(employeeId));
+            bal.setLeaveType("SICK"); bal.setYear(year); bal.setTotalDays(12);
+            leaveBalanceRepository.save(bal);
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public List<LeaveBalanceResponse> listAllBalances() {
+        return leaveBalanceRepository.findAll().stream()
+            .map(this::toBalanceResponse).toList();
+    }
+
+    private void deductLeaveBalance(QualificationEmployee emp, String leaveType, double days) {
+        int year = LocalDate.now().getYear();
+        var balance = leaveBalanceRepository.findByEmployeeIdAndLeaveTypeAndYear(emp.getId(), leaveType, year);
+        balance.ifPresent(b -> {
+            b.setUsedDays(b.getUsedDays() + days);
+            leaveBalanceRepository.save(b);
+        });
+    }
+
+    private LeaveBalanceResponse toBalanceResponse(LeaveBalance b) {
+        return new LeaveBalanceResponse(b.getId(), b.getEmployee().getId(), b.getEmployee().getName(),
+            b.getLeaveType(), b.getYear(), b.getTotalDays(), b.getUsedDays(), b.getRemainingDays());
+    }
+
+        // ====== Analytics ======
     @Transactional(readOnly = true)
     public HrAnalyticsResponse analytics() {
         var allEmployees = employeeRepository.findAll();

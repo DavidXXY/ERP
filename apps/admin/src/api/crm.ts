@@ -525,3 +525,83 @@ export function deleteAttachment(id: string) {
 export function getAttachmentDownloadUrl(id: string): string {
   return "/api/crm/attachments/" + id + "/download";
 }
+
+export type UpdateReceivablePayload = {
+  sourceNo?: string;
+  amount?: number;
+  dueDate?: string;
+};
+
+export function updateReceivable(id: string, payload: UpdateReceivablePayload) {
+  return request<Receivable>({
+    method: "PUT",
+    url: `/crm/receivables/${id}`,
+    data: payload,
+  });
+}
+
+export type UpdateContractPayload = {
+  projectName?: string;
+  contractType?: string;
+  amount?: number;
+  startDate?: string;
+  endDate?: string;
+  serviceCycle?: string;
+};
+
+export function updateContract(id: string, payload: UpdateContractPayload) {
+  return request<ServiceContract>({
+    method: "PUT",
+    url: `/crm/contracts/${id}`,
+    data: payload,
+  });
+}
+
+export type CreateContractChangePayload = {
+  changeData: string;
+  reason: string;
+  requestedBy: string;
+};
+
+export type ContractChangeResponse = {
+  id: string;
+  contractId: string;
+  changeData: string;
+  reason: string;
+  status: string;
+  requestedBy: string;
+  requestedAt: string;
+  approvedBy: string;
+  approvedAt: string;
+  approvalComment: string;
+  createdAt: string;
+};
+
+export type ApprovalActionPayload = {
+  operatorName: string;
+  comment: string;
+};
+
+export function createContractChange(contractId: string, payload: CreateContractChangePayload) {
+  return request<ContractChangeResponse>({
+    method: "POST", url: `/crm/contracts/${contractId}/changes`, data: payload,
+  });
+}
+
+export function approveContractChange(changeId: string, payload: ApprovalActionPayload) {
+  return request<ContractChangeResponse>({
+    method: "POST", url: `/crm/contract-changes/${changeId}/approve`, data: payload,
+  });
+}
+
+export function rejectContractChange(changeId: string, payload: ApprovalActionPayload) {
+  return request<ContractChangeResponse>({
+    method: "POST", url: `/crm/contract-changes/${changeId}/reject`, data: payload,
+  });
+}
+
+export function listContractChanges(contractId: string) {
+  return request<ContractChangeResponse[]>({
+    method: "GET", url: `/crm/contracts/${contractId}/changes`,
+  });
+}

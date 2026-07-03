@@ -1,6 +1,12 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
 import { createRoot } from "react-dom/client";
-import { login, getToken, fetchFinanceOverview, fetchReceivables, fetchPayables, registerInvoice, recordReceipt, type ReceivableResponse, type FinancePayableResponse, type FinanceOverviewResponse } from "./api";
+import { login, getToken, fetchFinanceOverview, fetchReceivables, fetchPayables, registerInvoice, recordReceipt, type ReceivableResponse, type FinancePayableResponse, type FinanceOverviewResponse,
+  type VoucherResponse, type LedgerOverviewResponse, type FinancialStatementsResponse,
+  type PaymentApplicationResponse, type PaymentRecordResponse,
+  fetchLedgerOverview, fetchLedgerVouchers, fetchFinancialStatements,
+  fetchPaymentApplications, fetchPaymentRecords,
+  createPaymentApplication, approvePaymentApplication, executePayment
+} from "./api";
 import {
   Activity,
   Archive,
@@ -1046,6 +1052,14 @@ function App() {
   const [payables, setPayables] = useState<Payable[]>(initialPayables);
   const [approvals, setApprovals] = useState<Approval[]>(initialApprovals);
   const [events, setEvents] = useState<FlowEvent[]>(initialEvents);
+  const [vouchers, setVouchers] = useState<VoucherResponse[]>([]);
+  const [ledgerOverview, setLedgerOverview] = useState<LedgerOverviewResponse | null>(null);
+  const [financialStatements, setFinancialStatements] = useState<FinancialStatementsResponse | null>(null);
+  const [paymentApps, setPaymentApps] = useState<PaymentApplicationResponse[]>([]);
+  const [paymentRecords, setPaymentRecords] = useState<PaymentRecordResponse[]>([]);
+  const [filterDateStart, setFilterDateStart] = useState("");
+  const [filterDateEnd, setFilterDateEnd] = useState("");
+  const [voucherDetailId, setVoucherDetail] = useState<string | null>(null);
   const [selectedContractId, setSelectedContractId] = useState(contracts[0].id);
   const [selectedEquipmentId, setSelectedEquipmentId] = useState(equipment[1].id);
   const [selectedOrderId, setSelectedOrderId] = useState(initialOrders[0].id);
@@ -1090,6 +1104,20 @@ function App() {
         }));
         pyList.forEach((p: FinancePayableResponse) => payableApiData.current.set(p.code, p));
         setPayables(mappedPy);
+        // Fetch ledger + payment data
+        Promise.all([
+          fetchLedgerOverview().catch(() => null),
+          fetchLedgerVouchers().catch(() => []),
+          fetchFinancialStatements().catch(() => null),
+          fetchPaymentApplications().catch(() => []),
+          fetchPaymentRecords().catch(() => []),
+        ]).then(([lo, v, fs, pa, pr]) => {
+          if (lo) setLedgerOverview(lo);
+          if (v.length) setVouchers(v as VoucherResponse[]);
+          if (fs) setFinancialStatements(fs);
+          if (pa.length) setPaymentApps(pa as PaymentApplicationResponse[]);
+          if (pr.length) setPaymentRecords(pr as PaymentRecordResponse[]);
+        }).catch(() => {});
 
         setToast("已加载后端数据");
       } catch (e) {
@@ -1201,8 +1229,7 @@ function App() {
     const receivableTotal = receivables
       .filter((item) => item.status !== "已核销")
       .reduce((sum, item) => sum + item.amount, 0);
-    const cost = orders.reduce((sum, item) => sum + item.cost, 0);
-    const payableTotal = payables
+    const cost = orders.reduce((sum, item) => sum + item.cost, 0);    const payableTotal = payables
       .filter((item) => item.status !== "已付款")
       .reduce((sum, item) => sum + item.amount, 0);
     const overduePayable = payables.filter((item) => item.status === "逾期").length;
@@ -2846,41 +2873,7 @@ function App() {
     );
   }
 
-  function FinanceModule() {
-    return (
-      <div className="page-stack">
-        <section className="metric-grid">
-          <MetricCard icon={WalletCards} label="应收余额" value={formatMoney(metrics.receivableTotal)} meta="合同 + 单次维修" tone="warn" />
-          <MetricCard icon={Coins} label="应付余额" value={formatMoney(metrics.payableTotal)} meta="采购 + 外包 + 报销" tone="info" />
-          <MetricCard icon={CheckCircle2} label="本月核销" value={formatMoney(486000)} meta="回款率 82%" tone="good" />
-          <MetricCard icon={CircleAlert} label="应收逾期" value={`${metrics.overdue}笔`} meta="催收台账" tone="danger" />
-          <MetricCard icon={CircleAlert} label="应付逾期" value={`${metrics.overduePayable}笔`} meta="逾期付款" tone="danger" />
-          <MetricCard icon={TrendingUp} label="可用资金" value={formatMoney(metrics.receivableTotal - metrics.payableTotal + 486000)} meta="应收 - 应付 + 回款" tone="info" />
-        </section>
-        <section className="split-grid">
-          <div className="panel">
-            <SectionTitle icon={WalletCards} title="应收款" right="开票 / 回款 / 核销" />
-            <ReceivableList />
-          </div>
-          <div className="panel">
-            <SectionTitle icon={Coins} title="应付款" right="付款 / 核销" />
-            <PayableList />
-          </div>
-        </section>
-        <section className="split-grid">
-          <div className="panel">
-            <SectionTitle icon={TrendingUp} title="应收账龄分布" right="到期分析" />
-            <AgingPanel />
-          </div>
-          <div className="panel">
-            <SectionTitle icon={ClipboardList} title="业务凭证线索" right="总账同步" />
-            <LedgerTable />
-          </div>
-        </section>
-      </div>
-    );
-  }
-
+  function FinanceModule() {    const [finTab, setFinTab] = useState<"vouchers"|"statements"|"payments">("vouchers");    const pendingPay = paymentApps.filter(a => a.status === "PENDING").length;    const totalBudget = projects.reduce((s, p) => s + p.budget, 0);    const totalCost = projects.reduce((s, p) => s + p.cost, 0);    const budgetMargin = totalBudget - totalCost;    const budgetPct = totalBudget > 0 ? Math.round(budgetMargin / totalBudget * 100) : 0;    return (      <div className="page-stack">        <section className="metric-grid">          <MetricCard icon={WalletCards} label="应收余额" value={formatMoney(metrics.receivableTotal)} meta="合同 + 单次维修" tone="warn" />          <MetricCard icon={Coins} label="应付余额" value={formatMoney(metrics.payableTotal)} meta="采购 + 外包 + 报销" tone="info" />          <MetricCard icon={CheckCircle2} label="本月核销" value={formatMoney(486000)} meta="回款率 82%" tone="good" />          <MetricCard icon={CircleAlert} label="应收逾期" value={`${metrics.overdue}笔`} meta="催收台账" tone="danger" />          <MetricCard icon={CircleAlert} label="应付逾期" value={`${metrics.overduePayable}笔`} meta="逾期付款" tone="danger" />          <MetricCard icon={TrendingUp} label="可用资金" value={formatMoney(metrics.receivableTotal - metrics.payableTotal + 486000)} meta="应收 - 应付 + 回款" tone="info" />          {ledgerOverview && (            <>              <MetricCard icon={ReceiptText} label="凭证" value={`${ledgerOverview.voucherCount}张`} meta="本月" tone="info" />              <MetricCard icon={TrendingUp} label="净利润" value={formatMoney(ledgerOverview.profit)} meta="收入-费用" tone={ledgerOverview.profit >= 0 ? "good" : "danger"} />              <MetricCard icon={Coins} label="现金余额" value={formatMoney(ledgerOverview.cashBalance)} meta="总账" tone="info" />            </>          )}          {totalBudget > 0 && (            <MetricCard icon={BarChart3} label="预算节余" value={formatMoney(budgetMargin)} meta={`${budgetPct}% 结余率`} tone={budgetMargin >= 0 ? "good" : "danger"} />          )}          {pendingPay > 0 && (            <MetricCard icon={ClipboardSignature} label="待批付款" value={`${pendingPay}笔`} meta="付款申请" tone="warn" />          )}        </section>        <section className="split-grid">          <div className="panel">            <div className="section-title">              <div><WalletCards size={19} /><h2>应收款</h2></div>              <div style={{display:"flex",gap:4,alignItems:"center"}}>                <input type="date" value={filterDateStart} onChange={e=>setFilterDateStart(e.target.value)} style={{padding:"3px 6px",border:"1px solid #d7dfd8",borderRadius:4,fontSize:11,width:110}} />                <span style={{fontSize:11,color:"#65716e"}}>~</span>                <input type="date" value={filterDateEnd} onChange={e=>setFilterDateEnd(e.target.value)} style={{padding:"3px 6px",border:"1px solid #d7dfd8",borderRadius:4,fontSize:11,width:110}} />                {(filterDateStart||filterDateEnd)&&<button className="mini-action" type="button" onClick={()=>{setFilterDateStart("");setFilterDateEnd("")}} style={{padding:"2px 6px",fontSize:11}}>×</button>}              </div>            </div>            <div style={{display:"flex",justifyContent:"flex-end",marginBottom:6}}>              <button className="mini-action" type="button" onClick={()=>{                const h="编号,客户,来源,金额,到期日,状态\n"; const r=receivables.map(x=>`${x.id},${x.customer},${x.source},${x.amount},${x.due},${x.status}`).join("\n");                const b=new Blob(["\ufeff"+h+r],{type:"text/csv;charset=utf-8"}); const a=document.createElement("a"); a.href=URL.createObjectURL(b); a.download="应收款.csv"; a.click(); URL.revokeObjectURL(a.href);                pushEvent("导出完成","应收款 CSV","good");              }}><FileArchive size={13} /><span>导出CSV</span></button>            </div>            <ReceivableList />          </div>          <div className="panel">            <div className="section-title">              <div><Coins size={19} /><h2>应付款</h2></div>              <div style={{display:"flex",gap:4,alignItems:"center"}}>                <input type="date" value={filterDateStart} onChange={e=>setFilterDateStart(e.target.value)} style={{padding:"3px 6px",border:"1px solid #d7dfd8",borderRadius:4,fontSize:11,width:110}} />                <span style={{fontSize:11,color:"#65716e"}}>~</span>                <input type="date" value={filterDateEnd} onChange={e=>setFilterDateEnd(e.target.value)} style={{padding:"3px 6px",border:"1px solid #d7dfd8",borderRadius:4,fontSize:11,width:110}} />                {(filterDateStart||filterDateEnd)&&<button className="mini-action" type="button" onClick={()=>{setFilterDateStart("");setFilterDateEnd("")}} style={{padding:"2px 6px",fontSize:11}}>×</button>}              </div>            </div>            <PayableList />          </div>        </section>        <section className="split-grid">          <div className="panel">            <SectionTitle icon={TrendingUp} title="应收账龄分布" right="到期分析" />            <AgingPanel />          </div>          <div className="panel">            <div className="section-title">              <div style={{display:"flex",gap:8,alignItems:"center"}}><ClipboardList size={19} /><h2>总账</h2></div>              <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>                {(["vouchers","statements","payments"] as const).map((t) => (                  <button key={t} className={finTab===t?"mini-action active-tab":"mini-action"} type="button"                    onClick={()=>setFinTab(t)} style={finTab===t?{borderColor:"#1f6a5b",color:"#1f6a5b",background:"#edf4f0"}:{}}>                    {t==="vouchers"?"会计凭证":t==="statements"?"财务报表":"付款管理"}                  </button>                ))}              </div>            </div>            {finTab==="vouchers" && <VoucherPanel />}            {finTab==="statements" && <FinancialStatementsPanel />}            {finTab==="payments" && <PaymentApplicationsPanel />}          </div>        </section>      </div>    );  }
   function HrModule() {
     return (
       <section className="panel">
@@ -3435,6 +3428,14 @@ function App() {
   }
 
   function LedgerTable() {
+    const genVoucher = (type: string, source: string, amount: number) => {
+      const code = "PZ-" + Date.now().toString(36).toUpperCase();
+      setVouchers((prev: any[]) => [{ id: "v-"+Date.now(), code, bizType: type, bizNo: source,
+        voucherDate: new Date().toISOString().slice(0,10), description: type+" "+source,
+        status: "DRAFT", totalDebit: amount, totalCredit: amount, entries: [],
+      }, ...prev]);
+      pushEvent("凭证已生成", code+" "+type, "good");
+    };
     return (
       <div className="table-wrap">
         <table>
@@ -3443,7 +3444,7 @@ function App() {
               <th>业务</th>
               <th>来源</th>
               <th>金额</th>
-              <th>凭证方向</th>
+              <th>凭证方向</th><th>操作</th>
             </tr>
           </thead>
           <tbody>
@@ -3452,11 +3453,67 @@ function App() {
                 <td><strong>{type}</strong></td>
                 <td>{source}</td>
                 <td>{formatMoney(Number(amount))}</td>
-                <td>{entry}</td>
+                <td>{entry}</td><td><button className="mini-action" type="button" onClick={()=>genVoucher(type as string,source as string,amount as number)}><FileCheck2 size={12} /><span>生成凭证</span></button></td>
               </tr>
             ))}
           </tbody>
         </table>
+      </div>
+    );
+  }
+
+  function VoucherPanel() {
+    if (vouchers.length === 0) return <p style={{color:"#65716e",fontSize:13,padding:"20px 0",textAlign:"center"}}>暂无会计凭证</p>;
+    return (
+      <div className="table-wrap"><table><thead><tr><th>凭证号</th><th>日期</th><th>摘要</th><th>借方</th><th>贷方</th><th>状态</th></tr></thead><tbody>
+        {vouchers.map((v) => (
+          <tr key={v.id} style={{cursor:"pointer"}} onClick={()=>setVoucherDetail(v.id===voucherDetailId?null:v.id)}>
+            <td><strong>{v.code}</strong><small>{v.bizType}</small></td>
+            <td>{v.voucherDate}</td>
+            <td style={{maxWidth:180,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" as const}}>{v.description}</td>
+            <td style={{textAlign:"right" as const}}>{formatMoney(v.totalDebit)}</td>
+            <td style={{textAlign:"right" as const}}>{formatMoney(v.totalCredit)}</td>
+            <td><StatusTag tone={v.status==="POSTED"?"good":v.status==="DRAFT"?"info":"warn"}>{v.status==="POSTED"?"已过账":v.status==="DRAFT"?"草稿":"已审核"}</StatusTag></td>
+          </tr>
+        ))}
+      </tbody></table></div>
+    );
+  }
+
+  function FinancialStatementsPanel() {
+    if (!financialStatements) return <p style={{color:"#65716e",fontSize:13,padding:"20px 0",textAlign:"center"}}>暂无财务报表</p>;
+    const s = financialStatements;
+    return (
+      <div className="mini-list">
+        <div className="money-row"><div><strong>资产总计</strong><span>资产负债表</span></div><b>{formatMoney(s.totalAssets)}</b><StatusTag tone="good">资产</StatusTag></div>
+        <div className="money-row"><div><strong>负债总计</strong></div><b>{formatMoney(s.totalLiabilities)}</b><StatusTag tone="warn">负债</StatusTag></div>
+        <div className="money-row"><div><strong>总收入</strong><span>损益表</span></div><b>{formatMoney(s.totalRevenue)}</b><StatusTag tone="good">收入</StatusTag></div>
+        <div className="money-row"><div><strong>总费用</strong></div><b>{formatMoney(s.totalExpense)}</b><StatusTag tone="danger">费用</StatusTag></div>
+        <div className="money-row"><div><strong>净利润</strong><span>{s.profit>=0?"盈利":"亏损"}</span></div><b>{formatMoney(s.profit)}</b><StatusTag tone={s.profit>=0?"good":"danger"}>{s.profit>=0?"盈利":"亏损"}</StatusTag></div>
+        <div className="money-row"><div><strong>净现金流</strong></div><b>{formatMoney(s.netCashFlow)}</b><StatusTag tone={s.netCashFlow>=0?"good":"danger"}>{s.netCashFlow>=0?"正向":"负向"}</StatusTag></div>
+      </div>
+    );
+  }
+
+  function PaymentApplicationsPanel() {
+    const pending = paymentApps.filter(a => a.status === "PENDING");
+    const approved = paymentApps.filter(a => a.status === "APPROVED");
+    const paid = paymentApps.filter(a => a.status === "PAID");
+    if (paymentApps.length === 0) return <p style={{color:"#65716e",fontSize:13,padding:"20px 0",textAlign:"center"}}>暂无付款申请</p>;
+    return (
+      <div className="mini-list">
+        <p style={{fontSize:12,color:"#65716e",margin:"0 0 8px",padding:"0 4px"}}>{pending.length}笔待批 · {approved.length}笔已批 · {paid.length}笔已付</p>
+        {paymentApps.map((app) => (
+          <div className="money-row" key={app.id}>
+            <div><strong>{app.supplierName}</strong><span>{app.code} · {app.purpose} · {app.requestedDate}</span></div>
+            <b>{formatMoney(app.requestedAmount)}</b>
+            <StatusTag tone={app.status==="PAID"?"good":app.status==="APPROVED"?"info":app.status==="REJECTED"?"danger":"warn"}>{app.status==="PENDING"?"待审批":app.status==="APPROVED"?"已批准":app.status==="REJECTED"?"已拒绝":"已付款"}</StatusTag>
+            <div className="row-actions">
+              {app.status==="PENDING"&&<><button className="mini-action" type="button" onClick={()=>{approvePaymentApplication(app.id,{decision:"APPROVED",comment:"自动",approverName:"系统管理员"}).then(()=>fetchPaymentApplications()).then(l=>{setPaymentApps(l);pushEvent("已批准",app.code,"good");}).catch(e=>pushEvent("审批失败",e.message,"danger"))}}><CheckCircle2 size={13}/><span>批准</span></button><button className="mini-action" type="button" onClick={()=>{approvePaymentApplication(app.id,{decision:"REJECTED",comment:"自动",approverName:"系统管理员"}).then(()=>fetchPaymentApplications()).then(l=>{setPaymentApps(l);pushEvent("已拒绝",app.code,"warn");}).catch(e=>pushEvent("拒绝失败",e.message,"danger"))}}><span style={{color:"#bd3f2f"}}>拒绝</span></button></>}
+              {app.status==="APPROVED"&&<button className="mini-action" type="button" onClick={()=>{executePayment(app.id,{paidDate:new Date().toISOString().slice(0,10),paymentMethod:"BANK_TRANSFER",bankReference:"BK-"+Date.now(),payerName:"系统管理员"}).then(()=>Promise.all([fetchPaymentApplications(),fetchPaymentRecords(),fetchPayables()])).then(([al,rl,pl])=>{setPaymentApps(al);setPaymentRecords(rl);payableApiData.current.clear();setPayables(pl.map((p:any)=>{payableApiData.current.set(p.code,p);return{id:p.code,source:p.orderCode,supplier:p.supplierName,amount:p.outstandingAmount,due:p.dueDate,status:(p.overdue?"逾期":p.status==="PAID"?"已付款":"待付款") as "逾期"|"已付款"|"待付款"};}));pushEvent("付款已执行",app.code,"good");}).catch(e=>pushEvent("付款失败",e.message,"danger"))}}><CheckCircle2 size={13}/><span>执行付款</span></button>}
+            </div>
+          </div>
+        ))}
       </div>
     );
   }

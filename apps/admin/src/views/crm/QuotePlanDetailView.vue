@@ -5,6 +5,7 @@
         <a-space>
           <a-button @click="goBack">返回列表</a-button>
           <a-button @click="loadData">刷新</a-button>
+          <a-button v-if="record" @click="handlePrintQuote">打印报价单</a-button>
         </a-space>
       </template>
 
@@ -19,7 +20,16 @@
           <a-tag :color="quoteStatusColor(record.status)">{{ quoteStatusLabel(record.status) }}</a-tag>
         </div>
 
-        <a-descriptions bordered :column="{ xs: 1, sm: 2, md: 3 }" style="margin-top: 20px">
+        <!-- Process lifecycle stepper -->
+        <a-steps :current="lifecycleStep" size="small" style="margin: 20px 0 8px; padding: 12px 0; background: #fafafa; border-radius: 6px;">
+          <a-step title="草稿" :status="stepStatuses[0]" :description="stepDescs[0]" />
+          <a-step title="内部审批" :status="stepStatuses[1]" :description="stepDescs[1]" />
+          <a-step title="客户确认" :status="stepStatuses[2]" :description="stepDescs[2]" />
+          <a-step title="合同生成" :status="stepStatuses[3]" :description="stepDescs[3]" />
+          <a-step title="应收管理" :status="stepStatuses[4]" :description="stepDescs[4]" />
+        </a-steps>
+
+        <a-descriptions bordered :column="{ xs: 1, sm: 2, md: 3 }" style="margin-top: 8px">
           <a-descriptions-item label="客户">{{ record.customerName }}</a-descriptions-item>
           <a-descriptions-item label="关联商机">{{ record.opportunityCode || "未关联" }}</a-descriptions-item>
           <a-descriptions-item label="报价金额">
@@ -27,36 +37,47 @@
           </a-descriptions-item>
           <a-descriptions-item label="服务频次">{{ record.inspectCycle || "未设置" }}</a-descriptions-item>
           <a-descriptions-item label="付款节点">{{ record.paymentNodes || "未设置" }}</a-descriptions-item>
-          <a-descriptions-item label="更新时间">{{ formatDateTime(record.updatedAt) }}</a-descriptions-item>
+          <a-descriptions-item label="更新">{{ formatDateTime(record.updatedAt) }}</a-descriptions-item>
         </a-descriptions>
 
         <a-card title="服务范围" style="margin-top: 16px">
           <p style="margin: 0; white-space: pre-wrap">{{ record.serviceScope }}</p>
         </a-card>
 
-        <a-card v-if="record.status === 'PENDING_APPROVAL' || record.status === 'APPROVED' || record.status === 'REJECTED'" title="内部审批记录" style="margin-top: 16px">
-          <a-descriptions bordered :column="2">
-            <a-descriptions-item label="审批人">{{ record.lastApproverName || "-" }}</a-descriptions-item>
-            <a-descriptions-item label="审批时间">{{ formatDateTime(record.lastApprovalAt) }}</a-descriptions-item>
-            <a-descriptions-item label="审批意见" :span="2">{{ record.lastApprovalComment || "-" }}</a-descriptions-item>
-          </a-descriptions>
-        </a-card>
-
-        <a-card v-if="record.customerDecision" title="客户反馈" style="margin-top: 16px">
-          <a-descriptions bordered :column="2">
-            <a-descriptions-item label="客户结果">
-              <a-tag :color="record.customerDecision === 'ACCEPTED' ? 'green' : 'red'">
-                {{ record.customerDecision === 'ACCEPTED' ? '客户接受' : '客户拒绝' }}
-              </a-tag>
+        <!-- Enhanced converted contract card -->
+        <a-card v-if="record.convertedContractId" title="已转合同" style="margin-top: 16px">
+          <a-descriptions v-if="relatedContract" bordered :column="2" size="small">
+            <a-descriptions-item label="合同编号">
+              <a @click="router.push('/crm/contracts/' + relatedContract.id)">{{ relatedContract.code }}</a>
             </a-descriptions-item>
-            <a-descriptions-item label="登记人">{{ record.customerDecisionBy || "-" }}</a-descriptions-item>
-            <a-descriptions-item label="结果说明" :span="2">{{ record.customerComment || "-" }}</a-descriptions-item>
-            <a-descriptions-item label="登记时间" :span="2">{{ formatDateTime(record.customerDecidedAt) }}</a-descriptions-item>
+            <a-descriptions-item label="项目名称">{{ relatedContract.projectName }}</a-descriptions-item>
+            <a-descriptions-item label="合同金额"><strong>{{ formatMoney(relatedContract.amount) }}</strong></a-descriptions-item>
+            <a-descriptions-item label="合同周期">{{ relatedContract.startDate }} ~ {{ relatedContract.endDate }}</a-descriptions-item>
+            <a-descriptions-item label="状态">
+              <a-tag :color="contractStatusColor(relatedContract.status)">{{ contractStatusLabel(relatedContract.status) }}</a-tag>
+            </a-descriptions-item>
+            <a-descriptions-item label="操作">
+              <a-button type="link" size="small" @click="router.push('/crm/contracts/' + relatedContract.id)">查看合同详情</a-button>
+            </a-descriptions-item>
           </a-descriptions>
+          <a-empty v-else-if="loadingContract" description="加载合同信息..." />
         </a-card>
 
-        <a-card v-if="record.convertedContractId" title="转合同" style="margin-top: 16px">
-          <a-alert type="success" show-icon message="本报价已转为合同" />
+        <!-- Receivable status card -->
+        <a-card v-if="relatedContract && relatedReceivables.length > 0" title="应收进度" style="margin-top: 16px">
+          <a-row :gutter="16" class="metric-row">
+            <a-col :xs="12" :md="6"><a-statistic title="应收总额" :value="receivableSummary.total" :formatter="moneyFormatter" /></a-col>
+            <a-col :xs="12" :md="6"><a-statistic title="已开票" :value="receivableSummary.invoiced" :formatter="moneyFormatter" :value-style="{color:'#1890ff'}" /></a-col>
+            <a-col :xs="12" :md="6"><a-statistic title="已回款" :value="receivableSummary.received" :formatter="moneyFormatter" :value-style="{color:'#52c41a'}" /></a-col>
+            <a-col :xs="12" :md="6"><a-statistic title="未收" :value="receivableSummary.outstanding" :formatter="moneyFormatter" :value-style="{color:receivableSummary.outstanding>0?'#ff4d4f':'#52c41a'}" /></a-col>
+          </a-row>
+          <a-table size="small" :data-source="relatedReceivables" :columns="receivableMiniColumns" :pagination="false" :row-key="(r:any)=>r.id" style="margin-top: 12px">
+            <template #bodyCell="{column,record}">
+              <template v-if="column.key==='amount'">{{ formatMoney(record.amount) }}</template>
+              <template v-else-if="column.key==='outstanding'"><span :class="{'text-danger':+record.outstandingAmount>0}">{{ formatMoney(record.outstandingAmount) }}</span></template>
+              <template v-else-if="column.key==='status'"><a-tag :color="receivableStatusColor(record.status)">{{ receivableStatusLabel(record.status) }}</a-tag></template>
+            </template>
+          </a-table>
         </a-card>
       </template>
 
@@ -66,46 +87,84 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { message } from "ant-design-vue";
 import { useRoute, useRouter } from "vue-router";
-import { getQuote, listAttachments, uploadAttachment, deleteAttachment, type QuotePlan, type CrmAttachment } from "@/api/crm";
-import { formatMoney, quoteStatusColor, quoteStatusLabel } from "./crm-options";
+import { getQuote, listContracts, listReceivables, type QuotePlan, type ServiceContract, type Receivable } from "@/api/crm";
+import { formatMoney, quoteStatusColor, quoteStatusLabel, contractStatusColor, contractStatusLabel, receivableStatusColor, receivableStatusLabel } from "./crm-options";
 
 const route = useRoute();
 const router = useRouter();
 const record = ref<QuotePlan | null>(null);
+const relatedContract = ref<ServiceContract | null>(null);
+const relatedReceivables = ref<Receivable[]>([]);
 const loading = ref(true);
+const loadingContract = ref(false);
 const id = route.params.id as string;
 
-const attachments = ref<CrmAttachment[]>([]);
+const receivableMiniColumns = [
+  { title: "应收编号", dataIndex: "code", width: 180 },
+  { title: "应收金额", key: "amount", width: 130 },
+  { title: "未收金额", key: "outstanding", width: 130 },
+  { title: "到期日", dataIndex: "dueDate", width: 120 },
+  { title: "状态", key: "status", width: 110 },
+];
 
-async function loadAttachments() {
-  try {
-    attachments.value = await listAttachments("QUOTE", id);
-  } catch {}
-}
+const receivableSummary = computed(() => {
+  const items = relatedReceivables.value;
+  return {
+    total: items.reduce((s, r) => s + Number(r.amount || 0), 0),
+    invoiced: items.reduce((s, r) => s + (r.invoiceNo ? Number(r.amount || 0) : 0), 0),
+    received: items.reduce((s, r) => s + (Number(r.amount || 0) - Number(r.outstandingAmount || 0)), 0),
+    outstanding: items.reduce((s, r) => s + Number(r.outstandingAmount || 0), 0),
+  };
+});
 
-async function handleUpload(file: File) {
-  try {
-    await uploadAttachment("QUOTE", id, undefined, file);
-    message.success("附件上传成功");
-    await loadAttachments();
-  } catch (error) {
-    message.error(error instanceof Error ? error.message : "上传失败");
-  }
-  return false;
-}
+// Process stepper
+const lifecycleStep = computed(() => {
+  const s = record.value?.status;
+  if (!s) return 0;
+  if (s === "DRAFT") return 0;
+  if (s === "PENDING_APPROVAL" || s === "REJECTED") return 1;
+  if (s === "APPROVED" || s === "CUSTOMER_DECLINED") return 2;
+  if (s === "CUSTOMER_ACCEPTED") return 3;
+  if (s === "CONVERTED") return 4;
+  return 0;
+});
 
-async function handleDeleteAttachment(attId: string) {
-  try {
-    await deleteAttachment(attId);
-    message.success("附件已删除");
-    await loadAttachments();
-  } catch (error) {
-    message.error(error instanceof Error ? error.message : "删除失败");
-  }
-}
+const stepStatuses = computed(() => {
+  const s = record.value?.status;
+  const steps = ["finish", "wait", "wait", "wait", "wait"];
+  if (!s) { steps[0] = "process"; return steps; }
+  if (s === "DRAFT") { steps[0] = "process"; }
+  else if (s === "PENDING_APPROVAL") { steps[0] = "finish"; steps[1] = "process"; }
+  else if (s === "REJECTED") { steps[0] = "finish"; steps[1] = "error"; }
+  else if (s === "APPROVED") { steps[0] = "finish"; steps[1] = "finish"; steps[2] = "process"; }
+  else if (s === "CUSTOMER_DECLINED") { steps[0] = "finish"; steps[1] = "finish"; steps[2] = "error"; }
+  else if (s === "CUSTOMER_ACCEPTED") { steps[0] = "finish"; steps[1] = "finish"; steps[2] = "finish"; steps[3] = "process"; }
+  else if (s === "CONVERTED") { steps[0] = "finish"; steps[1] = "finish"; steps[2] = "finish"; steps[3] = "finish"; steps[4] = "finish"; }
+  return steps;
+});
+
+const stepDescs = computed(() => {
+  const r = record.value;
+  const descs = [
+    formatDateTime(r?.createdAt || r?.updatedAt),
+    "-",
+    "-",
+    "-",
+    "-",
+  ];
+  if (!r) return descs;
+  if (r.status === "PENDING_APPROVAL") descs[1] = "待审批";
+  else if (r.lastApproverName) descs[1] = r.lastApproverName;
+  if (r.customerDecision === "ACCEPTED") descs[2] = "客户已接受";
+  else if (r.customerDecision === "DECLINED") descs[2] = "客户已拒绝";
+  else if (r.status === "APPROVED") descs[2] = "等待客户确认";
+  if (r.convertedContractId && relatedContract.value) descs[3] = relatedContract.value.code;
+  if (relatedReceivables.value.length > 0) descs[4] = receivableSummary.value.outstanding > 0 ? "待收款" : "已结清";
+  return descs;
+});
 
 onMounted(loadData);
 
@@ -113,6 +172,23 @@ async function loadData() {
   loading.value = true;
   try {
     record.value = await getQuote(id);
+    // Load related contract if converted
+    if (record.value?.convertedContractId) {
+      loadingContract.value = true;
+      try {
+        const contracts = await listContracts();
+        const found = contracts.find((c) => c.id === record.value!.convertedContractId);
+        if (found) {
+          relatedContract.value = found;
+          // Load related receivables
+          const allReceivables = await listReceivables();
+          relatedReceivables.value = allReceivables.filter(
+            (r) => r.contractId === found.id || r.sourceNo === found.code
+          );
+        }
+      } catch { /* supplementary data */ }
+      finally { loadingContract.value = false; }
+    }
   } catch (error) {
     message.error(error instanceof Error ? error.message : "报价加载失败");
   } finally {
@@ -120,18 +196,15 @@ async function loadData() {
   }
 }
 
-function goBack() {
-  router.push("/crm/quotes");
-}
-
+function handlePrintQuote() { window.print(); }
+function goBack() { router.push("/crm/quotes"); }
 function formatDateTime(value?: string) {
   if (!value) return "";
-  return new Date(value).toLocaleString("zh-CN", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return new Date(value).toLocaleString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
+function moneyFormatter({ value }: { value: number | string }) { return formatMoney(Number(value)); }
 </script>
+
+<style scoped>
+.metric-row .ant-statistic .ant-statistic-title { font-size: 12px; }
+</style>

@@ -21,7 +21,8 @@
         <a-checkbox v-model:checked="showConverted">显示已转合同</a-checkbox>
       </div>
 
-      <a-table
+      <!-- desktop-table --><div class="desktop-table">
+<a-table
         :columns="columns"
         :data-source="filteredQuotes"
         :loading="loading"
@@ -111,6 +112,14 @@
           </template>
         </template>
       </a-table>
+</div><!-- end desktop-table -->
+    <div class="mobile-only">
+      <div v-for="record in filteredQuotes" :key="record.id" class="mobile-card-item" @click="router.push('/crm/quotes/' + record.id)">
+        <div class="mobile-card-header"><strong>{{ record.code }}</strong><a-tag :color="quoteStatusColor(record.status)">{{ quoteStatusLabel(record.status) }}</a-tag></div>
+        <div class="mobile-card-body"><span>{{ record.customerName }}</span><strong>{{ formatMoney(record.amount) }}</strong></div>
+        <div class="mobile-card-tags">{{ record.opportunityCode || "未关联商机" }}</div>
+      </div>
+    </div>
     </a-card>
 
     <a-modal

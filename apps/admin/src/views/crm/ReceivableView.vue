@@ -1,7 +1,7 @@
 <template>
   <div class="page-stack">
     <a-card title="合同应收">
-      <template #extra><a-button @click="loadData">刷新</a-button></template>
+      <template #extra><a-button @click="loadData">刷新</a-button><a-button @click="handleExportCsv"><template #icon><DownloadOutlined /></template>导出</a-button></template>
 
       <a-row :gutter="[16, 16]" class="metric-row">
         <a-col :xs="12" :lg="6"><a-statistic title="应收总额" :value="totalAmount" :formatter="moneyFormatter" /></a-col>
@@ -42,6 +42,14 @@
               >
                 登记开票
               </a-button>
+<a-button
+                v-if="record.status !== 'SETTLED'"
+                size="small"
+                type="link"
+                @click="openEdit(record)"
+              >
+                修改
+              </a-button>
               <a-button
                 v-if="auth.can('crm:receivable:settle') && record.invoiceNo && record.outstandingAmount > 0"
                 size="small"
@@ -75,21 +83,36 @@
         </a-row>
       </a-form>
     </a-modal>
+
+    <a-modal v-model:open="editOpen" title="修改应收" :confirm-loading="saving" @ok="handleEdit">
+      <a-alert v-if="selectedItem" class="section-alert" type="info" :message="selectedItem.code + ' ' + selectedItem.customerName" />
+      <a-form ref="editFormRef" :model="editForm" layout="vertical">
+        <a-row :gutter="16">
+          <a-col :xs="24" :md="12"><a-form-item label="来源单号"><a-input v-model:value="editForm.sourceNo" /></a-form-item></a-col>
+          <a-col :xs="24" :md="12"><a-form-item label="应收金额" name="amount"><a-input-number v-model:value="editForm.amount" :min="0" class="full-input" /></a-form-item></a-col>
+          <a-col :xs="24" :md="12"><a-form-item label="到期日"><a-input v-model:value="editForm.dueDate" type="date" /></a-form-item></a-col>
+        </a-row>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
 import { message } from "ant-design-vue";
+
 import {
   listReceivables,
   recordReceivableReceipt,
   registerReceivableInvoice,
+  updateReceivable,
   type Receivable,
   type ReceivableStatus,
+  type UpdateReceivablePayload,
 } from "@/api/crm";
 import { useAuthStore } from "@/stores/auth";
 import { formatMoney, receivableStatusColor, receivableStatusLabel } from "./crm-options";
+import { downloadCsv, receivableRowToCsv } from "./crm-export";
 
 const auth = useAuthStore();
 const items = ref<Receivable[]>([]);
@@ -108,6 +131,10 @@ const invoiceRules = {
   invoiceNo: [{ required: true, message: "请输入发票号码" }],
   invoiceDate: [{ required: true, message: "请选择开票日期" }],
 };
+const editOpen = ref(false);
+const editFormRef = ref();
+const editForm = reactive({ sourceNo: "", amount: 0, dueDate: "" });
+
 const receiptRules = {
   amount: [{ required: true, message: "请输入回款金额" }],
   receivedDate: [{ required: true, message: "请选择回款日期" }],
@@ -206,6 +233,34 @@ async function handleReceipt() {
   } finally {
     saving.value = false;
   }
+}
+
+function openEdit(record: Receivable) {
+  selectedItem.value = record;
+  Object.assign(editForm, { sourceNo: record.sourceNo || "", amount: record.amount, dueDate: record.dueDate || "" });
+  editOpen.value = true;
+}
+
+async function handleEdit() {
+  await editFormRef.value?.validate();
+  if (!selectedItem.value) return;
+  saving.value = true;
+  try {
+    await updateReceivable(selectedItem.value.id, { ...editForm });
+    editOpen.value = false;
+    message.success("应收已修改");
+    await loadData();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "修改失败");
+  } finally {
+    saving.value = false;
+  }
+}
+
+function handleExportCsv() {
+  const headers = ["应收编号", "客户名称", "来源单号", "应收金额", "未收金额", "到期日", "状态", "发票号"];
+  const rows = items.value.map((r: any) => receivableRowToCsv(r));
+  downloadCsv("合同应收.csv", headers, rows);
 }
 
 function today() {

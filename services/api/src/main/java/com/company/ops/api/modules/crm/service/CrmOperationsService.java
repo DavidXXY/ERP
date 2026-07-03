@@ -7,6 +7,7 @@ import com.company.ops.api.modules.crm.domain.ContractStatus;
 import com.company.ops.api.modules.crm.domain.Customer;
 import com.company.ops.api.modules.crm.domain.FollowUp;
 import com.company.ops.api.modules.crm.domain.Opportunity;
+import com.company.ops.api.modules.crm.domain.ContractChangeRequest;
 import com.company.ops.api.modules.crm.domain.OpportunityStage;
 import com.company.ops.api.modules.crm.domain.QuoteCustomerDecision;
 import com.company.ops.api.modules.crm.domain.QuotePlan;
@@ -30,6 +31,7 @@ import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.QuoteResponse;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ProcessQuoteApprovalRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ProcessQuoteCustomerResultRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.QuoteConversionResult;
+import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.UpdateReceivableRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.QuoteRevisionResponse;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ReceivableResponse;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.RecordReceiptRequest;
@@ -38,6 +40,12 @@ import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.RenewalResponse;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.UpdateQuoteRequest;
 import com.company.ops.api.modules.crm.repository.CustomerRepository;
 import com.company.ops.api.modules.crm.repository.FollowUpRepository;
+import com.company.ops.api.modules.crm.repository.ContractChangeRequestRepository;
+import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ContractChangeResponse;
+import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.CreateContractChangeRequest;
+import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ApprovalActionRequest;
+
+
 import com.company.ops.api.modules.crm.repository.OpportunityRepository;
 import com.company.ops.api.modules.crm.repository.QuotePlanRepository;
 import com.company.ops.api.modules.crm.repository.QuoteApprovalRecordRepository;
@@ -76,6 +84,9 @@ public class CrmOperationsService {
 
   @jakarta.persistence.PersistenceContext
   private jakarta.persistence.EntityManager entityManager;
+
+  @org.springframework.beans.factory.annotation.Autowired
+  private ContractChangeRequestRepository changeRepository;
 
   public CrmOperationsService(
       CustomerRepository customerRepository,
@@ -600,8 +611,13 @@ public class CrmOperationsService {
     if (!contractRepository.existsById(id)) {
       throw new BusinessException("合同不存在");
     }
-    // Disassociate receivables first (set contract_id to null via update)
-    entityManager.createNativeQuery("UPDATE fin_receivables SET contract_id = NULL WHERE contract_id = ?1")
+    // Disassociate receivables (skip if fin_receivables table does not exist)
+    try {
+      entityManager.createNativeQuery("UPDATE fin_receivables SET contract_id = NULL WHERE contract_id = ?1")
+          .setParameter(1, id).executeUpdate();
+    } catch (Exception ignored) {}
+    // Clean up attached files
+    entityManager.createNativeQuery("DELETE FROM crm_attachment WHERE entity_type = 'CONTRACT' AND entity_id = ?1")
         .setParameter(1, id).executeUpdate();
     contractRepository.deleteById(id);
   }
@@ -937,6 +953,115 @@ public class CrmOperationsService {
 
   private BigDecimal defaultAmount(BigDecimal value) {
     return value == null ? BigDecimal.ZERO : value;
+  }
+
+
+  @Transactional
+  public ReceivableResponse updateReceivable(UUID id, UpdateReceivableRequest request) {
+    Receivable receivable = receivableRepository.findById(id)
+        .orElseThrow(() -> new BusinessException("应收单不存在"));
+    if (request.amount() != null) {
+      BigDecimal newAmount = defaultAmount(request.amount());
+      BigDecimal settled = receivable.getSettledAmount() != null ? receivable.getSettledAmount() : BigDecimal.ZERO;
+      if (newAmount.compareTo(settled) < 0) {
+        throw new BusinessException("修改后应收金额不能小于已收金额");
+      }
+      receivable.setAmount(newAmount);
+    }
+    if (request.dueDate() != null) receivable.setDueDate(request.dueDate());
+    if (request.sourceNo() != null) receivable.setSourceNo(request.sourceNo());
+    BigDecimal outstanding = receivable.getAmount().subtract(receivable.getSettledAmount() != null ? receivable.getSettledAmount() : BigDecimal.ZERO);
+    LocalDate due = receivable.getDueDate();
+    if (outstanding.compareTo(BigDecimal.ZERO) <= 0) {
+      receivable.setStatus(ReceivableStatus.SETTLED);
+    } else if (due != null && due.isBefore(LocalDate.now())) {
+      receivable.setStatus(ReceivableStatus.OVERDUE);
+    } else if (receivable.getInvoiceNo() != null) {
+      receivable.setStatus(ReceivableStatus.PAYMENT_PENDING);
+    } else {
+      receivable.setStatus(ReceivableStatus.INVOICE_PENDING);
+    }
+    Receivable saved = receivableRepository.save(receivable);
+    return toReceivable(saved,
+        customerMap(nullableId(saved.getCustomerId())),
+        contractMap(nullableId(saved.getContractId())));
+  }
+
+
+  @Transactional
+  public ContractChangeResponse createContractChangeRequest(UUID contractId, CreateContractChangeRequest request) {
+    ContractChangeRequest change = new ContractChangeRequest();
+    change.setContractId(contractId);
+    change.setChangeData(request.changeData());
+    change.setReason(request.reason());
+    change.setRequestedBy(request.requestedBy());
+    change.setRequestedAt(java.time.OffsetDateTime.now());
+    change.setStatus("PENDING");
+    ContractChangeRequest saved = changeRepository.save(change);
+    return toContractChangeResponse(saved);
+  }
+
+  @Transactional
+  public ContractChangeResponse approveContractChange(UUID id, String operatorName, String comment) {
+    ContractChangeRequest change = changeRepository.findById(id)
+        .orElseThrow(() -> new BusinessException("变更请求不存在"));
+    if (!"PENDING".equals(change.getStatus())) {
+      throw new BusinessException("该变更请求已处理");
+    }
+    applyContractChanges(change);
+    change.setStatus("APPROVED");
+    change.setApprovedBy(operatorName);
+    change.setApprovedAt(java.time.OffsetDateTime.now());
+    change.setApprovalComment(comment);
+    return toContractChangeResponse(changeRepository.save(change));
+  }
+
+  @Transactional
+  public ContractChangeResponse rejectContractChange(UUID id, String operatorName, String comment) {
+    ContractChangeRequest change = changeRepository.findById(id)
+        .orElseThrow(() -> new BusinessException("变更请求不存在"));
+    if (!"PENDING".equals(change.getStatus())) {
+      throw new BusinessException("该变更请求已处理");
+    }
+    change.setStatus("REJECTED");
+    change.setApprovedBy(operatorName);
+    change.setApprovedAt(java.time.OffsetDateTime.now());
+    change.setApprovalComment(comment);
+    return toContractChangeResponse(changeRepository.save(change));
+  }
+
+  private void applyContractChanges(ContractChangeRequest change) {
+    ServiceContract contract = contractRepository.findById(change.getContractId())
+        .orElseThrow(() -> new BusinessException("合同不存在"));
+    String data = change.getChangeData();
+    if (data == null || data.isBlank()) return;
+    try {
+      com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+      com.fasterxml.jackson.databind.JsonNode root = mapper.readTree(data);
+      if (root.has("projectName")) contract.setProjectName(root.get("projectName").asText());
+      if (root.has("contractType")) contract.setContractType(root.get("contractType").asText());
+      if (root.has("amount")) contract.setAmount(new java.math.BigDecimal(root.get("amount").asText()));
+      if (root.has("startDate")) contract.setStartDate(java.time.LocalDate.parse(root.get("startDate").asText()));
+      if (root.has("endDate")) contract.setEndDate(java.time.LocalDate.parse(root.get("endDate").asText()));
+      if (root.has("serviceCycle")) contract.setServiceCycle(root.get("serviceCycle").asText());
+      contractRepository.save(contract);
+    } catch (Exception e) {
+      throw new BusinessException("变更数据解析失败: " + e.getMessage());
+    }
+  }
+
+  public java.util.List<ContractChangeResponse> listContractChanges(UUID contractId) {
+    return changeRepository.findByContractIdOrderByCreatedAtDesc(contractId)
+        .stream().map(this::toContractChangeResponse).toList();
+  }
+
+  private ContractChangeResponse toContractChangeResponse(ContractChangeRequest item) {
+    return new ContractChangeResponse(
+        item.getId(), item.getContractId(), item.getChangeData(), item.getReason(),
+        item.getStatus(), item.getRequestedBy(), item.getRequestedAt(),
+        item.getApprovedBy(), item.getApprovedAt(), item.getApprovalComment(),
+        item.getCreatedAt()
+    );
   }
 
   private String deriveCode(String sourceCode, String targetPrefix) {

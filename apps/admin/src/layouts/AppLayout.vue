@@ -44,18 +44,35 @@
           <a-menu-item v-if="auth.can('crm:receivable:view')" key="/crm/receivables">合同应收</a-menu-item>
         </a-sub-menu>
 
-        <a-menu-item v-if="auth.can('procurement:view')" key="/procurement">
+        <a-sub-menu v-if="auth.can('procurement:view')" key="procurement">
           <template #icon><ShoppingCartOutlined /></template>
-          <span>供应链采购</span>
-        </a-menu-item>
-        <a-menu-item v-if="auth.can('project:view')" key="/projects">
+          <template #title>供应链采购</template>
+          <a-menu-item key="/procurement/requests">采购申请</a-menu-item>
+          <a-menu-item key="/procurement/orders">采购订单</a-menu-item>
+          <a-menu-item key="/procurement/receipts">到货入库</a-menu-item>
+          <a-menu-item key="/procurement/costs">成本归集</a-menu-item>
+          <a-menu-item key="/procurement/payables">采购应付</a-menu-item>
+          <a-menu-item key="/procurement/suppliers">供应商</a-menu-item>
+          <a-menu-item key="/procurement/analytics">采购分析</a-menu-item>
+          <a-menu-item key="/procurement/p2p">P2P流程</a-menu-item>
+        </a-sub-menu>
+        <a-sub-menu v-if="auth.can('project:view')" key="projects">
           <template #icon><ProjectOutlined /></template>
-          <span>项目管理</span>
-        </a-menu-item>
-        <a-menu-item v-if="auth.can('inventory:view')" key="/inventory">
+          <template #title>项目管理</template>
+          <a-menu-item key="/projects/list">项目列表</a-menu-item>
+          <a-menu-item key="/projects/budget">预算执行</a-menu-item>
+          <a-menu-item key="/projects/costs">成本明细</a-menu-item>
+          <a-menu-item key="/projects/stages">阶段履历</a-menu-item>
+        </a-sub-menu>
+        <a-sub-menu v-if="auth.can('inventory:view')" key="inventory">
           <template #icon><InboxOutlined /></template>
-          <span>库存管理</span>
-        </a-menu-item>
+          <template #title>库存管理</template>
+          <a-menu-item key="/inventory/parts">库存台账</a-menu-item>
+          <a-menu-item key="/inventory/issues">领料管理</a-menu-item>
+          <a-menu-item key="/inventory/returns">退料管理</a-menu-item>
+          <a-menu-item key="/inventory/movements">库存移动</a-menu-item>
+          <a-menu-item key="/inventory/analytics">库存分析</a-menu-item>
+        </a-sub-menu>
         <a-sub-menu v-if="canAccessHumanResources" key="hr">
           <template #icon><CalendarOutlined /></template>
           <template #title>人事管理</template>
@@ -113,6 +130,7 @@
           <a-typography-title :level="3">{{ route.meta.title }}</a-typography-title>
           <span class="app-header-subtitle">统一业务与经营管理</span>
         </div>
+        <GlobalSearch />
         <a-space class="app-header-actions">
           <a-tag class="app-environment" color="green">开发环境</a-tag>
           <a-dropdown :trigger="['click']">
@@ -160,6 +178,8 @@ import ShoppingCartOutlined from "@ant-design/icons-vue/ShoppingCartOutlined";
 import TeamOutlined from "@ant-design/icons-vue/TeamOutlined";
 import WalletOutlined from "@ant-design/icons-vue/WalletOutlined";
 import UserOutlined from "@ant-design/icons-vue/UserOutlined";
+import SearchOutlined from "@ant-design/icons-vue/SearchOutlined";
+import GlobalSearch from "./GlobalSearch.vue";
 import { useAppStore } from "@/stores/app";
 import { useAuthStore } from "@/stores/auth";
 
@@ -167,7 +187,7 @@ const app = useAppStore();
 const auth = useAuthStore();
 const route = useRoute();
 const router = useRouter();
-const openKeys = ref<string[]>(route.path.startsWith("/finance") ? ["finance"] : route.path.startsWith("/office") ? ["office"] : route.path.startsWith("/qualification") ? ["qualification"] : route.path.startsWith("/system") ? ["system"] : route.path.startsWith("/crm") ? ["crm"] : []);
+const openKeys = ref<string[]>(route.path.startsWith("/finance") ? ["finance"] : route.path.startsWith("/office") ? ["office"] : route.path.startsWith("/qualification") ? ["qualification"] : route.path.startsWith("/system") ? ["system"] : route.path.startsWith("/crm") ? ["crm"] : route.path.startsWith("/procurement") ? ["procurement"] : route.path.startsWith("/inventory") ? ["inventory"] : route.path.startsWith("/projects") ? ["projects"] : []);
 
 const activeKey = computed(() => route.path);
 const canAccessCrm = computed(() => [

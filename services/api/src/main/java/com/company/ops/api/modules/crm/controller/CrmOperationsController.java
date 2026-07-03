@@ -20,6 +20,11 @@ import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.RecordReceiptReques
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.RegisterInvoiceRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.RenewalResponse;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.UpdateQuoteRequest;
+import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.CreateContractChangeRequest;
+import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ContractChangeResponse;
+import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ApprovalActionRequest;
+
+import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.UpdateReceivableRequest;
 import com.company.ops.api.modules.crm.service.CrmOperationsService;
 import com.company.ops.api.modules.system.security.UserPrincipal;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -193,6 +198,16 @@ public class CrmOperationsController {
     return ApiResponse.ok(crmOperationsService.registerInvoice(id, request));
   }
 
+
+  @PutMapping("/receivables/{id}")
+  @PreAuthorize("hasAuthority('crm:receivable:update')")
+  public ApiResponse<ReceivableResponse> updateReceivable(
+      @PathVariable UUID id,
+      @Valid @RequestBody UpdateReceivableRequest request
+  ) {
+    return ApiResponse.ok(crmOperationsService.updateReceivable(id, request));
+  }
+
   @PostMapping("/receivables/{id}/receipts")
   @PreAuthorize("hasAuthority('crm:receivable:settle')")
   public ApiResponse<ReceivableResponse> recordReceipt(
@@ -247,4 +262,40 @@ public class CrmOperationsController {
   public ApiResponse<List<CustomerProfileResponse>> listCustomerProfiles() {
     return ApiResponse.ok(crmOperationsService.listCustomerProfiles());
   }
+
+  @GetMapping("/contracts/{id}/changes")
+  @PreAuthorize("hasAuthority('crm:contract:view')")
+  public ApiResponse<List<ContractChangeResponse>> listContractChanges(@PathVariable UUID id) {
+    return ApiResponse.ok(crmOperationsService.listContractChanges(id));
+  }
+
+  @PostMapping("/contracts/{id}/changes")
+  @PreAuthorize("hasAuthority('crm:contract:update')")
+  public ApiResponse<ContractChangeResponse> createContractChange(
+      @PathVariable UUID id,
+      @Valid @RequestBody CreateContractChangeRequest request
+  ) {
+    CreateContractChangeRequest full = new CreateContractChangeRequest(
+        request.changeData(), request.reason(), request.requestedBy());
+    return ApiResponse.ok(crmOperationsService.createContractChangeRequest(id, full));
+  }
+
+  @PostMapping("/contract-changes/{id}/approve")
+  @PreAuthorize("hasAuthority('crm:contract:update')")
+  public ApiResponse<ContractChangeResponse> approveContractChange(
+      @PathVariable UUID id,
+      @Valid @RequestBody ApprovalActionRequest request
+  ) {
+    return ApiResponse.ok(crmOperationsService.approveContractChange(id, request.operatorName(), request.comment()));
+  }
+
+  @PostMapping("/contract-changes/{id}/reject")
+  @PreAuthorize("hasAuthority('crm:contract:update')")
+  public ApiResponse<ContractChangeResponse> rejectContractChange(
+      @PathVariable UUID id,
+      @Valid @RequestBody ApprovalActionRequest request
+  ) {
+    return ApiResponse.ok(crmOperationsService.rejectContractChange(id, request.operatorName(), request.comment()));
+  }
+
 }

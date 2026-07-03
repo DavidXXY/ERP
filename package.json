@@ -16,6 +16,7 @@
     "dev": "npm run prototype:dev",
     "build": "npm run prototype:build",
     "prototype:dev": "vite --host 0.0.0.0",
+    "gen:api": "bash ./scripts/gen-api-types.sh",
     "prototype:build": "tsc -b && vite build",
     "prototype:preview": "vite preview --host 0.0.0.0",
     "admin:dev": "npm --workspace apps/admin run dev",
@@ -42,6 +43,7 @@
   "devDependencies": {
     "@types/node": "^26.0.1",
     "@types/react": "^19.2.17",
-    "@types/react-dom": "^19.2.3"
+    "@types/react-dom": "^19.2.3",
+    "openapi-typescript": "^7.13.0"
   }
 }

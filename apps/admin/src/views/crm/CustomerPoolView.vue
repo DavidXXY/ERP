@@ -16,6 +16,7 @@
           <a-button title="刷新客户" aria-label="刷新客户" :loading="loading" @click="loadCustomers">
             <template #icon><ReloadOutlined /></template>
           </a-button>
+          <a-button @click="handleExportCsv"><template #icon><DownloadOutlined /></template>导出</a-button>
           <a-button v-if="auth.can('crm:customer:create')" type="primary" @click="openCreate">
             <template #icon><PlusOutlined /></template>新增客户
           </a-button>
@@ -436,6 +437,12 @@ async function selectCustomer(id: string, syncRoute = true) {
     if (syncRoute && route.query.customer !== id) await router.replace({ path: route.path, query: { ...route.query, customer: id } });
   } catch (error) { message.error(error instanceof Error ? error.message : "客户详情加载失败"); }
   finally { detailLoading.value = false; }
+}
+
+function handleExportCsv() {
+  const headers = ["客户编码", "客户名称", "所属行业", "客户等级", "负责人", "联系人数量", "主要联系人", "付款习惯", "风险状态"];
+  const rows = filteredCustomers.value.map((r) => customerRowToCsv(r));
+  downloadCsv("客户池.csv", headers, rows);
 }
 
 function customerRow(record: CustomerSummary) { return { onClick: () => selectCustomer(record.id) }; }

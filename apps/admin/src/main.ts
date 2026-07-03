@@ -2,6 +2,7 @@ import { createApp } from "vue";
 import { createPinia } from "pinia";
 import {
   Alert,
+  Badge,
   Button,
   Card,
   Checkbox,
@@ -33,6 +34,7 @@ import {
   Table,
   Tag,
   Tabs,
+  Timeline,
   Tree,
   TreeSelect,
   Typography,
@@ -47,6 +49,7 @@ const app = createApp(App);
 
 [
   Alert,
+  Badge,
   Button,
   Card,
   Checkbox,
@@ -78,6 +81,7 @@ const app = createApp(App);
   Table,
   Tag,
   Tabs,
+  Timeline,
   Tree,
   TreeSelect,
   Typography,

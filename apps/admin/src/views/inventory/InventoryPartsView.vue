@@ -20,7 +20,8 @@
       <a-tabs v-model:active-key="activeTab">
         <a-tab-pane key="parts" tab="库存台账">
           <div class="table-toolbar">
-            <a-button v-if="auth.can('inventory:part:create')" type="primary" @click="openPart">
+            <a-button @click="handleExportParts">导出</a-button>
+          <a-button v-if="auth.can('inventory:part:create')" type="primary" @click="openPart">
               <template #icon><PlusOutlined /></template>
               新增物料
             </a-button>
@@ -188,6 +189,7 @@ import {
   type StockMovementType,
 } from "@/api/core-business";
 import { useAuthStore } from "@/stores/auth";
+import { downloadCsv } from "@/views/crm/crm-export";
 
 type IssueFormLine = { key: number; partId: string; quantity: number };
 type IssueForm = { code: string; projectId: string; issueDate: string; receiverName: string; purpose: string; lines: IssueFormLine[] };
@@ -269,6 +271,15 @@ const issueTotal = computed(() => issueForm.lines.reduce((sum, item) => sum + li
 const returnTotal = computed(() => returnForm.lines.reduce((sum, item) => sum + Number(item.quantity || 0) * Number(item.unitCost || 0), 0));
 
 onMounted(loadData);
+
+function handleExportParts() {
+  const headers = ["物料编码", "物料名称", "规格型号", "单位", "库存数量", "安全库存", "仓库", "类别"];
+  const rows = parts.value.map((r: any) => [
+    r.partCode || "", r.partName || "", r.spec || "", r.unit || "",
+    String(r.quantity || 0), String(r.safetyStock || 0), r.warehouse || "", r.category || "",
+  ]);
+  downloadCsv("库存台账.csv", headers, rows);
+}
 
 async function loadData() {
   loading.value = true; errorMessage.value = "";

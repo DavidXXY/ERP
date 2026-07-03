@@ -270,4 +270,33 @@ public final class CrmOperationsDtos {
       LocalDate nearestContractEndDate
   ) {
   }
+
+  public record UpdateReceivableRequest(
+      @Size(max = 64) String sourceNo,
+      @DecimalMin("0") BigDecimal amount,
+      LocalDate dueDate
+  ) {
+  }
+
+  public record CreateContractChangeRequest(
+      String changeData,
+      @NotBlank @Size(max = 500) String reason,
+      @NotBlank @Size(max = 80) String requestedBy
+  ) {
+  }
+
+  public record ContractChangeResponse(
+      UUID id, UUID contractId, String changeData, String reason,
+      String status, String requestedBy, OffsetDateTime requestedAt,
+      String approvedBy, OffsetDateTime approvedAt, String approvalComment,
+      OffsetDateTime createdAt
+  ) {
+  }
+
+  public record ApprovalActionRequest(
+      @NotBlank @Size(max = 80) String operatorName,
+      @Size(max = 500) String comment
+  ) {
+  }
+
 }

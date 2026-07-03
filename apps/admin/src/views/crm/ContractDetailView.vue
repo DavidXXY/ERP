@@ -5,6 +5,8 @@
         <a-space>
           <a-button @click="goBack">返回列表</a-button>
           <a-button @click="loadData">刷新</a-button>
+          <a-button @click="window.print()">打印</a-button>
+          <a-button type="primary" @click="openEdit">合同变更</a-button>
         </a-space>
       </template>
 
@@ -110,15 +112,62 @@
           </template>
         </a-list>
       </a-tab-pane>
+      <a-tab-pane key="changes" tab="变更记录">
+        <a-empty v-if="changeList.length === 0" description="暂无变更记录" />
+        <div v-else class="change-timeline">
+          <div v-for="item in changeList" :key="item.id" class="change-card" :class="'change-' + (item.status?.toLowerCase() || 'pending')">
+            <div class="change-header">
+              <strong>{{ item.reason }}</strong>
+              <a-tag :color="item.status === 'APPROVED' ? 'green' : item.status === 'REJECTED' ? 'red' : 'orange'">
+                {{ item.status === 'APPROVED' ? '已通过' : item.status === 'REJECTED' ? '已驳回' : '待审批' }}
+              </a-tag>
+            </div>
+            <a-timeline>
+              <a-timeline-item color="blue">
+                <template #label>{{ item.requestedAt?.slice(0,10) || "-" }}</template>
+                <strong>提交变更申请</strong>
+                <p style="margin:2px 0 0;color:#8c8c8c;font-size:12px">申请人：{{ item.requestedBy || "-" }}</p>
+              </a-timeline-item>
+              <a-timeline-item :color="item.status === 'APPROVED' ? 'green' : item.status === 'REJECTED' ? 'red' : 'orange'">
+                <template #label>{{ item.approvedAt?.slice(0,10) || "待处理" }}</template>
+                <strong v-if="item.status === 'PENDING'">等待审批</strong>
+                <strong v-else>{{ item.status === 'APPROVED' ? '审批通过' : '审批驳回' }}</strong>
+                <p v-if="item.approvedBy" style="margin:2px 0 0;color:#8c8c8c;font-size:12px">审批人：{{ item.approvedBy }}</p>
+                <div v-if="item.status === 'PENDING'" style="margin-top:8px">
+                  <a-space>
+                    <a-button size="small" type="primary" @click="handleApproveChange(item.id)">通过</a-button>
+                    <a-button size="small" danger @click="handleRejectChange(item.id)">驳回</a-button>
+                  </a-space>
+                </div>
+              </a-timeline-item>
+            </a-timeline>
+          </div>
+        </div>
+      </a-tab-pane>
     </a-tabs>
+    <a-modal v-model:open="editOpen" title="合同变更" :confirm-loading="saving" @ok="handleEdit">
+      <a-form ref="editFormRef" :model="editForm" layout="vertical">
+        <a-row :gutter="16">
+          <a-col :xs="24" :md="12"><a-form-item label="项目名称" name="projectName"><a-input v-model:value="editForm.projectName" /></a-form-item></a-col>
+          <a-col :xs="24" :md="12"><a-form-item label="合同类型" name="contractType"><a-input v-model:value="editForm.contractType" /></a-form-item></a-col>
+          <a-col :xs="24" :md="12"><a-form-item label="合同金额" name="amount"><a-input-number v-model:value="editForm.amount" :min="0" class="full-input" /></a-form-item></a-col>
+          <a-col :xs="24" :md="12"><a-form-item label="服务频次"><a-input v-model:value="editForm.serviceCycle" /></a-form-item></a-col>
+          <a-col :xs="24" :md="12"><a-form-item label="开始日期"><a-input v-model:value="editForm.startDate" type="date" /></a-form-item></a-col>
+          <a-col :xs="24" :md="12"><a-form-item label="结束日期"><a-input v-model:value="editForm.endDate" type="date" /></a-form-item></a-col>
+          <a-col :span="24"><a-form-item label="变更原因" name="reason"><a-textarea v-model:value="editForm.reason" :rows="2" placeholder="请说明变更原因" /></a-form-item></a-col>
+        </a-row>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
 import { message } from "ant-design-vue";
 import { useRoute, useRouter } from "vue-router";
-import { getContract, getOpportunity, getQuote, uploadAttachment, deleteAttachment, listAttachments, getAttachmentDownloadUrl, type Opportunity, type QuotePlan, type ServiceContract, type CrmAttachment } from "@/api/crm";
+import { useAuthStore } from "@/stores/auth";
+const auth = useAuthStore();
+import { getContract, getOpportunity, getQuote, uploadAttachment, deleteAttachment, listAttachments, getAttachmentDownloadUrl, updateContract, createContractChange, approveContractChange, rejectContractChange, listContractChanges, type Opportunity, type QuotePlan, type ServiceContract, type CrmAttachment, type UpdateContractPayload, type CreateContractChangePayload, type ContractChangeResponse, type ApprovalActionPayload } from "@/api/crm";
 import { contractStatusColor, contractStatusLabel, formatMoney, opportunityStageColor, opportunityStageLabel, quoteStatusColor, quoteStatusLabel } from "./crm-options";
 
 const route = useRoute();
@@ -127,9 +176,20 @@ const record = ref<ServiceContract | null>(null);
 const relatedQuote = ref<QuotePlan | null>(null);
 const relatedOpportunity = ref<Opportunity | null>(null);
 const loading = ref(true);
+const editOpen = ref(false);
+const editFormRef = ref();
+const editForm = reactive({ projectName: "", contractType: "", amount: 0, serviceCycle: "", startDate: "", endDate: "", reason: "" });
+const changeColumns = [
+  { title: "变更原因", key: "reason", width: 220 },
+  { title: "状态", key: "status", width: 80 },
+  { title: "申请人", key: "requested", width: 140 },
+  { title: "处理", key: "action", width: 160 },
+];
+
+const editRules = { projectName: [{ required: true, message: "请输入项目名称" }], amount: [{ required: true, message: "请输入合同金额" }], };
 const id = route.params.id as string;
 
-onMounted(() => { loadData(); loadAttachments(); });
+onMounted(() => { loadData(); loadAttachments(); loadChanges(); });
 
 async function loadData() {
   loading.value = true;
@@ -183,6 +243,61 @@ async function handleDeleteAttachment(attId: string) {
   } catch (error) {
     message.error(error instanceof Error ? error.message : "删除失败");
   }
+}
+
+function openEdit() {
+  if (!record.value) return;
+  Object.assign(editForm, { projectName: record.value.projectName, contractType: record.value.contractType, amount: record.value.amount, serviceCycle: record.value.serviceCycle || "", startDate: record.value.startDate || "", endDate: record.value.endDate || "" });
+  editOpen.value = true;
+}
+
+async function handleEdit() {
+  await editFormRef.value?.validate();
+  if (!record.value) return;
+  if (!editForm.reason.trim()) { message.error("请填写变更原因"); return; }
+  saving.value = true;
+  try {
+    const payload = {
+      changeData: JSON.stringify({ projectName: editForm.projectName, contractType: editForm.contractType, amount: editForm.amount, serviceCycle: editForm.serviceCycle, startDate: editForm.startDate, endDate: editForm.endDate }),
+      reason: editForm.reason,
+      requestedBy: auth.user?.displayName || "",
+    };
+    await createContractChange(id, payload);
+    editOpen.value = false;
+    message.success("变更请求已提交，等待审批");
+    await loadChanges();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "提交失败");
+  } finally {
+    saving.value = false;
+  }
+}
+
+const changeList = ref<ContractChangeResponse[]>([]);
+const changesLoading = ref(false);
+
+async function loadChanges() {
+  changesLoading.value = true;
+  try { changeList.value = await listContractChanges(id); }
+  catch {}
+  finally { changesLoading.value = false; }
+}
+
+async function handleApproveChange(changeId: string) {
+  try {
+    await approveContractChange(changeId, { operatorName: auth.user?.displayName || "", comment: "" });
+    message.success("变更已审批通过，合同已更新");
+    await loadChanges();
+    await loadData();
+  } catch (error) { message.error(error instanceof Error ? error.message : "审批失败"); }
+}
+
+async function handleRejectChange(changeId: string) {
+  try {
+    await rejectContractChange(changeId, { operatorName: auth.user?.displayName || "", comment: "" });
+    message.success("变更已驳回");
+    await loadChanges();
+  } catch (error) { message.error(error instanceof Error ? error.message : "驳回失败"); }
 }
 
 function goBack() {

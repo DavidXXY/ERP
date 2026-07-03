@@ -26,10 +26,11 @@
         <a-col :xs="12" :lg="8" :xl="4"><a-statistic title="部门采购成本" :value="departmentCostAmount" :formatter="moneyFormatter" /></a-col>
       </a-row>
 
-      <a-tabs v-model:active-key="activeTab">
+      <a-tabs :active-key="activeTab" @update:activeKey="handleTabChange">
         <a-tab-pane key="requests" tab="采购申请">
           <div class="table-toolbar">
             <a-space wrap>
+              <a-button @click="handleExportRequests">导出</a-button>
               <a-button v-if="auth.can('procurement:purchase:create')" type="primary" @click="openRequest">
                 <template #icon><PlusOutlined /></template>
                 新增采购申请
@@ -45,6 +46,7 @@
             </a-space>
           </div>
           <a-table
+            :row-selection="{selectedRowKeys:selectedRequestKeys,onChange:(keys:any)=>selectedRequestKeys.value=keys}"
             :columns="requestColumns"
             :data-source="purchaseRequests"
             :loading="requestLoading"
@@ -388,8 +390,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
 import { message, Modal } from "ant-design-vue";
+import { useRoute } from "vue-router";
 import PlusOutlined from "@ant-design/icons-vue/PlusOutlined";
 import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
 import ShoppingCartOutlined from "@ant-design/icons-vue/ShoppingCartOutlined";
@@ -428,12 +431,40 @@ import {
   type SupplierRiskStatus,
 } from "@/api/core-business";
 import { useAuthStore } from "@/stores/auth";
+import { downloadCsv } from "@/views/crm/crm-export";
 
 type ApprovalForm = { decision: ApprovalStatus; comment: string; approverName: string };
 type ReceiptForm = { quantity: number; receivedDate: string; deliveryNo: string; receiverName: string; payableDueDate: string };
 
 const auth = useAuthStore();
 const activeTab = ref("requests");
+function handleExportRequests() {
+  const headers = ["申请编号", "物料", "规格型号", "数量", "单价", "金额", "需求日期", "状态", "申请人", "说明"];
+  const rows = purchaseRequests.value.map((r: any) => [
+    r.code || "", r.materialName || "", r.materialSpec || "", String(r.quantity || 0),
+    String(r.unitPrice || 0), String(r.totalAmount || 0), r.requiredDate || "",
+    r.status || "", r.applicantName || "", r.reason || "",
+  ]);
+  downloadCsv("采购申请.csv", headers, rows);
+}
+
+function handleTabChange(key: string) { nextTick(() => { activeTab.value = key; }); }
+
+const route = useRoute();
+const tabPathMap: Record<string, string> = {
+  requests: "/procurement/requests", orders: "/procurement/orders",
+  receipts: "/procurement/receipts", costs: "/procurement/costs",
+  payables: "/procurement/payables", suppliers: "/procurement/suppliers",
+};
+function tabFromPath(p: string) {
+  if (p.includes("/orders")) return "orders";
+  if (p.includes("/receipts")) return "receipts";
+  if (p.includes("/costs")) return "costs";
+  if (p.includes("/payables")) return "payables";
+  if (p.includes("/suppliers")) return "suppliers";
+  return "requests";
+}
+watch(() => route.path, (path) => { const t = tabFromPath(path); if (t) activeTab.value = t; }, { immediate: true });
 const suppliers = ref<Supplier[]>([]);
 const purchaseRequests = ref<PurchaseRequest[]>([]);
 const purchaseOrders = ref<PurchaseOrder[]>([]);

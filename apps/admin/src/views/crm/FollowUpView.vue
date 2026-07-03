@@ -1,6 +1,12 @@
 <template>
   <div class="page-stack">
-    <a-card title="跟进回访">
+    <a-card>
+      <template #title>
+        <a-radio-group v-model:value="activeTab" button-style="solid" size="small">
+          <a-radio-button value="pending">待办 <template v-if="pendingCount">{{ pendingCount }}</template></a-radio-button>
+          <a-radio-button value="history">历史</a-radio-button>
+        </a-radio-group>
+      </template>
       <template #extra>
         <a-space>
           <a-button @click="loadData">刷新</a-button>
@@ -13,32 +19,58 @@
         <a-input v-model:value="keyword" allow-clear placeholder="搜索客户、主题或内容" style="width: 280px" />
       </a-space>
 
-      <a-table :columns="columns" :data-source="filteredItems" :loading="loading" :row-key="(record: FollowUp) => record.id" :scroll="{ x: 1180 }">
-        <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'customer'">
-            <strong>{{ record.customerName }}</strong>
-            <span class="table-subtitle">{{ record.opportunityCode || "客户日常跟进" }}</span>
+      <template v-if="activeTab === 'pending'">
+        <a-empty v-if="pendingItems.length === 0" description="暂无待办事项" />
+        <div v-for="group in pendingGroups" :key="group.key" class="fp-group">
+          <div class="fp-group-header">
+            <strong>{{ group.customerName }}</strong>
+            <span v-if="group.opportunityCode" class="table-subtitle">{{ group.opportunityCode }}</span>
+          </div>
+          <div v-for="item in group.items" :key="item.id" class="fp-item" :class="{ 'fp-overdue': isOverdue(item.nextActionAt) }">
+            <div class="fp-item-head">
+              <a-tag :color="followUpTypeColor(item.type)" size="small">{{ followUpTypeLabel(item.type) }}</a-tag>
+              <strong>{{ item.subject }}</strong>
+              <a-tag v-if="isOverdue(item.nextActionAt)" color="red" size="small">已逾期</a-tag>
+            </div>
+            <p class="fp-item-content">{{ item.content }}</p>
+            <div class="fp-item-meta">
+              <span>跟进人 {{ item.ownerName }} · {{ formatDateTime(item.followedAt) }}</span>
+              <span v-if="item.nextAction" class="fp-next-action">
+                下一步：{{ item.nextAction }}
+                <span v-if="item.nextActionAt" class="table-subtitle">（{{ item.nextActionAt }}）</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <template v-else>
+        <a-table :columns="columns" :data-source="filteredItems" :loading="loading" :row-key="(record: FollowUp) => record.id" :scroll="{ x: 1180 }">
+          <template #bodyCell="{ column, record }">
+            <template v-if="column.key === 'customer'">
+              <strong>{{ record.customerName }}</strong>
+              <span class="table-subtitle">{{ record.opportunityCode || "客户日常跟进" }}</span>
+            </template>
+            <template v-else-if="column.key === 'type'"><a-tag :color="followUpTypeColor(record.type)">{{ followUpTypeLabel(record.type) }}</a-tag></template>
+            <template v-else-if="column.key === 'content'">
+              <strong>{{ record.subject }}</strong>
+              <span class="table-subtitle line-clamp-2">{{ record.content }}</span>
+            </template>
+            <template v-else-if="column.key === 'followedAt'">{{ formatDateTime(record.followedAt) }}</template>
+            <template v-else-if="column.key === 'nextAction'">
+              <span :class="{ 'text-danger': isOverdue(record.nextActionAt) }">{{ record.nextAction || "-" }}</span>
+              <span class="table-subtitle">{{ record.nextActionAt || "" }}</span>
+            </template>
+            <template v-else-if="column.key === 'action'">
+              <span @click.stop>
+                <a-popconfirm v-if="auth.user?.roles.includes('ADMIN')" title="确实删除此跟进记录？" @confirm="handleDeleteFollowUp(record)">
+                  <a-button size="small" type="link" danger>删除</a-button>
+                </a-popconfirm>
+              </span>
+            </template>
           </template>
-          <template v-else-if="column.key === 'type'"><a-tag :color="followUpTypeColor(record.type)">{{ followUpTypeLabel(record.type) }}</a-tag></template>
-          <template v-else-if="column.key === 'content'">
-            <strong>{{ record.subject }}</strong>
-            <span class="table-subtitle line-clamp-2">{{ record.content }}</span>
-          </template>
-          <template v-else-if="column.key === 'followedAt'">{{ formatDateTime(record.followedAt) }}</template>
-          <template v-else-if="column.key === 'nextAction'">{{ record.nextAction || "-" }}</template>
-          <template v-else-if="column.key === 'action'">
-            <span @click.stop>
-              <a-popconfirm
-                v-if="auth.user?.roles.includes('ADMIN')"
-                title="确实删除此跟进记录？"
-                @confirm="handleDeleteFollowUp(record)"
-              >
-                <a-button size="small" type="link" danger>删除</a-button>
-              </a-popconfirm>
-            </span>
-          </template>
-        </template>
-      </a-table>
+        </a-table>
+      </template>
     </a-card>
 
     <a-modal v-model:open="createOpen" title="新增跟进回访" width="760px" :confirm-loading="saving" @ok="handleCreate">
@@ -61,24 +93,32 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
 import { message } from "ant-design-vue";
-import { useRoute, useRouter } from "vue-router";
-import { createFollowUp, deleteFollowUp, listCustomers, listFollowUps, listOpportunities, type CustomerSummary, type FollowUp, type FollowUpType, type Opportunity } from "@/api/crm";
+import { createFollowUp, deleteFollowUp, listCustomers, listFollowUps, listOpportunities, type FollowUp } from "@/api/crm";
 import { useAuthStore } from "@/stores/auth";
 import { followUpTypeColor, followUpTypeLabel, followUpTypeOptions } from "./crm-options";
 
 const auth = useAuthStore();
-const route = useRoute();
-const router = useRouter();
 const items = ref<FollowUp[]>([]);
-const customers = ref<CustomerSummary[]>([]);
-const opportunities = ref<Opportunity[]>([]);
+const customers = ref<any[]>([]);
+const opportunities = ref<any[]>([]);
 const loading = ref(false);
 const saving = ref(false);
 const createOpen = ref(false);
 const formRef = ref();
+const activeTab = ref("pending");
+const typeFilter = ref<string>();
 const keyword = ref("");
-const typeFilter = ref<FollowUpType>();
 const typeOptions = [...followUpTypeOptions];
+
+const columns = [
+  { title: "客户 / 商机", key: "customer", width: 200 },
+  { title: "类型", key: "type", width: 80 },
+  { title: "主题 / 内容", key: "content", width: 320 },
+  { title: "跟进时间", key: "followedAt", width: 150 },
+  { title: "下一步动作", key: "nextAction", width: 240 },
+  { title: "负责人", dataIndex: "ownerName", width: 100 },
+  { title: "操作", key: "action", width: 70 },
+];
 const form = reactive(initialForm());
 const rules = {
   customerId: [{ required: true, message: "请选择客户" }],
@@ -88,61 +128,110 @@ const rules = {
   followedAt: [{ required: true, message: "请选择发生时间" }],
   ownerName: [{ required: true, message: "请输入负责人" }],
 };
-const columns = [
-  { title: "客户 / 商机", key: "customer", width: 220 },
-  { title: "类型", key: "type", width: 90 },
-  { title: "主题 / 内容", key: "content", width: 360 },
-  { title: "发生时间", key: "followedAt", width: 170 },
-  { title: "下一步动作", key: "nextAction", width: 260 },
-  { title: "负责人", dataIndex: "ownerName", width: 110 },
-  { title: "操作", key: "action", width: 100 }, 
-];
-const customerOptions = computed(() => customers.value.map((item) => ({ label: `${item.name}（${item.code}）`, value: item.id })));
-const availableOpportunityOptions = computed(() => opportunities.value
-  .filter((item) => !form.customerId || item.customerId === form.customerId)
-  .map((item) => ({ label: `${item.code} · ${item.needSummary}`, value: item.id })));
+
+const customerOptions = computed(() =>
+  customers.value.map((c) => ({ label: `${c.name}（${c.code || ""}）`, value: c.id }))
+);
+const availableOpportunityOptions = computed(() =>
+  opportunities.value
+    .filter((o) => o.customerId === form.customerId && o.stage !== "WON" && o.stage !== "LOST")
+    .map((o) => ({ label: `${o.code} ${o.needSummary?.slice(0, 20)}`, value: o.id }))
+);
 const filteredItems = computed(() => {
   const term = keyword.value.trim().toLowerCase();
   return items.value.filter((item) => {
+    const t = typeFilter.value;
+    if (t && item.type !== t) return false;
     const text = `${item.customerName} ${item.subject} ${item.content}`.toLowerCase();
-    return (!typeFilter.value || item.type === typeFilter.value) && (!term || text.includes(term));
+    return !term || text.includes(term);
   });
 });
-
-onMounted(async () => {
-  await loadData();
-  const customerId = typeof route.query.customer === "string" ? route.query.customer : undefined;
-  if (route.query.create === "1" && customerId && customers.value.some(customer => customer.id === customerId)) {
-    openCreate(customerId);
-    const { customer: _customer, create: _create, ...query } = route.query;
-    await router.replace({ path: route.path, query });
-  }
+const pendingItems = computed(() =>
+  items.value.filter((i) => i.nextAction && i.nextActionAt)
+);
+const pendingGroups = computed(() => {
+  const map = new Map<string, { customerName: string; opportunityCode: string; items: FollowUp[] }>();
+  pendingItems.value.forEach((item) => {
+    const key = item.customerId || item.customerName || "other";
+    if (!map.has(key)) {
+      map.set(key, {
+        customerName: item.customerName,
+        opportunityCode: item.opportunityCode || "",
+        items: [],
+      });
+    }
+    map.get(key)!.items.push(item);
+  });
+  // Sort by overdue first
+  map.forEach((g) => {
+    g.items.sort((a, b) => {
+      const aOverdue = isOverdue(a.nextActionAt) ? 0 : 1;
+      const bOverdue = isOverdue(b.nextActionAt) ? 0 : 1;
+      return aOverdue - bOverdue;
+    });
+  });
+  return Array.from(map.values());
 });
+const pendingCount = computed(() => pendingItems.value.length);
+
+function isOverdue(dateStr?: string) {
+  if (!dateStr) return false;
+  return dateStr < new Date().toISOString().slice(0, 10);
+}
+
+function syncOpportunity(customerId: string) {
+  form.opportunityId = undefined;
+}
+
+function initialForm() {
+  return {
+    customerId: undefined as string | undefined,
+    opportunityId: undefined as string | undefined,
+    type: "VISIT" as string,
+    subject: "",
+    content: "",
+    followedAt: new Date().toISOString().slice(0, 16),
+    ownerName: auth.user?.displayName || "",
+    nextAction: "",
+  };
+}
+
+onMounted(loadData);
 
 async function loadData() {
   loading.value = true;
   try {
-    [items.value, customers.value, opportunities.value] = await Promise.all([listFollowUps(), listCustomers(), listOpportunities()]);
+    [items.value, customers.value, opportunities.value] = await Promise.all([
+      listFollowUps(), listCustomers(), listOpportunities(),
+    ]);
   } catch (error) {
-    message.error(error instanceof Error ? error.message : "跟进记录加载失败");
+    message.error(error instanceof Error ? error.message : "数据加载失败");
   } finally {
     loading.value = false;
   }
 }
 
-function syncOpportunity() {
-  if (!opportunities.value.some((item) => item.id === form.opportunityId && item.customerId === form.customerId)) {
-    form.opportunityId = undefined;
-  }
-}
-
-function openCreate(customerId?: string) {
-  Object.assign(form, initialForm(), { customerId });
-  syncOpportunity();
+function openCreate() {
+  Object.assign(form, initialForm());
   createOpen.value = true;
 }
 
-async function handleDeleteFollowUp(record: any) {
+async function handleCreate() {
+  await formRef.value?.validate();
+  saving.value = true;
+  try {
+    await createFollowUp({ ...form, followedAt: form.followedAt || new Date().toISOString() });
+    createOpen.value = false;
+    message.success("跟进记录已创建");
+    await loadData();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "创建失败");
+  } finally {
+    saving.value = false;
+  }
+}
+
+async function handleDeleteFollowUp(record: FollowUp) {
   try {
     await deleteFollowUp(record.id);
     message.success("跟进记录已删除");
@@ -152,32 +241,20 @@ async function handleDeleteFollowUp(record: any) {
   }
 }
 
-async function handleCreate() {
-  await formRef.value?.validate();
-  saving.value = true;
-  try {
-    await createFollowUp({
-      ...form,
-      customerId: form.customerId!,
-      followedAt: new Date(form.followedAt).toISOString(),
-    });
-    Object.assign(form, initialForm());
-    createOpen.value = false;
-    message.success("跟进记录已保存");
-    await loadData();
-  } catch (error) {
-    message.error(error instanceof Error ? error.message : "跟进记录保存失败");
-  } finally {
-    saving.value = false;
-  }
-}
-
-function initialForm() {
-  const now = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-  return { customerId: undefined as string | undefined, opportunityId: undefined as string | undefined, type: "PHONE" as FollowUpType, subject: "", content: "", followedAt: now, nextAction: "", ownerName: auth.user?.displayName || "" };
-}
-
-function formatDateTime(value: string) {
-  return new Date(value).toLocaleString("zh-CN", { hour12: false });
+function formatDateTime(val?: string) {
+  if (!val) return "";
+  return new Date(val).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 </script>
+
+<style scoped>
+.fp-group { margin-bottom: 16px; }
+.fp-group-header { padding: 6px 0 4px; border-bottom: 1px solid #f0f0f0; margin-bottom: 8px; display: flex; gap: 8px; align-items: baseline; }
+.fp-item { padding: 10px 12px; border: 1px solid #f0f0f0; border-radius: 6px; margin-bottom: 8px; transition: border-color 0.2s; }
+.fp-item:hover { border-color: #91d5ff; }
+.fp-item.fp-overdue { border-color: #ffa39e; background: #fff1f0; }
+.fp-item-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.fp-item-content { margin: 6px 0 0; font-size: 13px; color: #595959; white-space: pre-wrap; }
+.fp-item-meta { margin-top: 6px; font-size: 12px; color: #8c8c8c; display: flex; gap: 16px; flex-wrap: wrap; }
+.fp-next-action { color: #1890ff; }
+</style>

@@ -1,7 +1,7 @@
 <template>
   <div class="page-stack">
     <a-card title="客户合同">
-      <template #extra><a-button @click="loadData">刷新</a-button></template>
+      <template #extra><a-button @click="loadData">刷新</a-button><a-button @click="handleExportCsv"><template #icon><DownloadOutlined /></template>导出</a-button></template>
 
       <a-row :gutter="[16, 16]" class="metric-row">
         <a-col :xs="12" :lg="6"><a-statistic title="合同总数" :value="contracts.length" suffix="份" /></a-col>
@@ -15,7 +15,8 @@
         <a-input v-model:value="keyword" allow-clear placeholder="搜索合同编号、项目或客户" style="width: 280px" />
       </a-space>
 
-      <a-table :columns="columns" :data-source="filteredContracts" :loading="loading" row-key="id" :scroll="{ x: 1120 }" :customRow="customRow">
+      <!-- desktop-table --><div class="desktop-table">
+<a-table :columns="columns" :data-source="filteredContracts" :loading="loading" row-key="id" :scroll="{ x: 1120 }" :customRow="customRow">
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'contract'">
             <strong>{{ record.code }}</strong>
@@ -44,6 +45,14 @@
           </template>
         </template>
       </a-table>
+</div><!-- end desktop-table -->
+    <div class="mobile-only">
+      <div v-for="record in filteredContracts" :key="record.id" class="mobile-card-item" @click="router.push('/crm/contracts/' + record.id)">
+        <div class="mobile-card-header"><strong>{{ record.code }}</strong><a-tag :color="contractStatusColor(record.status)">{{ contractStatusLabel(record.status) }}</a-tag></div>
+        <div class="mobile-card-body"><span>{{ record.projectName || record.customerName }}</span><strong>{{ formatMoney(record.amount) }}</strong></div>
+        <div class="mobile-card-footer"><span>{{ record.startDate || "" }} {{ record.endDate ? "~ " + record.endDate : "" }}</span></div>
+      </div>
+    </div>
     </a-card>
   </div>
 </template>
@@ -56,6 +65,7 @@ import { message } from "ant-design-vue";
 import { deleteContract } from "@/api/crm";
 import { listContracts, type ContractStatus, type ServiceContract } from "@/api/crm";
 import { contractStatusColor, contractStatusLabel, formatMoney } from "./crm-options";
+import { downloadCsv, contractRowToCsv } from "./crm-export";
 
 const router = useRouter();
 const auth = useAuthStore();
@@ -96,6 +106,12 @@ async function handleDeleteContract(record: any) {
   } catch (error) {
     message.error(error instanceof Error ? error.message : "删除失败");
   }
+}
+
+function handleExportCsv() {
+  const headers = ["合同编号", "客户名称", "项目名称", "合同类型", "合同金额", "开始日期", "结束日期", "状态"];
+  const rows = contracts.value.map((r: any) => contractRowToCsv(r));
+  downloadCsv("客户合同.csv", headers, rows);
 }
 
 const customRow = (record: ServiceContract) => ({

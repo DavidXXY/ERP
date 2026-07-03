@@ -22,7 +22,9 @@
         <a-input v-model:value="keyword" allow-clear placeholder="搜索客户、商机编号、需求" style="width: 280px" />
       </a-space>
 
-            <a-table
+            <!-- desktop-table --><div class="desktop-table">
+<a-table
+        :row-selection="{selectedRowKeys:selectedBatchKeys,onChange:(keys:any)=>selectedBatchKeys.value=keys}"
         :columns="columns"
         :data-source="filteredOpportunities"
         :loading="loading"
@@ -83,6 +85,14 @@
           </template>
         </template>
       </a-table>
+</div><!-- end desktop-table -->
+    <div class="mobile-only">
+      <div v-for="record in filteredOpportunities" :key="record.id" class="mobile-card-item" @click="router.push('/crm/opportunities/' + record.id)">
+        <div class="mobile-card-header"><strong>{{ record.code }}</strong><a-tag :color="opportunityStageColor(record.stage)">{{ opportunityStageLabel(record.stage) }}</a-tag></div>
+        <div class="mobile-card-body"><span>{{ record.customerName }}</span><strong>{{ formatMoney(record.expectedAmount) }}</strong></div>
+        <div class="mobile-card-footer"><span v-if="record.nextAction">下一步：{{ record.nextAction }}</span><span v-if="record.nextActionAt">· {{ record.nextActionAt }}</span></div>
+      </div>
+    </div>
     </a-card>
 
     <a-modal v-model:open="createOpen" title="新增商机" width="760px" :confirm-loading="saving" @ok="handleCreate">
@@ -158,6 +168,14 @@ const createOpen = ref(false);
 const markLostOpen = ref(false);
 const markLostRecord = ref<Opportunity | null>(null);
 const lostReason = ref("");
+const selectedBatchKeys = ref<string[]>([]);
+async function handleBatchDeleteOpps() {
+  const ids = [...selectedBatchKeys.value];
+  selectedBatchKeys.value = [];
+  for (const id of ids) try { await deleteOpportunity(id); } catch {}
+  message.success('批量删除完成 (' + ids.length + ' 项)');
+  await loadData();
+}
 const advanceOpen = ref(false);
 const createFormRef = ref();
 

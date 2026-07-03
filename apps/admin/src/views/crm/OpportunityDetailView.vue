@@ -52,12 +52,31 @@
             <a-descriptions-item label="丢单原因">{{ lostFollowUp.content.replace("丢单原因：", "") }}</a-descriptions-item>
           </a-descriptions>
         </a-card>
+        <a-card v-if="relatedQuote" title="关联报价" style="margin-top: 16px">
+          <a-button type="link" @click="router.push('/crm/quotes/' + relatedQuote.id)">
+            {{ relatedQuote.code }} V{{ relatedQuote.versionNo }} · {{ formatMoney(relatedQuote.amount) }}
+          </a-button>
+          <p style="margin:4px 0 0;color:#8c8c8c;font-size:12px">
+            状态：<a-tag :color="quoteStatusColor(relatedQuote.status)">{{ quoteStatusLabel(relatedQuote.status) }}</a-tag>
+            <template v-if="relatedQuote.convertedContractId">
+              · 已转 <a @click="router.push('/crm/contracts/' + relatedQuote.convertedContractId)">合同</a>
+            </template>
+          </p>
+        </a-card>
 
-        <a-card v-if="stageAdvancements.length" title="推进记录" style="margin-top: 16px">
-          <a-timeline>
-            <a-timeline-item v-for="item in stageAdvancements" :key="item.id" color="green" :label="formatDateTime(item.followedAt)">
-              <strong>{{ item.subject }}</strong>
-              <p style="margin: 4px 0 0">{{ item.content }}</p>
+        <a-card title="推进与事件时间线" style="margin-top: 16px">
+          <template #extra>
+            <a-radio-group v-model:value="timelineMode" size="small" button-style="solid">
+              <a-radio-button value="advance">推进</a-radio-button>
+              <a-radio-button value="all">全部</a-radio-button>
+            </a-radio-group>
+          </template>
+          <a-empty v-if="timelineEvents.length === 0" description="暂无记录" />
+          <a-timeline v-else>
+            <a-timeline-item v-for="evt in timelineEvents" :key="evt.id" :color="evt.color">
+              <template #label>{{ evt.time }}</template>
+              <strong>{{ evt.title }}</strong>
+              <p style="margin: 4px 0 0">{{ evt.desc }}</p>
             </a-timeline-item>
           </a-timeline>
         </a-card>
@@ -136,15 +155,17 @@
 import { computed, onMounted, reactive, ref } from "vue";
 import { message } from "ant-design-vue";
 import { useRoute, useRouter } from "vue-router";
-import { createFollowUp, getOpportunity, listFollowUps, type FollowUp, type FollowUpType, type Opportunity } from "@/api/crm";
+import { createFollowUp, getOpportunity, listFollowUps, listQuotes, type FollowUp, type FollowUpType, type Opportunity } from "@/api/crm";
 import { useAuthStore } from "@/stores/auth";
-import { followUpTypeColor, followUpTypeLabel, followUpTypeOptions, formatMoney, opportunityStageColor, opportunityStageLabel } from "./crm-options";
+import { followUpTypeColor, followUpTypeLabel, followUpTypeOptions, formatMoney, opportunityStageColor, opportunityStageLabel, quoteStatusColor, quoteStatusLabel } from "./crm-options";
 
 const auth = useAuthStore();
 const route = useRoute();
 const router = useRouter();
 const record = ref<Opportunity | null>(null);
+const relatedQuote = ref<any>(null);
 const loading = ref(true);
+const timelineMode = ref("advance");
 const id = route.params.id as string;
 
 // Follow-up state
@@ -166,6 +187,44 @@ const lostFollowUp = computed(() => followUps.value.find((item) => item.subject.
 
 const stageAdvancements = computed(() => followUps.value.filter((item) => item.subject.startsWith("商机推进至")));
 
+const timelineEvents = computed(() => {
+  const events: Array<{ id: string; time: string; title: string; desc: string; color: string; sortKey: string; isAdvance: boolean }> = [];
+
+  // Stage advancements
+  stageAdvancements.value.forEach((item) => {
+    events.push({
+      id: "adv-" + item.id,
+      time: formatDateTime(item.followedAt) || "",
+      title: item.subject,
+      desc: item.content,
+      color: "green",
+      sortKey: item.followedAt || "",
+      isAdvance: true,
+    });
+  });
+
+  // Related quote event
+  if (relatedQuote.value) {
+    events.push({
+      id: "quote-" + relatedQuote.value.id,
+      time: formatDateTime(relatedQuote.value.createdAt || relatedQuote.value.updatedAt),
+      title: "报价创建：" + relatedQuote.value.code + " V" + (relatedQuote.value.versionNo || 1),
+      desc: "金额 " + formatMoney(relatedQuote.value.amount) + " · " + (relatedQuote.value.serviceScope?.slice(0, 50) || ""),
+      color: "purple",
+      sortKey: relatedQuote.value.createdAt || relatedQuote.value.updatedAt || "",
+      isAdvance: false,
+    });
+  }
+
+  // Sort by time ascending (if possible)
+  events.sort((a, b) => (a.sortKey || "").localeCompare(b.sortKey || ""));
+
+  if (timelineMode.value === "advance") {
+    return events.filter((e) => e.isAdvance);
+  }
+  return events;
+});
+
 const actionOverdue = computed(() =>
   Boolean(record.value?.nextActionAt && record.value.nextActionAt < new Date().toISOString().slice(0, 10))
 );
@@ -178,6 +237,12 @@ async function loadData() {
     const [opp, allFollowUps] = await Promise.all([getOpportunity(id), listFollowUps()]);
     record.value = opp;
     followUps.value = allFollowUps.filter((item) => item.opportunityId === id);
+    // Load related quote
+    try {
+      const allQuotes = await listQuotes();
+      const foundQuote = allQuotes.find((q) => q.opportunityId === id);
+      if (foundQuote) relatedQuote.value = foundQuote;
+    } catch { /* quote fetch is supplementary */ }
   } catch (error) {
     message.error(error instanceof Error ? error.message : "商机加载失败");
   } finally {

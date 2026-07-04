@@ -33,7 +33,7 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from "vue"; import { useRouter } from "vue-router";
 import { message } from "ant-design-vue"; import PlusOutlined from "@ant-design/icons-vue/PlusOutlined"; import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
-import { createPurchaseRequest, listPurchaseRequests, processPurchaseRequestApproval, type PurchaseRequest } from "@/api/core-business";
+import { createPurchaseRequest, listPurchaseRequests, processPurchaseRequestApproval, type PurchaseRequest } from "@/api/procurement";
 import { useAuthStore } from "@/stores/auth";
 const auth=useAuthStore(); const router=useRouter(); const loading=ref(false); const saving=ref(false); const requests=ref<PurchaseRequest[]>([]);
 const createOpen=ref(false); const formRef=ref();

@@ -23,6 +23,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import static com.company.ops.api.common.util.MoneyUtils.amount;
 
 @Service
 public class CustomerService {

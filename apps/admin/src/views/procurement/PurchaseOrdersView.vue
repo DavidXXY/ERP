@@ -19,7 +19,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue"; import { useRouter } from "vue-router";
 import { message } from "ant-design-vue"; import PlusOutlined from "@ant-design/icons-vue/PlusOutlined"; import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
-import { listPurchaseOrders, type PurchaseOrder } from "@/api/core-business"; import { useAuthStore } from "@/stores/auth";
+import { listPurchaseOrders, type PurchaseOrder } from "@/api/procurement"; import { useAuthStore } from "@/stores/auth";
 const auth=useAuthStore(); const router=useRouter(); const loading=ref(false); const orders=ref<PurchaseOrder[]>([]);
 const orderColumns=[{title:'订单编号',key:'order',width:220},{title:'明细',key:'items',width:80},{title:'金额',key:'amount',width:140},{title:'状态',key:'status',width:130},{title:'下单日期',key:'date',width:120}];
 onMounted(loadData);

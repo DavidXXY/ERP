@@ -18,7 +18,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue"; import { useRouter } from "vue-router";
 import { message } from "ant-design-vue"; import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
-import { listGoodsReceipts, type GoodsReceipt } from "@/api/core-business";
+import { listGoodsReceipts, type GoodsReceipt } from "@/api/procurement";
 const router=useRouter(); const loading=ref(false); const receipts=ref<GoodsReceipt[]>([]);
 const receiptColumns=[{title:'入库单',key:'receipt',width:220},{title:'供应商',key:'supplier',width:200},{title:'金额',key:'amount',width:140},{title:'入库日期',key:'date',width:120},{title:'状态',key:'status',width:90}];
 onMounted(loadData);

@@ -43,7 +43,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue"; import { useRouter } from "vue-router";
 import { message } from "ant-design-vue"; import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
-import { listInventoryParts, type InventoryPart } from "@/api/core-business";
+import { listInventoryParts, type InventoryPart } from "@/api/inventory";
 const router=useRouter(); const loading=ref(false); const parts=ref<InventoryPart[]>([]);
 
 const totalValue=computed(()=>parts.value.reduce((s,p)=>s+Number(p.quantity||0)*Number(p.unitCost||0),0));

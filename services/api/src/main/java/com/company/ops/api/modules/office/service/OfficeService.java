@@ -72,6 +72,7 @@ import org.springframework.core.io.UrlResource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import static com.company.ops.api.common.util.MoneyUtils.amount;
 
 @Service
 public class OfficeService {

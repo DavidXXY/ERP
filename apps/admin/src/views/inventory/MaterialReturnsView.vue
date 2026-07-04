@@ -17,7 +17,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue"; import { useRouter } from "vue-router";
 import { message } from "ant-design-vue"; import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
-import { listMaterialReturns, type MaterialReturn } from "@/api/core-business";
+import { listMaterialReturns, type MaterialReturn } from "@/api/inventory";
 const router=useRouter(); const loading=ref(false); const returns=ref<MaterialReturn[]>([]);
 const returnColumns=[{title:'退料单',key:'code',width:240},{title:'项目',key:'project',width:240},{title:'明细',key:'lines',width:100},{title:'退料日期',dataIndex:'returnDate',width:120},{title:'经办人',dataIndex:'handlerName',width:120},{title:'冲回成本',key:'amount',width:140}];
 onMounted(loadData);

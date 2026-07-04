@@ -15,7 +15,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue"; import { useRouter } from "vue-router";
 import { message } from "ant-design-vue"; import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
-import { listStockMovements, type StockMovement } from "@/api/core-business";
+import { listStockMovements, type StockMovement } from "@/api/inventory";
 const router=useRouter(); const loading=ref(false); const movements=ref<StockMovement[]>([]);
 const movementColumns=[{title:'类型',key:'type',width:100},{title:'数量',dataIndex:'quantity',width:100},{title:'来源单号',dataIndex:'sourceNo',width:150},{title:'备注',dataIndex:'remark'},{title:'时间',key:'createdAt',width:170}];
 onMounted(loadData);

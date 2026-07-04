@@ -10,6 +10,9 @@ import com.company.ops.api.modules.project.dto.ProjectResponse;
 import com.company.ops.api.modules.project.service.ProjectService;
 import jakarta.validation.Valid;
 import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -33,8 +36,8 @@ public class ProjectController {
 
   @GetMapping
   @PreAuthorize("hasAuthority('project:view')")
-  public ApiResponse<List<ProjectResponse>> listProjects() {
-    return ApiResponse.ok(projectService.listProjects());
+  public ApiResponse<Page<ProjectResponse>> listProjects(@PageableDefault(size = 20) Pageable pageable) {
+    return ApiResponse.ok(projectService.listProjects(pageable));
   }
 
   @GetMapping("/{id}")

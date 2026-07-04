@@ -55,7 +55,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue"; import { useRouter } from "vue-router";
 import { message } from "ant-design-vue"; import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
-import { listPurchaseRequests, listPurchaseOrders, listGoodsReceipts, listProcurementPayables, type PurchaseRequest, type PurchaseOrder, type GoodsReceipt, type ProcurementPayable } from "@/api/core-business";
+import { listPurchaseRequests, listPurchaseOrders, listGoodsReceipts, listProcurementPayables, type PurchaseRequest, type PurchaseOrder, type GoodsReceipt, type ProcurementPayable } from "@/api/procurement";
 const router=useRouter(); const loading=ref(false);
 const requests=ref<PurchaseRequest[]>([]); const orders=ref<PurchaseOrder[]>([]); const receipts=ref<GoodsReceipt[]>([]); const payables=ref<ProcurementPayable[]>([]);
 

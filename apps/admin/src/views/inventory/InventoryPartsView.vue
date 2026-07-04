@@ -187,7 +187,7 @@ import {
   type MaterialReturn,
   type StockMovement,
   type StockMovementType,
-} from "@/api/core-business";
+} from "@/api/inventory";
 import { useAuthStore } from "@/stores/auth";
 import { downloadCsv } from "@/views/crm/crm-export";
 

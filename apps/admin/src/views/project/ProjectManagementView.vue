@@ -172,67 +172,22 @@
       </a-spin>
     </a-drawer>
 
-    <a-modal v-model:open="createOpen" title="新增项目立项" width="860px" :confirm-loading="saving" @ok="handleCreate">
-      <a-form ref="createFormRef" :model="createForm" :rules="createRules" layout="vertical">
-        <a-row :gutter="16">
-          <a-col :xs="24" :md="16"><a-form-item label="项目名称" name="name"><a-input v-model:value="createForm.name" /></a-form-item></a-col>
-          <a-col :xs="24" :md="12"><a-form-item label="关联客户" name="customerId"><a-select v-model:value="createForm.customerId" :options="customerOptions" show-search option-filter-prop="label" /></a-form-item></a-col>
-          <a-col :xs="24" :md="6"><a-form-item label="项目类型" name="projectType"><a-select v-model:value="createForm.projectType" :options="projectTypeOptions" /></a-form-item></a-col>
-          <a-col :xs="24" :md="6"><a-form-item label="项目负责人" name="managerName"><a-input v-model:value="createForm.managerName" /></a-form-item></a-col>
-          <a-col :span="24"><a-form-item label="现场地址" name="siteAddress"><a-input v-model:value="createForm.siteAddress" /></a-form-item></a-col>
-          <a-col :xs="24" :md="8"><a-form-item label="合同金额" name="contractAmount"><a-input-number v-model:value="createForm.contractAmount" :min="0" :precision="2" class="full-input" /></a-form-item></a-col>
-          <a-col :xs="24" :md="8"><a-form-item label="计划开始" name="plannedStartDate"><a-input v-model:value="createForm.plannedStartDate" type="date" /></a-form-item></a-col>
-          <a-col :xs="24" :md="8"><a-form-item label="计划结束" name="plannedEndDate"><a-input v-model:value="createForm.plannedEndDate" type="date" /></a-form-item></a-col>
-          <a-col :xs="24" :md="8"><a-form-item label="质保截止"><a-input v-model:value="createForm.warrantyEndDate" type="date" /></a-form-item></a-col>
-        </a-row>
-        <a-divider>分类预算 · 合计 {{ formatMoney(createBudgetTotal) }}</a-divider>
-        <a-row :gutter="16">
-          <a-col v-for="item in categoryOptions" :key="item.value" :xs="24" :md="8">
-            <a-form-item :label="item.label">
-              <a-input-number v-model:value="createForm.budgets[item.value]" :min="0" :precision="2" class="full-input" />
-            </a-form-item>
-          </a-col>
-        </a-row>
-      </a-form>
-    </a-modal>
-
-    <a-modal v-model:open="approvalOpen" title="项目立项审批" width="700px" :confirm-loading="saving" @ok="handleApproval">
-      <a-alert v-if="activeProject" class="section-alert" type="info" :message="`${activeProject.code} · ${activeProject.name} · ${formatMoney(activeProject.contractAmount)}`" />
-      <a-form ref="approvalFormRef" :model="approvalForm" :rules="approvalRules" layout="vertical">
-        <a-row :gutter="16">
-          <a-col :xs="24" :md="10"><a-form-item label="审批结论" name="decision"><a-radio-group v-model:value="approvalForm.decision" button-style="solid"><a-radio-button value="APPROVED">通过</a-radio-button><a-radio-button value="REJECTED">驳回</a-radio-button></a-radio-group></a-form-item></a-col>
-          <a-col :xs="24" :md="14"><a-form-item label="审批人" name="approverName"><a-input v-model:value="approvalForm.approverName" /></a-form-item></a-col>
-          <a-col :span="24"><a-form-item label="审批意见" name="comment"><a-textarea v-model:value="approvalForm.comment" :rows="3" /></a-form-item></a-col>
-        </a-row>
-      </a-form>
-    </a-modal>
-
-    <a-modal v-model:open="stageOpen" title="推进项目阶段" width="700px" :confirm-loading="saving" @ok="handleAdvanceStage">
-      <a-alert v-if="detail && nextStage" class="section-alert" type="info" :message="`${stageLabel(detail.project.stage)} → ${stageLabel(nextStage)}`" />
-      <a-form ref="stageFormRef" :model="stageForm" :rules="stageRules" layout="vertical">
-        <a-row :gutter="16">
-          <a-col :xs="24" :md="8"><a-form-item label="目标阶段"><a-input :value="nextStage ? stageLabel(nextStage) : ''" disabled /></a-form-item></a-col>
-          <a-col :xs="24" :md="8"><a-form-item label="完成进度" name="progress"><a-input-number v-model:value="stageForm.progress" :min="detail?.project.progress || 0" :max="100" class="full-input" /></a-form-item></a-col>
-          <a-col :xs="24" :md="8"><a-form-item label="操作人" name="operatorName"><a-input v-model:value="stageForm.operatorName" /></a-form-item></a-col>
-          <a-col :span="24"><a-form-item label="节点说明" name="comment"><a-textarea v-model:value="stageForm.comment" :rows="3" /></a-form-item></a-col>
-        </a-row>
-      </a-form>
-    </a-modal>
-
-    <a-modal v-model:open="costOpen" title="登记项目成本" width="760px" :confirm-loading="saving" @ok="handleCreateCost">
-      <a-alert v-if="detail" class="section-alert" type="info" :message="`${detail.project.code} · 预算余额 ${formatMoney(detail.project.budgetVariance)}`" />
-      <a-form ref="costFormRef" :model="costForm" :rules="costRules" layout="vertical">
-        <a-row :gutter="16">
-          <a-col :xs="24" :md="8"><a-form-item label="成本分类" name="category"><a-select v-model:value="costForm.category" :options="categoryOptions" /></a-form-item></a-col>
-          <a-col :xs="24" :md="8"><a-form-item label="来源类型" name="sourceType"><a-select v-model:value="costForm.sourceType" :options="sourceOptions" /></a-form-item></a-col>
-          <a-col :xs="24" :md="8"><a-form-item label="发生日期" name="incurredDate"><a-input v-model:value="costForm.incurredDate" type="date" /></a-form-item></a-col>
-          <a-col :xs="24" :md="10"><a-form-item label="来源单号"><a-input v-model:value="costForm.sourceNo" placeholder="报销单、外包单、领料单" /></a-form-item></a-col>
-          <a-col :xs="24" :md="14"><a-form-item label="成本说明" name="description"><a-input v-model:value="costForm.description" /></a-form-item></a-col>
-          <a-col :xs="24" :md="8"><a-form-item label="成本金额" name="amount"><a-input-number v-model:value="costForm.amount" :min="0.01" :precision="2" class="full-input" /></a-form-item></a-col>
-        </a-row>
-      </a-form>
-    </a-modal>
-  </div>
+        <ProjectModals
+      v-model:create-open="createOpen"
+      v-model:approval-open="approvalOpen"
+      v-model:stage-open="stageOpen"
+      v-model:cost-open="costOpen"
+      :saving="saving"
+      :customer-options="customerOptions"
+      :category-options="categoryOptions"
+      :project-type-options="projectTypeOptions"
+      :source-options="sourceOptions"
+      :detail="detail"
+      :active-project="activeProject"
+      :next-stage="nextStage"
+      @created="createOpen = false; loadData()"
+      @updated="loadData()"
+    />
 </template>
 
 <script setup lang="ts">
@@ -241,13 +196,8 @@ import { message } from "ant-design-vue";
 import PlusOutlined from "@ant-design/icons-vue/PlusOutlined";
 import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
 import { listCustomers, type CustomerSummary } from "@/api/crm";
+import { listProjects, getProject } from "@/api/project";
 import {
-  advanceProjectStage,
-  createProject,
-  createProjectCost,
-  getProject,
-  listProjects,
-  processProjectApproval,
   type CreateProjectPayload,
   type Project,
   type ProjectApprovalStatus,
@@ -259,16 +209,14 @@ import {
   type ProjectStage,
   type ProjectStageRecord,
   type ProjectType,
-} from "@/api/core-business";
+} from "@/api/project";
 import { useAuthStore } from "@/stores/auth";
+import ProjectModals from "./ProjectModals.vue";
 
-type ProjectCreateForm = Omit<CreateProjectPayload, "budgetItems"> & { budgets: Record<ProjectCostCategory, number> };
-type ApprovalForm = { decision: ProjectApprovalStatus; comment: string; approverName: string };
-type StageForm = { progress: number; comment: string; operatorName: string };
-type CostForm = { category: ProjectCostCategory; sourceType: ProjectCostSource; sourceNo: string; description: string; amount: number; incurredDate: string };
 
 const auth = useAuthStore();
 const projects = ref<Project[]>([]);
+const pageMeta = ref({ totalElements: 0, totalPages: 0, number: 0, size: 999 });
 const customers = ref<CustomerSummary[]>([]);
 const detail = ref<ProjectDetail | null>(null);
 const activeProject = ref<Project | null>(null);
@@ -284,14 +232,6 @@ const errorMessage = ref("");
 const keyword = ref("");
 const approvalFilter = ref("ALL");
 const stageFilter = ref("ALL");
-const createFormRef = ref();
-const approvalFormRef = ref();
-const stageFormRef = ref();
-const costFormRef = ref();
-const createForm = reactive<ProjectCreateForm>(initialCreateForm());
-const approvalForm = reactive<ApprovalForm>(initialApprovalForm());
-const stageForm = reactive<StageForm>(initialStageForm());
-const costForm = reactive<CostForm>(initialCostForm());
 
 const stageOptions: Array<{ label: string; value: ProjectStage }> = [
   { label: "立项", value: "INITIATED" }, { label: "投标", value: "BIDDING" },
@@ -340,16 +280,6 @@ const stageRecordColumns = [
   { title: "阶段变化", key: "change", width: 220 }, { title: "节点说明", dataIndex: "comment" },
   { title: "操作记录", key: "operator", width: 190 },
 ];
-const createRules = {
-  code: [], name: [{ required: true, message: "请输入项目名称" }],
-  customerId: [{ required: true, message: "请选择客户" }], projectType: [{ required: true, message: "请选择项目类型" }],
-  managerName: [{ required: true, message: "请输入项目负责人" }], siteAddress: [{ required: true, message: "请输入现场地址" }],
-  contractAmount: [{ required: true, message: "请输入合同金额" }], plannedStartDate: [{ required: true, message: "请选择计划开始日期" }],
-  plannedEndDate: [{ required: true, message: "请选择计划结束日期" }],
-};
-const approvalRules = { decision: [{ required: true }], comment: [{ required: true, message: "请输入审批意见" }], approverName: [{ required: true, message: "请输入审批人" }] };
-const stageRules = { progress: [{ required: true, message: "请输入完成进度" }], comment: [{ required: true, message: "请输入节点说明" }], operatorName: [{ required: true, message: "请输入操作人" }] };
-const costRules = { category: [{ required: true }], sourceType: [{ required: true }], incurredDate: [{ required: true }], description: [{ required: true, message: "请输入成本说明" }], amount: [{ required: true, message: "请输入成本金额" }] };
 
 const filteredProjects = computed(() => projects.value.filter((item) => {
   const search = keyword.value.trim().toLowerCase();
@@ -365,7 +295,6 @@ const totalBudget = computed(() => projects.value.reduce((sum, item) => sum + Nu
 const totalActualCost = computed(() => projects.value.reduce((sum, item) => sum + Number(item.actualCost || 0), 0));
 const totalGrossMargin = computed(() => projects.value.reduce((sum, item) => sum + Number(item.grossMargin || 0), 0));
 const pendingApprovalCount = computed(() => projects.value.filter((item) => item.approvalStatus === "PENDING").length);
-const createBudgetTotal = computed(() => Object.values(createForm.budgets).reduce((sum, value) => sum + Number(value || 0), 0));
 const nextStage = computed<ProjectStage | null>(() => {
   if (!detail.value || detail.value.project.stage === "CLOSED") return null;
   return stageOptions[stageOptions.findIndex((item) => item.value === detail.value?.project.stage) + 1]?.value || null;
@@ -375,83 +304,29 @@ onMounted(loadData);
 
 async function loadData() {
   loading.value = true; errorMessage.value = "";
-  try { [projects.value, customers.value] = await Promise.all([listProjects(), listCustomers()]); }
+  try { const projectPage = await listProjects(0, 999);
+      projects.value = projectPage.content;
+      pageMeta.value = { totalElements: projectPage.totalElements, totalPages: projectPage.totalPages, number: projectPage.number, size: projectPage.size };
+      [customers.value] = await Promise.all([listCustomers()]); }
   catch (error) { errorMessage.value = error instanceof Error ? error.message : "项目数据加载失败"; }
   finally { loading.value = false; }
 }
-function openCreate() { Object.assign(createForm, initialCreateForm()); createOpen.value = true; }
+function openCreate() { createOpen.value = true; }
+function openApproval(project: Project) { activeProject.value = project; approvalOpen.value = true; }
+function openStage() { if (!detail.value || !nextStage.value) return; stageOpen.value = true; }
+function openCost() { costOpen.value = true; }
+
 async function openDetail(project: Project) {
   detailOpen.value = true; detailLoading.value = true;
   try { detail.value = await getProject(project.id); }
   catch (error) { message.error(error instanceof Error ? error.message : "项目详情加载失败"); }
   finally { detailLoading.value = false; }
 }
-function openApproval(project: Project) { activeProject.value = project; Object.assign(approvalForm, initialApprovalForm()); approvalOpen.value = true; }
-function openStage() {
-  if (!detail.value || !nextStage.value) return;
-  Object.assign(stageForm, initialStageForm(), { progress: suggestedProgress(nextStage.value), comment: `进入${stageLabel(nextStage.value)}阶段` });
-  stageOpen.value = true;
-}
-function openCost() { Object.assign(costForm, initialCostForm()); costOpen.value = true; }
 
-async function handleCreate() {
-  await createFormRef.value?.validate();
-  if (createBudgetTotal.value <= 0) { message.warning("请填写项目分类预算"); return; }
-  saving.value = true;
-  try {
-    await createProject({
-      customerId: createForm.customerId, code: createForm.code, name: createForm.name, projectType: createForm.projectType,
-      managerName: createForm.managerName, siteAddress: createForm.siteAddress, contractAmount: createForm.contractAmount,
-      plannedStartDate: createForm.plannedStartDate, plannedEndDate: createForm.plannedEndDate,
-      warrantyEndDate: createForm.warrantyEndDate || undefined,
-      budgetItems: categoryOptions.map((item) => ({ category: item.value, plannedAmount: createForm.budgets[item.value], remark: `${item.label}预算` })),
-    });
-    createOpen.value = false; message.success("项目立项已提交审批"); await loadData();
-  } catch (error) { message.error(error instanceof Error ? error.message : "项目新增失败"); }
-  finally { saving.value = false; }
-}
-async function handleApproval() {
-  if (!activeProject.value) return;
-  await approvalFormRef.value?.validate(); saving.value = true;
-  try {
-    detail.value = await processProjectApproval(activeProject.value.id, { ...approvalForm });
-    approvalOpen.value = false; message.success(approvalForm.decision === "APPROVED" ? "项目立项已审批通过" : "项目立项已驳回"); await loadData();
-  } catch (error) { message.error(error instanceof Error ? error.message : "项目审批失败"); }
-  finally { saving.value = false; }
-}
-async function handleAdvanceStage() {
-  if (!detail.value || !nextStage.value) return;
-  await stageFormRef.value?.validate(); saving.value = true;
-  try {
-    detail.value = await advanceProjectStage(detail.value.project.id, { targetStage: nextStage.value, ...stageForm });
-    stageOpen.value = false; message.success(`项目已进入${stageLabel(detail.value.project.stage)}阶段`); await loadData();
-  } catch (error) { message.error(error instanceof Error ? error.message : "项目阶段推进失败"); }
-  finally { saving.value = false; }
-}
-async function handleCreateCost() {
-  if (!detail.value) return;
-  await costFormRef.value?.validate(); saving.value = true;
-  try {
-    detail.value = await createProjectCost(detail.value.project.id, { ...costForm, sourceNo: costForm.sourceNo || undefined });
-    costOpen.value = false; message.success("项目成本已归集"); await loadData();
-  } catch (error) { message.error(error instanceof Error ? error.message : "项目成本登记失败"); }
-  finally { saving.value = false; }
-}
 
-function initialCreateForm(): ProjectCreateForm {
-  return {
-    customerId: "", code: "", name: "", projectType: "RENOVATION", managerName: auth.user?.displayName || "",
-    siteAddress: "", contractAmount: 0, plannedStartDate: dateAfter(0), plannedEndDate: dateAfter(90), warrantyEndDate: dateAfter(455),
-    budgets: { LABOR: 0, MATERIAL: 0, SUBCONTRACT: 0, TRAVEL: 0, OTHER: 0 },
-  };
-}
-function initialApprovalForm(): ApprovalForm { return { decision: "APPROVED", comment: "同意立项，按预算执行", approverName: auth.user?.displayName || "" }; }
-function initialStageForm(): StageForm { return { progress: detail.value?.project.progress || 0, comment: "", operatorName: auth.user?.displayName || "" }; }
-function initialCostForm(): CostForm { return { category: "LABOR", sourceType: "MANUAL", sourceNo: "", description: "", amount: 0.01, incurredDate: dateAfter(0) }; }
-function dateAfter(days: number) { const value = new Date(); value.setDate(value.getDate() + days); return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`; }
+
 function canExecute(project: Project) { return project.approvalStatus === "APPROVED" && project.stage !== "CLOSED"; }
 function canAdvance(project: Project) { return canExecute(project) && project.stage !== "CLOSED"; }
-function suggestedProgress(stage: ProjectStage) { return ({ INITIATED: 0, BIDDING: 10, ENTRY: 20, CONSTRUCTION: 45, COMMISSIONING: 70, INITIAL_ACCEPTANCE: 82, FINAL_ACCEPTANCE: 92, WARRANTY: 98, CLOSED: 100 } as Record<ProjectStage, number>)[stage]; }
 function stageLabel(stage: ProjectStage) { return stageOptions.find((item) => item.value === stage)?.label || stage; }
 function stageColor(stage: ProjectStage) { return ({ INITIATED: "blue", BIDDING: "cyan", ENTRY: "geekblue", CONSTRUCTION: "orange", COMMISSIONING: "purple", INITIAL_ACCEPTANCE: "gold", FINAL_ACCEPTANCE: "green", WARRANTY: "lime", CLOSED: "default" } as Record<ProjectStage, string>)[stage]; }
 function approvalLabel(status: ProjectApprovalStatus) { return ({ PENDING: "待审批", APPROVED: "已通过", REJECTED: "已驳回" } as Record<ProjectApprovalStatus, string>)[status]; }

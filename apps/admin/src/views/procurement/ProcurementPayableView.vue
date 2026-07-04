@@ -18,7 +18,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue"; import { useRouter } from "vue-router";
 import { message } from "ant-design-vue"; import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
-import { listProcurementPayables, type ProcurementPayable } from "@/api/core-business";
+import { listProcurementPayables, type ProcurementPayable } from "@/api/procurement";
 const router=useRouter(); const loading=ref(false); const payables=ref<ProcurementPayable[]>([]);
 const payableColumns=[{title:'应付单',key:'payable',width:240},{title:'金额',key:'amount',width:140},{title:'已付/待付',key:'paid',width:200},{title:'到期日',key:'dueDate',width:120},{title:'状态',key:'status',width:110}];
 onMounted(loadData);

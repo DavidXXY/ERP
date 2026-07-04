@@ -402,7 +402,6 @@ import {
   createPurchaseRequest,
   createSupplier,
   listGoodsReceipts,
-  listInventoryParts,
   listProcurementCostAllocations,
   listProcurementCostTargets,
   listProcurementPayables,
@@ -417,7 +416,6 @@ import {
   type CreatePurchaseRequestPayload,
   type CreateSupplierPayload,
   type GoodsReceipt,
-  type InventoryPart,
   type PayableStatus,
   type ProcurementCostAllocation,
   type ProcurementCostTargetOptions,
@@ -429,7 +427,8 @@ import {
   type PurchaseRequestStatus,
   type Supplier,
   type SupplierRiskStatus,
-} from "@/api/core-business";
+} from "@/api/procurement";
+import { listInventoryParts, type InventoryPart } from "@/api/inventory";
 import { useAuthStore } from "@/stores/auth";
 import { downloadCsv } from "@/views/crm/crm-export";
 

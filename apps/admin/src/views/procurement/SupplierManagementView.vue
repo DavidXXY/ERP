@@ -24,7 +24,7 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from "vue"; import { useRouter } from "vue-router";
 import { message } from "ant-design-vue"; import PlusOutlined from "@ant-design/icons-vue/PlusOutlined"; import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
-import { listSuppliers, createSupplier, type Supplier } from "@/api/core-business"; import { useAuthStore } from "@/stores/auth";
+import { listSuppliers, createSupplier, type Supplier } from "@/api/procurement"; import { useAuthStore } from "@/stores/auth";
 const auth=useAuthStore(); const router=useRouter(); const loading=ref(false); const saving=ref(false); const suppliers=ref<Supplier[]>([]);
 const createOpen=ref(false); const formRef=ref();
 const form=reactive({code:'',name:'',contactName:'',contactPhone:'',remark:''});

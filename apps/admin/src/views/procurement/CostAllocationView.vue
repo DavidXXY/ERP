@@ -17,7 +17,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue"; import { useRouter } from "vue-router";
 import { message } from "ant-design-vue"; import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
-import { listProcurementCostAllocations, type ProcurementCostAllocation } from "@/api/core-business";
+import { listProcurementCostAllocations, type ProcurementCostAllocation } from "@/api/procurement";
 const router=useRouter(); const loading=ref(false); const costs=ref<ProcurementCostAllocation[]>([]);
 const costColumns=[{title:'成本单',key:'cost',width:240},{title:'类型',key:'type',width:120},{title:'金额',key:'amount',width:140},{title:'日期',key:'date',width:120}];
 onMounted(loadData);

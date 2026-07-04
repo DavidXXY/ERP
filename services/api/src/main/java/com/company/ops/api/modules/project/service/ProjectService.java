@@ -28,6 +28,8 @@ import com.company.ops.api.modules.project.repository.ProjectRepository;
 import com.company.ops.api.modules.project.repository.ProjectStageRecordRepository;
 import com.company.ops.api.modules.system.security.DataScopeService;
 import java.math.BigDecimal;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import java.time.OffsetDateTime;
 import java.util.EnumMap;
 import java.util.HashSet;
@@ -39,6 +41,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import static com.company.ops.api.common.util.MoneyUtils.amount;
 
 @Service
 public class ProjectService {
@@ -70,13 +73,11 @@ public class ProjectService {
   }
 
   @Transactional(readOnly = true)
-  public List<ProjectResponse> listProjects() {
-    List<Project> projects = projectRepository.findAllByOrderByCreatedAtDesc();
-    projects = projects.stream().filter(project -> dataScopeService.canViewOwner(project.getManagerName())).toList();
-    Map<UUID, String> customerNames = loadCustomerNames(projects);
-    return projects.stream()
-        .map(project -> toResponse(project, customerNames.get(project.getCustomerId()), null))
-        .toList();
+  public Page<ProjectResponse> listProjects(Pageable pageable) {
+    Page<Project> projectPage = projectRepository.findAllByOrderByCreatedAtDesc(pageable);
+    List<Project> visibleProjects = projectPage.getContent().stream().filter(project -> dataScopeService.canViewOwner(project.getManagerName())).toList();
+    Map<UUID, String> customerNames = loadCustomerNames(visibleProjects);
+    return projectPage.map(project -> toResponse(project, customerNames.get(project.getCustomerId()), null));
   }
 
   @Transactional(readOnly = true)
@@ -103,7 +104,7 @@ public class ProjectService {
         .reduce(BigDecimal.ZERO, BigDecimal::add);
     Project project = new Project();
     project.setCustomerId(request.customerId());
-    project.setCode(request.code());
+    project.setCode(request.code() != null && !request.code().isBlank() ? request.code() : generateProjectCode());
     project.setName(request.name());
     project.setProjectType(request.projectType());
     project.setManagerName(request.managerName());
@@ -203,7 +204,15 @@ public class ProjectService {
     entry.setIncurredDate(request.incurredDate());
     costRepository.save(entry);
 
-    project.setActualCost(amount(project.getActualCost()).add(request.amount()));
+    BigDecimal newCost = amount(project.getActualCost()).add(request.amount());
+    if (newCost.compareTo(amount(project.getBudgetAmount())) > 0) {
+      long overPct = newCost.subtract(amount(project.getBudgetAmount()))
+          .multiply(BigDecimal.valueOf(100))
+          .divide(amount(project.getBudgetAmount()), 0, java.math.RoundingMode.HALF_UP)
+          .longValue();
+      throw new BusinessException("Cost exceeds budget by " + overPct + "%");
+    }
+    project.setActualCost(newCost);
     projectRepository.save(project);
     return toDetail(project);
   }
@@ -325,7 +334,11 @@ public class ProjectService {
         .collect(Collectors.toMap(Customer::getId, Customer::getName, (left, right) -> left));
   }
 
-  private BigDecimal amount(BigDecimal value) {
-    return value == null ? BigDecimal.ZERO : value;
+
+
+  private String generateProjectCode() {
+    int count = projectRepository.countByCodeStartingWith("PRJ-");
+    String seq = String.format("%05d", count + 1);
+    return "PRJ-" + seq;
   }
 }

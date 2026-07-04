@@ -18,7 +18,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue"; import { useRouter } from "vue-router";
 import { message } from "ant-design-vue"; import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
-import { listInventoryParts, type InventoryPart } from "@/api/core-business";
+import { listInventoryParts, type InventoryPart } from "@/api/inventory";
 const router=useRouter(); const loading=ref(false); const parts=ref<InventoryPart[]>([]);
 const partColumns=[{title:'物料',key:'name',width:260},{title:'库存',key:'stock',width:130},{title:'状态',key:'status',width:100},{title:'库位',dataIndex:'location',width:110},{title:'单位成本',key:'cost',width:130},{title:'库存金额',key:'value',width:140}];
 onMounted(loadData);

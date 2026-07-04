@@ -9,7 +9,7 @@
           <template v-if="column.key === 'project'">{{ record.projectName || record.projectId?.slice(0,8) || '-' }}</template>
           <template v-else-if="column.key === 'lines'"><span>{{ record.lines?.length || 0 }} 项</span></template>
           <template v-else-if="column.key === 'amount'">{{ formatMoney(record.totalCost || 0) }}</template>
-          <template v-else-if="column.key === 'status'"><a-tag :color="{POSTED:'blue',PARTIAL_RETURNED:'orange',FULLY_RETURNED:'green'}[record.status]||'default'">{{ {POSTED:'已领用',PARTIAL_RETURNED:'部分退回',FULLY_RETURNED:'全部退回'}[record.status]||record.status }}</a-tag></template>
+          <template v-else-if="column.key === 'status'"><a-tag :color="statusColor(record.status, {POSTED:'blue',PARTIAL_RETURNED:'orange',FULLY_RETURNED:'green'}, 'default')">{{ statusLabel(record.status, {POSTED:'已领用',PARTIAL_RETURNED:'部分退回',FULLY_RETURNED:'全部退回'}) }}</a-tag></template>
         </template>
       </a-table>
     </a-card>
@@ -19,6 +19,7 @@
 import { onMounted, ref } from "vue"; import { useRouter } from "vue-router";
 import { message } from "ant-design-vue"; import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
 import { listMaterialIssues, type MaterialIssue } from "@/api/inventory";
+import { statusLabel, statusColor } from "@/utils/status-mapper";
 const router=useRouter(); const loading=ref(false); const issues=ref<MaterialIssue[]>([]);
 const issueColumns=[{title:'领料单',key:'code',width:210},{title:'项目',key:'project',width:240},{title:'用途',dataIndex:'purpose',width:220},{title:'明细',key:'lines',width:100},{title:'材料成本',key:'amount',width:140},{title:'状态',key:'status',width:120}];
 onMounted(loadData);

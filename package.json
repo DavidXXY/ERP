@@ -13,11 +13,11 @@
     "vue-tsc": "2.1.10"
   },
   "scripts": {
-    "dev": "npm run prototype:dev",
-    "build": "npm run prototype:build",
-    "prototype:dev": "vite --host 0.0.0.0",
+    "dev": "npm run admin:dev",
+    "build": "npm run admin:build",
+    "prototype:dev": "cd prototypes/react && npm run dev",
     "gen:api": "bash ./scripts/gen-api-types.sh",
-    "prototype:build": "tsc -b && vite build",
+    "prototype:build": "cd prototypes/react && npm run build",
     "prototype:preview": "vite preview --host 0.0.0.0",
     "admin:dev": "npm --workspace apps/admin run dev",
     "admin:build": "npm --workspace apps/admin run build",
@@ -30,7 +30,8 @@
     "tools:install": "bash scripts/install-local-tools.sh",
     "data:backup": "bash scripts/backup-data.sh",
     "test-bot": "node scripts/test-bot.js",
-    "test-bot:fix": "node scripts/test-bot.js --fix"
+    "test-bot:fix": "node scripts/test-bot.js --fix",
+    "preview": "npm run admin:preview"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",

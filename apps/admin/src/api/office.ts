@@ -62,3 +62,26 @@ export function listNotifications() { return request<NotificationRecord[]>({ met
 export function readNotification(id: string) { return request<NotificationRecord>({ method: "POST", url: `/office/notifications/${id}/read` }); }
 export function refreshNotifications() { return request<number>({ method: "POST", url: "/office/notifications/refresh" }); }
 export function listAudits() { return request<AuditRecord[]>({ method: "GET", url: "/office/audits" }); }
+
+
+// ====== Audit Log ======
+export type AuditLogRecord = {
+  id: string;
+  username?: string;
+  httpMethod: string;
+  requestPath: string;
+  responseStatus: number;
+  clientIp?: string;
+  durationMs: number;
+  createdAt: string;
+};
+
+export function listAuditLogs(page: number = 0, size: number = 20) {
+  return request<{ content: AuditLogRecord[]; totalElements: number; totalPages: number; size: number; number: number }>({
+    method: "GET", url: "/office/audits", params: { page, size }
+  });
+}
+
+export function getUnreadNotificationCount() {
+  return request<number>({ method: "GET", url: "/office/notifications/count" });
+}

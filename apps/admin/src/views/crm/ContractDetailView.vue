@@ -5,7 +5,7 @@
         <a-space>
           <a-button @click="goBack">返回列表</a-button>
           <a-button @click="loadData">刷新</a-button>
-          <a-button @click="window.print()">打印</a-button>
+          <a-button @click="printPage">打印</a-button>
           <a-button type="primary" @click="openEdit">合同变更</a-button>
         </a-space>
       </template>
@@ -300,6 +300,7 @@ async function handleRejectChange(changeId: string) {
   } catch (error) { message.error(error instanceof Error ? error.message : "驳回失败"); }
 }
 
+function printPage() { window.print(); }
 function goBack() {
   router.push("/crm/contracts");
 }

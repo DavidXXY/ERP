@@ -16,3 +16,4 @@ services/api/target/
 *.mv.db
 *.trace.db
 backups/
+components.d.ts

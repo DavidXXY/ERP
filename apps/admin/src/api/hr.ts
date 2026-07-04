@@ -1,5 +1,5 @@
 import { request, http } from "./http";
-import type { EmployeeResponse, PersonnelCertificateResponse } from "./qualification";
+import type { EmployeeDetail, PersonnelCertificate } from "./qualification";
 
 // ====== Types ======
 

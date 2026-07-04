@@ -180,11 +180,20 @@ import WalletOutlined from "@ant-design/icons-vue/WalletOutlined";
 import UserOutlined from "@ant-design/icons-vue/UserOutlined";
 import SearchOutlined from "@ant-design/icons-vue/SearchOutlined";
 import GlobalSearch from "./GlobalSearch.vue";
+import { getUnreadNotificationCount } from "@/api/office";
 import { useAppStore } from "@/stores/app";
 import { useAuthStore } from "@/stores/auth";
 
 const app = useAppStore();
 const auth = useAuthStore();
+const unreadCount = ref(0);
+
+onMounted(async () => {
+  try { unreadCount.value = await getUnreadNotificationCount(); } catch {}
+  setInterval(async () => {
+    try { unreadCount.value = await getUnreadNotificationCount(); } catch {}
+  }, 30000);
+});
 const route = useRoute();
 const router = useRouter();
 const openKeys = ref<string[]>(route.path.startsWith("/finance") ? ["finance"] : route.path.startsWith("/office") ? ["office"] : route.path.startsWith("/qualification") ? ["qualification"] : route.path.startsWith("/system") ? ["system"] : route.path.startsWith("/crm") ? ["crm"] : route.path.startsWith("/procurement") ? ["procurement"] : route.path.startsWith("/inventory") ? ["inventory"] : route.path.startsWith("/projects") ? ["projects"] : []);

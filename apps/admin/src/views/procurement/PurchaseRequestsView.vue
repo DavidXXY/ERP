@@ -13,7 +13,7 @@
           <template v-else-if="column.key === 'qty'">{{ record.quantity }}<span class="table-subtitle">{{ record.unit || '' }}</span></template>
           <template v-else-if="column.key === 'amount'"><strong>{{ formatMoney(record.totalAmount || record.unitPrice * record.quantity) }}</strong></template>
           <template v-else-if="column.key === 'date'">{{ record.requiredDate || '-' }}</template>
-          <template v-else-if="column.key === 'status'"><a-tag :color="{DRAFT:'default',SUBMITTED:'blue',APPROVED:'green',ORDERED:'cyan',RECEIVED:'green',CANCELLED:'red'}[record.status]||'default'">{{ {DRAFT:'草稿',SUBMITTED:'待审批',APPROVED:'已通过',ORDERED:'已下单',RECEIVED:'已收货',CANCELLED:'已取消'}[record.status]||record.status }}</a-tag></template>
+          <template v-else-if="column.key === 'status'"><a-tag :color="({DRAFT:'default',SUBMITTED:'blue',APPROVED:'green',ORDERED:'cyan',RECEIVED:'green',CANCELLED:'red'} as any)[record.status]||'default'">{{ ({DRAFT:'草稿',SUBMITTED:'待审批',APPROVED:'已通过',ORDERED:'已下单',RECEIVED:'已收货',CANCELLED:'已取消'} as any)[record.status]||record.status }}</a-tag></template>
           <template v-else-if="column.key === 'action'">
             <span @click.stop><a-popconfirm v-if="record.status === 'DRAFT'" title="提交审批?" @confirm="handleSubmit(record)"><a-button type="link" size="small">提交审批</a-button></a-popconfirm></span>
           </template>
@@ -46,9 +46,9 @@ const requestColumns=[
   {title:'操作',key:'action',width:120,fixed:'right' as const},
 ];
 onMounted(loadData);
-async function loadData(){loading.value=true;try{requests.value=await listPurchaseRequests();}catch(e:any){message.error(e.message||'加载失败');}finally{loading.value=false;}}
+async function loadData(){loading.value=true;try{const result=await listPurchaseRequests({page:0,size:999});requests.value=result.content;}catch(e:any){message.error(e.message||'加载失败');}finally{loading.value=false;}}
 function openCreate(){Object.assign(form,{materialName:'',materialSpec:'',quantity:1,unit:'个',unitPrice:0,requiredDate:'',reason:'',costType:'PROJECT'});createOpen.value=true;}
-async function handleCreate(){await formRef.value?.validate();saving.value=true;try{await createPurchaseRequest({...form,applicantName:auth.user?.displayName||''});createOpen.value=false;message.success('申请已创建');await loadData();}catch(e:any){message.error(e.message||'创建失败');}finally{saving.value=false;}}
-async function handleSubmit(record:PurchaseRequest){try{await processPurchaseRequestApproval(record.id);message.success('已提交审批');await loadData();}catch(e:any){message.error(e.message||'提交失败');}}
+async function handleCreate(){await formRef.value?.validate();saving.value=true;try{await createPurchaseRequest({...({...form,requesterName:auth.user?.displayName||''})} as any);createOpen.value=false;message.success('申请已创建');await loadData();}catch(e:any){message.error(e.message||'创建失败');}finally{saving.value=false;}}
+async function handleSubmit(record:PurchaseRequest){try{await processPurchaseRequestApproval(record.id,{decision:'APPROVED' as any,comment:'提交审批',approverName:auth.user?.displayName||''});message.success('已提交审批');await loadData();}catch(e:any){message.error(e.message||'提交失败');}}
 function formatMoney(v:number){return new Intl.NumberFormat('zh-CN',{style:'currency',currency:'CNY',minimumFractionDigits:2}).format(v||0);}
 </script>

@@ -113,6 +113,39 @@ public class BiService {
   }
 
   private List<MonthlyTrend> monthlyTrends() {
+    List<MonthlyTrend> result = new ArrayList<>();
+    try {
+      List<Object[]> rows = entries.aggregateMonthlyTrends();
+      java.util.Map<String, Object[]> trendMap = new java.util.LinkedHashMap<>();
+      for (Object[] row : rows) {
+        int year = ((Number) row[0]).intValue();
+        int month = ((Number) row[1]).intValue();
+        String key = year + "-" + String.format("%02d", month);
+        trendMap.put(key, row);
+      }
+      YearMonth now = YearMonth.now();
+      for (int i = 5; i >= 0; i--) {
+        YearMonth month = now.minusMonths(i);
+        String key = month.toString();
+        Object[] row = trendMap.get(key);
+        if (row != null) {
+          BigDecimal revenue = (BigDecimal) row[2];
+          BigDecimal expense = (BigDecimal) row[3];
+          BigDecimal cashIn = (BigDecimal) row[4];
+          BigDecimal cashOut = (BigDecimal) row[5];
+          result.add(new MonthlyTrend(key, revenue, expense, cashIn, cashOut, revenue.subtract(expense)));
+        } else {
+          result.add(new MonthlyTrend(key, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO));
+        }
+      }
+      return result;
+    } catch (Exception e) {
+      log.warn("Database monthly trends failed, falling back to in-memory", e);
+      return inMemoryMonthlyTrends();
+    }
+  }
+
+  private List<MonthlyTrend> inMemoryMonthlyTrends() {
     List<AccountingVoucher> voucherRows = vouchers.findAllByOrderByVoucherDateDescCreatedAtDesc();
     List<MonthlyTrend> result = new ArrayList<>();
     YearMonth now = YearMonth.now();
@@ -189,6 +222,27 @@ public class BiService {
   }
 
   private List<WorkforcePerformance> workforcePerformance(List<WorkOrder> orderRows) {
+    try {
+      return orders.aggregateByAssignee().stream().map(row -> {
+        UUID assigneeId = (UUID) row[0];
+        String name = (String) row[1];
+        long totalOrders = (long) row[2];
+        long completed = (long) row[3];
+        BigDecimal hours = (BigDecimal) row[4];
+        BigDecimal revenue = (BigDecimal) row[5];
+        BigDecimal laborCost = (BigDecimal) row[6];
+        return new WorkforcePerformance(assigneeId, name, completed, hours, revenue, laborCost,
+            hours.compareTo(BigDecimal.ZERO) > 0
+                ? revenue.divide(hours, 2, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO);
+      }).sorted(Comparator.comparing(WorkforcePerformance::generatedRevenue).reversed()).toList();
+    } catch (Exception e) {
+      log.warn("Database workforce aggregation failed, falling back to in-memory", e);
+      return inMemoryWorkforcePerformance(orderRows);
+    }
+  }
+
+  private List<WorkforcePerformance> inMemoryWorkforcePerformance(List<WorkOrder> orderRows) {
     return orderRows.stream().filter(o -> o.getAssigneeId() != null)
         .collect(Collectors.groupingBy(WorkOrder::getAssigneeId)).entrySet().stream().map(e -> {
           List<WorkOrder> rows = e.getValue();
@@ -206,13 +260,20 @@ public class BiService {
   }
 
   private FinancialCash financialCash() {
-    BigDecimal in = BigDecimal.ZERO, out = BigDecimal.ZERO;
-    for (AccountingEntry e : entries.findAllByOrderByAccountCodeAsc())
-      if (e.getAccountCode().equals("1002")) {
-        in = in.add(amount(e.getDebit()));
-        out = out.add(amount(e.getCredit()));
-      }
-    return new FinancialCash(in, out);
+    try {
+      BigDecimal in = entries.sumDebitByAccountCode("1002");
+      BigDecimal out = entries.sumCreditByAccountCode("1002");
+      return new FinancialCash(in == null ? BigDecimal.ZERO : in, out == null ? BigDecimal.ZERO : out);
+    } catch (Exception e) {
+      log.warn("Database cash aggregation failed, falling back to in-memory", e);
+      BigDecimal in = BigDecimal.ZERO, out = BigDecimal.ZERO;
+      for (AccountingEntry entry : entries.findAllByOrderByAccountCodeAsc())
+        if (entry.getAccountCode().equals("1002")) {
+          in = in.add(amount(entry.getDebit()));
+          out = out.add(amount(entry.getCredit()));
+        }
+      return new FinancialCash(in, out);
+    }
   }
 
   private record FinancialCash(BigDecimal in, BigDecimal out) {

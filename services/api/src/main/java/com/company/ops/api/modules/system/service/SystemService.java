@@ -51,7 +51,9 @@ public class SystemService {
 
   private static final DateTimeFormatter DT_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
+  @Deprecated
   public SystemService(
+      CodeGenerator codeGenerator,
       SystemUserRepository userRepository,
       SystemRoleRepository roleRepository,
       SystemPermissionRepository permissionRepository,

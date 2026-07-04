@@ -131,10 +131,16 @@ public class OfficeController {
   }
 
   @GetMapping("/audits") @PreAuthorize("hasAuthority('office:audit:view')")
-  public ApiResponse<List<AuditResponse>> listAudits() {
-    return ApiResponse.ok(service.listAudits());
+  public ApiResponse<org.springframework.data.domain.Page<AuditResponse>> listAudits(
+      @org.springframework.data.web.PageableDefault(size = 20, sort = "createdAt", direction = org.springframework.data.domain.Sort.Direction.DESC) 
+      org.springframework.data.domain.Pageable pageable) {
+    return ApiResponse.ok(service.listAudits(pageable));
   }
 
+  @GetMapping("/notifications/count") @PreAuthorize("hasAuthority('office:notification:view')")
+  public ApiResponse<Integer> unreadNotificationCount() {
+    return ApiResponse.<Integer>ok(service.getUnreadNotificationCount());
+  }
   @PostMapping("/notifications/{id}/read") @PreAuthorize("hasAuthority('office:notification:view')")
   public ApiResponse<NotificationResponse> readNotification(@PathVariable UUID id) { return ApiResponse.ok(service.readNotification(id)); }
 }

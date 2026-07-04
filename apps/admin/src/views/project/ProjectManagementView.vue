@@ -188,6 +188,7 @@
       @created="createOpen = false; loadData()"
       @updated="loadData()"
     />
+  </div>
 </template>
 
 <script setup lang="ts">

@@ -4,7 +4,7 @@ import com.company.ops.api.common.api.ApiResponse;
 import com.company.ops.api.modules.system.dto.CreateRoleRequest;
 import com.company.ops.api.modules.system.dto.RoleResponse;
 import com.company.ops.api.modules.system.dto.UpdateRoleRequest;
-import com.company.ops.api.modules.system.service.SystemService;
+import com.company.ops.api.modules.system.service.RoleService;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -24,40 +24,40 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/roles")
 public class RoleController {
 
-  private final SystemService systemService;
+  private final RoleService roleService;
 
-  public RoleController(SystemService systemService) {
-    this.systemService = systemService;
+  public RoleController(RoleService roleService) {
+    this.roleService = roleService;
   }
 
   @GetMapping
   @PreAuthorize("hasAuthority('system:role:view')")
   public ApiResponse<Page<RoleResponse>> list(@PageableDefault(size = 20) Pageable pageable) {
-    return ApiResponse.ok(systemService.listRoles(pageable));
+    return ApiResponse.ok(roleService.listRoles(pageable));
   }
 
   @GetMapping("/{id}")
   @PreAuthorize("hasAuthority('system:role:view')")
   public ApiResponse<RoleResponse> get(@PathVariable UUID id) {
-    return ApiResponse.ok(systemService.getRole(id));
+    return ApiResponse.ok(roleService.getRole(id));
   }
 
   @PostMapping
   @PreAuthorize("hasAuthority('system:role:create')")
   public ApiResponse<RoleResponse> create(@Valid @RequestBody CreateRoleRequest request) {
-    return ApiResponse.ok(systemService.createRole(request));
+    return ApiResponse.ok(roleService.createRole(request));
   }
 
   @PutMapping("/{id}")
   @PreAuthorize("hasAuthority('system:role:update')")
   public ApiResponse<RoleResponse> update(@PathVariable UUID id, @Valid @RequestBody UpdateRoleRequest request) {
-    return ApiResponse.ok(systemService.updateRole(id, request));
+    return ApiResponse.ok(roleService.updateRole(id, request));
   }
 
   @DeleteMapping("/{id}")
   @PreAuthorize("hasAuthority('system:role:delete')")
   public ApiResponse<Void> delete(@PathVariable UUID id) {
-    systemService.deleteRole(id);
+    roleService.deleteRole(id);
     return ApiResponse.ok();
   }
 }

@@ -335,6 +335,7 @@ import {
   type UpdateCustomerPayload,
 } from "@/api/crm";
 import { useAuthStore } from "@/stores/auth";
+import { downloadCsv, customerRowToCsv } from "./crm-export";
 import {
   contractStatusColor,
   contractStatusLabel,

@@ -9,7 +9,7 @@
           <template v-else-if="column.key === 'amount'"><strong>{{ formatMoney(record.amount) }}</strong></template>
           <template v-else-if="column.key === 'paid'">{{ formatMoney(record.paidAmount || 0) }}<br><span class="table-subtitle">待付 {{ formatMoney(record.outstandingAmount || 0) }}</span></template>
           <template v-else-if="column.key === 'dueDate'">{{ record.dueDate || '-' }}</template>
-          <template v-else-if="column.key === 'status'"><a-tag :color="{PENDING:'orange',PARTIAL_PAID:'blue',PAID:'green',CANCELLED:'red'}[record.status]||'default'">{{ {PENDING:'待付款',PARTIAL_PAID:'部分已付',PAID:'已付清',CANCELLED:'已取消'}[record.status]||record.status }}</a-tag></template>
+          <template v-else-if="column.key === 'status'"><a-tag :color="statusColor(record.status, {PENDING:'orange',PARTIAL_PAID:'blue',PAID:'green',CANCELLED:'red'}, 'default')">{{ statusLabel(record.status, {PENDING:'待付款',PARTIAL_PAID:'部分已付',PAID:'已付清',CANCELLED:'已取消'}) }}</a-tag></template>
         </template>
       </a-table>
     </a-card>
@@ -19,6 +19,7 @@
 import { onMounted, ref } from "vue"; import { useRouter } from "vue-router";
 import { message } from "ant-design-vue"; import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
 import { listProcurementPayables, type ProcurementPayable } from "@/api/procurement";
+import { statusLabel, statusColor } from "@/utils/status-mapper";
 const router=useRouter(); const loading=ref(false); const payables=ref<ProcurementPayable[]>([]);
 const payableColumns=[{title:'应付单',key:'payable',width:240},{title:'金额',key:'amount',width:140},{title:'已付/待付',key:'paid',width:200},{title:'到期日',key:'dueDate',width:120},{title:'状态',key:'status',width:110}];
 onMounted(loadData);

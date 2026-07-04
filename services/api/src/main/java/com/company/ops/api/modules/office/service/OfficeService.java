@@ -388,6 +388,10 @@ public class OfficeService {
     });
   }
 
+  public int getUnreadNotificationCount() {
+    return (int) notificationRepository.countByReadFalse();
+  }
+
   public int refreshNotifications() {
     long count = approvalRepository.findAll().stream()
         .filter(a -> a.getStatus() == com.company.ops.api.modules.office.domain.ApprovalStatus.PENDING)
@@ -396,8 +400,8 @@ public class OfficeService {
   }
 
   @Transactional(readOnly = true)
-  public List<AuditResponse> listAudits() {
-    return auditLogRepository.findAllByOrderByCreatedAtDesc().stream()
+  public org.springframework.data.domain.Page<AuditResponse> listAudits(org.springframework.data.domain.Pageable pageable) {
+    return auditLogRepository.findAllByOrderByCreatedAtDesc(pageable)
         .map(item -> new AuditResponse(
             item.getId(),
             item.getUsername(),
@@ -407,8 +411,8 @@ public class OfficeService {
             item.getClientIp(),
             item.getDurationMs(),
             item.getCreatedAt()
-        ))
-        .toList();
+        ));
+        
   }
 
 

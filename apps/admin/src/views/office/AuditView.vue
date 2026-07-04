@@ -1,25 +1,86 @@
 <template>
   <div class="page-stack">
-    <a-card>
-      <template #title>操作审计</template>
-      <template #extra><a-space><a-button @click="goBack">返回办公室</a-button><a-button :loading="loading" @click="loadData"><template #icon><ReloadOutlined /></template>刷新</a-button></a-space></template>
-      <a-table :columns="auditColumns" :data-source="audits" :loading="loading" :pagination="{pageSize:10}" :row-key="(r:any)=>r.id" :scroll="{x:1000}">
+    <a-card title="操作审计日志">
+      <template #extra>
+        <a-space>
+          <a-range-picker v-model:value="dateRange" @change="loadData" />
+          <a-input-search v-model:value="searchUser" placeholder="搜索操作人" style="width:200px" allow-clear @search="loadData" />
+          <a-button :loading="loading" @click="loadData"><template #icon><ReloadOutlined /></template>刷新</a-button>
+        </a-space>
+      </template>
+      <a-table
+        :columns="columns"
+        :data-source="auditLogs"
+        :loading="loading"
+        :pagination="{ current: page + 1, pageSize: size, total, showSizeChanger: true, showTotal: (t) => '共 ' + t + ' 条' }"
+        :row-key="(r: any) => r.id"
+        :scroll="{ x: 1200 }"
+        size="small"
+        @change="handleTableChange"
+      >
         <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'status'"><a-tag :color="record.responseStatus < 400 ? 'green' : 'red'">{{ record.responseStatus }}</a-tag></template>
-          <template v-else-if="column.key === 'created'">{{ formatDateTime(record.createdAt) }}</template>
+          <template v-if="column.key === 'method'">
+            <a-tag :color="methodColor(record.httpMethod)">{{ record.httpMethod }}</a-tag>
+          </template>
+          <template v-else-if="column.key === 'path'">
+            <span :title="record.requestPath" style="max-width:400px;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ record.requestPath }}</span>
+          </template>
+          <template v-else-if="column.key === 'status'">
+            <a-tag :color="record.responseStatus < 300 ? 'green' : record.responseStatus < 400 ? 'orange' : 'red'">{{ record.responseStatus }}</a-tag>
+          </template>
+          <template v-else-if="column.key === 'duration'">{{ record.durationMs }}ms</template>
+          <template v-else-if="column.key === 'time'">{{ record.createdAt?.slice(0, 19)?.replace('T', ' ') || '-' }}</template>
         </template>
       </a-table>
     </a-card>
   </div>
 </template>
 <script setup lang="ts">
-import { onMounted, ref } from "vue"; import { useRouter } from "vue-router";
-import { message } from "ant-design-vue"; import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
-import { listAudits, type AuditRecord } from "@/api/office";
-const router=useRouter(); const loading=ref(false); const audits=ref<AuditRecord[]>([]);
-const auditColumns=[{title:'时间',key:'created',width:190},{title:'用户',dataIndex:'username',width:130},{title:'方法',dataIndex:'httpMethod',width:90},{title:'访问路径',dataIndex:'requestPath'},{title:'状态',key:'status',width:90},{title:'耗时(ms)',dataIndex:'durationMs',width:110},{title:'来源IP',dataIndex:'clientIp',width:150}];
+import { onMounted, ref } from "vue";
+import { message } from "ant-design-vue";
+import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
+import { listAuditLogs, type AuditLogRecord } from "@/api/office";
+
+const loading = ref(false);
+const auditLogs = ref<AuditLogRecord[]>([]);
+const page = ref(0);
+const size = ref(20);
+const total = ref(0);
+const searchUser = ref("");
+const dateRange = ref<[string, string] | null>(null);
+
+const columns = [
+  { title: "操作人", dataIndex: "username", key: "username", width: 120 },
+  { title: "请求方法", key: "method", width: 100 },
+  { title: "请求路径", key: "path", width: 420, ellipsis: true },
+  { title: "状态码", key: "status", width: 90 },
+  { title: "客户端IP", dataIndex: "clientIp", key: "ip", width: 140 },
+  { title: "耗时", key: "duration", width: 90 },
+  { title: "操作时间", key: "time", width: 180 },
+];
+
+function methodColor(method: string) {
+  return { GET: "green", POST: "blue", PUT: "orange", PATCH: "cyan", DELETE: "red" }[method] || "default";
+}
+
 onMounted(loadData);
-async function loadData(){loading.value=true;try{audits.value=await listAudits();}catch(error){message.error(error instanceof Error?error.message:'数据加载失败');}finally{loading.value=false;}}
-function goBack(){router.push('/office');}
-function formatDateTime(v?:string){return v?new Date(v).toLocaleString('zh-CN',{hour12:false}):'-';}
+
+async function loadData() {
+  loading.value = true;
+  try {
+    const result = await listAuditLogs(page.value, size.value);
+    auditLogs.value = result.content;
+    total.value = result.totalElements;
+  } catch (e: any) {
+    message.error(e.message || "加载审计日志失败");
+  } finally {
+    loading.value = false;
+  }
+}
+
+function handleTableChange(pagination: any) {
+  page.value = pagination.current - 1;
+  size.value = pagination.pageSize;
+  loadData();
+}
 </script>

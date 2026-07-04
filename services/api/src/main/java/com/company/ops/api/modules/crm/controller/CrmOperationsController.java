@@ -27,8 +27,7 @@ import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.UpdateContractReque
 
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.UpdateReceivableRequest;
 import com.company.ops.api.modules.crm.service.CrmOperationsService;
-import com.company.ops.api.modules.system.security.UserPrincipal;
-import org.springframework.security.core.context.SecurityContextHolder;
+import com.company.ops.api.modules.crm.service.CrmExportService;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
@@ -49,9 +48,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class CrmOperationsController {
 
   private final CrmOperationsService crmOperationsService;
+  private final CrmExportService crmExportService;
 
-  public CrmOperationsController(CrmOperationsService crmOperationsService) {
+  public CrmOperationsController(CrmOperationsService crmOperationsService, CrmExportService crmExportService) {
     this.crmOperationsService = crmOperationsService;
+    this.crmExportService = crmExportService;
   }
 
   @GetMapping("/opportunities")
@@ -219,43 +220,31 @@ public class CrmOperationsController {
   }
 
   @DeleteMapping("/opportunities/{id}")
+  @PreAuthorize("hasAuthority('crm:opportunity:delete')")
   public ApiResponse<Void> deleteOpportunity(@PathVariable UUID id) {
-    UserPrincipal principal = (UserPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-    if (!principal.roleCodes().contains("ADMIN")) {
-      return ApiResponse.fail("删除需要管理员权限");
-    }
     crmOperationsService.deleteOpportunity(id);
-    return ApiResponse.ok(null);
+    return ApiResponse.ok();
   }
 
   @DeleteMapping("/quotes/{id}")
+  @PreAuthorize("hasAuthority('crm:quote:delete')")
   public ApiResponse<Void> deleteQuote(@PathVariable UUID id) {
-    UserPrincipal principal = (UserPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-    if (!principal.roleCodes().contains("ADMIN")) {
-      return ApiResponse.fail("删除需要管理员权限");
-    }
     crmOperationsService.deleteQuote(id);
-    return ApiResponse.ok(null);
+    return ApiResponse.ok();
   }
 
   @DeleteMapping("/contracts/{id}")
+  @PreAuthorize("hasAuthority('crm:contract:delete')")
   public ApiResponse<Void> deleteContract(@PathVariable UUID id) {
-    UserPrincipal principal = (UserPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-    if (!principal.roleCodes().contains("ADMIN")) {
-      return ApiResponse.fail("删除需要管理员权限");
-    }
     crmOperationsService.deleteContract(id);
-    return ApiResponse.ok(null);
+    return ApiResponse.ok();
   }
 
   @DeleteMapping("/follow-ups/{id}")
+  @PreAuthorize("hasAuthority('crm:followup:delete')")
   public ApiResponse<Void> deleteFollowUp(@PathVariable UUID id) {
-    UserPrincipal principal = (UserPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-    if (!principal.roleCodes().contains("ADMIN")) {
-      return ApiResponse.fail("删除需要管理员权限");
-    }
     crmOperationsService.deleteFollowUp(id);
-    return ApiResponse.ok(null);
+    return ApiResponse.ok();
   }
 
   @GetMapping("/profiles")
@@ -315,6 +304,26 @@ public class CrmOperationsController {
       @Valid @RequestBody ApprovalActionRequest request
   ) {
     return ApiResponse.ok(crmOperationsService.rejectContractChange(id, request.operatorName(), request.comment()));
+  }
+
+  @GetMapping("/export/customers")
+  @PreAuthorize("hasAuthority('crm:customer:view')")
+  public org.springframework.http.ResponseEntity<org.springframework.core.io.Resource> exportCustomers() {
+    var resource = crmExportService.exportCustomersExcel();
+    return org.springframework.http.ResponseEntity.ok()
+        .contentType(org.springframework.http.MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+        .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"crm-customers.xlsx\"")
+        .body(resource);
+  }
+
+  @GetMapping("/export/contracts")
+  @PreAuthorize("hasAuthority('crm:contract:view')")
+  public org.springframework.http.ResponseEntity<org.springframework.core.io.Resource> exportContracts() {
+    var resource = crmExportService.exportContractsExcel();
+    return org.springframework.http.ResponseEntity.ok()
+        .contentType(org.springframework.http.MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+        .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"crm-contracts.xlsx\"")
+        .body(resource);
   }
 
 }

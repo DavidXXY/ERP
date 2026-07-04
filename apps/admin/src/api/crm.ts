@@ -605,3 +605,23 @@ export function listContractChanges(contractId: string) {
     method: "GET", url: `/crm/contracts/${contractId}/changes`,
   });
 }
+
+
+// ====== Excel Export ======
+export async function exportCustomersExcel() {
+  const { http } = await import("./http");
+  const response = await http.get<Blob>("/crm/export/customers", { responseType: "blob" });
+  const url = URL.createObjectURL(response.data);
+  const anchor = document.createElement("a");
+  anchor.href = url; anchor.download = "crm-customers.xlsx";
+  anchor.click(); URL.revokeObjectURL(url);
+}
+
+export async function exportContractsExcel() {
+  const { http } = await import("./http");
+  const response = await http.get<Blob>("/crm/export/contracts", { responseType: "blob" });
+  const url = URL.createObjectURL(response.data);
+  const anchor = document.createElement("a");
+  anchor.href = url; anchor.download = "crm-contracts.xlsx";
+  anchor.click(); URL.revokeObjectURL(url);
+}

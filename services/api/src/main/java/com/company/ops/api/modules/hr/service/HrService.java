@@ -379,15 +379,12 @@ public class HrService {
         // ====== Analytics ======
     @Transactional(readOnly = true)
     public HrAnalyticsResponse analytics() {
-        var allEmployees = employeeRepository.findAll();
-        long total = allEmployees.size();
-        long active = allEmployees.stream().filter(e -> "ACTIVE".equals(e.getEmploymentStatus())).count();
-        long left = allEmployees.stream().filter(e -> "LEFT".equals(e.getEmploymentStatus())).count();
-        long newThisMonth = allEmployees.stream().filter(e -> {
-            if (e.getEntryDate() == null) return false;
-            var now = LocalDate.now();
-            return e.getEntryDate().getYear() == now.getYear() && e.getEntryDate().getMonth() == now.getMonth();
-        }).count();
+        long total = employeeRepository.count();
+        long active = employeeRepository.countByEmploymentStatus("ACTIVE");
+        long left = employeeRepository.countByEmploymentStatus("LEFT");
+        var now = LocalDate.now();
+        long newThisMonth = employeeRepository.countByEntryDateBetween(
+            now.withDayOfMonth(1), now);
         long leavePending = leaveRequestRepository.countByStatus("PENDING");
 
         // Education distribution (from highest education records)
@@ -403,19 +400,16 @@ public class HrService {
 
         // Status distribution
         var statusDist = new LinkedHashMap<String, Long>();
-        for (var e : allEmployees) {
-            String s = switch (e.getEmploymentStatus()) {
-                case "ACTIVE" -> "在职"; case "LEFT" -> "离职"; case "DISABLED" -> "停用";
-                default -> e.getEmploymentStatus();
-            };
-            statusDist.merge(s, 1L, Long::sum);
-        }
+        if (active > 0) statusDist.put("在职", active);
+        if (left > 0) statusDist.put("离职", left);
+        long disabled = total - active - left;
+        if (disabled > 0) statusDist.put("停用", disabled);
         var statusList = statusDist.entrySet().stream()
             .map(e -> new CategoryCount(e.getKey(), e.getValue())).toList();
 
         // Organization distribution
         var orgDist = new LinkedHashMap<String, Long>();
-        for (var e : allEmployees) {
+        for (var e : employeeRepository.findAll()) {
             String orgName = "未分配";
             if (e.getOrganization() != null && e.getOrganization().getName() != null) {
                 orgName = e.getOrganization().getName();

@@ -51,9 +51,8 @@
                 修改
               </a-button>
               <a-button
-                v-if="auth.can('crm:receivable:settle') && record.invoiceNo && record.outstandingAmount > 0"
-                size="small"
                 v-if="auth.can('crm:receivable:settle') && record.invoiceNo && !requestedReceiptIds.includes(record.id) && record.outstandingAmount > 0"
+                size="small"
                 @click="openReceiptRequest(record)"
               >
                 申请回款

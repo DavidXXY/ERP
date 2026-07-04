@@ -33,8 +33,18 @@ export type PurchaseRequest = {
   id: string;
   code?: string;
   requesterName: string;
+  applicantName?: string;
   partId?: string;
   partName: string;
+  materialName?: string;
+  materialSpec?: string;
+  unit?: string;
+  unitPrice?: number;
+  totalAmount?: number;
+  requiredDate?: string;
+  description?: string;
+  projectId?: string;
+  departmentId?: string;
   quantity: number;
   expectedDate?: string;
   reason?: string;
@@ -52,6 +62,11 @@ export type PurchaseRequest = {
 export type PurchaseOrder = {
   id: string;
   code?: string;
+  orderedAt?: string;
+  createdAt?: string;
+  orderItems?: any[];
+  totalAmount?: number;
+  amount?: number;
   supplierId: string;
   supplierName?: string;
   requestId?: string;
@@ -82,7 +97,15 @@ export type CreateSupplierPayload = {
 
 export type CreatePurchaseRequestPayload = {
   code?: string;
-  requesterName: string;
+  requesterName?: string;
+  applicantName?: string;
+  materialName?: string;
+  materialSpec?: string;
+  unit?: string;
+  unitPrice?: number;
+  totalAmount?: number;
+  requiredDate?: string;
+  description?: string;
   partId?: string;
   partName?: string;
   quantity: number;

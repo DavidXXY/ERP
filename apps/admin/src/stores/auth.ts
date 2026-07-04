@@ -35,7 +35,7 @@ export const useAuthStore = defineStore("auth", {
     },
     can(permission: string) {
       if (this.user?.roles?.includes('ADMIN')) return true;
-      return this.permissions?.includes(permission) || false;
+      return this.user?.permissions?.includes(permission) ?? false;
     },
   },
 });

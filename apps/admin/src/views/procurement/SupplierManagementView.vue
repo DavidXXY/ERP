@@ -8,7 +8,7 @@
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'supplier'"><strong>{{ record.code }}</strong><span class="table-subtitle">{{ record.name }}</span></template>
           <template v-else-if="column.key === 'contact'">{{ record.contactName || '-' }}<br><span class="table-subtitle">{{ record.contactPhone || '' }}</span></template>
-          <template v-else-if="column.key === 'status'"><a-tag :color="record.riskStatus === 'NORMAL' ? 'green' : record.riskStatus === 'WATCHLIST' ? 'orange' : 'red'">{{ {NORMAL:'正常',WATCHLIST:'关注',BLOCKED:'冻结'}[record.riskStatus] || record.riskStatus }}</a-tag></template>
+          <template v-else-if="column.key === 'status'"><a-tag :color="record.riskStatus === 'NORMAL' ? 'green' : record.riskStatus === 'WATCHLIST' ? 'orange' : 'red'">{{ ({NORMAL:'正常',WATCHLIST:'关注',BLOCKED:'冻结'} as any)[record.riskStatus] || record.riskStatus }}</a-tag></template>
         </template>
       </a-table>
     </a-card>
@@ -31,7 +31,7 @@ const form=reactive({code:'',name:'',contactName:'',contactPhone:'',remark:''});
 const rules={code:[{required:true}],name:[{required:true}]};
 const supplierColumns=[{title:'供应商',key:'supplier',width:240},{title:'联系人',key:'contact',width:200},{title:'状态',key:'status',width:100}];
 onMounted(loadData);
-async function loadData(){loading.value=true;try{suppliers.value=await listSuppliers();}catch(e:any){message.error(e.message||'加载失败');}finally{loading.value=false;}}
+async function loadData(){loading.value=true;try{const result=await listSuppliers(0,999);suppliers.value=result.content;}catch(e:any){message.error(e.message||'加载失败');}finally{loading.value=false;}}
 function openCreate(){Object.assign(form,{code:generateCode('GYS'),name:'',contactName:'',contactPhone:'',remark:''});createOpen.value=true;}
 async function handleCreate(){await formRef.value?.validate();saving.value=true;try{await createSupplier({...form});createOpen.value=false;message.success('供应商已创建');await loadData();}catch(e:any){message.error(e.message||'创建失败');}finally{saving.value=false;}}
 function generateCode(p:string){const d=new Date();return p+'-'+d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0')+'-'+String(d.getHours()).padStart(2,'0')+String(d.getMinutes()).padStart(2,'0');}

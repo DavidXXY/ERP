@@ -120,6 +120,7 @@ import { useRouter } from "vue-router";
 import { listCustomers, listOpportunities, listQuotes, listContracts, listReceivables, listFollowUps } from "@/api/crm";
 import { getExecutiveDashboard } from "@/api/bi";
 import { formatMoney } from "./crm-options";
+const moneyFormatter = (value: number | string) => formatMoney(typeof value === "number" ? value : Number(value));
 
 const router = useRouter();
 const loading = ref(true);

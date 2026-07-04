@@ -4,7 +4,7 @@ import com.company.ops.api.common.api.ApiResponse;
 import com.company.ops.api.modules.system.dto.CreateOrganizationRequest;
 import com.company.ops.api.modules.system.dto.OrganizationResponse;
 import com.company.ops.api.modules.system.dto.UpdateOrganizationRequest;
-import com.company.ops.api.modules.system.service.SystemService;
+import com.company.ops.api.modules.system.service.OrganizationService;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
@@ -22,46 +22,46 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/organizations")
 public class OrganizationController {
 
-  private final SystemService systemService;
+  private final OrganizationService organizationService;
 
-  public OrganizationController(SystemService systemService) {
-    this.systemService = systemService;
+  public OrganizationController(OrganizationService organizationService) {
+    this.organizationService = organizationService;
   }
 
   @GetMapping
   @PreAuthorize("hasAuthority('system:organization:view')")
   public ApiResponse<List<OrganizationResponse>> list() {
-    return ApiResponse.ok(systemService.listOrganizations());
+    return ApiResponse.ok(organizationService.listOrganizations());
   }
 
   @GetMapping("/flat")
   @PreAuthorize("hasAuthority('system:organization:view')")
   public ApiResponse<List<OrganizationResponse>> listFlat() {
-    return ApiResponse.ok(systemService.listOrganizationsFlat());
+    return ApiResponse.ok(organizationService.listOrganizationsFlat());
   }
 
   @GetMapping("/{id}")
   @PreAuthorize("hasAuthority('system:organization:view')")
   public ApiResponse<OrganizationResponse> get(@PathVariable UUID id) {
-    return ApiResponse.ok(systemService.getOrganization(id));
+    return ApiResponse.ok(organizationService.getOrganization(id));
   }
 
   @PostMapping
   @PreAuthorize("hasAuthority('system:organization:create')")
   public ApiResponse<OrganizationResponse> create(@Valid @RequestBody CreateOrganizationRequest request) {
-    return ApiResponse.ok(systemService.createOrganization(request));
+    return ApiResponse.ok(organizationService.createOrganization(request));
   }
 
   @PutMapping("/{id}")
   @PreAuthorize("hasAuthority('system:organization:update')")
   public ApiResponse<OrganizationResponse> update(@PathVariable UUID id, @Valid @RequestBody UpdateOrganizationRequest request) {
-    return ApiResponse.ok(systemService.updateOrganization(id, request));
+    return ApiResponse.ok(organizationService.updateOrganization(id, request));
   }
 
   @DeleteMapping("/{id}")
   @PreAuthorize("hasAuthority('system:organization:delete')")
   public ApiResponse<Void> delete(@PathVariable UUID id) {
-    systemService.deleteOrganization(id);
+    organizationService.deleteOrganization(id);
     return ApiResponse.ok();
   }
 }

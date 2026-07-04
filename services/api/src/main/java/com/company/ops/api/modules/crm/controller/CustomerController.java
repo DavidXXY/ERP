@@ -6,8 +6,6 @@ import com.company.ops.api.modules.crm.dto.CustomerDetailResponse;
 import com.company.ops.api.modules.crm.dto.CustomerSummaryResponse;
 import com.company.ops.api.modules.crm.dto.UpdateCustomerRequest;
 import com.company.ops.api.modules.crm.service.CustomerService;
-import com.company.ops.api.modules.system.security.UserPrincipal;
-import org.springframework.security.core.context.SecurityContextHolder;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
@@ -62,13 +60,9 @@ public class CustomerController {
   }
 
   @DeleteMapping("/{id}")
-  @PreAuthorize("isAuthenticated()")
+  @PreAuthorize("hasAuthority('crm:customer:delete')")
   public ApiResponse<Void> deleteCustomer(@PathVariable UUID id) {
-    UserPrincipal principal = (UserPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-    if (!principal.roleCodes().contains("ADMIN")) {
-      return ApiResponse.fail("删除需要管理员权限");
-    }
     customerService.deleteCustomer(id);
-    return ApiResponse.ok(null);
+    return ApiResponse.ok();
   }
 }

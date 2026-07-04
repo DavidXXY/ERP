@@ -5,7 +5,7 @@ import com.company.ops.api.modules.system.dto.CreateUserRequest;
 import com.company.ops.api.modules.system.dto.ResetPasswordRequest;
 import com.company.ops.api.modules.system.dto.UpdateUserRequest;
 import com.company.ops.api.modules.system.dto.UserResponse;
-import com.company.ops.api.modules.system.service.SystemService;
+import com.company.ops.api.modules.system.service.UserService;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -26,47 +26,47 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/users")
 public class UserController {
 
-  private final SystemService systemService;
+  private final UserService userService;
 
-  public UserController(SystemService systemService) {
-    this.systemService = systemService;
+  public UserController(UserService userService) {
+    this.userService = userService;
   }
 
   @GetMapping
   @PreAuthorize("hasAuthority('system:user:view')")
   public ApiResponse<Page<UserResponse>> list(@PageableDefault(size = 20) Pageable pageable) {
-    return ApiResponse.ok(systemService.listUsers(pageable));
+    return ApiResponse.ok(userService.listUsers(pageable));
   }
 
   @GetMapping("/{id}")
   @PreAuthorize("hasAuthority('system:user:view')")
   public ApiResponse<UserResponse> get(@PathVariable UUID id) {
-    return ApiResponse.ok(systemService.getUser(id));
+    return ApiResponse.ok(userService.getUser(id));
   }
 
   @PostMapping
   @PreAuthorize("hasAuthority('system:user:create')")
   public ApiResponse<UserResponse> create(@Valid @RequestBody CreateUserRequest request) {
-    return ApiResponse.ok(systemService.createUser(request));
+    return ApiResponse.ok(userService.createUser(request));
   }
 
   @PutMapping("/{id}")
   @PreAuthorize("hasAuthority('system:user:update')")
   public ApiResponse<UserResponse> update(@PathVariable UUID id, @Valid @RequestBody UpdateUserRequest request) {
-    return ApiResponse.ok(systemService.updateUser(id, request));
+    return ApiResponse.ok(userService.updateUser(id, request));
   }
 
   @DeleteMapping("/{id}")
   @PreAuthorize("hasAuthority('system:user:delete')")
   public ApiResponse<Void> delete(@PathVariable UUID id) {
-    systemService.deleteUser(id);
+    userService.deleteUser(id);
     return ApiResponse.ok();
   }
 
   @PostMapping("/{id}/reset-password")
   @PreAuthorize("hasAuthority('system:user:reset-password')")
   public ApiResponse<Void> resetPassword(@PathVariable UUID id, @Valid @RequestBody ResetPasswordRequest request) {
-    systemService.resetPassword(id, request.newPassword());
+    userService.resetPassword(id, request.newPassword());
     return ApiResponse.ok();
   }
 }

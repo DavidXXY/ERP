@@ -1,5 +1,5 @@
 <template>
-    <a-modal v-model:open="createOpen" title="新增项目立项" width="860px" :confirm-loading="saving" @ok="handleCreate">
+    <a-modal :open="createOpen" @update:open="emit('update:createOpen', $event)" title="新增项目立项" width="860px" :confirm-loading="saving" @ok="handleCreate">
       <a-form ref="createFormRef" :model="createForm" :rules="createRules" layout="vertical">
         <a-row :gutter="16">
           <a-col :xs="24" :md="16"><a-form-item label="项目名称" name="name"><a-input v-model:value="createForm.name" /></a-form-item></a-col>
@@ -23,7 +23,7 @@
       </a-form>
     </a-modal>
 
-    <a-modal v-model:open="approvalOpen" title="项目立项审批" width="700px" :confirm-loading="saving" @ok="handleApproval">
+    <a-modal :open="approvalOpen" @update:open="emit('update:approvalOpen', $event)" title="项目立项审批" width="700px" :confirm-loading="saving" @ok="handleApproval">
       <a-alert v-if="activeProject" class="section-alert" type="info" :message="`${activeProject.code} · ${activeProject.name} · ${formatMoney(activeProject.contractAmount)}`" />
       <a-form ref="approvalFormRef" :model="approvalForm" :rules="approvalRules" layout="vertical">
         <a-row :gutter="16">
@@ -34,7 +34,7 @@
       </a-form>
     </a-modal>
 
-    <a-modal v-model:open="stageOpen" title="推进项目阶段" width="700px" :confirm-loading="saving" @ok="handleAdvanceStage">
+    <a-modal :open="stageOpen" @update:open="emit('update:stageOpen', $event)" title="推进项目阶段" width="700px" :confirm-loading="saving" @ok="handleAdvanceStage">
       <a-alert v-if="detail && nextStage" class="section-alert" type="info" :message="`${stageLabel(detail.project.stage)} → ${stageLabel(nextStage)}`" />
       <a-form ref="stageFormRef" :model="stageForm" :rules="stageRules" layout="vertical">
         <a-row :gutter="16">
@@ -46,7 +46,7 @@
       </a-form>
     </a-modal>
 
-    <a-modal v-model:open="costOpen" title="登记项目成本" width="760px" :confirm-loading="saving" @ok="handleCreateCost">
+    <a-modal :open="costOpen" @update:open="emit('update:costOpen', $event)" title="登记项目成本" width="760px" :confirm-loading="saving" @ok="handleCreateCost">
       <a-alert v-if="detail" class="section-alert" type="info" :message="`${detail.project.code} · 预算余额 ${formatMoney(detail.project.budgetVariance)}`" />
       <a-form ref="costFormRef" :model="costForm" :rules="costRules" layout="vertical">
         <a-row :gutter="16">
@@ -59,7 +59,6 @@
         </a-row>
       </a-form>
     </a-modal>
-  </div>
 </template>
 
 <script setup lang="ts">

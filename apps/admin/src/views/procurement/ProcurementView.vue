@@ -665,9 +665,9 @@ async function loadData() {
       auth.can("procurement:payable:view") ? listProcurementPayables() : Promise.resolve([]),
       listProcurementCostTargets(), listProcurementCostAllocations(),
     ]);
-    suppliers.value = supplierData;
-    purchaseRequests.value = requestData;
-    purchaseOrders.value = orderData;
+    suppliers.value = supplierData.content || supplierData;
+    purchaseRequests.value = requestData.content || requestData;
+    purchaseOrders.value = orderData.content || orderData;
     parts.value = partData;
     goodsReceipts.value = receiptData;
     payables.value = payableData;
@@ -678,6 +678,17 @@ async function loadData() {
   } finally {
     loading.value = false;
   }
+}
+
+const selectedRequestKeys = ref<string[]>([]);
+function handleRequestFilter() { loadRequests(); }
+function handleRequestPageChange() { loadRequests(); }
+
+async function loadRequests() {
+  try{const result=await listPurchaseRequests({page:0,size:999});purchaseRequests.value=result.content;}catch(e:any){message.error(e instanceof Error?e.message:'加载采购申请失败');}
+}
+async function loadOrders() {
+  try{const result=await listPurchaseOrders({page:0,size:999});purchaseOrders.value=result.content;}catch(e:any){message.error(e instanceof Error?e.message:'加载采购订单失败');}
 }
 
 function openSupplier() { Object.assign(supplierForm, initialSupplierForm()); supplierOpen.value = true; }
@@ -783,6 +794,10 @@ async function handleApproval() {
   } catch (error) { message.error(error instanceof Error ? error.message : "审批处理失败"); }
   finally { savingApproval.value = false; }
 }
+async function handleCancelOrder(record: PurchaseOrder) {
+  message.warning('订单取消失败：该功能尚未实现');
+}
+
 async function handleCreateOrder() {
   await orderFormRef.value?.validate();
   savingOrder.value = true;

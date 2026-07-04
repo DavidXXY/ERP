@@ -61,6 +61,7 @@
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
+import { exportContractsExcel } from "@/api/crm";
 import { message } from "ant-design-vue";
 import { deleteContract } from "@/api/crm";
 import { listContracts, type ContractStatus, type ServiceContract } from "@/api/crm";
@@ -123,6 +124,7 @@ const customRow = (record: ServiceContract) => ({
 
 onMounted(loadData);
 
+async function doExport() { try { await exportContractsExcel(); } catch(e: any) { message.error(e.message || "导出失败"); } }
 async function loadData() {
   loading.value = true;
   try {

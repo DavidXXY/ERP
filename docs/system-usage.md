@@ -507,3 +507,58 @@ npm run admin:dev
 - **维护**：设备、工单、服务计划
 - **OA**：审批、报销、外包示例
 - **人力**：排班、考勤记录
+
+---
+
+## 📌 v0.2 新增功能（2026-07）
+
+### 操作审计日志
+
+后端自动记录所有 API 请求（路径、方法、状态码、耗时、客户端 IP、操作人）。
+
+- **位置**：OA协同 → 操作审计
+- **功能**：按时间范围/操作人筛选，分页浏览，实时刷新
+- **后端**：`SystemAuditLog` 实体 + `AuditInterceptor` 拦截器
+- **接口**：`GET /api/office/audits?page=&size=`
+
+### 消息通知系统
+
+- **未读角标**：侧边栏"消息中心"项实时显示未读数（红色 badge）
+- **自动轮询**：每 30 秒自动检查 `/api/office/notifications/count`
+- **事件触发**：审批创建/完成、费用报销提交、合同到期预警等自动生成通知
+- **接口**：`GET /api/office/notifications` · `POST /api/office/notifications/{id}/read` · `GET /api/office/notifications/count`
+
+### HR 模块（员工档案扩展）
+
+**新增 REST 端点**（`/api/hr/`）覆盖员工子档案：
+
+| 端点 | 功能 |
+|------|------|
+| `employees/{id}/educations` | 教育经历 CRUD |
+| `employees/{id}/work-experiences` | 工作经历 CRUD |
+| `employees/{id}/emergency-contacts` | 紧急联系人 CRUD |
+| `employees/{id}/lifecycles` | 入职/调岗/离职生命周期 |
+| `employees/{id}/leaves` | 请假申请与审批 |
+| `employees/{id}/leave-balances` | 年假/病假额度管理 |
+| `/hr/analytics` | 人力分析（在职/离职/学历/组织分布） |
+| `/hr/export/employees` | Excel 导出（员工花名册） |
+| `/hr/import/employees` | Excel 导入（批量新增员工） |
+| `/hr/export/template` | 导入模板下载 |
+
+权限使用 `qualification:employee:view`（读）和 `qualification:employee:manage`（写）。
+
+### CRM Excel 导出
+
+客户和合同列表支持一键导出 `.xlsx`：
+
+- **客户导出**：编码 · 名称 · 行业 · 等级 · 负责人 · 付款习惯 · 风险状态
+- **合同导出**：编号 · 客户 · 项目名称 · 金额 · 类型 · 起止日期 · 状态
+- **接口**：`GET /api/crm/export/customers` · `GET /api/crm/export/contracts`
+
+### 系统架构调整
+
+- **`SystemService`** 拆分为 `UserService`/`RoleService`/`PermissionService`/`OrganizationService`
+- **`BiService`** 数据库级聚合（按月营收趋势、现金流汇总、工作量统计由 JPQL GROUP BY 替代全表扫描）
+- **前端**：`unplugin-vue-components` 自动按需注册 Ant Design Vue 组件，`main.ts` 从 91 行精简至 13 行
+- **安全**：CRM 删除权限从手动 ADMIN 角色检查改为声明式 `@PreAuthorize("hasAuthority('crm:*:delete')")`
+- **构建**：`vite build` 已修复 4 个模板语法错误，可正常产出生产包

@@ -23,6 +23,7 @@ import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.UpdateQuoteRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.CreateContractChangeRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ContractChangeResponse;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ApprovalActionRequest;
+import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.UpdateContractRequest;
 
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.UpdateReceivableRequest;
 import com.company.ops.api.modules.crm.service.CrmOperationsService;

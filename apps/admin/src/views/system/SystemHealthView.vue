@@ -6,7 +6,7 @@
         <p>实时查看服务器的运行状态、资源使用情况及 Java 虚拟机信息。</p>
       </div>
       <a-space>
-        <a-badge :status="loading ? 'processing' : 'success'" :text="loading ? '刷新中' : '运行中'" />
+        <Badge :status="loading ? 'processing' : 'success'" :text="loading ? '刷新中' : '运行中'" />
         <a-button :loading="loading" @click="loadData">
           <template #icon><ReloadOutlined /></template>刷新
         </a-button>
@@ -197,7 +197,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
-import { Empty, message } from "ant-design-vue";
+import { Badge, Empty, message } from "ant-design-vue";
 import { ReloadOutlined, FolderOutlined } from "@ant-design/icons-vue";
 import { getSystemHealthApi, type SystemHealthResponse } from "@/api/system";
 

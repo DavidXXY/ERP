@@ -2,6 +2,7 @@ package com.company.ops.api.modules.office.controller;
 
 import com.company.ops.api.common.api.ApiResponse;
 import com.company.ops.api.modules.office.domain.DocumentFile;
+import com.company.ops.api.modules.office.dto.OfficeDtos.AuditResponse;
 import com.company.ops.api.modules.office.dto.OfficeDtos.ApprovalResponse;
 import com.company.ops.api.modules.office.dto.OfficeDtos.CompleteOutsourceRequest;
 import com.company.ops.api.modules.office.dto.OfficeDtos.CreateApprovalRequest;
@@ -126,12 +127,12 @@ public class OfficeController {
   public ApiResponse<List<NotificationResponse>> notifications() { return ApiResponse.ok(service.notifications()); }
   @PostMapping("/notifications/refresh") @PreAuthorize("hasAuthority('office:notification:view')")
   public ApiResponse<Integer> refreshNotifications() {
-    return ApiResponse.ok(officeService.refreshNotifications());
+    return ApiResponse.ok(service.refreshNotifications());
   }
 
   @GetMapping("/audits") @PreAuthorize("hasAuthority('office:audit:view')")
-  public ApiResponse<java.util.List> listAudits() {
-    return ApiResponse.ok(officeService.listAudits());
+  public ApiResponse<List<AuditResponse>> listAudits() {
+    return ApiResponse.ok(service.listAudits());
   }
 
   @PostMapping("/notifications/{id}/read") @PreAuthorize("hasAuthority('office:notification:view')")

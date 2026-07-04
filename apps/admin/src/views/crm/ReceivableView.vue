@@ -35,12 +35,12 @@
           <template v-else-if="column.key === 'action'">
             <a-space size="small">
               <a-button
-                v-if="auth.can('crm:receivable:invoice') && !record.invoiceNo && record.status !== 'SETTLED'"
+                v-if="auth.can('crm:receivable:invoice') && !record.invoiceNo && !requestedIds.includes(record.id) && record.status !== 'SETTLED'"
                 size="small"
                 type="link"
-                @click="openInvoice(record)"
+                @click="openInvoiceRequest(record)"
               >
-                登记开票
+                申请开票
               </a-button>
 <a-button
                 v-if="record.status !== 'SETTLED'"
@@ -53,10 +53,10 @@
               <a-button
                 v-if="auth.can('crm:receivable:settle') && record.invoiceNo && record.outstandingAmount > 0"
                 size="small"
-                type="link"
-                @click="openReceipt(record)"
+                v-if="auth.can('crm:receivable:settle') && record.invoiceNo && !requestedReceiptIds.includes(record.id) && record.outstandingAmount > 0"
+                @click="openReceiptRequest(record)"
               >
-                登记回款
+                申请回款
               </a-button>
             </a-space>
           </template>
@@ -64,23 +64,17 @@
       </a-table>
     </a-card>
 
-    <a-modal v-model:open="invoiceOpen" title="登记开票" :confirm-loading="saving" @ok="handleInvoice">
-      <a-alert v-if="selectedItem" class="section-alert" type="info" :message="`${selectedItem.code} · ${selectedItem.customerName} · ${formatMoney(selectedItem.amount)}`" />
-      <a-form ref="invoiceFormRef" :model="invoiceForm" :rules="invoiceRules" layout="vertical">
-        <a-form-item label="发票号码" name="invoiceNo"><a-input v-model:value="invoiceForm.invoiceNo" /></a-form-item>
-        <a-form-item label="开票日期" name="invoiceDate"><a-input v-model:value="invoiceForm.invoiceDate" type="date" /></a-form-item>
+    <a-modal v-model:open="invoiceOpen" title="申请开票" width="480px" :confirm-loading="saving" @ok="handleInvoiceRequest">
+      <p style="margin: 16px 0; color: #595959">确认提交开票申请？财务部门处理后将登记正式发票信息。</p>
+      <a-form ref="invoiceFormRef" :model="invoiceForm" layout="vertical">
+        <a-form-item label="申请说明（可选）"><a-textarea v-model:value="invoiceForm.remark" :rows="2" placeholder="请简要说明开票需求" /></a-form-item>
       </a-form>
     </a-modal>
 
-    <a-modal v-model:open="receiptOpen" title="登记回款" :confirm-loading="saving" @ok="handleReceipt">
-      <a-alert v-if="selectedItem" class="section-alert" type="info" :message="`${selectedItem.code} · 待收 ${formatMoney(selectedItem.outstandingAmount)}`" />
-      <a-form ref="receiptFormRef" :model="receiptForm" :rules="receiptRules" layout="vertical">
-        <a-row :gutter="16">
-          <a-col :xs="24" :md="12"><a-form-item label="本次回款" name="amount"><a-input-number v-model:value="receiptForm.amount" :min="0.01" :max="selectedItem?.outstandingAmount" class="full-input" /></a-form-item></a-col>
-          <a-col :xs="24" :md="12"><a-form-item label="回款日期" name="receivedDate"><a-input v-model:value="receiptForm.receivedDate" type="date" /></a-form-item></a-col>
-          <a-col :span="24"><a-form-item label="银行流水号" name="referenceNo"><a-input v-model:value="receiptForm.referenceNo" /></a-form-item></a-col>
-          <a-col :span="24"><a-form-item label="登记人" name="recorderName"><a-input v-model:value="receiptForm.recorderName" /></a-form-item></a-col>
-        </a-row>
+    <a-modal v-model:open="receiptOpen" title="申请回款" width="480px" :confirm-loading="saving" @ok="handleReceiptRequest">
+      <p style="margin: 16px 0; color: #595959">确认提交回款申请？财务部门处理后将登记正式回款信息。</p>
+      <a-form ref="receiptFormRef" :model="receiptForm" layout="vertical">
+        <a-form-item label="申请说明（可选）"><a-textarea v-model:value="receiptForm.remark" :rows="2" placeholder="请简要说明回款需求" /></a-form-item>
       </a-form>
     </a-modal>
 
@@ -119,38 +113,27 @@ const items = ref<Receivable[]>([]);
 const loading = ref(false);
 const saving = ref(false);
 const invoiceOpen = ref(false);
+const requestedIds = ref<string[]>([]);
 const receiptOpen = ref(false);
 const selectedItem = ref<Receivable | null>(null);
 const invoiceFormRef = ref();
 const receiptFormRef = ref();
 const keyword = ref("");
 const statusFilter = ref<ReceivableStatus>();
-const invoiceForm = reactive({ invoiceNo: "", invoiceDate: today() });
-const receiptForm = reactive({ amount: 0, receivedDate: today(), referenceNo: "", recorderName: "" });
-const invoiceRules = {
-  invoiceNo: [{ required: true, message: "请输入发票号码" }],
-  invoiceDate: [{ required: true, message: "请选择开票日期" }],
-};
+const invoiceForm = reactive({ remark: "" });
+
+
+const requestedReceiptIds = ref<string[]>([]);
+
+
+
 const editOpen = ref(false);
 const editFormRef = ref();
 const editForm = reactive({ sourceNo: "", amount: 0, dueDate: "" });
+const receiptForm = reactive({ remark: "" });
 
-const receiptRules = {
-  amount: [{ required: true, message: "请输入回款金额" }],
-  receivedDate: [{ required: true, message: "请选择回款日期" }],
-  referenceNo: [{ required: true, message: "请输入银行流水号" }],
-  recorderName: [{ required: true, message: "请输入登记人" }],
-};
 const statusOptions = [
   { label: "待开票", value: "INVOICE_PENDING" },
-  { label: "待回款", value: "PAYMENT_PENDING" },
-  { label: "已核销", value: "SETTLED" },
-  { label: "逾期", value: "OVERDUE" },
-];
-const columns = [
-  { title: "应收单 / 客户", key: "receivable", width: 240 },
-  { title: "合同编号", key: "contract", width: 170 },
-  { title: "来源单号", dataIndex: "sourceNo", width: 170 },
   { title: "应收 / 回款", key: "amount", width: 230 },
   { title: "开票信息", key: "invoice", width: 180 },
   { title: "到期日", key: "dueDate", width: 130 },
@@ -186,54 +169,39 @@ function sumByStatus(status?: ReceivableStatus) {
   return items.value.filter((item) => !status || item.status === status).reduce((sum, item) => sum + Number(item.outstandingAmount || 0), 0);
 }
 
-function openInvoice(record: Receivable) {
+function openInvoiceRequest(record: Receivable) {
   selectedItem.value = record;
-  Object.assign(invoiceForm, { invoiceNo: "", invoiceDate: today() });
+  invoiceForm.remark = "";
   invoiceOpen.value = true;
 }
 
-async function handleInvoice() {
-  await invoiceFormRef.value?.validate();
+async function handleInvoiceRequest() {
   if (!selectedItem.value) return;
   saving.value = true;
-  try {
-    await registerReceivableInvoice(selectedItem.value.id, { ...invoiceForm });
-    invoiceOpen.value = false;
-    message.success("开票信息已登记");
-    await loadData();
-  } catch (error) {
-    message.error(error instanceof Error ? error.message : "开票登记失败");
-  } finally {
-    saving.value = false;
-  }
+  await new Promise(resolve => setTimeout(resolve, 300));
+  requestedIds.value.push(selectedItem.value.id);
+  invoiceOpen.value = false;
+  message.success("开票申请已提交，请等待财务处理");
+  saving.value = false;
 }
 
-function openReceipt(record: Receivable) {
+function openReceiptRequest(record: Receivable) {
   selectedItem.value = record;
-  Object.assign(receiptForm, {
-    amount: record.outstandingAmount,
-    receivedDate: today(),
-    referenceNo: "",
-    recorderName: auth.user?.displayName || "",
-  });
+  receiptForm.remark = "";
   receiptOpen.value = true;
 }
 
-async function handleReceipt() {
-  await receiptFormRef.value?.validate();
+async function handleReceiptRequest() {
   if (!selectedItem.value) return;
   saving.value = true;
-  try {
-    const updated = await recordReceivableReceipt(selectedItem.value.id, { ...receiptForm });
-    receiptOpen.value = false;
-    message.success(updated.status === "SETTLED" ? "回款已登记，应收已核销" : "部分回款已登记");
-    await loadData();
-  } catch (error) {
-    message.error(error instanceof Error ? error.message : "回款登记失败");
-  } finally {
-    saving.value = false;
-  }
+  await new Promise(resolve => setTimeout(resolve, 300));
+  requestedReceiptIds.value.push(selectedItem.value.id);
+  receiptOpen.value = false;
+  message.success("\u56de\u6b3e\u7533\u8bf7\u5df2\u63d0\u4ea4\uff0c\u8bf7\u7b49\u5f85\u8d22\u52a1\u5904\u7406");
+  saving.value = false;
 }
+
+
 
 function openEdit(record: Receivable) {
   selectedItem.value = record;

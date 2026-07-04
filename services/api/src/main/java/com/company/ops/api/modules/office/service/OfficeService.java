@@ -16,6 +16,7 @@ import com.company.ops.api.modules.office.domain.ExpenseType;
 import com.company.ops.api.modules.office.domain.OutsourceOrder;
 import com.company.ops.api.modules.office.domain.OutsourceStatus;
 import com.company.ops.api.modules.office.domain.SystemNotification;
+import com.company.ops.api.modules.office.dto.OfficeDtos.AuditResponse;
 import com.company.ops.api.modules.office.dto.OfficeDtos.ApprovalActionResponse;
 import com.company.ops.api.modules.office.dto.OfficeDtos.ApprovalResponse;
 import com.company.ops.api.modules.office.dto.OfficeDtos.CompleteOutsourceRequest;
@@ -47,6 +48,8 @@ import com.company.ops.api.modules.project.domain.ProjectCostSource;
 import com.company.ops.api.modules.project.dto.CreateProjectCostRequest;
 import com.company.ops.api.modules.project.repository.ProjectRepository;
 import com.company.ops.api.modules.project.service.ProjectService;
+import com.company.ops.api.modules.system.domain.SystemAuditLog;
+import com.company.ops.api.modules.system.repository.SystemAuditLogRepository;
 import com.company.ops.api.modules.system.repository.SystemUserRepository;
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -84,6 +87,7 @@ public class OfficeService {
   private final ProjectService projectService;
   private final SystemUserRepository userRepository;
   private final LedgerService ledgerService;
+  private final SystemAuditLogRepository auditLogRepository;
   private final Path storageRoot;
 
   public OfficeService(ApprovalRequestRepository approvalRepository, ApprovalActionRepository actionRepository,
@@ -91,7 +95,7 @@ public class OfficeService {
                        DocumentFileRepository documentRepository, SystemNotificationRepository notificationRepository,
                        SupplierRepository supplierRepository,
                        ProjectRepository projectRepository, WorkOrderRepository workOrderRepository,
-                       ProjectService projectService, SystemUserRepository userRepository, LedgerService ledgerService,
+                       ProjectService projectService, SystemUserRepository userRepository, LedgerService ledgerService, SystemAuditLogRepository auditLogRepository,
                        @Value("${ops.storage.local-path:.local-data/uploads}") String storagePath) {
     this.approvalRepository = approvalRepository; this.actionRepository = actionRepository;
     this.expenseRepository = expenseRepository; this.outsourceRepository = outsourceRepository;
@@ -100,6 +104,7 @@ public class OfficeService {
     this.projectRepository = projectRepository; this.workOrderRepository = workOrderRepository;
     this.projectService = projectService; this.userRepository = userRepository;
     this.ledgerService = ledgerService;
+    this.auditLogRepository = auditLogRepository;
     this.storageRoot = Path.of(storagePath).toAbsolutePath().normalize();
   }
 
@@ -389,7 +394,20 @@ public class OfficeService {
     return (int) count;
   }
 
-  public java.util.List listAudits() {
+  @Transactional(readOnly = true)
+  public List<AuditResponse> listAudits() {
+    return auditLogRepository.findAllByOrderByCreatedAtDesc().stream()
+        .map(item -> new AuditResponse(
+            item.getId(),
+            item.getUsername(),
+            item.getHttpMethod(),
+            item.getRequestPath(),
+            item.getResponseStatus(),
+            item.getClientIp(),
+            item.getDurationMs(),
+            item.getCreatedAt()
+        ))
+        .toList();
   }
 
 
@@ -406,17 +424,5 @@ public class OfficeService {
   private Map<UUID, Supplier> supplierMap(List<UUID> ids) { return ids.isEmpty() ? Map.of() : supplierRepository.findAllById(ids.stream().distinct().toList()).stream().collect(Collectors.toMap(Supplier::getId, Function.identity())); }
   private Map<UUID, Project> projectMap(List<UUID> ids) { return ids.isEmpty() ? Map.of() : projectRepository.findAllById(ids.stream().distinct().toList()).stream().collect(Collectors.toMap(Project::getId, Function.identity())); }
   private Map<UUID, WorkOrder> workOrderMap(List<UUID> ids) { return ids.isEmpty() ? Map.of() : workOrderRepository.findAllById(ids.stream().distinct().toList()).stream().collect(Collectors.toMap(WorkOrder::getId, Function.identity())); }
-}
-
-  public int refreshNotifications() {
-    long count = approvalRepository.findAll().stream()
-        .filter(a -> a.getStatus() == com.company.ops.api.modules.office.domain.ApprovalStatus.PENDING)
-        .count();
-    return (int) count;
-  }
-
-  public java.util.List listAudits() {
-    return java.util.List.of();
-  }
 
 }

@@ -1,7 +1,5 @@
 package com.company.ops.api.modules.bi.service;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import com.company.ops.api.modules.bi.dto.BiDtos.*;
 import com.company.ops.api.modules.crm.domain.*;
 import com.company.ops.api.modules.crm.repository.*;
@@ -27,7 +25,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class BiService {
-  private static final Logger log = LoggerFactory.getLogger(BiService.class);
   private final CustomerRepository customers;
   private final ServiceContractRepository contracts;
   private final ReceivableRepository receivables;
@@ -62,7 +59,6 @@ public class BiService {
 
   @Transactional(readOnly = true)
   public ExecutiveDashboard dashboard() {
-    try {
     List<Customer> customerRows = customers.findAllByOrderByCreatedAtDesc();
     List<ServiceContract> contractRows = contracts.findAllByOrderByEndDateAsc();
     List<Receivable> receivableRows = receivables.findAllByOrderByDueDateAsc();
@@ -105,10 +101,6 @@ public class BiService {
         customerProfits(customerRows, contractRows, receivableRows, orderRows),
         equipmentPerformance(customerRows, orderRows),
         workforcePerformance(orderRows));
-    } catch (Exception e) {
-      log.error("Dashboard query failed", e);
-      throw new RuntimeException(e);
-    }
   }
 
   private List<MonthlyTrend> monthlyTrends() {
@@ -120,17 +112,17 @@ public class BiService {
       BigDecimal revenue = BigDecimal.ZERO, expense = BigDecimal.ZERO,
           cashIn = BigDecimal.ZERO, cashOut = BigDecimal.ZERO;
       for (AccountingVoucher voucher : voucherRows) {
-        if (voucher.getVoucherDate() == null || !YearMonth.from(voucher.getVoucherDate()).equals(month))
+        if (!YearMonth.from(voucher.getVoucherDate()).equals(month))
           continue;
         for (AccountingEntry entry : entries.findByVoucherIdOrderByCreatedAtAsc(voucher.getId())) {
-          if ("1002".equals(entry.getAccountCode())) {
+          if (entry.getAccountCode().equals("1002")) {
             cashIn = cashIn.add(amount(entry.getDebit()));
             cashOut = cashOut.add(amount(entry.getCredit()));
           }
-          if (entry.getAccountCode() != null && entry.getAccountCode().startsWith("6")
+          if (entry.getAccountCode().startsWith("6")
               && entry.getAccountCode().compareTo("6400") < 0)
             revenue = revenue.add(amount(entry.getCredit()).subtract(amount(entry.getDebit())));
-          if (entry.getAccountCode() != null && entry.getAccountCode().startsWith("6")
+          if (entry.getAccountCode().startsWith("6")
               && entry.getAccountCode().compareTo("6400") >= 0)
             expense = expense.add(amount(entry.getDebit()).subtract(amount(entry.getCredit())));
         }

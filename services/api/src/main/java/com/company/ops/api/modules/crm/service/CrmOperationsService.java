@@ -44,6 +44,7 @@ import com.company.ops.api.modules.crm.repository.ContractChangeRequestRepositor
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ContractChangeResponse;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.CreateContractChangeRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ApprovalActionRequest;
+import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.UpdateContractRequest;
 
 
 import com.company.ops.api.modules.crm.repository.OpportunityRepository;
@@ -1056,7 +1057,7 @@ public class CrmOperationsService {
         .orElseThrow(() -> new BusinessException("\u5546\u673a\u4e0d\u5b58\u5728"));
     if (request.customerId() != null) opp.setCustomerId(request.customerId());
     if (request.needSummary() != null) opp.setNeedSummary(request.needSummary());
-    if (request.expectedAmount() != null) opp.setExpectedAmount(BigDecimal.valueOf(request.expectedAmount()));
+    if (request.expectedAmount() != null) opp.setExpectedAmount(request.expectedAmount());
     if (request.nextAction() != null) opp.setNextAction(request.nextAction());
     if (request.nextActionAt() != null) opp.setNextActionAt(request.nextActionAt());
     if (request.ownerName() != null) opp.setOwnerName(request.ownerName());
@@ -1071,8 +1072,8 @@ public class CrmOperationsService {
     if (request.contractType() != null) contract.setContractType(request.contractType());
     if (request.amount() != null) contract.setAmount(request.amount());
     if (request.serviceCycle() != null) contract.setServiceCycle(request.serviceCycle());
-    if (request.startDate() != null) contract.setStartDate(request.startDate());
-    if (request.endDate() != null) contract.setEndDate(request.endDate());
+    if (request.startDate() != null) contract.setStartDate(LocalDate.parse(request.startDate()));
+    if (request.endDate() != null) contract.setEndDate(LocalDate.parse(request.endDate()));
     return toContract(contractRepository.save(contract), customerMap(nullableId(contract.getCustomerId())));
   }
 

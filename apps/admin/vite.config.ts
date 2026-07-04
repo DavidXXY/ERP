@@ -4,7 +4,22 @@ import { fileURLToPath, URL } from "node:url";
 
 export default defineConfig({
   cacheDir: "../../node_modules/.vite-admin",
-  plugins: [vue()],
+  plugins: [
+    vue(),
+    {
+      name: "favicon-redirect",
+      configureServer(server) {
+        server.middlewares.use((req, res, next) => {
+          if (req.url === "/favicon.ico") {
+            res.writeHead(302, { Location: "/favicon.svg" });
+            res.end();
+            return;
+          }
+          next();
+        });
+      },
+    },
+  ],
   build: {
     rolldownOptions: {
       output: {
@@ -12,17 +27,17 @@ export default defineConfig({
           groups: [
             {
               name: "vue-vendor",
-              test: /node_modules[\\/](?:vue|vue-router|pinia)[\\/]/,
+              test: /node_modules[\/](?:vue|vue-router|pinia)[\/]/,
               priority: 30,
             },
             {
               name: "ant-design-vendor",
-              test: /node_modules[\\/](?:ant-design-vue|@ant-design)[\\/]/,
+              test: /node_modules[\/](?:ant-design-vue|@ant-design)[\/]/,
               priority: 20,
             },
             {
               name: "vendor",
-              test: /node_modules[\\/]/,
+              test: /node_modules[\/]/,
               priority: 10,
               maxSize: 450_000,
             },

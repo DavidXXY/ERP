@@ -72,6 +72,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { message } from "ant-design-vue";
+import { ReloadOutlined } from "@ant-design/icons-vue";
 import { getHrAnalytics, type HrAnalytics } from "@/api/hr";
 
 const analytics = ref<HrAnalytics>({

@@ -133,8 +133,8 @@
           <a-col :span="12"><a-form-item label="最高学历"><a-switch v-model:checked="eduForm.highest" /></a-form-item></a-col>
         </a-row>
         <a-row :gutter="14">
-          <a-col :span="12"><a-form-item label="开始日期"><a-input v-model:value="eduForm.startDate" type="date" /></a-form-item></a-col>
-          <a-col :span="12"><a-form-item label="结束日期"><a-input v-model:value="eduForm.endDate" type="date" /></a-form-item></a-col>
+          <a-col :span="12"><a-form-item label="开始日期"><a-date-picker v-model:value="eduForm.startDate" value-format="YYYY-MM-DD" style="width:100%" /></a-form-item></a-col>
+          <a-col :span="12"><a-form-item label="结束日期"><a-date-picker v-model:value="eduForm.endDate" value-format="YYYY-MM-DD" style="width:100%" /></a-form-item></a-col>
         </a-row>
         <a-form-item label="备注"><a-textarea v-model:value="eduForm.remark" :rows="2" /></a-form-item>
       </a-form>
@@ -149,8 +149,8 @@
         </a-row>
         <a-form-item label="职位"><a-input v-model:value="workForm.position" /></a-form-item>
         <a-row :gutter="14">
-          <a-col :span="12"><a-form-item label="开始日期"><a-input v-model:value="workForm.startDate" type="date" /></a-form-item></a-col>
-          <a-col :span="12"><a-form-item label="结束日期"><a-input v-model:value="workForm.endDate" type="date" /></a-form-item></a-col>
+          <a-col :span="12"><a-form-item label="开始日期"><a-date-picker v-model:value="workForm.startDate" value-format="YYYY-MM-DD" style="width:100%" /></a-form-item></a-col>
+          <a-col :span="12"><a-form-item label="结束日期"><a-date-picker v-model:value="workForm.endDate" value-format="YYYY-MM-DD" style="width:100%" /></a-form-item></a-col>
         </a-row>
         <a-form-item label="工作描述"><a-textarea v-model:value="workForm.description" :rows="3" /></a-form-item>
         <a-form-item label="备注"><a-textarea v-model:value="workForm.remark" :rows="2" /></a-form-item>
@@ -178,7 +178,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
 import { useRoute } from "vue-router";
-import { message } from "ant-design-vue";
+import { message, DatePicker } from "ant-design-vue";
 import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined } from "@ant-design/icons-vue";
 import { useAuthStore } from "@/stores/auth";
 import {

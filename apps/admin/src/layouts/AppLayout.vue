@@ -120,6 +120,14 @@
           <a-menu-item v-if="auth.can('system:role:view')" key="/system/roles">角色管理</a-menu-item>
           <a-menu-item v-if="auth.can('system:permission:view')" key="/system/permissions">权限管理</a-menu-item>
         </a-sub-menu>
+        <a-sub-menu key="self">
+          <template #icon><UserOutlined /></template>
+          <template #title>员工自助</template>
+          <a-menu-item key="/self">我的工作台</a-menu-item>
+          <a-menu-item key="/self/profile">我的档案</a-menu-item>
+          <a-menu-item key="/self/leaves">我的请假</a-menu-item>
+          <a-menu-item key="/self/balances">我的额度</a-menu-item>
+        </a-sub-menu>
       </a-menu>
       </a-layout-sider>
 

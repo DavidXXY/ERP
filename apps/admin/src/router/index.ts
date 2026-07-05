@@ -10,6 +10,11 @@ import EmployeeLifecycleView from "@/views/hr/EmployeeLifecycleView.vue";
 import LeaveManagementView from "@/views/hr/LeaveManagementView.vue";
 import HrAnalyticsView from "@/views/hr/HrAnalyticsView.vue";
 import LeaveBalanceView from "@/views/hr/LeaveBalanceView.vue";
+import SelfDashboardView from "@/views/self/SelfDashboardView.vue";
+import SelfProfileView from "@/views/self/SelfProfileView.vue";
+import SelfLeaveSubmitView from "@/views/self/SelfLeaveSubmitView.vue";
+import SelfLeaveHistoryView from "@/views/self/SelfLeaveHistoryView.vue";
+import SelfBalanceView from "@/views/self/SelfBalanceView.vue";
 import HumanResourcesView from "@/views/hr/HumanResourcesView.vue";
 import LoginView from "@/views/system/LoginView.vue";
 import SystemHealthView from "@/views/system/SystemHealthView.vue";
@@ -120,3 +125,33 @@ router.beforeEach(async (to) => {
 });
 
 export default router;
+      {
+        path: "self",
+        name: "self-dashboard",
+        component: SelfDashboardView,
+        meta: { title: "我的工作台" },
+      },
+      {
+        path: "self/profile",
+        name: "self-profile",
+        component: SelfProfileView,
+        meta: { title: "我的档案" },
+      },
+      {
+        path: "self/leaves",
+        name: "self-leaves",
+        component: SelfLeaveHistoryView,
+        meta: { title: "我的请假" },
+      },
+      {
+        path: "self/leaves/new",
+        name: "self-leave-new",
+        component: SelfLeaveSubmitView,
+        meta: { title: "提交请假" },
+      },
+      {
+        path: "self/balances",
+        name: "self-balances",
+        component: SelfBalanceView,
+        meta: { title: "我的额度" },
+      },

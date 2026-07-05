@@ -65,7 +65,7 @@
         <a-row :gutter="14">
           <a-col :span="12">
             <a-form-item label="生效日期" name="effectiveDate" :rules="requiredRule">
-              <a-input v-model:value="lcForm.effectiveDate" type="date" />
+              <a-date-picker v-model:value="lcForm.effectiveDate" value-format="YYYY-MM-DD" style="width:100%" />
             </a-form-item>
           </a-col>
           <a-col :span="12" v-if="lcForm.lifecycleType === 'TRANSFER'">
@@ -110,7 +110,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
-import { message } from "ant-design-vue";
+import { message, DatePicker } from "ant-design-vue";
 import { PlusOutlined, ReloadOutlined, ArrowRightOutlined } from "@ant-design/icons-vue";
 import { useAuthStore } from "@/stores/auth";
 import { listQualificationEmployees, type QualificationEmployee } from "@/api/qualification";

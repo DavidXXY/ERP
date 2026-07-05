@@ -277,3 +277,34 @@ export function importEmployeesExcel(file: File, operatorName?: string) {
   if (operatorName) form.append("operatorName", operatorName);
   return request<{ success: number; fail: number; errors: string[] }>({ method: "POST", url: "/hr/import/employees", data: form });
 }
+
+
+// ====== Self-Service ======
+export function getSelfProfile() {
+  return request<EmployeeDetail>({ method: "GET", url: "/hr/self/profile" });
+}
+export function getSelfLeaveBalances() {
+  return request<LeaveBalanceRecord[]>({ method: "GET", url: "/hr/self/leave-balances" });
+}
+export function getSelfLeaves() {
+  return request<LeaveRecord[]>({ method: "GET", url: "/hr/self/leaves" });
+}
+export function createSelfLeave(data: LeavePayload) {
+  return request<LeaveRecord>({ method: "POST", url: "/hr/self/leaves", data });
+}
+
+export function getSelfEducations() {
+  return request<EducationRecord[]>({ method: "GET", url: "/hr/self/educations" });
+}
+export function getSelfWorkExperiences() {
+  return request<WorkExperienceRecord[]>({ method: "GET", url: "/hr/self/work-experiences" });
+}
+export function getSelfEmergencyContacts() {
+  return request<EmergencyContactRecord[]>({ method: "GET", url: "/hr/self/emergency-contacts" });
+}
+export function getSelfCertificates() {
+  return request<PersonnelCertificate[]>({ method: "GET", url: "/hr/self/certificates" });
+}
+export function getSelfContracts() {
+  return request<EmployeeContract[]>({ method: "GET", url: "/hr/self/contracts" });
+}

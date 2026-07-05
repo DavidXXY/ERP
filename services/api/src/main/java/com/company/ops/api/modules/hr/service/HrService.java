@@ -15,7 +15,14 @@ import com.company.ops.api.modules.hr.repository.EmployeeWorkExperienceRepositor
 import com.company.ops.api.modules.hr.repository.LeaveBalanceRepository;
 import com.company.ops.api.modules.hr.repository.LeaveRequestRepository;
 import com.company.ops.api.modules.qualification.domain.QualificationEmployee;
+import com.company.ops.api.modules.qualification.domain.PersonnelCertificate;
+import com.company.ops.api.modules.qualification.domain.EmployeeContract;
+import com.company.ops.api.modules.qualification.dto.QualificationDtos.Attachment;
+import com.company.ops.api.modules.qualification.dto.QualificationDtos.EmployeeContractResponse;
+import com.company.ops.api.modules.qualification.dto.QualificationDtos.PersonnelCertificateResponse;
 import com.company.ops.api.modules.qualification.repository.QualificationEmployeeRepository;
+import com.company.ops.api.modules.qualification.repository.PersonnelCertificateRepository;
+import com.company.ops.api.modules.qualification.repository.EmployeeContractRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,6 +42,8 @@ public class HrService {
     private final EmergencyContactRepository emergencyContactRepository;
     private final EmployeeLifecycleRecordRepository lifecycleRepository;
     private final LeaveRequestRepository leaveRequestRepository;
+    private final PersonnelCertificateRepository personnelCertificateRepository;
+    private final EmployeeContractRepository employeeContractRepository;
     private final LeaveBalanceRepository leaveBalanceRepository;
 
     public HrService(QualificationEmployeeRepository employeeRepository,
@@ -43,7 +52,9 @@ public class HrService {
                      EmergencyContactRepository emergencyContactRepository,
                      EmployeeLifecycleRecordRepository lifecycleRepository,
                      LeaveRequestRepository leaveRequestRepository,
-                     LeaveBalanceRepository leaveBalanceRepository) {
+                     LeaveBalanceRepository leaveBalanceRepository,
+                     PersonnelCertificateRepository personnelCertificateRepository,
+                     EmployeeContractRepository employeeContractRepository) {
         this.employeeRepository = employeeRepository;
         this.educationRepository = educationRepository;
         this.workExperienceRepository = workExperienceRepository;
@@ -51,6 +62,8 @@ public class HrService {
         this.lifecycleRepository = lifecycleRepository;
         this.leaveRequestRepository = leaveRequestRepository;
         this.leaveBalanceRepository = leaveBalanceRepository;
+        this.personnelCertificateRepository = personnelCertificateRepository;
+        this.employeeContractRepository = employeeContractRepository;
     }
 
     private QualificationEmployee findEmployee(UUID id) {
@@ -309,7 +322,58 @@ public class HrService {
     }
 
 
-    // ====== Leave Balance ======
+
+    // ====== Self Service helpers ======
+    @Transactional(readOnly = true)
+    public EmployeeDetailResponse getEmployeeDetail(UUID employeeId) {
+        var emp = findEmployee(employeeId);
+        var contracts = employeeContractRepository.findByEmployeeIdOrderByStartDateDesc(employeeId)
+            .stream().map(this::toContractResponse).toList();
+        var certs = personnelCertificateRepository.findByEmployeeIdOrderByNameAsc(employeeId)
+            .stream().map(this::toCertResponse).toList();
+        var empResp = toEmployeeResponse(emp);
+        return new EmployeeDetailResponse(empResp, contracts, certs);
+    }
+        
+    // ====== Self-service certificate & contract helpers ======
+    private PersonnelCertificateResponse toCertResponse(PersonnelCertificate c) {
+        String status; Long daysLeft = null;
+        if (c.getValidTo() != null) {
+            daysLeft = java.time.temporal.ChronoUnit.DAYS.between(java.time.LocalDate.now(), c.getValidTo());
+            if (daysLeft < 0) status = "EXPIRED";
+            else if (daysLeft <= 180) status = "EXPIRING";
+            else status = "VALID";
+        } else status = "VALID";
+        List<Attachment> atts = new java.util.ArrayList<>();
+        try { var arr = objectMapper.readValue(c.getAttachmentsJson(), Attachment[].class); atts = java.util.Arrays.asList(arr); } catch (Exception ignored) {}
+        return new PersonnelCertificateResponse(c.getId(), c.getEmployee().getId(), c.getEmployee().getName(),
+            c.getName(), c.getType(), c.getCertificateNo(), c.getSpecialty(), c.isCompanyRegistered(),
+            c.getIssueDate(), c.getValidTo(), c.getReviewDate(), c.isAvailableForTender(), c.getManualStatus(),
+            c.isLocked(), atts, c.getRemark(), status, daysLeft);
+    }
+
+    private EmployeeContractResponse toContractResponse(EmployeeContract c) {
+        Long daysLeft = c.getEndDate() != null ? java.time.temporal.ChronoUnit.DAYS.between(java.time.LocalDate.now(), c.getEndDate()) : null;
+        List<Attachment> atts = new java.util.ArrayList<>();
+        try { var arr = objectMapper.readValue(c.getAttachmentsJson(), Attachment[].class); atts = java.util.Arrays.asList(arr); } catch (Exception ignored) {}
+        return new EmployeeContractResponse(c.getId(), c.getEmployee().getId(), c.getContractNo(),
+            c.getContractType(), c.getSignDate(), c.getStartDate(), c.getEndDate(), c.getProbationEndDate(),
+            c.getStatus(), atts, c.getRemark(), daysLeft);
+    }
+
+    @Transactional(readOnly = true)
+    public List<PersonnelCertificateResponse> listEmployeeCertificates(UUID employeeId) {
+        return personnelCertificateRepository.findByEmployeeIdOrderByNameAsc(employeeId)
+            .stream().map(this::toCertResponse).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<EmployeeContractResponse> listEmployeeContracts(UUID employeeId) {
+        return employeeContractRepository.findByEmployeeIdOrderByStartDateDesc(employeeId)
+            .stream().map(this::toContractResponse).toList();
+    }
+
+        // ====== Leave Balance ======
     @Transactional(readOnly = true)
     public List<LeaveBalanceResponse> listBalances(UUID employeeId) {
         return leaveBalanceRepository.findByEmployeeIdOrderByLeaveTypeAsc(employeeId)

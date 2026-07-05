@@ -62,12 +62,12 @@
         <a-row :gutter="14">
           <a-col :span="8">
             <a-form-item label="开始日期" name="startDate" :rules="requiredRule">
-              <a-input v-model:value="leaveForm.startDate" type="date" @change="calcDays" />
+              <a-date-picker v-model:value="leaveForm.startDate" value-format="YYYY-MM-DD" style="width:100%" @change="calcDays" />
             </a-form-item>
           </a-col>
           <a-col :span="8">
             <a-form-item label="结束日期" name="endDate" :rules="requiredRule">
-              <a-input v-model:value="leaveForm.endDate" type="date" @change="calcDays" />
+              <a-date-picker v-model:value="leaveForm.endDate" value-format="YYYY-MM-DD" style="width:100%" @change="calcDays" />
             </a-form-item>
           </a-col>
           <a-col :span="8">
@@ -95,7 +95,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
-import { message } from "ant-design-vue";
+import { message, DatePicker } from "ant-design-vue";
 import { PlusOutlined, ReloadOutlined } from "@ant-design/icons-vue";
 import { useAuthStore } from "@/stores/auth";
 import { listQualificationEmployees, type QualificationEmployee } from "@/api/qualification";

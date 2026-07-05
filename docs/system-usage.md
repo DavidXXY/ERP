@@ -562,3 +562,179 @@ npm run admin:dev
 - **前端**：`unplugin-vue-components` 自动按需注册 Ant Design Vue 组件，`main.ts` 从 91 行精简至 13 行
 - **安全**：CRM 删除权限从手动 ADMIN 角色检查改为声明式 `@PreAuthorize("hasAuthority('crm:*:delete')")`
 - **构建**：`vite build` 已修复 4 个模板语法错误，可正常产出生产包
+
+---
+> 财务模块功能更新：2026-07-05
+> 
+
+### 2.9 财务管理（增强版）
+
+#### 2.9.1 功能全景
+
+| 子模块 | 主要功能 | 交互方式 |
+|--------|----------|----------|
+| **指标仪表盘** | 应收/应付余额、逾期笔数、可用资金、凭证数、净利润、现金余额、预算节余、待批付款 | 动态指标卡（最高 12 个） |
+| **应收管理** | 应收列表、开票、回款登记、核销、日期筛选、CSV 导出 | 操作按钮 + 日期输入 + 下载 |
+| **应付管理** | 应付列表、申请付款（自动生成付款申请） | 操作按钮 + API 联动 |
+| **付款审批** | 付款申请列表、批准/拒绝、执行付款 | 三步骤操作（申请→审批→执行） |
+| **回款预测** | 按周预测未来 8 周回款金额 | 柱状图 + 到期笔数标注 |
+| **应收账龄** | 0-30 / 31-60 / 61-90 / 90+ 天分布 | 金额 + 占比标签 |
+| **总账凭证** | 会计凭证列表、分录详情展开 | 点击凭证行展开分录明细表 |
+| **财务报表** | 资产总计、负债总计、总收入、总费用、净利润、净现金流 | 指标卡片式展示 |
+| **凭证生成** | 从业务线索一键生成草稿凭证 | "生成凭证"操作按钮 |
+| **审计日志** | 操作时间轴（开票/回款/核销/付款/审批/凭证/关账） | 最近 30 条滚动展示 |
+| **会计期间** | 当前期间显示、关账按钮、关账状态指示 | 顶部面板 |
+| **付款统计** | 按付款方式分布（银行转账/支票/现金/微信/支付宝） | 标签统计 |
+
+#### 2.9.2 指标卡说明
+
+财务页面顶部展示动态指标卡，当后端可用时最多展示 12 个：
+
+| 指标 | 计算公式 / 数据源 | 颜色规则 |
+|------|-------------------|----------|
+| 应收余额 | `GET /finance/overview → receivableOutstanding` | 黄色预警 |
+| 应付余额 | `GET /finance/payables → payables.filter(status!=已付款)` | 蓝色信息 |
+| 本月核销 | 硬编码模拟 | 绿色（82% 回款率） |
+| 应收逾期 | `receivables.filter(status=逾期).length` | 红色危险 |
+| 应付逾期 | `payables.filter(status=逾期).length` | 红色危险 |
+| 可用资金 | 应收余额 - 应付余额 + 本月核销 | 蓝色信息 |
+| 凭证数（后端可用时） | `GET /finance/ledger/overview → voucherCount` | 蓝色信息 |
+| 净利润（后端可用时） | `GET /finance/ledger/overview → profit` | 盈利绿/亏损红 |
+| 现金余额（后端可用时） | `GET /finance/ledger/overview → cashBalance` | 蓝色信息 |
+| 预算节余 | 项目预算汇总 - 项目成本汇总 | 结余绿/超支红 |
+| 待批付款（有数据时） | `paymentApps.filter(status=PENDING).length` | 黄色预警 |
+
+#### 2.9.3 应收操作流程
+
+```
+应收列表 → 待开票 → 点击"开票" → POST /api/finance/receivables/{id}/invoice
+          → 待回款 → 点击"回款登记" → POST /api/finance/receivables/{id}/receipts
+          → 待回款/逾期 → 点击"核销" → 本地状态更新
+          → 日期筛选 → filterDateStart / filterDateEnd 输入框
+          → CSV导出 → 生成 UTF-8 BOM CSV 文件下载
+```
+
+**日期筛选：** 应收/应付面板顶部嵌入两个 date 输入框 + 清除按钮，联动 `filterDateStart` / `filterDateEnd` 状态，筛选结果实时响应。
+
+**CSV 导出：** 点击"导出CSV"按钮，当前 `receivables` 数组 → 拼装 BOM + header + rows → Blob → URL.createObjectURL → 自动下载 `应收款.csv`。
+
+#### 2.9.4 付款全流程
+
+```
+应付列表 → 点击"申请付款" → createPaymentApplication API
+  → 付款管理面板（待审批状态）
+    ├─ 点击"批准" → POST /api/finance/payment-applications/{id}/approval (decision=APPROVED)
+    │  → 状态变为"已批准"
+    │  → 点击"执行付款" → POST /api/finance/payment-applications/{id}/payment
+    │  → 状态变为"已付款"，数据刷新
+    └─ 点击"拒绝" → POST /api/finance/payment-applications/{id}/approval (decision=REJECTED)
+      → 状态变为"已拒绝"
+```
+
+#### 2.9.5 总账面板
+
+总账面板为右侧三栏切换面板（mini-action 按钮组）：
+
+| 标签 | 组件 | 数据源 | 说明 |
+|------|------|--------|------|
+| 会计凭证 | `VoucherPanel` | `GET /finance/ledger/vouchers` | 凭证列表 + 点击展开分录明细 |
+| 财务报表 | `FinancialStatementsPanel` | `GET /finance/ledger/statements` | 资产/负债/收入/费用/利润/现金流 |
+| 付款管理 | `PaymentApplicationsPanel` | `GET /finance/payment-applications` | 待批/已批/已付列表 + 操作按钮 |
+
+**凭证详情展开：** 点击凭证行 → 展开分录明细表格（科目编码、科目名称、借方、贷方、摘要），再次点击收起。
+
+**付款方式统计：** 付款管理面板顶部统计各付款方式笔数（银行转账/支票/现金/微信/支付宝），从 `paymentRecords` 中实时计算。
+
+#### 2.9.6 凭证生成
+
+业务线索面板（LedgerTable）新增"生成凭证"按钮：
+
+```
+业务线索 → 点击"生成凭证" → genVoucher(type, source, amount)
+  → 创建草稿凭证（DRAFT 状态）
+  → 追加到 vouchers 数组开头
+  → 推送到会计凭证面板
+```
+
+生成的凭证包含：自动编号 PZ-{timestamp}、业务类型、来源单号、当前日期、摘要、借贷金额。
+
+#### 2.9.7 回款预测
+
+模块：`ReceivableForecastPanel`
+
+基于应收款到期日自动预测未来 8 周回款：
+
+- 按周分组（起始日到 7 天后）
+- 统计每周到期笔数与金额
+- 柱状图可视化（宽度比例 = 金额 / 最大金额）
+- 顶部汇总：未来 8 周预计可回款总额、总笔数
+- 数据源：`receivables.filter(status !== "已核销")`
+
+#### 2.9.8 审计日志
+
+模块：`AuditLogPanel`
+
+自动记录所有财务操作的审计追踪：
+
+| 操作 | 触发源 | 日志内容 |
+|------|--------|----------|
+| 开票 | `handleInvoice` | "XXX 已开票" |
+| 回款 | `handleCollect` | "XXX 已回款登记" |
+| 核销 | `handleWriteOff` | "XXX 已核销" |
+| 付款申请 | `PayableList handlePay` | "付款申请已提交" |
+| 付款离线 | `PayableList handlePay` fallback | "XXX 标记付款" |
+| 凭证生成 | `LedgerTable genVoucher` | "PZ-XXX 服务收入" |
+| 付款批准 | `PaymentApplicationsPanel` | "XXX 已批准" |
+| 付款拒绝 | `PaymentApplicationsPanel` | "XXX 已拒绝" |
+| 付款执行 | `PaymentApplicationsPanel` | "XXX 已付款" |
+| 关账 | FinanceModule 关账按钮 | "会计期间 YYYY-MM 已关闭" |
+
+日志存储：`auditLog` 状态数组，上限 200 条自动裁剪，面板展示最近 30 条。
+
+#### 2.9.9 会计期间
+
+- 自动计算当前会计期间（YYYY-MM，从 `new Date()` 获取）
+- 关账状态指示（绿色"已关账" / 黄色"未关账"）
+- 关账按钮 → `setPeriodClosed(true)` + `logAudit("关账", ...)`
+- 关账后显示"数据已锁定"提示
+- 当前为前端状态管理，未联动后端期间表
+
+#### 2.9.10 侧边栏待批计数
+
+财务模块侧边栏按钮右上角显示红色圆形徽章，值为 `paymentApps.filter(status === "PENDING").length`。徽章在 `paymentApps` 变化时自动更新，0 时不显示。
+
+#### 2.9.11 概览页集成
+
+概览页面（OverviewModule）新增"待批付款"指标卡，数据源为 `paymentApps.filter(status === "PENDING").length`，与财务模块的待批付款卡一致。
+
+#### 2.9.12 预算节余计算
+
+预算节余 = 所有项目预算汇总 - 所有项目成本汇总。结余率为百分比，显示在指标卡 meta 区。
+
+#### 2.9.13 离线降级
+
+所有 API 调用均使用 `.catch(() => [])` 或 `.catch(() => null)` 保护。后端不可用时：
+- 财务数据降级到 `initialReceivables` / `initialPayables` mock 数据
+- ledger / payment 数据为空数组
+- 操作按钮使用本地状态更新
+- 不白屏、不报错
+
+#### 2.9.14 后端 API 清单
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/finance/overview` | 财务总览（应收/应付/逾期/现金流） |
+| GET | `/api/finance/receivables` | 应收列表 |
+| POST | `/api/finance/receivables/{id}/invoice` | 开票 |
+| POST | `/api/finance/receivables/{id}/receipts` | 回款登记 |
+| GET | `/api/finance/payables` | 应付列表 |
+| GET | `/api/finance/payment-applications` | 付款申请列表 |
+| POST | `/api/finance/payment-applications` | 新建付款申请 |
+| POST | `/api/finance/payment-applications/{id}/approval` | 审批付款申请 |
+| POST | `/api/finance/payment-applications/{id}/payment` | 执行付款 |
+| GET | `/api/finance/payments` | 付款记录列表 |
+| GET | `/api/finance/ledger/overview` | 总账概览 |
+| GET | `/api/finance/ledger/vouchers` | 会计凭证列表 |
+| GET | `/api/finance/ledger/statements` | 财务报表 |
+| POST | `/api/auth/login` | JWT 登录 |
+

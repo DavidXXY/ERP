@@ -267,7 +267,7 @@ const modules: Array<{
   { id: "supplychain", label: "供应链采购", group: "核心业务", icon: Truck },
   { id: "projects", label: "项目管理", group: "核心业务", icon: HardHat },
   { id: "inventory", label: "库存管理", group: "核心业务", icon: PackageCheck },
-  { id: "finance", label: "财务资金", group: "资金管控", icon: Coins },
+          { id: "finance", label: "财务资金", group: "资金管控", icon: Coins },
   { id: "hr", label: "组织人事", group: "底层支撑", icon: UsersRound },
   { id: "oa", label: "OA审批", group: "底层支撑", icon: ClipboardCheck },
   { id: "documents", label: "电子档案", group: "底层支撑", icon: FileArchive },
@@ -1059,6 +1059,11 @@ function App() {
   const [paymentRecords, setPaymentRecords] = useState<PaymentRecordResponse[]>([]);
   const [filterDateStart, setFilterDateStart] = useState("");
   const [filterDateEnd, setFilterDateEnd] = useState("");
+  const [auditLog, setAuditLog] = useState<Array<{id:string;time:string;user:string;action:string;detail:string;entity:string}>>([]);
+  const [isPeriodClosed, setPeriodClosed] = useState(false);
+  const logAudit = (action: string, detail: string, entity: string) => {
+    setAuditLog(prev => [{id:"LOG-"+Date.now(),time:new Date().toLocaleString("zh-CN"),user:"系统管理员",action,detail,entity}, ...prev].slice(0,200));
+  };
   const [voucherDetailId, setVoucherDetail] = useState<string | null>(null);
   const [selectedContractId, setSelectedContractId] = useState(contracts[0].id);
   const [selectedEquipmentId, setSelectedEquipmentId] = useState(equipment[1].id);
@@ -1150,6 +1155,7 @@ function App() {
           });
           setReceivables(mapped);
           pushEvent("应收开票", code + " 已开票", "good");
+          logAudit("开票", code + " 已开票", "Receivable");
         })
         .catch((err) => pushEvent("开票失败", err.message, "danger"));
     } else {
@@ -1183,6 +1189,7 @@ function App() {
           });
           setReceivables(mapped);
           pushEvent("回款登记", code + " 回款已登记", "good");
+          logAudit("回款", code + " 已回款登记", "Receivable");
         })
         .catch((err) => pushEvent("回款失败", err.message, "danger"));
     } else {
@@ -1206,6 +1213,7 @@ function App() {
       )
     );
     pushEvent("应收核销", code + " 已手动核销", "good");
+    logAudit("核销", code + " 已核销", "Receivable");
   }
 
 
@@ -1650,6 +1658,9 @@ function App() {
                     >
                       <Icon size={18} />
                       <span>{item.label}</span>
+                      {item.id === "finance" && paymentApps.filter(a => a.status === "PENDING").length > 0 && (
+                        <span style={{position:"absolute",top:"50%",right:8,transform:"translateY(-50%)",background:"#bd3f2f",color:"#fff",fontSize:10,borderRadius:8,minWidth:16,height:16,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 4px",lineHeight:1}}>{paymentApps.filter(a => a.status === "PENDING").length}</span>
+                      )}
                       {activeModule === item.id && <ChevronRight size={16} />}
                     </button>
                   );
@@ -3435,6 +3446,7 @@ function App() {
         status: "DRAFT", totalDebit: amount, totalCredit: amount, entries: [],
       }, ...prev]);
       pushEvent("凭证已生成", code+" "+type, "good");
+      logAudit("凭证生成", code+" "+type, "Voucher");
     };
     return (
       <div className="table-wrap">
@@ -3510,7 +3522,10 @@ function App() {
             <StatusTag tone={app.status==="PAID"?"good":app.status==="APPROVED"?"info":app.status==="REJECTED"?"danger":"warn"}>{app.status==="PENDING"?"待审批":app.status==="APPROVED"?"已批准":app.status==="REJECTED"?"已拒绝":"已付款"}</StatusTag>
             <div className="row-actions">
               {app.status==="PENDING"&&<><button className="mini-action" type="button" onClick={()=>{approvePaymentApplication(app.id,{decision:"APPROVED",comment:"自动",approverName:"系统管理员"}).then(()=>fetchPaymentApplications()).then(l=>{setPaymentApps(l);pushEvent("已批准",app.code,"good");}).catch(e=>pushEvent("审批失败",e.message,"danger"))}}><CheckCircle2 size={13}/><span>批准</span></button><button className="mini-action" type="button" onClick={()=>{approvePaymentApplication(app.id,{decision:"REJECTED",comment:"自动",approverName:"系统管理员"}).then(()=>fetchPaymentApplications()).then(l=>{setPaymentApps(l);pushEvent("已拒绝",app.code,"warn");}).catch(e=>pushEvent("拒绝失败",e.message,"danger"))}}><span style={{color:"#bd3f2f"}}>拒绝</span></button></>}
+              logAudit("付款拒绝", app.code+" 已拒绝", "Payment");
+              logAudit("付款批准", app.code+" 已批准", "Payment");
               {app.status==="APPROVED"&&<button className="mini-action" type="button" onClick={()=>{executePayment(app.id,{paidDate:new Date().toISOString().slice(0,10),paymentMethod:"BANK_TRANSFER",bankReference:"BK-"+Date.now(),payerName:"系统管理员"}).then(()=>Promise.all([fetchPaymentApplications(),fetchPaymentRecords(),fetchPayables()])).then(([al,rl,pl])=>{setPaymentApps(al);setPaymentRecords(rl);payableApiData.current.clear();setPayables(pl.map((p:any)=>{payableApiData.current.set(p.code,p);return{id:p.code,source:p.orderCode,supplier:p.supplierName,amount:p.outstandingAmount,due:p.dueDate,status:(p.overdue?"逾期":p.status==="PAID"?"已付款":"待付款") as "逾期"|"已付款"|"待付款"};}));pushEvent("付款已执行",app.code,"good");}).catch(e=>pushEvent("付款失败",e.message,"danger"))}}><CheckCircle2 size={13}/><span>执行付款</span></button>}
+              logAudit("付款执行", app.code+" 已付款", "Payment");
             </div>
           </div>
         ))}
@@ -3519,15 +3534,31 @@ function App() {
   }
 
   function PayableList() {
-    const handlePay = (id: string) => {
-      setPayables((current) =>
-        current.map((item) =>
-          item.id === id && item.status !== "已付款"
-            ? { ...item, status: "已付款" as const }
-            : item
-        )
-      );
-      pushEvent("应付付款完成", `${id} 已标记为已付款`, "good");
+    const handlePay = (code: string) => {
+      const api = payableApiData.current.get(code);
+      if (api) {
+        createPaymentApplication({
+          payableId: api.id, requestedAmount: api.outstandingAmount || api.amount,
+          requestedDate: new Date().toISOString().slice(0,10),
+          applicantName: "系统管理员", purpose: "付款: " + api.supplierName,
+        }).then((app) => {
+          setPaymentApps((prev) => [app, ...prev]);
+          pushEvent("付款申请已提交", app.code + " 待审批", "info");
+          logAudit("付款申请", "付款申请已提交", "Payable");
+          fetchPayables().then((pyList) => {
+            payableApiData.current.clear();
+            const mapped = pyList.map((p: any) => { payableApiData.current.set(p.code, p); return {
+              id: p.code, source: p.orderCode, supplier: p.supplierName,
+              amount: p.outstandingAmount, due: p.dueDate,
+              status: (p.overdue ? "逾期" : p.status === "PAID" ? "已付款" : "待付款") as "逾期"|"已付款"|"待付款",
+            };});
+            setPayables(mapped);
+          });
+        }).catch((err) => pushEvent("申请失败", err.message, "danger"));
+      } else {
+        setPayables((c) => c.map((x) => x.id === code ? {...x, status: "已付款" as const} : x));
+        pushEvent("付款(离线)", code + " 已标记付款", "good");
+      }
     };
     return (
       <div className="mini-list">
@@ -3542,7 +3573,7 @@ function App() {
             <div className="row-actions">
               {(item.status === "待付款" || item.status === "逾期") && (
                 <button className="mini-action" type="button" onClick={() => handlePay(item.id)}>
-                  <CheckCircle2 size={13} /><span>付款</span>
+                  <CheckCircle2 size={13} /><ClipboardSignature size={13}/><span>申请付款</span>
                 </button>
               )}
             </div>
@@ -3580,6 +3611,60 @@ function App() {
             </div>
           );
         })}
+      </div>
+    );
+  }
+
+  function ReceivableForecastPanel() {
+    const now = new Date();
+    const weeks: {label:string;amount:number;count:number}[] = [];
+    for (let w = 0; w < 8; w++) {
+      const start = new Date(now); start.setDate(start.getDate() + w * 7);
+      const end = new Date(start); end.setDate(end.getDate() + 6);
+      const label = `${start.getMonth()+1}/${start.getDate()}-${end.getMonth()+1}/${end.getDate()}`;
+      const items = receivables.filter(r => {
+        if (r.status === "已核销") return false;
+        const d = new Date(r.due);
+        return d >= start && d <= end;
+      });
+      const amount = items.reduce((s, r) => s + r.amount, 0);
+      weeks.push({label, amount, count: items.length});
+    }
+    const maxAmt = Math.max(...weeks.map(w => w.amount), 1);
+    const totalForecast = weeks.reduce((s, w) => s + w.amount, 0);
+    return (
+      <div className="mini-list">
+        <p style={{fontSize:12,color:"#65716e",margin:"0 0 8px 4px"}}>预计未来 8 周可回款 {formatMoney(totalForecast)}（{receivables.filter(r=>r.status!=="已核销").length} 笔）</p>
+        {weeks.map((w) => (
+          <div className="money-row" key={w.label} style={{gridTemplateColumns:"120px 1fr 90px"}}>
+            <div><strong>{w.label}</strong><span>{w.count} 笔到期</span></div>
+            <div style={{background:"#e8efe9",borderRadius:4,height:20,overflow:"hidden"}}>
+              <div style={{width:`${(w.amount / maxAmt) * 100}%`,height:"100%",background:"#1f6a5b",borderRadius:4,minWidth:w.amount>0?4:0}} />
+            </div>
+            <b style={{textAlign:"right",fontSize:13}}>{formatMoney(w.amount)}</b>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  function AuditLogPanel() {
+    if (auditLog.length === 0) return <p style={{color:"#65716e",fontSize:13,padding:"20px 0",textAlign:"center"}}>暂无操作记录</p>;
+    return (
+      <div className="mini-list">
+        {auditLog.slice(0, 30).map((log) => (
+          <div className="money-row" key={log.id} style={{gridTemplateColumns:"70px 1fr"}}>
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center"}}>
+              <span style={{fontSize:10,color:"#65716e"}}>{log.time.slice(5,16)}</span>
+              <StatusTag tone={log.action==="开票"||log.action==="回款"||log.action==="付款执行"||log.action==="付款批准"?"good":log.action==="付款拒绝"||log.action==="核銷"?"danger":"info"}>{log.action}</StatusTag>
+            </div>
+            <div>
+              <strong style={{fontSize:13}}>{log.detail}</strong>
+              <span style={{fontSize:11,color:"#65716e"}}>{log.user} · {log.entity}</span>
+            </div>
+          </div>
+        ))}
+        {auditLog.length > 30 && <p style={{fontSize:11,color:"#65716e",textAlign:"center",padding:8}}>仅显示最近 30 条</p>}
       </div>
     );
   }

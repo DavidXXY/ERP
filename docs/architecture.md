@@ -66,3 +66,43 @@
 
 - 后端基础路径为 `/api`。
 - 健康检查走 Spring Actuator：`/actuator/health`。
+
+## 前端原型说明
+
+`src/` 目录下的 React 原型为产品交互参考，已实现完整的财务模块功能。
+与后端通过 `/api` 代理（Vite proxy → `localhost:8080`）通信，自动 JWT 登录，
+支持离线降级到 mock 数据。
+
+### 财务模块 API 补充（2026-07-05 更新）
+
+- `GET /api/finance/overview`：财务总览数据
+- `GET /api/finance/receivables`：应收列表
+- `POST /api/finance/receivables/{id}/invoice`：开票
+- `POST /api/finance/receivables/{id}/receipts`：回款登记
+- `GET /api/finance/payables`：应付列表（含逾期标记）
+- `GET /api/finance/payment-applications`：付款申请列表
+- `POST /api/finance/payment-applications`：创建付款申请
+- `POST /api/finance/payment-applications/{id}/approval`：审批付款申请
+- `POST /api/finance/payment-applications/{id}/payment`：执行付款
+- `GET /api/finance/payments`：付款记录
+- `GET /api/finance/ledger/overview`：总账科目概览
+- `GET /api/finance/ledger/vouchers`：会计凭证列表
+- `GET /api/finance/ledger/statements`：财务报表（资产/负债/收入/费用）
+
+### 前端 API 客户端
+
+`src/api.ts` — 共 26 个 fetch 函数，覆盖 8 个后端模块：
+Finance（5）、CRM（7）、Ledger（3）、Procurement（3）、Inventory（1）、
+Project（1）、Office（4）、BI（1）。
+
+运行 `npm run gen:api` 可从 OpenAPI 规范自动生成 TypeScript 类型。
+
+### 前端初始化流程
+
+```
+应用启动 → POST /api/auth/login（自动登录）
+  → Promise.all([26个API]) 并行加载
+    ├─ 成功 → setState 填充数据，视图实时刷新
+    └─ 失败 → 保留 mock 数据，静默降级
+  → setInitializing(false) 隐藏加载遮罩
+```

@@ -18,6 +18,34 @@
       </a-col>
     </a-row>
 
+    <!-- Todo Section -->
+    <a-row :gutter="16" v-if="todos.length" class="todo-row">
+      <a-col :span="24">
+        <a-card title="待办事项" class="todo-card">
+          <a-list :data-source="todos" size="small">
+            <template #renderItem="{ item }">
+              <a-list-item>
+                <a-list-item-meta>
+                  <template #title>
+                    <a-space>
+                      <a-tag v-if="item.priority === 'HIGH'" color="red">紧急</a-tag>
+                      <a-tag v-else-if="item.priority === 'MEDIUM'" color="orange">提醒</a-tag>
+                      <a-tag v-else color="blue">待办</a-tag>
+                      <span>{{ item.title }}</span>
+                    </a-space>
+                  </template>
+                  <template #description>{{ item.description }}</template>
+                </a-list-item-meta>
+                <template #actions>
+                  <a-button type="link" size="small" @click="$router.push(item.link)">查看</a-button>
+                </template>
+              </a-list-item>
+            </template>
+          </a-list>
+        </a-card>
+      </a-col>
+    </a-row>
+    
     <a-row :gutter="16" class="stats-row">
       <a-col :xs="12" :sm="6">
         <a-card><a-statistic title="总人数" :value="analytics.totalEmployees" /></a-card>
@@ -77,7 +105,7 @@
 import { computed, onMounted, ref } from "vue";
 import { PlusOutlined, OrderedListOutlined, UserOutlined, BarChartOutlined } from "@ant-design/icons-vue";
 import { useAuthStore } from "@/stores/auth";
-import { getSelfProfile, getSelfLeaveBalances, getSelfLeaves, type LeaveBalanceRecord, type LeaveRecord } from "@/api/hr";
+import { getSelfProfile, getSelfLeaveBalances, getSelfLeaves, getSelfTodos, type LeaveBalanceRecord, type LeaveRecord, type TodoItem } from "@/api/hr";
 import { getHrAnalytics, type HrAnalytics } from "@/api/hr";
 
 const auth = useAuthStore();
@@ -85,6 +113,7 @@ const loading = ref(false);
 const employee = ref<{ name: string; position?: string; organizationName?: string }>();
 const balances = ref<LeaveBalanceRecord[]>([]);
 const recentLeaves = ref<LeaveRecord[]>([]);
+const todos = ref<TodoItem[]>([]);
 const analytics = ref<HrAnalytics>({ totalEmployees: 0, activeEmployees: 0, leftEmployees: 0, newThisMonth: 0, leavePendingCount: 0, educationDistribution: [], statusDistribution: [], organizationDistribution: [], recentLifecycles: [] });
 
 const greeting = computed(() => {
@@ -109,12 +138,14 @@ const leafCols = [
 async function loadData() {
   loading.value = true;
   try {
-    const [profile, bal, leaves, hrA] = await Promise.all([
+    const [profile, bal, leaves, hrA, todosData] = await Promise.all([
       getSelfProfile().catch(() => null),
       getSelfLeaveBalances(),
       getSelfLeaves(),
       getHrAnalytics().catch(() => analytics.value),
+      getSelfTodos(),
     ]);
+    todos.value = todosData || [];
     if (profile) employee.value = { name: profile.employee.name, position: profile.employee.position, organizationName: profile.employee.organizationName };
     balances.value = bal;
     recentLeaves.value = leaves.slice(0, 10);
@@ -136,4 +167,6 @@ onMounted(loadData);
 .balance-header { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px; color: #17212b; }
 .balance-num { color: #65717e; }
 .quick-actions :deep(.ant-btn) { text-align: left; }
+.todo-row { margin-top: 16px; }
+.todo-card :deep(.ant-list-item) { padding: 8px 0; }
 </style>

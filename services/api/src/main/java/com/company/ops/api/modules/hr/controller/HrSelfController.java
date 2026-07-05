@@ -34,20 +34,20 @@ public class HrSelfController {
     // Self profile: employee + education + work + contacts + contracts + certificates
     @GetMapping("/profile")
     public ApiResponse<EmployeeDetailResponse> profile(@AuthenticationPrincipal UserPrincipal principal) {
-        var emp = getCurrentEmployee(principal.getId());
+        var emp = getCurrentEmployee(principal.id());
         var detail = hrService.getEmployeeDetail(emp.getId());
         return ApiResponse.ok(detail);
     }
 
     @GetMapping("/leave-balances")
     public ApiResponse<List<LeaveBalanceResponse>> leaveBalances(@AuthenticationPrincipal UserPrincipal principal) {
-        var emp = getCurrentEmployee(principal.getId());
+        var emp = getCurrentEmployee(principal.id());
         return ApiResponse.ok(hrService.listBalances(emp.getId()));
     }
 
     @GetMapping("/leaves")
     public ApiResponse<List<LeaveResponse>> leaves(@AuthenticationPrincipal UserPrincipal principal) {
-        var emp = getCurrentEmployee(principal.getId());
+        var emp = getCurrentEmployee(principal.id());
         return ApiResponse.ok(hrService.listLeaves(emp.getId()));
     }
 
@@ -55,44 +55,50 @@ public class HrSelfController {
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<LeaveResponse> createLeave(@AuthenticationPrincipal UserPrincipal principal,
                                                    @Valid @RequestBody LeaveRequestData request) {
-        var emp = getCurrentEmployee(principal.getId());
+        var emp = getCurrentEmployee(principal.id());
         return ApiResponse.ok(hrService.createLeave(emp.getId(), request));
     }
 
     @GetMapping("/lifecycles")
     public ApiResponse<List<LifecycleResponse>> lifecycles(@AuthenticationPrincipal UserPrincipal principal) {
-        var emp = getCurrentEmployee(principal.getId());
+        var emp = getCurrentEmployee(principal.id());
         return ApiResponse.ok(hrService.listLifecycles(emp.getId()));
     }
 
 
     @GetMapping("/educations")
     public ApiResponse<List<EducationResponse>> educations(@AuthenticationPrincipal UserPrincipal principal) {
-        var emp = getCurrentEmployee(principal.getId());
+        var emp = getCurrentEmployee(principal.id());
         return ApiResponse.ok(hrService.listEducations(emp.getId()));
     }
 
     @GetMapping("/work-experiences")
     public ApiResponse<List<WorkExperienceResponse>> workExperiences(@AuthenticationPrincipal UserPrincipal principal) {
-        var emp = getCurrentEmployee(principal.getId());
+        var emp = getCurrentEmployee(principal.id());
         return ApiResponse.ok(hrService.listWorkExperiences(emp.getId()));
     }
 
     @GetMapping("/emergency-contacts")
     public ApiResponse<List<EmergencyContactResponse>> emergencyContacts(@AuthenticationPrincipal UserPrincipal principal) {
-        var emp = getCurrentEmployee(principal.getId());
+        var emp = getCurrentEmployee(principal.id());
         return ApiResponse.ok(hrService.listEmergencyContacts(emp.getId()));
     }
 
     @GetMapping("/certificates")
     public ApiResponse<List<PersonnelCertificateResponse>> certificates(@AuthenticationPrincipal UserPrincipal principal) {
-        var emp = getCurrentEmployee(principal.getId());
+        var emp = getCurrentEmployee(principal.id());
         return ApiResponse.ok(hrService.listEmployeeCertificates(emp.getId()));
     }
 
-    @GetMapping("/contracts")
+    
+    @GetMapping("/todos")
+    public ApiResponse<java.util.List<com.company.ops.api.modules.hr.dto.HrDtos.TodoItem>> todos(@AuthenticationPrincipal UserPrincipal principal) {
+        var emp = getCurrentEmployee(principal.id());
+        return ApiResponse.ok(hrService.listEmployeeTodos(emp.getId()));
+    }
+@GetMapping("/contracts")
     public ApiResponse<List<EmployeeContractResponse>> contracts(@AuthenticationPrincipal UserPrincipal principal) {
-        var emp = getCurrentEmployee(principal.getId());
+        var emp = getCurrentEmployee(principal.id());
         return ApiResponse.ok(hrService.listEmployeeContracts(emp.getId()));
     }
 

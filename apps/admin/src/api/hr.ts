@@ -308,3 +308,16 @@ export function getSelfCertificates() {
 export function getSelfContracts() {
   return request<EmployeeContract[]>({ method: "GET", url: "/hr/self/contracts" });
 }
+
+export interface TodoItem {
+  type: string;
+  title: string;
+  description: string;
+  link: string;
+  priority: string;
+  date: string;
+}
+
+export function getSelfTodos() {
+  return request<TodoItem[]>({ method: "GET", url: "/hr/self/todos" });
+}

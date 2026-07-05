@@ -115,4 +115,15 @@ public final class HrDtos {
     public record BalanceInitItem(
         UUID employeeId, String leaveType, int year, double totalDays
     ) {}
+
+
+    // Todo items for self-service
+    public record TodoItem(
+        String type,
+        String title,
+        String description,
+        String link,
+        String priority,
+        String date
+    ) {}
 }

@@ -99,6 +99,12 @@ const rootRoutes: RouteRecordRaw[] = [
   { path: "system/organizations", name: "system-organizations", component: OrganizationView, meta: { title: "\u7ec4\u7ec7\u67b6\u6784", permission: "system:organization:view" } },
   { path: "system/roles", name: "system-roles", component: RoleManagementView, meta: { title: "\u89d2\u8272\u7ba1\u7406", permission: "system:role:view" } },
   { path: "system/permissions", name: "system-permissions", component: PermissionManagementView, meta: { title: "\u6743\u9650\u7ba1\u7406", permission: "system:permission:view" } },
+  // Self-service
+  { path: "self", name: "self-dashboard", component: SelfDashboardView, meta: { title: "\u6211\u7684\u5de5\u4f5c\u53f0" } },
+  { path: "self/profile", name: "self-profile", component: SelfProfileView, meta: { title: "\u6211\u7684\u6863\u6848" } },
+  { path: "self/leaves", name: "self-leaves", component: SelfLeaveHistoryView, meta: { title: "\u6211\u7684\u8bf7\u5047" } },
+  { path: "self/leaves/new", name: "self-leave-new", component: SelfLeaveSubmitView, meta: { title: "\u63d0\u4ea4\u8bf7\u5047" } },
+  { path: "self/balances", name: "self-balances", component: SelfBalanceView, meta: { title: "\u6211\u7684\u989d\u5ea6" } },
 ];
 
 const router = createRouter({
@@ -125,33 +131,4 @@ router.beforeEach(async (to) => {
 });
 
 export default router;
-      {
-        path: "self",
-        name: "self-dashboard",
-        component: SelfDashboardView,
-        meta: { title: "我的工作台" },
-      },
-      {
-        path: "self/profile",
-        name: "self-profile",
-        component: SelfProfileView,
-        meta: { title: "我的档案" },
-      },
-      {
-        path: "self/leaves",
-        name: "self-leaves",
-        component: SelfLeaveHistoryView,
-        meta: { title: "我的请假" },
-      },
-      {
-        path: "self/leaves/new",
-        name: "self-leave-new",
-        component: SelfLeaveSubmitView,
-        meta: { title: "提交请假" },
-      },
-      {
-        path: "self/balances",
-        name: "self-balances",
-        component: SelfBalanceView,
-        meta: { title: "我的额度" },
-      },
+

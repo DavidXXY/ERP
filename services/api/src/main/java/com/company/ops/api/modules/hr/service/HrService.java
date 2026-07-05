@@ -18,11 +18,21 @@ import com.company.ops.api.modules.qualification.domain.QualificationEmployee;
 import com.company.ops.api.modules.qualification.domain.PersonnelCertificate;
 import com.company.ops.api.modules.qualification.domain.EmployeeContract;
 import com.company.ops.api.modules.qualification.dto.QualificationDtos.Attachment;
+import com.company.ops.api.modules.qualification.dto.QualificationDtos.EmployeeResponse;
+import com.company.ops.api.modules.qualification.dto.QualificationDtos.EmployeeAccountResponse;
+import com.company.ops.api.modules.qualification.dto.QualificationDtos.EmployeeDetailResponse;
 import com.company.ops.api.modules.qualification.dto.QualificationDtos.EmployeeContractResponse;
 import com.company.ops.api.modules.qualification.dto.QualificationDtos.PersonnelCertificateResponse;
 import com.company.ops.api.modules.qualification.repository.QualificationEmployeeRepository;
 import com.company.ops.api.modules.qualification.repository.PersonnelCertificateRepository;
 import com.company.ops.api.modules.qualification.repository.EmployeeContractRepository;
+import com.company.ops.api.modules.office.domain.ApprovalRequest;
+import com.company.ops.api.modules.office.repository.ApprovalRequestRepository;
+import com.company.ops.api.modules.maintenance.domain.WorkOrder;
+import com.company.ops.api.modules.maintenance.repository.WorkOrderRepository;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,7 +54,10 @@ public class HrService {
     private final LeaveRequestRepository leaveRequestRepository;
     private final PersonnelCertificateRepository personnelCertificateRepository;
     private final EmployeeContractRepository employeeContractRepository;
+    private final ApprovalRequestRepository approvalRequestRepository;
+    private final WorkOrderRepository workOrderRepository;
     private final LeaveBalanceRepository leaveBalanceRepository;
+    private final ObjectMapper objectMapper;
 
     public HrService(QualificationEmployeeRepository employeeRepository,
                      EmployeeEducationRepository educationRepository,
@@ -53,8 +66,11 @@ public class HrService {
                      EmployeeLifecycleRecordRepository lifecycleRepository,
                      LeaveRequestRepository leaveRequestRepository,
                      LeaveBalanceRepository leaveBalanceRepository,
+                     ObjectMapper objectMapper,
                      PersonnelCertificateRepository personnelCertificateRepository,
-                     EmployeeContractRepository employeeContractRepository) {
+                     EmployeeContractRepository employeeContractRepository,
+                     ApprovalRequestRepository approvalRequestRepository,
+                     WorkOrderRepository workOrderRepository) {
         this.employeeRepository = employeeRepository;
         this.educationRepository = educationRepository;
         this.workExperienceRepository = workExperienceRepository;
@@ -62,8 +78,11 @@ public class HrService {
         this.lifecycleRepository = lifecycleRepository;
         this.leaveRequestRepository = leaveRequestRepository;
         this.leaveBalanceRepository = leaveBalanceRepository;
+        this.objectMapper = objectMapper;
         this.personnelCertificateRepository = personnelCertificateRepository;
         this.employeeContractRepository = employeeContractRepository;
+        this.approvalRequestRepository = approvalRequestRepository;
+        this.workOrderRepository = workOrderRepository;
     }
 
     private QualificationEmployee findEmployee(UUID id) {
@@ -324,6 +343,30 @@ public class HrService {
 
 
     // ====== Self Service helpers ======
+
+    private EmployeeResponse toEmployeeResponse(QualificationEmployee emp) {
+        java.util.UUID orgId = emp.getOrganization() != null ? emp.getOrganization().getId() : null;
+        String orgName = emp.getOrganization() != null ? emp.getOrganization().getName() : null;
+        String orgPath = emp.getOrganization() != null ? emp.getOrganization().getName() : null;
+        EmployeeAccountResponse account = null;
+        if (emp.getSystemUser() != null) {
+            try {
+                var u = emp.getSystemUser();
+                account = new EmployeeAccountResponse(u.getId(), u.getUsername(), u.getDisplayName(),
+                    u.getPhone(), u.getEmail(), u.isEnabled(),
+                    u.getRoles().stream().map(r -> r.getCode()).toList());
+            } catch (Exception ignored) {}
+        }
+        long certCount = 0, validCertCount = 0;
+        try { certCount = personnelCertificateRepository.findByEmployeeIdOrderByNameAsc(emp.getId()).size(); } catch (Exception ignored) {}
+        return new EmployeeResponse(emp.getId(), emp.getName(), emp.getWorkNo(), orgId, orgName, orgPath,
+            emp.getDepartment(), emp.getPosition(), emp.getIdCard(), emp.getPhone(), emp.getEntryDate(),
+            emp.getEmploymentStatus(), emp.getContractStart(), emp.getContractEnd(),
+            emp.getSocialSecurityUnit(), emp.getSocialSecurityStart(), emp.getSocialSecurityEnd(),
+            emp.getRemark(), emp.getSystemUser() != null ? emp.getSystemUser().getId() : null, account,
+            certCount, validCertCount);
+    }
+
     @Transactional(readOnly = true)
     public EmployeeDetailResponse getEmployeeDetail(UUID employeeId) {
         var emp = findEmployee(employeeId);
@@ -373,6 +416,94 @@ public class HrService {
             .stream().map(this::toContractResponse).toList();
     }
 
+    
+    // ====== Self-service todos ======
+    @Transactional(readOnly = true)
+    public java.util.List<com.company.ops.api.modules.hr.dto.HrDtos.TodoItem> listEmployeeTodos(UUID employeeId) {
+        var items = new java.util.ArrayList<com.company.ops.api.modules.hr.dto.HrDtos.TodoItem>();
+        var now = java.time.LocalDate.now();
+
+        // 1. My pending leave requests
+        var pendingLeaves = leaveRequestRepository.findByEmployeeIdOrderByCreatedAtDesc(employeeId)
+            .stream().filter(l -> "PENDING".equals(l.getStatus())).toList();
+        for (var l : pendingLeaves) {
+            items.add(new com.company.ops.api.modules.hr.dto.HrDtos.TodoItem(
+                "LEAVE_PENDING", "请假待审批",
+                l.getLeaveType() + " " + l.getStartDate() + " ~ " + l.getEndDate() + " 共 " + String.format("%.1f", l.getTotalDays()) + "天",
+                "/self/leaves", "MEDIUM", l.getStartDate().toString()));
+        }
+
+        // 2. Certificates expiring within 30 days
+        var certs = personnelCertificateRepository.findByEmployeeIdOrderByNameAsc(employeeId);
+        for (var c : certs) {
+            if (c.getValidTo() != null) {
+                var daysLeft = java.time.temporal.ChronoUnit.DAYS.between(now, c.getValidTo());
+                if (daysLeft >= 0 && daysLeft <= 30) {
+                    items.add(new com.company.ops.api.modules.hr.dto.HrDtos.TodoItem(
+                        "CERT_EXPIRING", "证书即将到期",
+                        c.getName() + " (" + c.getCertificateNo() + ") 剩余" + daysLeft + "天",
+                        "/self/profile", "HIGH", c.getValidTo().toString()));
+                } else if (daysLeft < 0) {
+                    items.add(new com.company.ops.api.modules.hr.dto.HrDtos.TodoItem(
+                        "CERT_EXPIRED", "证书已过期",
+                        c.getName() + " (" + c.getCertificateNo() + ") 已过期" + Math.abs(daysLeft) + "天",
+                        "/self/profile", "HIGH", c.getValidTo().toString()));
+                }
+            }
+        }
+
+        // 3. Contracts ending within 30 days
+        var contracts = employeeContractRepository.findByEmployeeIdOrderByStartDateDesc(employeeId);
+        for (var c : contracts) {
+            if (c.getEndDate() != null) {
+                var daysLeft = java.time.temporal.ChronoUnit.DAYS.between(now, c.getEndDate());
+                if (daysLeft >= 0 && daysLeft <= 30) {
+                    items.add(new com.company.ops.api.modules.hr.dto.HrDtos.TodoItem(
+                        "CONTRACT_ENDING", "合同即将到期",
+                        c.getContractNo() + " " + java.time.temporal.ChronoUnit.DAYS.between(now, c.getEndDate()) + "天后到期",
+                        "/self/profile", "HIGH", c.getEndDate().toString()));
+                }
+            }
+        }
+
+        // 4. Pending office approvals (if any)
+        try {
+            var pendingApprovals = approvalRequestRepository.findAll().stream()
+                .filter(a -> "PENDING".equals(a.getStatus()))
+                .limit(10).toList();
+            for (var a : pendingApprovals) {
+                items.add(new com.company.ops.api.modules.hr.dto.HrDtos.TodoItem(
+                    "APPROVAL_PENDING", a.getTitle() != null ? a.getTitle() : "待审批事项",
+                    a.getContent() != null ? a.getContent() : "",
+                    "/office/approvals", "MEDIUM", a.getCreatedAt() != null ? a.getCreatedAt().toLocalDate().toString() : now.toString()));
+            }
+        } catch (Exception ignored) {}
+
+        // 5. Work orders assigned to me that are still open
+        try {
+            var allWorkOrders = workOrderRepository.findAll();
+            var workOrders = allWorkOrders.stream()
+                .filter(wo -> wo.getAssigneeId() != null && wo.getAssigneeId().equals(employeeId))
+                .filter(wo -> !"ACCEPTED".equals(wo.getStatus()) && !"CANCELLED".equals(wo.getStatus()))
+                .toList();
+            for (var wo : workOrders) {
+                if (!"ACCEPTED".equals(wo.getStatus()) && !"CANCELLED".equals(wo.getStatus())) {
+                    items.add(new com.company.ops.api.modules.hr.dto.HrDtos.TodoItem(
+                        "WORK_ORDER", "待处理工单: " + wo.getCode(),
+                        wo.getTitle() != null ? wo.getTitle() : "",
+                        "/maintenance/work-orders", "MEDIUM", now.toString()));
+                }
+            }
+        } catch (Exception ignored) {}
+
+        // Sort by priority
+        items.sort((a, b) -> {
+            var p = java.util.Map.of("HIGH", 0, "MEDIUM", 1, "LOW", 2);
+            return Integer.compare(p.getOrDefault(a.priority(), 2), p.getOrDefault(b.priority(), 2));
+        });
+
+        return items;
+    }
         // ====== Leave Balance ======
     @Transactional(readOnly = true)
     public List<LeaveBalanceResponse> listBalances(UUID employeeId) {

@@ -112,9 +112,9 @@ router.beforeEach(async (to) => {
     catch { auth.logout(); return { path: "/login", query: { redirect: to.fullPath } }; }
   }
   const permission = to.meta.permission;
-  if (typeof permission === "string" && !auth.can(permission)) return "/dashboard";
+  if (typeof permission === "string" && !auth.can(permission)) return { path: "/login", query: { redirect: to.fullPath } };
   const permissions = to.meta.permissions;
-  if (Array.isArray(permissions) && !permissions.some((item) => typeof item === "string" && auth.can(item))) return "/dashboard";
+  if (Array.isArray(permissions) && !permissions.some((item) => typeof item === "string" && auth.can(item))) return { path: "/login", query: { redirect: to.fullPath } };
   return true;
 });
 

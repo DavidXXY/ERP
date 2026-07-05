@@ -321,7 +321,7 @@ function refresh() { loadData(); }
 // Education
 function openEducation(record?: EducationRecord) {
   educationEditingId.value = record?.id || "";
-  Object.assign(eduForm, record ? { schoolName: record.schoolName, degree: record.degree, major: record.major, highest: record.highest, startDate: record.startDate, endDate: record.endDate, remark: record.remark } : { schoolName: "", degree: undefined, major: "", highest: false, startDate: undefined, endDate: undefined, remark: "" });
+  Object.assign(eduForm, record ? { schoolName: record.schoolName, degree: record.degree, major: record.major, highest: record.highest, startDate: record.startDate, endDate: record.endDate, remark: (record as any).remark } : { schoolName: "", degree: undefined, major: "", highest: false, startDate: undefined, endDate: undefined, remark: "" });
   educationModal.value = true;
 }
 async function saveEducation() {
@@ -352,7 +352,7 @@ async function removeEducation(id: string) {
 function openWorkExperience(record?: WorkExperienceRecord) {
   workEditingId.value = record?.id || "";
   const defaults = { companyName: "", position: "", current: false, startDate: undefined, endDate: undefined, description: "", remark: "" };
-  Object.assign(workForm, record ? { companyName: record.companyName, position: record.position, current: record.current, startDate: record.startDate, endDate: record.endDate, description: record.description, remark: record.remark } : defaults);
+  Object.assign(workForm, record ? { companyName: record.companyName, position: record.position, current: record.current, startDate: record.startDate, endDate: record.endDate, description: record.description, remark: (record as any).remark } : defaults);
   workModal.value = true;
 }
 async function saveWorkExperience() {
@@ -383,7 +383,7 @@ async function removeWorkExperience(id: string) {
 function openEmergencyContact(record?: EmergencyContactRecord) {
   contactEditingId.value = record?.id || "";
   const defaults = { name: "", relationship: "", phone: "", address: "", primary: false, remark: "" };
-  Object.assign(contactForm, record ? { name: record.name, relationship: record.relationship, phone: record.phone, address: record.address, primary: record.primary, remark: record.remark } : defaults);
+  Object.assign(contactForm, record ? { name: record.name, relationship: record.relationship, phone: record.phone, address: record.address, primary: record.primary, remark: (record as any).remark } : defaults);
   contactModal.value = true;
 }
 async function saveEmergencyContact() {

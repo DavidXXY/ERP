@@ -321,7 +321,8 @@ import EyeOutlined from "@ant-design/icons-vue/EyeOutlined";
 import PlusOutlined from "@ant-design/icons-vue/PlusOutlined";
 import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
 import RightOutlined from "@ant-design/icons-vue/RightOutlined";
-import SearchOutlined from "@ant-design/icons-vue/SearchOutlined";
+import SearchOutlined from "@ant-design/icons-vue/SearchOutlined"
+import DownloadOutlined from "@ant-design/icons-vue/DownloadOutlined";
 import {
   createCustomer,
   getCustomer,

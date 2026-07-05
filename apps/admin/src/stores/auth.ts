@@ -34,7 +34,8 @@ export const useAuthStore = defineStore("auth", {
       localStorage.removeItem(AUTH_TOKEN_KEY);
     },
     can(permission: string) {
-      if (this.user?.roles?.includes('ADMIN')) return true;
+      const roles = this.user?.roleCodes ?? [];
+      if (roles.includes('ADMIN')) return true;
       return this.user?.permissions?.includes(permission) ?? false;
     },
   },

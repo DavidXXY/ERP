@@ -76,7 +76,8 @@ public class QualificationService {
                               EmployeeContractRepository contractRepository,
                               SystemUserRepository systemUserRepository,
                               SystemOrganizationRepository organizationRepository,
-                              ObjectMapper objectMapper) {
+                              ObjectMapper objectMapper,
+                              CodeGenerator codeGenerator) {
     this.codeGenerator = codeGenerator;
     this.employeeRepository = employeeRepository;
     this.companyRepository = companyRepository;

@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface SystemRoleRepository extends JpaRepository<SystemRole, UUID> {
 
   boolean existsByCodeAndTenantId(String code, String tenantId);
+  java.util.Optional<com.company.ops.api.modules.system.domain.SystemRole> findByCodeAndTenantId(String code, String tenantId);
 
   long countByPermissions_Id(UUID permissionId);
 

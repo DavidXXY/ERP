@@ -89,8 +89,7 @@ public class CrmOperationsService {
   @org.springframework.beans.factory.annotation.Autowired
   private ContractChangeRequestRepository changeRepository;
 
-  public CrmOperationsService(
-      CustomerRepository customerRepository,
+  public CrmOperationsService(CustomerRepository customerRepository,
       OpportunityRepository opportunityRepository,
       QuotePlanRepository quoteRepository,
       QuoteApprovalRecordRepository quoteApprovalRepository,
@@ -99,8 +98,8 @@ public class CrmOperationsService {
       ServiceContractRepository contractRepository,
       ReceivableRepository receivableRepository,
       ReceivableReceiptRepository receiptRepository,
-      LedgerService ledgerService
-  ) {
+      LedgerService ledgerService,
+                              CodeGenerator codeGenerator) {
     this.codeGenerator = codeGenerator;
     this.customerRepository = customerRepository;
     this.opportunityRepository = opportunityRepository;

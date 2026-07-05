@@ -4,7 +4,7 @@ export type CurrentUser = {
   id: string;
   username: string;
   displayName: string;
-  roles: string[];
+  roleCodes: string[];
   permissions: string[];
 };
 

@@ -25,7 +25,7 @@ http.interceptors.response.use(
   (response) => response,
   (error) => {
     const status = error.response?.status;
-    if (status === 401) {
+    if (status === 401 || status === 403) {
       localStorage.removeItem(AUTH_TOKEN_KEY);
       if (window.location.pathname !== "/login") {
         window.location.href = "/login";

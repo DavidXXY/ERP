@@ -56,15 +56,14 @@ public class FinanceService {
   private final PaymentRecordRepository paymentRepository;
   private final LedgerService ledgerService;
 
-  public FinanceService(
-      ReceivableRepository receivableRepository,
+  public FinanceService(ReceivableRepository receivableRepository,
       ProcurementPayableRepository payableRepository,
       SupplierRepository supplierRepository,
       PurchaseOrderRepository orderRepository,
       PaymentApplicationRepository applicationRepository,
       PaymentRecordRepository paymentRepository,
-      LedgerService ledgerService
-  ) {
+      LedgerService ledgerService,
+                              CodeGenerator codeGenerator) {
     this.codeGenerator = codeGenerator;
     this.receivableRepository = receivableRepository;
     this.payableRepository = payableRepository;

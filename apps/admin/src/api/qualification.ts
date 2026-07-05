@@ -32,7 +32,10 @@ export type PersonnelCertificate = {
   reviewDate?: string; availableForTender: boolean; manualStatus: string; locked: boolean;
   attachments: Attachment[]; remark?: string; status: QualificationStatus; daysLeft?: number;
 };
-export type EmployeeDetail = { employee: QualificationEmployee; contracts: EmployeeContract[]; certificates: PersonnelCertificate[] };
+export type EmployeeDetail = { employee: QualificationEmployee; contracts: EmployeeContract[]; certificates: PersonnelCertificate[] } & {
+  name?: string; workNo?: string; employmentStatus?: string; organizationName?: string; position?: string;
+  phone?: string; entryDate?: string; idCard?: string; department?: string;
+};
 export type QualificationPerformance = {
   id: string; subjectCompany: string; name: string; clientName?: string; contractNo?: string; contractDate?: string;
   contractAmount?: string; projectType?: string; attachments: Attachment[]; remark?: string;

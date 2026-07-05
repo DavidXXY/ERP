@@ -12,7 +12,7 @@
         :columns="columns"
         :data-source="auditLogs"
         :loading="loading"
-        :pagination="{ current: page + 1, pageSize: size, total, showSizeChanger: true, showTotal: (t) => '共 ' + t + ' 条' }"
+        :pagination="{ current: page + 1, pageSize: size, total, showSizeChanger: true, showTotal: (t: any) => '共 ' + t + ' 条' }"
         :row-key="(r: any) => r.id"
         :scroll="{ x: 1200 }"
         size="small"

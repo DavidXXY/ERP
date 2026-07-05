@@ -29,8 +29,8 @@
               <a-table v-else size="small" :data-source="lowStockItems" :columns="lowStockColumns" :pagination="false" :row-key="(r:any)=>r.partCode">
                 <template #bodyCell="{column,record}">
                   <template v-if="column.key==='name'"><strong>{{ record.partName }}</strong><span class="table-subtitle">{{ record.spec||'' }}</span></template>
-                  <template v-else-if="column.key==='stock'">{{ record.quantity }}{{ record.unit }}</template>
-                  <template v-else-if="column.key==='value'">{{ formatMoney(record.quantity*(record.unitCost||0)) }}</template>
+                  <template v-else-if="column.key==='stock'">{{ record.stockQty }}{{ record.unit }}</template>
+                  <template v-else-if="column.key==='value'">{{ formatMoney(record.stockQty*(record.unitCost||0)) }}</template>
                 </template>
               </a-table>
             </a-card>
@@ -46,17 +46,17 @@ import { message } from "ant-design-vue"; import ReloadOutlined from "@ant-desig
 import { listInventoryParts, type InventoryPart } from "@/api/inventory";
 const router=useRouter(); const loading=ref(false); const parts=ref<InventoryPart[]>([]);
 
-const totalValue=computed(()=>parts.value.reduce((s,p)=>s+Number(p.quantity||0)*Number(p.unitCost||0),0));
-const totalQuantity=computed(()=>parts.value.reduce((s,p)=>s+Number(p.quantity||0),0));
-const lowStockCount=computed(()=>parts.value.filter(p=>Number(p.quantity||0)<=Number(p.safetyStock||0)).length);
-const lowStockItems=computed(()=>parts.value.filter(p=>Number(p.quantity||0)<=Number(p.safetyStock||0)).sort((a,b)=>a.quantity-a.quantity));
+const totalValue=computed(()=>parts.value.reduce((s,p)=>s+Number(p.stockQty||0)*Number(p.unitCost||0),0));
+const totalQuantity=computed(()=>parts.value.reduce((s,p)=>s+Number(p.stockQty||0),0));
+const lowStockCount=computed(()=>parts.value.filter(p=>Number(p.stockQty||0)<=Number(p.safetyQty||0)).length);
+const lowStockItems=computed(()=>parts.value.filter(p=>Number(p.stockQty||0)<=Number(p.safetyQty||0)).sort((a,b)=>a.stockQty-a.stockQty));
 const lowStockColumns=[{title:'物料',key:'name',width:260},{title:'当前库存',key:'stock',width:120},{title:'安全库存',dataIndex:'safetyStock',width:100},{title:'价值',key:'value',width:130}];
 
 const byWarehouse=computed(()=>{
   const map=new Map<string,number>();
   parts.value.forEach(p=>{
     const wh=p.warehouse||'未分类';
-    map.set(wh,(map.get(wh)||0)+Number(p.quantity||0)*Number(p.unitCost||0));
+    map.set(wh,(map.get(wh)||0)+Number(p.stockQty||0)*Number(p.unitCost||0));
   });
   return Array.from(map.entries()).map(([name,value])=>({name,value})).sort((a,b)=>b.value-a.value);
 });

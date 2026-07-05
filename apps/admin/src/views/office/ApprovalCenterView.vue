@@ -146,7 +146,7 @@ const mergedList = computed(() => {
       _statusColor: "orange",
       id: q.id, code: q.code, title: q.customerName, desc: q.serviceScope?.slice(0, 40),
       amount: q.amount, customerName: q.customerName, status: q.status, date: q.updatedAt,
-      applicantName: q.editorName, approverName: q.lastApproverName,
+      applicantName: (q as any).editorName, approverName: q.lastApproverName,
       approvalComment: q.lastApprovalComment,
     });
   });

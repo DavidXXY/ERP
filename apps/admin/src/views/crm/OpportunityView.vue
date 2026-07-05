@@ -24,7 +24,7 @@
 
             <!-- desktop-table --><div class="desktop-table">
 <a-table
-        :row-selection="{selectedRowKeys:selectedBatchKeys,onChange:(keys:any)=>selectedBatchKeys.value=keys}"
+        :row-selection="{selectedRowKeys:selectedBatchKeys,onChange:(keys:any)=>(selectedBatchKeys as any).value=keys}"
         :columns="columns"
         :data-source="filteredOpportunities"
         :loading="loading"

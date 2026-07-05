@@ -59,6 +59,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
+import DownloadOutlined from "@ant-design/icons-vue/DownloadOutlined";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
 import { exportContractsExcel } from "@/api/crm";

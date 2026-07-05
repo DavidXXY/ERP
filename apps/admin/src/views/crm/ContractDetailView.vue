@@ -176,6 +176,7 @@ const record = ref<ServiceContract | null>(null);
 const relatedQuote = ref<QuotePlan | null>(null);
 const relatedOpportunity = ref<Opportunity | null>(null);
 const loading = ref(true);
+const saving = ref(false);
 const editOpen = ref(false);
 const editFormRef = ref();
 const editForm = reactive({ projectName: "", contractType: "", amount: 0, serviceCycle: "", startDate: "", endDate: "", reason: "" });

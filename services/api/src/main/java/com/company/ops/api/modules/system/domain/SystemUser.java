@@ -39,7 +39,7 @@ public class SystemUser extends BaseEntity {
   @Column(nullable = false)
   private boolean enabled = true;
 
-  @ManyToMany(fetch = FetchType.LAZY)
+  @ManyToMany(fetch = FetchType.EAGER)
   @JoinTable(
       name = "sys_user_roles",
       joinColumns = @JoinColumn(name = "user_id"),

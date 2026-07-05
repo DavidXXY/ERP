@@ -32,7 +32,11 @@ public class AuthController {
   public ApiResponse<LoginResponse.CurrentUserResponse> currentUser(
       @AuthenticationPrincipal UserPrincipal principal
   ) {
-    return ApiResponse.ok(authService.currentUser(principal));
+    var user = authService.currentUser(principal);
+    if (user == null) {
+      throw new com.company.ops.api.common.exception.BusinessException("未登录");
+    }
+    return ApiResponse.ok(user);
   }
 }
 

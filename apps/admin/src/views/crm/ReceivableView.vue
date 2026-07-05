@@ -15,7 +15,7 @@
         <a-input v-model:value="keyword" allow-clear placeholder="搜索应收单、合同或客户" style="width: 280px" />
       </a-space>
 
-      <a-table :columns="columns" :data-source="filteredItems" :loading="loading" :row-key="(record: Receivable) => record.id" :scroll="{ x: 1060 }">
+      <a-table :columns="receivableColumns" :data-source="filteredItems" :loading="loading" :row-key="(record: Receivable) => record.id" :scroll="{ x: 1060 }">
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'receivable'">
             <strong>{{ record.code }}</strong>
@@ -92,7 +92,20 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
+import DownloadOutlined from "@ant-design/icons-vue/DownloadOutlined";
 import { message } from "ant-design-vue";
+const receivableColumns = [
+  { title: "应收编号", dataIndex: "code", width: 180 },
+  { title: "客户", dataIndex: "customerName", width: 180 },
+  { title: "合同编号", dataIndex: "contractCode", width: 180 },
+  { title: "金额", dataIndex: "amount", width: 150 },
+  { title: "到期日", dataIndex: "dueDate", width: 120 },
+  { title: "已收金额", dataIndex: "settledAmount", width: 150 },
+  { title: "未收金额", dataIndex: "outstandingAmount", width: 150 },
+  { title: "状态", key: "status", width: 100 },
+  { title: "操作", key: "action", width: 100, fixed: "right" },
+];
+
 
 import {
   listReceivables,

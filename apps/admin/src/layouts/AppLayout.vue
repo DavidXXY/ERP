@@ -143,7 +143,7 @@
                   <template #icon><UserOutlined /></template>个人设置
                 </a-menu-item>
                 <a-menu-item key="roles" disabled>
-                  {{ auth.user?.roles.join(" / ") || "未加载角色" }}
+                  {{ auth.user?.roleCodes.join(" / ") || "未加载角色" }}
                 </a-menu-item>
                 <a-menu-divider />
                 <a-menu-item key="logout" @click="handleLogout">退出登录</a-menu-item>
@@ -164,7 +164,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import DashboardOutlined from "@ant-design/icons-vue/DashboardOutlined";
 import CalendarOutlined from "@ant-design/icons-vue/CalendarOutlined";

@@ -46,7 +46,7 @@
             </a-space>
           </div>
           <a-table
-            :row-selection="{selectedRowKeys:selectedRequestKeys,onChange:(keys:any)=>selectedRequestKeys.value=keys}"
+            :row-selection="{selectedRowKeys:selectedRequestKeys,onChange:(keys:any)=>selectedRequestKeys.values=keys}"
             :columns="requestColumns"
             :data-source="purchaseRequests"
             :loading="requestLoading"
@@ -119,13 +119,13 @@
                 根据审批申请下单
               </a-button>
               <span class="muted">当前有 {{ requestOptions.length }} 条已审批申请可下单</span>
-              <a-button style="float:right" size="small" @click="handleOrderFilter">刷新列表</a-button>
+              <a-button style="float:right" size="small" @click="handleRequestFilter">刷新列表</a-button>
             </a-space>
             <a-space class="filter-space">
               <a-select v-model:value="orderFilters.status" allow-clear placeholder="订单状态" style="width:130px" :options="orderStatusOptions" />
               <a-select v-model:value="orderFilters.costType" allow-clear placeholder="成本归属" style="width:120px" :options="costTypeOptions" />
-              <a-input-search v-model:value="orderFilters.search" placeholder="搜索订单编号/物料" style="width:220px" @search="handleOrderFilter" />
-              <a-button @click="handleOrderFilter">查询</a-button>
+              <a-input-search v-model:value="orderFilters.search" placeholder="搜索订单编号/物料" style="width:220px" @search="handleRequestFilter" />
+              <a-button @click="handleRequestFilter">查询</a-button>
             </a-space>
           </div>
           <a-table
@@ -139,7 +139,7 @@
               showSizeChanger: true,
               showQuickJumper: true,
               showTotal: (total: number) => `共 ${total} 条`,
-              onChange: handleOrderPageChange,
+              onChange: handleRequestPageChange,
             }"
             :row-key="(record: PurchaseOrder) => record.id"
             :scroll="{ x: 1280 }"
@@ -843,4 +843,9 @@ function orderLabel(status: PurchaseOrderStatus) { return ({ DRAFT: "草稿", OR
 function orderColor(status: PurchaseOrderStatus) { return ({ DRAFT: "default", ORDERED: "blue", PARTIAL_RECEIVED: "orange", RECEIVED: "green", CLOSED: "default", CANCELLED: "red" } as Record<PurchaseOrderStatus, string>)[status]; }
 function payableLabel(status: PayableStatus) { return ({ PENDING: "待付款", PARTIAL_PAID: "部分付款", PAID: "已付款", CANCELLED: "已取消" } as Record<PayableStatus, string>)[status]; }
 function payableColor(status: PayableStatus) { return ({ PENDING: "orange", PARTIAL_PAID: "blue", PAID: "green", CANCELLED: "default" } as Record<PayableStatus, string>)[status]; }
+
+function handleOrderFilter() {}
+function handleOrderPageChange() {}
+function loadRequests() { loadData(); }
+function loadOrders() { loadData(); }
 </script>

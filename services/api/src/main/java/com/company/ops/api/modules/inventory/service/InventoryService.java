@@ -62,16 +62,15 @@ public class InventoryService {
   private final ProjectRepository projectRepository;
   private final ProjectCostEntryRepository projectCostRepository;
 
-  public InventoryService(
-      InventoryPartRepository partRepository,
+  public InventoryService(InventoryPartRepository partRepository,
       StockMovementRepository movementRepository,
       InventoryIssueOrderRepository issueRepository,
       InventoryIssueLineRepository issueLineRepository,
       InventoryReturnOrderRepository returnRepository,
       InventoryReturnLineRepository returnLineRepository,
       ProjectRepository projectRepository,
-      ProjectCostEntryRepository projectCostRepository
-  ) {
+      ProjectCostEntryRepository projectCostRepository,
+                              CodeGenerator codeGenerator) {
     this.codeGenerator = codeGenerator;
     this.partRepository = partRepository;
     this.movementRepository = movementRepository;

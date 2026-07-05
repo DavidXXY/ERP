@@ -149,7 +149,7 @@ const stepStatuses = computed(() => {
 const stepDescs = computed(() => {
   const r = record.value;
   const descs = [
-    formatDateTime(r?.createdAt || r?.updatedAt),
+    formatDateTime(r?.updatedAt),
     "-",
     "-",
     "-",

@@ -29,6 +29,9 @@ public class AuthService {
   }
 
   public LoginResponse.CurrentUserResponse currentUser(UserPrincipal principal) {
+    if (principal == null) {
+      return null;
+    }
     return toCurrentUser(principal);
   }
 

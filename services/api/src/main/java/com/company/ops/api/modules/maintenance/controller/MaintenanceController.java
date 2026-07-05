@@ -43,44 +43,44 @@ public class MaintenanceController {
   }
 
   @GetMapping("/work-orders")
-  @PreAuthorize("hasAuthority('maintenance:workorder:view')")
+  @PreAuthorize("hasAnyAuthority('maintenance:order:manage', 'maintenance:view')")
   public ApiResponse<List<WorkOrderResponse>> workOrders() {
     return ApiResponse.ok(service.listWorkOrders());
   }
 
   @GetMapping("/work-orders/{id}")
-  @PreAuthorize("hasAuthority('maintenance:workorder:view')")
+  @PreAuthorize("hasAnyAuthority('maintenance:order:manage', 'maintenance:view')")
   public ApiResponse<WorkOrderResponse> workOrder(@PathVariable UUID id) {
     return ApiResponse.ok(service.getWorkOrder(id));
   }
 
   @PostMapping("/work-orders")
   @ResponseStatus(HttpStatus.CREATED)
-  @PreAuthorize("hasAuthority('maintenance:workorder:create')")
+  @PreAuthorize("hasAuthority('maintenance:order:manage')")
   public ApiResponse<WorkOrderResponse> createWorkOrder(@Valid @RequestBody CreateWorkOrderRequest request) {
     return ApiResponse.ok(service.createWorkOrder(request));
   }
 
   @PutMapping("/work-orders/{id}/assign")
-  @PreAuthorize("hasAuthority('maintenance:workorder:update')")
+  @PreAuthorize("hasAuthority('maintenance:order:manage')")
   public ApiResponse<WorkOrderResponse> assign(@PathVariable UUID id, @Valid @RequestBody AssignWorkOrderRequest request) {
     return ApiResponse.ok(service.assign(id, request));
   }
 
   @PutMapping("/work-orders/{id}/check-in")
-  @PreAuthorize("hasAuthority('maintenance:workorder:update')")
+  @PreAuthorize("hasAuthority('maintenance:order:manage')")
   public ApiResponse<WorkOrderResponse> checkIn(@PathVariable UUID id, @Valid @RequestBody CheckInRequest request) {
     return ApiResponse.ok(service.checkIn(id, request));
   }
 
   @PutMapping("/work-orders/{id}/complete")
-  @PreAuthorize("hasAuthority('maintenance:workorder:update')")
+  @PreAuthorize("hasAuthority('maintenance:order:manage')")
   public ApiResponse<WorkOrderResponse> complete(@PathVariable UUID id, @Valid @RequestBody CompleteWorkOrderRequest request) {
     return ApiResponse.ok(service.complete(id, request));
   }
 
   @PutMapping("/work-orders/{id}/accept")
-  @PreAuthorize("hasAuthority('maintenance:workorder:update')")
+  @PreAuthorize("hasAuthority('maintenance:order:manage')")
   public ApiResponse<WorkOrderResponse> accept(@PathVariable UUID id, @Valid @RequestBody AcceptWorkOrderRequest request) {
     return ApiResponse.ok(service.accept(id, request));
   }
@@ -96,13 +96,13 @@ public class MaintenanceController {
   }
 
   @GetMapping("/equipment")
-  @PreAuthorize("hasAuthority('maintenance:equipment:view')")
+  @PreAuthorize("hasAnyAuthority('maintenance:order:manage', 'maintenance:view')")
   public ApiResponse<List<EquipmentResponse>> equipment() {
     return ApiResponse.ok(service.listEquipment());
   }
 
   @GetMapping("/plans")
-  @PreAuthorize("hasAuthority('maintenance:plan:view')")
+  @PreAuthorize("hasAuthority('maintenance:plan:manage')")
   public ApiResponse<List<PlanResponse>> plans() {
     return ApiResponse.ok(service.listPlans());
   }

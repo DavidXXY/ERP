@@ -20,5 +20,5 @@ import { statusLabel, statusColor } from "@/utils/status-mapper";
 const router=useRouter(); const loading=ref(false); const movements=ref<StockMovement[]>([]);
 const movementColumns=[{title:'类型',key:'type',width:100},{title:'数量',dataIndex:'quantity',width:100},{title:'来源单号',dataIndex:'sourceNo',width:150},{title:'备注',dataIndex:'remark'},{title:'时间',key:'createdAt',width:170}];
 onMounted(loadData);
-async function loadData(){loading.value=true;try{movements.value=await listStockMovements();}catch(e:any){message.error(e.message||'加载失败');}finally{loading.value=false;}}
+async function loadData(undefined){loading.value=true;try{movements.value=await listStockMovements("" as string);}catch(e:any){message.error(e.message||'加载失败');}finally{loading.value=false;}}
 </script>

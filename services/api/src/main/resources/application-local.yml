@@ -4,15 +4,10 @@ spring:
     driver-class-name: org.h2.Driver
     username: sa
     password:
-  sql:
-    init:
-      mode: always
-      continue-on-error: true
   jpa:
     hibernate:
       ddl-auto: update
     database-platform: org.hibernate.dialect.H2Dialect
-    defer-datasource-initialization: true
   flyway:
     enabled: false
   h2:

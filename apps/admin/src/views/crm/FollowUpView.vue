@@ -21,23 +21,23 @@
 
       <template v-if="activeTab === 'pending'">
         <a-empty v-if="pendingItems.length === 0" description="暂无待办事项" />
-        <div v-for="group in pendingGroups" :key="group.key" class="fp-group">
+        <div v-for="group in pendingGroups" :key="(group as any).key" class="fp-group">
           <div class="fp-group-header">
             <strong>{{ group.customerName }}</strong>
             <span v-if="group.opportunityCode" class="table-subtitle">{{ group.opportunityCode }}</span>
           </div>
-          <div v-for="item in group.items" :key="item.id" class="fp-item" :class="{ 'fp-overdue': isOverdue(item.nextActionAt) }">
+          <div v-for="item in (group as any).items" :key="item.id" class="fp-item" :class="{ 'fp-overdue': isOverdue(item.nextAction) }">
             <div class="fp-item-head">
               <a-tag :color="followUpTypeColor(item.type)" size="small">{{ followUpTypeLabel(item.type) }}</a-tag>
               <strong>{{ item.subject }}</strong>
-              <a-tag v-if="isOverdue(item.nextActionAt)" color="red" size="small">已逾期</a-tag>
+              <a-tag v-if="isOverdue(item.nextAction)" color="red" size="small">已逾期</a-tag>
             </div>
             <p class="fp-item-content">{{ item.content }}</p>
             <div class="fp-item-meta">
               <span>跟进人 {{ item.ownerName }} · {{ formatDateTime(item.followedAt) }}</span>
               <span v-if="item.nextAction" class="fp-next-action">
                 下一步：{{ item.nextAction }}
-                <span v-if="item.nextActionAt" class="table-subtitle">（{{ item.nextActionAt }}）</span>
+                <span v-if="item.nextAction" class="table-subtitle">（{{ item.nextAction }}）</span>
               </span>
             </div>
           </div>
@@ -58,8 +58,8 @@
             </template>
             <template v-else-if="column.key === 'followedAt'">{{ formatDateTime(record.followedAt) }}</template>
             <template v-else-if="column.key === 'nextAction'">
-              <span :class="{ 'text-danger': isOverdue(record.nextActionAt) }">{{ record.nextAction || "-" }}</span>
-              <span class="table-subtitle">{{ record.nextActionAt || "" }}</span>
+              <span :class="{ 'text-danger': isOverdue(record.nextAction) }">{{ record.nextAction || "-" }}</span>
+              <span class="table-subtitle">{{ record.nextAction || "" }}</span>
             </template>
             <template v-else-if="column.key === 'action'">
               <span @click.stop>
@@ -92,7 +92,8 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
-import { message } from "ant-design-vue";
+import { message } from "ant-design-vue"
+import type { FollowUpType } from "@/api/crm";
 import { createFollowUp, deleteFollowUp, listCustomers, listFollowUps, listOpportunities, type FollowUp } from "@/api/crm";
 import { useAuthStore } from "@/stores/auth";
 import { followUpTypeColor, followUpTypeLabel, followUpTypeOptions } from "./crm-options";
@@ -147,7 +148,7 @@ const filteredItems = computed(() => {
   });
 });
 const pendingItems = computed(() =>
-  items.value.filter((i) => i.nextAction && i.nextActionAt)
+  items.value.filter((i) => i.nextAction && i.nextAction)
 );
 const pendingGroups = computed(() => {
   const map = new Map<string, { customerName: string; opportunityCode: string; items: FollowUp[] }>();
@@ -165,8 +166,8 @@ const pendingGroups = computed(() => {
   // Sort by overdue first
   map.forEach((g) => {
     g.items.sort((a, b) => {
-      const aOverdue = isOverdue(a.nextActionAt) ? 0 : 1;
-      const bOverdue = isOverdue(b.nextActionAt) ? 0 : 1;
+      const aOverdue = isOverdue(a.nextAction) ? 0 : 1;
+      const bOverdue = isOverdue(b.nextAction) ? 0 : 1;
       return aOverdue - bOverdue;
     });
   });
@@ -220,7 +221,7 @@ async function handleCreate() {
   await formRef.value?.validate();
   saving.value = true;
   try {
-    await createFollowUp({ ...form, followedAt: form.followedAt || new Date().toISOString() });
+    await createFollowUp({ ...form, type: form.type as FollowUpType, followedAt: form.followedAt || new Date().toISOString() });
     createOpen.value = false;
     message.success("跟进记录已创建");
     await loadData();

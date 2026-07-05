@@ -35,14 +35,14 @@ public class CrmAttachmentController {
   }
 
   @GetMapping
-  @PreAuthorize("hasAuthority('crm:attachment:view')")
+  @PreAuthorize("hasAnyAuthority('crm:contract:view', 'crm:quote:view', 'crm:opportunity:view', 'crm:customer:view')")
   public ApiResponse<List<AttachmentDto>> list(
       @RequestParam String entityType, @RequestParam UUID entityId) {
     return ApiResponse.ok(service.listByEntity(entityType, entityId));
   }
 
   @GetMapping("/by-type")
-  @PreAuthorize("hasAuthority('crm:attachment:view')")
+  @PreAuthorize("hasAnyAuthority('crm:contract:view', 'crm:quote:view', 'crm:opportunity:view', 'crm:customer:view')")
   public ApiResponse<List<AttachmentDto>> listByType(
       @RequestParam String entityType, @RequestParam UUID entityId,
       @RequestParam(required = false) String attachmentType) {
@@ -53,7 +53,7 @@ public class CrmAttachmentController {
   }
 
   @PostMapping("/upload")
-  @PreAuthorize("hasAuthority('crm:attachment:upload')")
+  @PreAuthorize("hasAnyAuthority('crm:contract:update', 'crm:quote:update', 'crm:opportunity:update', 'crm:customer:update')")
   public ApiResponse<AttachmentDto> upload(
       @RequestParam String entityType, @RequestParam UUID entityId,
       @RequestParam(required = false) String attachmentType,
@@ -64,6 +64,7 @@ public class CrmAttachmentController {
   }
 
   @GetMapping("/{id}/download")
+  @PreAuthorize("hasAnyAuthority('crm:contract:view', 'crm:quote:view', 'crm:opportunity:view', 'crm:customer:view')")
   public void download(@PathVariable UUID id, HttpServletResponse response) {
     try {
       Path filePath = service.getFilePath(id);
@@ -82,7 +83,7 @@ public class CrmAttachmentController {
   }
 
   @DeleteMapping("/{id}")
-  @PreAuthorize("hasAuthority('crm:attachment:delete')")
+  @PreAuthorize("hasAuthority('crm:contract:delete')")
   public ApiResponse<Void> delete(@PathVariable UUID id) {
     service.delete(id);
     return ApiResponse.ok(null);

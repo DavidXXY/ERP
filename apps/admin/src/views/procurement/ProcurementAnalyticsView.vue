@@ -64,7 +64,7 @@ const costByType=computed(()=>{
 const costByTarget=computed(()=>{
   const map=new Map<string,number>();
   costs.value.forEach(c=>{
-    const name=c.targetName||c.targetId?.slice(0,8)||'未知';
+    const name=c.costTargetName||c.costTargetId?.slice(0,8)||'未知';
     map.set(name,(map.get(name)||0)+Number(c.amount||0));
   });
   return Array.from(map.entries()).map(([name,value])=>({name,value})).sort((a,b)=>b.value-a.value);

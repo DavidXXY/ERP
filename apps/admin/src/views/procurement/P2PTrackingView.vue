@@ -86,7 +86,7 @@ const p2pColumns=[
 ];
 
 onMounted(loadData);
-async function loadData(){loading.value=true;try{[requests.value,orders.value,receipts.value,payables.value]=await Promise.all([listPurchaseRequests(),listPurchaseOrders(),listGoodsReceipts(),listProcurementPayables()]);}catch(e:any){message.error(e.message||'加载失败');}finally{loading.value=false;}}
+async function loadData(){loading.value=true;try{const[reqResult,ordResult,rcs,pay]=await Promise.all([listPurchaseRequests(),listPurchaseOrders(),listGoodsReceipts(),listProcurementPayables()]);requests.value=(reqResult as any).content||reqResult;orders.value=(ordResult as any).content||ordResult;receipts.value=rcs;payables.value=pay;}catch(e:any){message.error(e.message||'加载失败');}finally{loading.value=false;}}
 function formatMoney(v:number){return new Intl.NumberFormat('zh-CN',{style:'currency',currency:'CNY'}).format(v||0);}
 </script>
 <style scoped>

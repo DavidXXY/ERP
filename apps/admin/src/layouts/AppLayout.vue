@@ -69,7 +69,6 @@
           <template #title>库存管理</template>
           <a-menu-item key="/inventory/parts">库存台账</a-menu-item>
           <a-menu-item key="/inventory/issues">领料管理</a-menu-item>
-          <a-menu-item key="/inventory/returns">退料管理</a-menu-item>
           <a-menu-item key="/inventory/movements">库存移动</a-menu-item>
           <a-menu-item key="/inventory/analytics">库存分析</a-menu-item>
         </a-sub-menu>

@@ -22,6 +22,7 @@ const rootRoutes: RouteRecordRaw[] = [
   { path: "dashboard", name: "dashboard", component: CrmDashboardView, meta: { title: "\u7ecf\u8425\u9a7e\u9a76\u8231", permission: "dashboard:view" } },
   { path: "profile", name: "personal-settings", component: () => import("@/views/personal/PersonalSettingsView.vue"), meta: { title: "\u4e2a\u4eba\u8bbe\u7f6e" } },
   // CRM
+  { path: "crm/dashboard", name: "crm-dashboard", component: CrmDashboardView, meta: { title: "CRM仪表盘", permission: "crm:dashboard:view" } },
   { path: "crm/customers", name: "crm-customers", component: CustomerPoolView, meta: { title: "\u5ba2\u6237\u6c60", permission: "crm:customer:view" } },
   { path: "crm/opportunities", name: "crm-opportunities", component: () => import("@/views/crm/OpportunityView.vue"), meta: { title: "\u7ebf\u7d22\u5546\u673a", permission: "crm:opportunity:view" } },
   { path: "crm/opportunities/:id", name: "crm-opportunity-detail", component: () => import("@/views/crm/OpportunityDetailView.vue"), meta: { title: "\u5546\u673a\u8be6\u60c5", permission: "crm:opportunity:view" } },
@@ -99,7 +100,7 @@ const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: "/login", name: "login", component: LoginView, meta: { title: "\u767b\u5f55", public: true } },
-    { path: "/", component: AppLayout, redirect: "/dashboard", children: rootRoutes },
+    { path: "/", component: AppLayout, redirect: "/crm/customers", children: rootRoutes },
   ],
 });
 

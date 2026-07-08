@@ -738,3 +738,76 @@ npm run admin:dev
 | GET | `/api/finance/ledger/statements` | 财务报表 |
 | POST | `/api/auth/login` | JWT 登录 |
 
+
+---
+
+## 🛠 本地开发环境
+
+### 前提
+
+| 工具 | 版本 | 说明 |
+|------|------|------|
+| JDK | **17**（必须） | Spring Boot 3.4 + JDK 26 会导致 springdoc 无法启动 |
+| Maven | 3.9+ | 使用 `mvn wrapper` 也可 |
+| Node.js | 20+ | 前端构建 |
+| Docker | 可选 | 仅生产部署需要（PostgreSQL + Redis + MinIO） |
+
+JDK 17 安装位置：`/opt/homebrew/opt/openjdk@17`
+
+### 启动方式
+
+**后端**（无需 Docker，使用 H2 内存数据库）：
+
+```bash
+export JAVA_HOME=/opt/homebrew/opt/openjdk@17
+cd services/api && SPRING_PROFILES_ACTIVE=local mvn spring-boot:run
+```
+
+**前端**（自动代理 `/api` → 8080）：
+
+```bash
+npm run admin:dev
+# → http://localhost:5174
+```
+
+### 初始化机制
+
+Flyway 默认扫描 `classpath:db/migration-h2`（H2 兼容版 Migration），但由于两套 Migration 版本号重叠（`V1~V32`），本地开发时 **Flyway 已禁用**。
+
+改用 **`DataInitializer`**（`@Component implements CommandLineRunner`）在首次启动时自动：
+1. 创建 90+ 项系统权限（`sys_permissions`）
+2. 创建 `ADMIN` 角色并赋予全部权限
+3. 创建 admin 用户（admin/Admin@123）
+
+Hibernate `ddl-auto: update` 从 JPA 实体自动建表，无需手动执行 SQL。
+
+如需重置数据库：
+
+```bash
+rm -f ~/.ops-erp-data/ops_erp.mv.db
+```
+
+### 生产部署（Docker）
+
+```bash
+# 1. 恢复主 Migration 文件
+mv db-main-backup/* src/main/resources/db/migration/
+
+# 2. 构建后端 JAR
+mvn package -DskipTests
+
+# 3. 启动基础设施（PostgreSQL + Redis + MinIO）
+docker compose -f infra/docker-compose.yml up -d
+
+# 4. 部署后端（使用 prod profile 连接 PostgreSQL + Flyway）
+java -jar target/ops-erp-api-0.1.0.jar --spring.profiles.active=prod
+```
+
+### 验收
+
+| 检查项 | 方法 |
+|--------|------|
+| 后端健康 | `curl http://localhost:8080/actuator/health` → `{"status":"UP"}` |
+| 登录 | `POST /api/auth/login {"username":"admin","password":"Admin@123"}` → 返回 JWT |
+| 权限 | JWT payload 中 `permissions` 应包含 90+ 项 |
+| 前端访问 | http://localhost:5174 → 显示登录页面 |

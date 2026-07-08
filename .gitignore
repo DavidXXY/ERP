@@ -17,3 +17,6 @@ services/api/target/
 *.trace.db
 backups/
 components.d.ts
+# db migration backup (main PostgreSQL migrations)
+db-main-backup/
+prototypes/

@@ -350,3 +350,11 @@ export function getSystemHealthApi() {
     url: "/system/health",
   });
 }
+
+// ====== Global Search ======
+export type SearchResult = {
+  type: string; id: string; title: string; subtitle: string; url: string;
+};
+export function searchGlobal(q: string) {
+  return request<SearchResult[]>({ method: "GET", url: "/search", params: { q } });
+}

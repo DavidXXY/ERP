@@ -23,4 +23,6 @@ public interface ServiceContractRepository extends JpaRepository<ServiceContract
 
   @Query("SELECT COUNT(c) FROM ServiceContract c WHERE c.endDate <= :deadline AND c.status <> 'CLOSED'")
   long countRenewalRisks(@Param("deadline") LocalDate deadline);
+
+  List<com.company.ops.api.modules.crm.domain.ServiceContract> findByCodeContainingIgnoreCaseOrProjectNameContainingIgnoreCase(String code, String projectName);
 }

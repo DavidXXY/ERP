@@ -957,6 +957,27 @@ public class CrmOperationsService {
 
 
   @Transactional
+
+  public ContractResponse renewContract(UUID id) {
+    var contract = contractRepository.findById(id)
+        .orElseThrow(() -> new BusinessException("合同不存在"));
+    ServiceContract renewal = new ServiceContract();
+    renewal.setCustomerId(contract.getCustomerId());
+    renewal.setQuoteId(contract.getQuoteId());
+    renewal.setProjectName(contract.getProjectName());
+    renewal.setContractType(contract.getContractType());
+    renewal.setAmount(contract.getAmount());
+    renewal.setServiceCycle(contract.getServiceCycle());
+    renewal.setStartDate(java.time.LocalDate.now());
+    renewal.setEndDate(java.time.LocalDate.now().plusYears(1));
+    renewal.setStatus(ContractStatus.ACTIVE);
+    renewal.setCode(codeGenerator.generate("CONTRACT"));
+    // Close old contract
+    contract.setStatus(ContractStatus.CLOSED);
+    contractRepository.save(contract);
+    var saved = contractRepository.save(renewal);
+    return toContract(saved, java.util.Map.of());
+  }
   public ReceivableResponse updateReceivable(UUID id, UpdateReceivableRequest request) {
     Receivable receivable = receivableRepository.findById(id)
         .orElseThrow(() -> new BusinessException("应收单不存在"));

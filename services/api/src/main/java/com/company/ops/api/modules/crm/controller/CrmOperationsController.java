@@ -28,6 +28,7 @@ import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.UpdateContractReque
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.UpdateReceivableRequest;
 import com.company.ops.api.modules.crm.service.CrmOperationsService;
 import com.company.ops.api.modules.crm.service.CrmExportService;
+import com.company.ops.api.modules.crm.dto.CreateCustomerRequest;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
@@ -297,6 +298,12 @@ public class CrmOperationsController {
     return ApiResponse.ok(crmOperationsService.updateContract(id, request));
   }
 
+
+  @PostMapping("/contracts/{id}/renew")
+  @PreAuthorize("hasAuthority('crm:contract:create')")
+  public ApiResponse<ContractResponse> renewContract(@PathVariable UUID id) {
+    return ApiResponse.ok(crmOperationsService.renewContract(id));
+  }
   @PostMapping("/contract-changes/{id}/reject")
   @PreAuthorize("hasAuthority('crm:contract:update')")
   public ApiResponse<ContractChangeResponse> rejectContractChange(

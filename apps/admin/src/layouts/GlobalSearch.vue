@@ -30,50 +30,38 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { useRouter } from "vue-router";
-import SearchOutlined from "@ant-design/icons-vue/SearchOutlined";
-import { listCustomers, listOpportunities, listQuotes, listContracts } from "@/api/crm";
+import { searchGlobal, type SearchResult } from "@/api/system";
 
 const router = useRouter();
-const selectedValue = ref<string>("");
-const searchOptions = ref<any[]>([]);
+const selectedValue = ref("");
+const searchOptions = ref<{ label: string; value: string; options: { label: string; value: string }[] }[]>([]);
 const searching = ref(false);
-let debounceTimer: ReturnType<typeof setTimeout>;
+let searchTimer: ReturnType<typeof setTimeout> | null = null;
 
-function handleSearch(value: string) {
-  clearTimeout(debounceTimer);
-  if (!value.trim()) { searchOptions.value = []; return; }
+async function handleSearch(value: string) {
+  if (searchTimer) clearTimeout(searchTimer);
+  if (!value || value.trim().length < 2) { searchOptions.value = []; return; }
   searching.value = true;
-  debounceTimer = setTimeout(async () => {
+  searchTimer = setTimeout(async () => {
     try {
-      const [customers, opps, quotes, contracts] = await Promise.all([
-        listCustomers(), listOpportunities(), listQuotes(), listContracts(),
-      ]);
-      const term = value.toLowerCase();
-      const results: any[] = [];
-      customers.filter((c: any) => (c.name + (c.code || "")).toLowerCase().includes(term)).slice(0, 5).forEach((c: any) => {
-        results.push({ value: "/crm/customers?customer=" + c.id, _module: "客户", _title: c.name, _subtitle: c.code + " · " + c.industry, _color: "blue" });
-      });
-      opps.filter((o: any) => (o.code + o.customerName + (o.needSummary || "")).toLowerCase().includes(term)).slice(0, 5).forEach((o: any) => {
-        results.push({ value: "/crm/opportunities/" + o.id, _module: "商机", _title: o.code, _subtitle: o.customerName + " · " + (o.needSummary || "").slice(0, 30), _color: "cyan" });
-      });
-      quotes.filter((q: any) => (q.code + q.customerName + (q.serviceScope || "")).toLowerCase().includes(term)).slice(0, 5).forEach((q: any) => {
-        results.push({ value: "/crm/quotes/" + q.id, _module: "报价", _title: q.code, _subtitle: q.customerName + " · " + (q.serviceScope || "").slice(0, 30), _color: "purple" });
-      });
-      contracts.filter((c: any) => (c.code + c.projectName + c.customerName).toLowerCase().includes(term)).slice(0, 5).forEach((c: any) => {
-        results.push({ value: "/crm/contracts/" + c.id, _module: "合同", _title: c.code, _subtitle: c.projectName + " · " + c.customerName, _color: "green" });
-      });
-      searchOptions.value = results.slice(0, 12);
+      const results = await searchGlobal(value.trim());
+      const groups: Record<string, { label: string; value: string }[]> = {};
+      const typeLabels: Record<string, string> = { customer: "客户", contract: "合同", project: "项目", part: "物料", employee: "员工" };
+      for (const r of results) {
+        const label = typeLabels[r.type] || r.type;
+        if (!groups[label]) groups[label] = [];
+        groups[label].push({ label: r.title + (r.subtitle ? " (" + r.subtitle + ")" : ""), value: r.url });
+      }
+      searchOptions.value = Object.entries(groups).map(([label, options]) => ({ label, value: label, options }));
     } catch { searchOptions.value = []; }
     finally { searching.value = false; }
   }, 300);
 }
 
-function handleFocus() {
-  if (selectedValue.value && typeof selectedValue.value === "string") handleSearch(selectedValue.value);
-}
-
 function handleSelect(value: string) {
+  selectedValue.value = "";
   searchOptions.value = [];
   router.push(value);
 }
+function handleFocus() { if (selectedValue.value) handleSearch(selectedValue.value); }
 </script>

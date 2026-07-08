@@ -17,4 +17,6 @@ public interface QualificationEmployeeRepository extends JpaRepository<Qualifica
   @org.springframework.data.jpa.repository.Query("SELECT COUNT(e) FROM QualificationEmployee e WHERE e.entryDate BETWEEN :start AND :end")
   long countByEntryDateBetween(@org.springframework.data.repository.query.Param("start") java.time.LocalDate start,
                                 @org.springframework.data.repository.query.Param("end") java.time.LocalDate end);
+
+  List<com.company.ops.api.modules.qualification.domain.QualificationEmployee> findByNameContainingIgnoreCase(String name);
 }

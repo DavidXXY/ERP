@@ -625,3 +625,19 @@ export async function exportContractsExcel() {
   anchor.href = url; anchor.download = "crm-contracts.xlsx";
   anchor.click(); URL.revokeObjectURL(url);
 }
+
+// ====== Import ======
+export function importCustomersExcel(file: File) {
+  const form = new FormData(); form.append("file", file);
+  return request<{ success: number; fail: number; errors: string[] }>({ method: "POST", url: "/crm/customers/import", data: form });
+}
+
+// ====== Batch Delete ======
+export function batchDeleteCustomers(ids: string[]) {
+  return request<void>({ method: "POST", url: "/crm/customers/batch-delete", data: ids });
+}
+
+// ====== Contract Renewal ======
+export function renewContract(id: string) {
+  return request<QuotePlan>({ method: "POST", url: `/crm/contracts/${id}/renew` });
+}

@@ -6,6 +6,7 @@ import com.company.ops.api.modules.crm.dto.CustomerDetailResponse;
 import com.company.ops.api.modules.crm.dto.CustomerSummaryResponse;
 import com.company.ops.api.modules.crm.dto.UpdateCustomerRequest;
 import com.company.ops.api.modules.crm.service.CustomerService;
+import com.company.ops.api.modules.crm.service.CrmImportService;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
@@ -26,9 +27,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class CustomerController {
 
   private final CustomerService customerService;
+  private final CrmImportService crmImportService;
 
-  public CustomerController(CustomerService customerService) {
+  public CustomerController(CustomerService customerService, CrmImportService crmImportService) {
     this.customerService = customerService;
+    this.crmImportService = crmImportService;
   }
 
   @GetMapping
@@ -65,4 +68,16 @@ public class CustomerController {
     customerService.deleteCustomer(id);
     return ApiResponse.ok();
   }
+  @PostMapping("/import")
+  @PreAuthorize("hasAuthority('crm:customer:create')")
+  public ApiResponse<com.company.ops.api.modules.crm.service.CrmImportService.ImportResult> importCustomers(@org.springframework.web.bind.annotation.RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
+    return ApiResponse.ok(crmImportService.importCustomers(file));
+  }
+  @PostMapping("/batch-delete")
+  @PreAuthorize("hasAuthority('crm:customer:delete')")
+  public ApiResponse<Void> batchDelete(@RequestBody List<java.util.UUID> ids) {
+    ids.forEach(id -> customerService.deleteCustomer(id));
+    return ApiResponse.ok();
+  }
+
 }

@@ -19,4 +19,6 @@ public interface InventoryPartRepository extends JpaRepository<InventoryPart, UU
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select part from InventoryPart part where part.id = :id")
   Optional<InventoryPart> findByIdForUpdate(@Param("id") UUID id);
+
+  List<com.company.ops.api.modules.inventory.domain.InventoryPart> findByCodeContainingIgnoreCaseOrNameContainingIgnoreCase(String code, String name);
 }

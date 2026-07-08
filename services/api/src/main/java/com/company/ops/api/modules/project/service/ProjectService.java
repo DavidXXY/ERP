@@ -105,6 +105,10 @@ public class ProjectService {
     Project project = new Project();
     project.setCustomerId(request.customerId());
     project.setCode(request.code() != null && !request.code().isBlank() ? request.code() : generateProjectCode());
+    if (request.contractId() != null) {
+      ServiceContract contract = contractRepository.findById(request.contractId()).orElseThrow(() -> new BusinessException("关联合同不存在"));
+      project.setContractId(request.contractId());
+    }
     project.setName(request.name());
     project.setProjectType(request.projectType());
     project.setManagerName(request.managerName());

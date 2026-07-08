@@ -7,6 +7,7 @@
           <a-button @click="loadData">刷新</a-button>
           <a-button @click="printPage">打印</a-button>
           <a-button type="primary" @click="openEdit">合同变更</a-button>
+          <a-button v-if="record && auth.can('project:create')" type="primary" @click="convertToProject">转项目</a-button>
         </a-space>
       </template>
 
@@ -167,6 +168,7 @@ import { message } from "ant-design-vue";
 import { useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
 const auth = useAuthStore();
+import { createProject } from "@/api/project";
 import { getContract, getOpportunity, getQuote, uploadAttachment, deleteAttachment, listAttachments, getAttachmentDownloadUrl, updateContract, createContractChange, approveContractChange, rejectContractChange, listContractChanges, type Opportunity, type QuotePlan, type ServiceContract, type CrmAttachment, type UpdateContractPayload, type CreateContractChangePayload, type ContractChangeResponse, type ApprovalActionPayload } from "@/api/crm";
 import { contractStatusColor, contractStatusLabel, formatMoney, opportunityStageColor, opportunityStageLabel, quoteStatusColor, quoteStatusLabel } from "./crm-options";
 
@@ -302,6 +304,27 @@ async function handleRejectChange(changeId: string) {
 }
 
 function printPage() { window.print(); }
+async function convertToProject() {
+  if (!record.value) return;
+  try {
+    const project = await createProject({
+      customerId: record.value.customerId,
+      name: record.value.projectName + "项目",
+      projectType: "RENOVATION",
+      managerName: auth.user?.displayName || "",
+      siteAddress: "",
+      contractAmount: record.value.amount,
+      plannedStartDate: record.value.startDate,
+      plannedEndDate: record.value.endDate,
+      budgetItems: [{ category: "OTHER", plannedAmount: record.value.amount, remark: "合同预算" }],
+      contractId: record.value.id,
+    });
+    message.success("项目已创建");
+    router.push("/projects");
+    await loadData();
+  } catch (error) { message.error(error instanceof Error ? error.message : "项目创建失败"); }
+}
+
 function goBack() {
   router.push("/crm/contracts");
 }

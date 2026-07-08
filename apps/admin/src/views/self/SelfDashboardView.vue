@@ -19,10 +19,10 @@
     </a-row>
 
     <!-- Todo Section -->
-    <a-row :gutter="16" v-if="todos.length" class="todo-row">
+    <a-row :gutter="16" class="todo-row">
       <a-col :span="24">
         <a-card title="待办事项" class="todo-card">
-          <a-list :data-source="todos" size="small">
+          <a-list :data-source="todos" size="small" v-if="todos.length">
             <template #renderItem="{ item }">
               <a-list-item>
                 <a-list-item-meta>
@@ -42,6 +42,7 @@
               </a-list-item>
             </template>
           </a-list>
+          <a-empty v-else description="暂无待办事项，一切顺利！" />
         </a-card>
       </a-col>
     </a-row>
@@ -140,10 +141,10 @@ async function loadData() {
   try {
     const [profile, bal, leaves, hrA, todosData] = await Promise.all([
       getSelfProfile().catch(() => null),
-      getSelfLeaveBalances(),
-      getSelfLeaves(),
+      getSelfLeaveBalances().catch(() => []),
+      getSelfLeaves().catch(() => []),
       getHrAnalytics().catch(() => analytics.value),
-      getSelfTodos(),
+      getSelfTodos().catch(() => []),
     ]);
     todos.value = todosData || [];
     if (profile) employee.value = { name: profile.employee.name, position: profile.employee.position, organizationName: profile.employee.organizationName };

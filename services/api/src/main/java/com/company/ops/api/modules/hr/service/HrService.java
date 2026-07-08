@@ -26,6 +26,10 @@ import com.company.ops.api.modules.qualification.dto.QualificationDtos.Personnel
 import com.company.ops.api.modules.qualification.repository.QualificationEmployeeRepository;
 import com.company.ops.api.modules.qualification.repository.PersonnelCertificateRepository;
 import com.company.ops.api.modules.qualification.repository.EmployeeContractRepository;
+
+import com.company.ops.api.modules.crm.domain.Receivable;
+import com.company.ops.api.modules.crm.domain.ReceivableStatus;
+import com.company.ops.api.modules.crm.repository.ReceivableRepository;
 import com.company.ops.api.modules.office.domain.ApprovalRequest;
 import com.company.ops.api.modules.office.repository.ApprovalRequestRepository;
 import com.company.ops.api.modules.maintenance.domain.WorkOrder;
@@ -56,6 +60,7 @@ public class HrService {
     private final EmployeeContractRepository employeeContractRepository;
     private final ApprovalRequestRepository approvalRequestRepository;
     private final WorkOrderRepository workOrderRepository;
+    private final ReceivableRepository receivableRepository;
     private final LeaveBalanceRepository leaveBalanceRepository;
     private final ObjectMapper objectMapper;
 
@@ -70,7 +75,8 @@ public class HrService {
                      PersonnelCertificateRepository personnelCertificateRepository,
                      EmployeeContractRepository employeeContractRepository,
                      ApprovalRequestRepository approvalRequestRepository,
-                     WorkOrderRepository workOrderRepository) {
+                     WorkOrderRepository workOrderRepository,
+                     ReceivableRepository receivableRepository) {
         this.employeeRepository = employeeRepository;
         this.educationRepository = educationRepository;
         this.workExperienceRepository = workExperienceRepository;
@@ -83,6 +89,7 @@ public class HrService {
         this.employeeContractRepository = employeeContractRepository;
         this.approvalRequestRepository = approvalRequestRepository;
         this.workOrderRepository = workOrderRepository;
+        this.receivableRepository = receivableRepository;
     }
 
     private QualificationEmployee findEmployee(UUID id) {
@@ -422,6 +429,8 @@ public class HrService {
     public java.util.List<com.company.ops.api.modules.hr.dto.HrDtos.TodoItem> listEmployeeTodos(UUID employeeId) {
         var items = new java.util.ArrayList<com.company.ops.api.modules.hr.dto.HrDtos.TodoItem>();
         var now = java.time.LocalDate.now();
+        // Debug: always add a test item to verify the feature works
+        try { throw new RuntimeException(); } catch (Exception e) { items.add(new com.company.ops.api.modules.hr.dto.HrDtos.TodoItem("DEBUG", "DEBUG: 待办功能正常", "如果看到这个说明待办系统在运行", "/self", "HIGH", now.toString())); }
 
         // 1. My pending leave requests
         var pendingLeaves = leaveRequestRepository.findByEmployeeIdOrderByCreatedAtDesc(employeeId)

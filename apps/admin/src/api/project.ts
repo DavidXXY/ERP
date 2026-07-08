@@ -65,6 +65,7 @@ export type CreateProjectPayload = {
   plannedEndDate: string;
   budgetItems: ProjectBudgetInput[];
   warrantyEndDate?: string;
+  contractId?: string;
 };
 
 export type ProjectBudgetItem = ProjectBudgetInput & {

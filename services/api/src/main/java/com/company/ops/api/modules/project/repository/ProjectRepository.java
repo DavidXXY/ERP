@@ -17,5 +17,4 @@ public interface ProjectRepository extends JpaRepository<Project, UUID> {
 
   int countByCodeStartingWith(String prefix);
 
-  List<com.company.ops.api.modules.project.domain.Project> findByCodeContainingIgnoreCaseOrNameContainingIgnoreCase(String code, String name);
 }

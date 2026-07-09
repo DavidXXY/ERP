@@ -6,10 +6,6 @@ import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface CustomerRepository extends JpaRepository<Customer, UUID> {
-
-  java.util.List<Customer> findAllByOrderByCreatedAtDesc();
-
+  List<Customer> findAllByOrderByCreatedAtDesc();
   boolean existsByCode(String code);
-
-  List<Customer> findByCodeContainingIgnoreCaseOrNameContainingIgnoreCase(String code, String name);
 }

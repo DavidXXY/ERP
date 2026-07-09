@@ -28,28 +28,46 @@ public class SearchService {
   @Transactional(readOnly = true)
   public List<SearchResult> search(String q) {
     if (q == null || q.trim().isEmpty()) return List.of();
-    String keyword = "%" + q.trim().toLowerCase() + "%";
+    String keyword = q.trim().toLowerCase();
     List<SearchResult> results = new ArrayList<>();
 
-    customerRepo.findByCodeContainingIgnoreCaseOrNameContainingIgnoreCase(q.trim(), q.trim()).forEach(c ->
-      results.add(new SearchResult("customer", c.getId().toString(), c.getCode() + " - " + c.getName(),
-          c.getLevel() != null ? c.getLevel().name() : "", "/crm/customers/" + c.getId())));
+    customerRepo.findAll().forEach(c -> {
+      if ((c.getName() != null && c.getName().toLowerCase().contains(keyword))
+          || (c.getCode() != null && c.getCode().toLowerCase().contains(keyword)))
+        results.add(new SearchResult("customer", c.getId().toString(),
+            (c.getCode() != null ? c.getCode() : "") + " - " + c.getName(),
+            c.getLevel() != null ? c.getLevel().name() : "", "/crm/customers/" + c.getId()));
+    });
 
-    contractRepo.findByCodeContainingIgnoreCaseOrProjectNameContainingIgnoreCase(q.trim(), q.trim()).forEach(c ->
-      results.add(new SearchResult("contract", c.getId().toString(), c.getCode() + " - " + c.getProjectName(),
-          c.getCustomerId() != null ? c.getCustomerId().toString() : "" != null ? c.getCustomerId() != null ? c.getCustomerId().toString() : "" : "", "/crm/contracts/" + c.getId())));
+    contractRepo.findAll().forEach(c -> {
+      if ((c.getCode() != null && c.getCode().toLowerCase().contains(keyword))
+          || (c.getProjectName() != null && c.getProjectName().toLowerCase().contains(keyword)))
+        results.add(new SearchResult("contract", c.getId().toString(),
+            (c.getCode() != null ? c.getCode() : "") + " - " + c.getProjectName(),
+            "", "/crm/contracts/" + c.getId()));
+    });
 
-    projectRepo.findByCodeContainingIgnoreCaseOrNameContainingIgnoreCase(q.trim(), q.trim()).forEach(p ->
-      results.add(new SearchResult("project", p.getId().toString(), p.getCode() + " - " + p.getName(),
-          p.getManagerName() != null ? p.getManagerName() : "", "/projects/list?id=" + p.getId())));
+    projectRepo.findAll().forEach(p -> {
+      if ((p.getCode() != null && p.getCode().toLowerCase().contains(keyword))
+          || (p.getName() != null && p.getName().toLowerCase().contains(keyword)))
+        results.add(new SearchResult("project", p.getId().toString(),
+            (p.getCode() != null ? p.getCode() : "") + " - " + p.getName(),
+            p.getManagerName() != null ? p.getManagerName() : "", "/projects/list?id=" + p.getId()));
+    });
 
-    partRepo.findByCodeContainingIgnoreCaseOrNameContainingIgnoreCase(q.trim(), q.trim()).forEach(p ->
-      results.add(new SearchResult("part", p.getId().toString(), p.getCode() + " - " + p.getName(),
-          String.valueOf(p.getStockQty()), "/inventory/parts?id=" + p.getId())));
+    partRepo.findAll().forEach(p -> {
+      if ((p.getCode() != null && p.getCode().toLowerCase().contains(keyword))
+          || (p.getName() != null && p.getName().toLowerCase().contains(keyword)))
+        results.add(new SearchResult("part", p.getId().toString(),
+            (p.getCode() != null ? p.getCode() : "") + " - " + p.getName(),
+            String.valueOf(p.getStockQty()), "/inventory/parts?id=" + p.getId()));
+    });
 
-    empRepo.findByNameContainingIgnoreCase(q.trim()).forEach(e ->
-      results.add(new SearchResult("employee", e.getId().toString(), e.getName(),
-          e.getPosition() != null ? e.getPosition() : "", "/hr/employees/" + e.getId())));
+    empRepo.findAll().forEach(e -> {
+      if (e.getName() != null && e.getName().toLowerCase().contains(keyword))
+        results.add(new SearchResult("employee", e.getId().toString(), e.getName(),
+            e.getPosition() != null ? e.getPosition() : "", "/hr/employees/" + e.getId()));
+    });
 
     return results;
   }

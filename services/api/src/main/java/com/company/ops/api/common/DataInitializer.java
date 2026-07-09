@@ -1,12 +1,16 @@
 package com.company.ops.api.common;
 
 import com.company.ops.api.modules.system.domain.SystemPermission;
+import com.company.ops.api.modules.system.domain.SystemOrganization;
 import com.company.ops.api.modules.system.domain.SystemRole;
 import com.company.ops.api.modules.system.domain.SystemUser;
 import com.company.ops.api.modules.system.repository.SystemPermissionRepository;
+import com.company.ops.api.modules.system.repository.SystemOrganizationRepository;
 import com.company.ops.api.modules.system.repository.SystemRoleRepository;
 import com.company.ops.api.modules.system.repository.SystemUserRepository;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
@@ -19,16 +23,21 @@ public class DataInitializer implements CommandLineRunner {
   private final SystemUserRepository userRepo;
   private final SystemRoleRepository roleRepo;
   private final SystemPermissionRepository permRepo;
+  private final SystemOrganizationRepository orgRepo;
   private final PasswordEncoder encoder;
   
-  public DataInitializer(SystemUserRepository userRepo, SystemRoleRepository roleRepo, SystemPermissionRepository permRepo, PasswordEncoder encoder) {
-    this.userRepo = userRepo; this.roleRepo = roleRepo; this.permRepo = permRepo; this.encoder = encoder;
+  public DataInitializer(SystemUserRepository userRepo, SystemRoleRepository roleRepo, SystemPermissionRepository permRepo, SystemOrganizationRepository orgRepo, PasswordEncoder encoder) {
+    this.userRepo = userRepo; this.roleRepo = roleRepo; this.permRepo = permRepo; this.orgRepo = orgRepo; this.encoder = encoder;
   }
   
   @Override
   public void run(String... args) {
     // Check if permissions exist. If not, create all permissions and ADMIN role + user
-    if (permRepo.count() > 0) return;
+    // Always check user first (perm table might not exist yet on fresh H2)
+    if (userRepo.existsByUsername("admin")) {
+      log.info("Admin user already exists, skipping data initialization");
+      return;
+    }
     
     log.info("Seeding permissions and admin user...");
     String[][] perms = {
@@ -98,5 +107,98 @@ public class DataInitializer implements CommandLineRunner {
       userRepo.save(admin);
       log.info("Admin user created (admin/Admin@123)");
     }
+    
+    // === Organization Structure ===
+    if (orgRepo.count() == 0) {
+      log.info("Creating organization structure...");
+      SystemOrganization root = new SystemOrganization();
+      root.setCode("ROOT"); root.setName("工程运维公司"); root.setType("COMPANY"); root.setEnabled(true); root.setSortOrder(0);
+      root = orgRepo.save(root);
+      
+      SystemOrganization deptExec = createOrg("EXEC_OFFICE", "总经办", "DEPARTMENT", 1, root);
+      SystemOrganization deptFinance = createOrg("FINANCE", "财务部", "DEPARTMENT", 2, root);
+      SystemOrganization deptHr = createOrg("HR", "人事行政部", "DEPARTMENT", 3, root);
+      SystemOrganization deptTech = createOrg("TECH", "技术研发部", "DEPARTMENT", 4, root);
+      SystemOrganization deptSales = createOrg("SALES", "市场销售部", "DEPARTMENT", 5, root);
+      SystemOrganization deptProc = createOrg("PROCUREMENT", "采购部", "DEPARTMENT", 6, root);
+      SystemOrganization deptProj = createOrg("PROJECT", "项目部", "DEPARTMENT", 7, root);
+      SystemOrganization deptOps = createOrg("OPS", "运维服务部", "DEPARTMENT", 8, root);
+      
+      createOrg("ACCOUNTING", "会计组", "TEAM", 1, deptFinance);
+      createOrg("CASHIER", "出纳组", "TEAM", 2, deptFinance);
+      createOrg("FRONTEND", "前端组", "TEAM", 1, deptTech);
+      createOrg("BACKEND", "后端组", "TEAM", 2, deptTech);
+      createOrg("PROJ_A", "项目一组", "TEAM", 1, deptProj);
+      createOrg("PROJ_B", "项目二组", "TEAM", 2, deptProj);
+      log.info("Created {} departments with sub-teams", orgRepo.count());
+    }
+    
+    // === Roles (beyond ADMIN) ===
+    if (!roleRepo.findByCodeAndTenantId("SALES", "default").isPresent()) {
+      log.info("Creating standard roles...");
+      Map<String, SystemPermission> permMap = new HashMap<>();
+      permRepo.findAll().forEach(p -> permMap.put(p.getCode(), p));
+      
+      createRole("SALES", "销售经理", "DEPT_AND_SUB", permMap,
+        "dashboard:view", "crm:dashboard:view",
+        "crm:customer:view", "crm:customer:create", "crm:customer:update",
+        "crm:opportunity:view", "crm:opportunity:create", "crm:opportunity:update",
+        "crm:quote:view", "crm:quote:create", "crm:quote:update", "crm:quote:submit",
+        "crm:contract:view", "crm:followup:view", "crm:followup:create",
+        "crm:renewal:view", "crm:receivable:view", "crm:profile:view");
+      
+      createRole("FINANCE", "财务专员", "ALL", permMap,
+        "dashboard:view", "finance:view",
+        "finance:receivable:view", "finance:receivable:invoice", "finance:receivable:collect",
+        "finance:payable:view", "finance:payment:apply", "finance:payment:approve", "finance:payment:execute",
+        "finance:ledger:view", "crm:receivable:view", "crm:receivable:invoice", "crm:receivable:settle",
+        "procurement:payable:view");
+      
+      createRole("HR", "人事专员", "ALL", permMap,
+        "dashboard:view", "qualification:view",
+        "qualification:employee:view", "qualification:employee:manage",
+        "qualification:certificate:view", "qualification:certificate:manage",
+        "workforce:view");
+      
+      createRole("PROCUREMENT", "采购专员", "DEPT_AND_SUB", permMap,
+        "dashboard:view", "procurement:view",
+        "procurement:supplier:create", "procurement:purchase:create", "procurement:request:approve",
+        "procurement:order:receive", "procurement:payable:view",
+        "inventory:view", "inventory:part:create");
+      
+      createRole("PROJECT_MGR", "项目经理", "DEPT_AND_SUB", permMap,
+        "dashboard:view", "project:view", "project:create", "project:approve",
+        "inventory:view", "inventory:issue:create", "inventory:return:create",
+        "procurement:view", "office:view", "office:approval:view", "office:approval:create");
+      
+      createRole("OPS", "运维工程师", "SELF", permMap,
+        "dashboard:view", "maintenance:view", "maintenance:plan:manage", "maintenance:order:manage",
+        "inventory:view", "inventory:issue:create",
+        "office:view", "office:approval:view", "office:approval:create", "office:expense:create");
+      
+      createRole("VIEWER", "普通员工", "SELF", permMap,
+        "dashboard:view", "office:view", "office:expense:create", "office:notification:view");
+      
+      log.info("Standard roles created");
+    }
+  }
+  
+  private SystemOrganization createOrg(String code, String name, String type, int sort, SystemOrganization parent) {
+    SystemOrganization o = new SystemOrganization();
+    o.setCode(code); o.setName(name); o.setType(type); o.setSortOrder(sort); o.setEnabled(true);
+    if (parent != null) o.setParent(parent);
+    return orgRepo.save(o);
+  }
+  
+  private void createRole(String code, String name, String scope, Map<String, SystemPermission> permMap, String... permCodes) {
+    SystemRole r = new SystemRole();
+    r.setCode(code); r.setName(name); r.setDataScope(scope); r.setBuiltIn(false);
+    r = roleRepo.save(r);
+    for (String pc : permCodes) {
+      SystemPermission p = permMap.get(pc);
+      if (p != null) r.getPermissions().add(p);
+    }
+    roleRepo.save(r);
+    log.info("  Role created: {} ({})", name, permCodes.length + " permissions");
   }
 }

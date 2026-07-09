@@ -18,5 +18,4 @@ public interface QualificationEmployeeRepository extends JpaRepository<Qualifica
   long countByEntryDateBetween(@org.springframework.data.repository.query.Param("start") java.time.LocalDate start,
                                 @org.springframework.data.repository.query.Param("end") java.time.LocalDate end);
 
-  List<com.company.ops.api.modules.qualification.domain.QualificationEmployee> findByNameContainingIgnoreCase(String name);
 }

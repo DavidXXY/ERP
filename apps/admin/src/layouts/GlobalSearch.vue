@@ -29,6 +29,7 @@
 
 <script setup lang="ts">
 import { ref } from "vue";
+import SearchOutlined from "@ant-design/icons-vue/SearchOutlined";
 import { useRouter } from "vue-router";
 import { searchGlobal, type SearchResult } from "@/api/system";
 

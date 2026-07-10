@@ -5,8 +5,12 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface InventoryMovementRepository extends JpaRepository<StockMovement, UUID> {
   List<StockMovement> findAllByOrderByCreatedAtDesc();
-  Optional<StockMovement> findByCode(String code);
+
+  @Query("SELECT m FROM StockMovement m WHERE m.sourceNo = :code")
+  Optional<StockMovement> findByCode(@Param("code") String code);
 }

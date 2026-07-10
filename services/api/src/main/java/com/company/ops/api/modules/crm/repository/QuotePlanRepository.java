@@ -10,4 +10,6 @@ public interface QuotePlanRepository extends JpaRepository<QuotePlan, UUID> {
   List<QuotePlan> findAllByOrderByUpdatedAtDesc();
 
   boolean existsByCode(String code);
+
+  boolean existsByOpportunityId(UUID opportunityId);
 }

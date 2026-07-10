@@ -18,14 +18,14 @@ public interface AccountingEntryRepository extends JpaRepository<AccountingEntry
   @Query("SELECT COALESCE(SUM(e.credit), 0) FROM AccountingEntry e WHERE e.accountCode = :accountCode")
   BigDecimal sumCreditByAccountCode(@Param("accountCode") String accountCode);
 
-  @Query("SELECT function('year', v.voucherDate), function('month', v.voucherDate), " +
+  @Query("SELECT EXTRACT(YEAR FROM v.voucherDate), EXTRACT(MONTH FROM v.voucherDate), " +
          "COALESCE(SUM(CASE WHEN e.accountCode LIKE '6%' AND e.accountCode < '6400' THEN e.credit - e.debit ELSE 0 END), 0), " +
          "COALESCE(SUM(CASE WHEN e.accountCode LIKE '6%' AND e.accountCode >= '6400' THEN e.debit - e.credit ELSE 0 END), 0), " +
          "COALESCE(SUM(CASE WHEN e.accountCode = '1002' THEN e.debit ELSE 0 END), 0), " +
          "COALESCE(SUM(CASE WHEN e.accountCode = '1002' THEN e.credit ELSE 0 END), 0) " +
          "FROM AccountingEntry e JOIN AccountingVoucher v ON v.id = e.voucherId " +
          "WHERE v.voucherDate IS NOT NULL " +
-         "GROUP BY function('year', v.voucherDate), function('month', v.voucherDate) " +
+         "GROUP BY EXTRACT(YEAR FROM v.voucherDate), EXTRACT(MONTH FROM v.voucherDate) " +
          "ORDER BY 1, 2")
   List<Object[]> aggregateMonthlyTrends();
 }

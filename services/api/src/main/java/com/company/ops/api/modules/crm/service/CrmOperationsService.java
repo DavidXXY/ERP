@@ -159,6 +159,10 @@ public class CrmOperationsService {
     if (opportunity.getStage() == OpportunityStage.WON || opportunity.getStage() == OpportunityStage.LOST) {
       throw new BusinessException("已结束商机不能继续推进");
     }
+    if ((request.stage() == OpportunityStage.NEGOTIATION || request.stage() == OpportunityStage.WON)
+        && !quoteRepository.existsByOpportunityId(opportunity.getId())) {
+      throw new BusinessException("请先为该商机创建报价方案才能继续推进");
+    }
     opportunity.setStage(request.stage());
     opportunity.setNextAction(request.nextAction());
     opportunity.setNextActionAt(request.nextActionAt());

@@ -20,14 +20,15 @@
           <a-tag :color="quoteStatusColor(record.status)">{{ quoteStatusLabel(record.status) }}</a-tag>
         </div>
 
-        <!-- Process lifecycle stepper -->
-        <a-steps :current="lifecycleStep" size="small" style="margin: 20px 0 8px; padding: 12px 0; background: #fafafa; border-radius: 6px;">
+        <!-- Hide stepper during print -->
+        <a-steps :current="lifecycleStep" size="small" style="margin: 20px 0 8px; padding: 12px 0; background: #fafafa; border-radius: 6px;" class="print-hide">
           <a-step title="草稿" :status="stepStatuses[0]" :description="stepDescs[0]" />
           <a-step title="内部审批" :status="stepStatuses[1]" :description="stepDescs[1]" />
           <a-step title="客户确认" :status="stepStatuses[2]" :description="stepDescs[2]" />
           <a-step title="合同生成" :status="stepStatuses[3]" :description="stepDescs[3]" />
           <a-step title="应收管理" :status="stepStatuses[4]" :description="stepDescs[4]" />
         </a-steps>
+        <div class="print-area">
 
         <a-descriptions bordered :column="{ xs: 1, sm: 2, md: 3 }" style="margin-top: 8px">
           <a-descriptions-item label="客户">{{ record.customerName }}</a-descriptions-item>
@@ -82,6 +83,7 @@
       </template>
 
       <a-empty v-else description="未找到报价方案" />
+      </div><!-- end print-area -->
     </a-card>
   </div>
 </template>
@@ -207,4 +209,38 @@ function moneyFormatter({ value }: { value: number | string }) { return formatMo
 
 <style scoped>
 .metric-row .ant-statistic .ant-statistic-title { font-size: 12px; }
+</style>
+<style>
+@media print {
+  /* 隐藏边栏、顶栏、按钮 */
+  .app-sider, .ant-layout-sider { display: none !important; }
+  .app-header, .ant-layout-header { display: none !important; }
+  .ant-card-extra { display: none !important; }
+  .ant-card-actions { display: none !important; }
+  .print-hide { display: none !important; }
+  .ant-btn { display: none !important; }
+  button { display: none !important; }
+
+  /* 主体内容占满宽度 */
+  .app-content, .ant-layout-content { 
+    margin-left: 0 !important;
+    padding: 20px !important;
+    width: 100% !important;
+  }
+
+  /* 让主要内容铺满 */
+  .page-stack { width: 100% !important; }
+
+  /* 卡片打印样式 */
+  .ant-card { box-shadow: none !important; border: 1px solid #ddd !important; break-inside: avoid; }
+  .ant-card-body { padding: 20px !important; }
+
+  /* 表格样式 */
+  table { font-size: 11pt !important; }
+  .ant-descriptions-item-label { font-size: 10pt !important; }
+  .ant-descriptions-item-content { font-size: 10pt !important; }
+
+  /* 背景 */
+  body { background: white !important; }
+}
 </style>

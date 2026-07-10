@@ -576,7 +576,15 @@ public class HrService {
     }
 
     private LeaveBalanceResponse toBalanceResponse(LeaveBalance b) {
-        return new LeaveBalanceResponse(b.getId(), b.getEmployee().getId(), b.getEmployee().getName(),
+        UUID empId = null;
+        String empName = "已删除";
+        try {
+            empId = b.getEmployee().getId();
+            empName = b.getEmployee().getName();
+        } catch (Exception e) {
+            // Employee may have been deleted, use fallback
+        }
+        return new LeaveBalanceResponse(b.getId(), empId, empName != null ? empName : "已删除",
             b.getLeaveType(), b.getYear(), b.getTotalDays(), b.getUsedDays(), b.getRemainingDays());
     }
 

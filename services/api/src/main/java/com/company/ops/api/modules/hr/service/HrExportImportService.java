@@ -5,6 +5,8 @@ import com.company.ops.api.modules.hr.repository.EmployeeEducationRepository;
 import com.company.ops.api.modules.qualification.domain.QualificationEmployee;
 import com.company.ops.api.modules.qualification.repository.QualificationEmployeeRepository;
 import java.io.ByteArrayOutputStream;
+import com.company.ops.api.modules.hr.domain.LeaveBalance;
+import com.company.ops.api.modules.hr.repository.LeaveBalanceRepository;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -31,12 +33,15 @@ public class HrExportImportService {
 
   private final QualificationEmployeeRepository employeeRepository;
   private final EmployeeEducationRepository educationRepository;
+  private final LeaveBalanceRepository leaveBalanceRepository;
 
   public HrExportImportService(
       QualificationEmployeeRepository employeeRepository,
-      EmployeeEducationRepository educationRepository) {
+      EmployeeEducationRepository educationRepository,
+      LeaveBalanceRepository leaveBalanceRepository) {
     this.employeeRepository = employeeRepository;
     this.educationRepository = educationRepository;
+    this.leaveBalanceRepository = leaveBalanceRepository;
   }
 
   @Transactional(readOnly = true)
@@ -163,6 +168,137 @@ public class HrExportImportService {
       log.error("Failed to create HR import template", e);
       throw new RuntimeException("下载导入模板失败", e);
     }
+  }
+
+  @Transactional(readOnly = true)
+  public Resource exportLeaveBalanceTemplate() {
+    try (XSSFWorkbook wb = new XSSFWorkbook()) {
+      Sheet sheet = wb.createSheet("请假额度导入");
+      sheet.setColumnWidth(0, 18 * 256);
+      sheet.setColumnWidth(1, 14 * 256);
+      sheet.setColumnWidth(2, 14 * 256);
+      sheet.setColumnWidth(3, 10 * 256);
+      sheet.setColumnWidth(4, 14 * 256);
+      sheet.setColumnWidth(5, 14 * 256);
+
+      CellStyle headerStyle = wb.createCellStyle();
+      Font headerFont = wb.createFont();
+      headerFont.setBold(true);
+      headerStyle.setFont(headerFont);
+
+      String[] headers = {"员工姓名", "工号", "假期类型", "年度", "总额度(天)", "已使用(天)"};
+      Row headerRow = sheet.createRow(0);
+      for (int i = 0; i < headers.length; i++) {
+        var cell = headerRow.createCell(i);
+        cell.setCellValue(headers[i]);
+        cell.setCellStyle(headerStyle);
+      }
+      Row hint = sheet.createRow(1);
+      hint.createCell(0).setCellValue("(请填写现有员工, 假期类型: 年假/病假/事假/调休/婚假/产假)");
+
+      Row ex1 = sheet.createRow(2);
+      ex1.createCell(0).setCellValue("张三(示例)"); ex1.createCell(1).setCellValue("EMP001");
+      ex1.createCell(2).setCellValue("年假"); ex1.createCell(3).setCellValue(2026);
+      ex1.createCell(4).setCellValue(15.0); ex1.createCell(5).setCellValue(0);
+
+      Row ex2 = sheet.createRow(3);
+      ex2.createCell(0).setCellValue("李四(示例)"); ex2.createCell(1).setCellValue("EMP002");
+      ex2.createCell(2).setCellValue("病假"); ex2.createCell(3).setCellValue(2026);
+      ex2.createCell(4).setCellValue(12.0); ex2.createCell(5).setCellValue(2.5);
+
+      ByteArrayOutputStream bos = new ByteArrayOutputStream();
+      wb.write(bos);
+      return new ByteArrayResource(bos.toByteArray());
+    } catch (Exception e) {
+      log.error("Failed to create leave balance template", e);
+      throw new RuntimeException("下载请假额度导入模板失败", e);
+    }
+  }
+
+  @Transactional
+  public ImportResult importLeaveBalances(MultipartFile file, String operatorName) {
+    List<String> errors = new ArrayList<>();
+    int success = 0;
+    int fail = 0;
+
+    try (Workbook wb = new XSSFWorkbook(file.getInputStream())) {
+      Sheet sheet = wb.getSheetAt(0);
+      if (sheet == null) return new ImportResult(success, fail, errors);
+      int rows = sheet.getLastRowNum();
+
+      for (int i = 1; i <= rows; i++) {
+        Row row = sheet.getRow(i);
+        if (row == null) continue;
+        try {
+          String empName = getCellString(row, 0);
+          String empCode = getCellString(row, 1);
+          String leaveTypeLabel = getCellString(row, 2);
+          String yearStr = getCellString(row, 3);
+          String totalStr = getCellString(row, 4);
+          String usedStr = getCellString(row, 5);
+
+          // Find employee
+          String fCode = empCode;
+          String fName = empName;
+          QualificationEmployee emp = null;
+          if (fCode != null && !fCode.isBlank()) {
+            String finalCode = fCode.trim();
+            emp = employeeRepository.findAll().stream()
+                .filter(e -> finalCode.equalsIgnoreCase(e.getWorkNo() != null ? e.getWorkNo().trim() : ""))
+                .findFirst().orElse(null);
+          }
+          if (emp == null && fName != null && !fName.isBlank()) {
+            String finalName = fName.trim();
+            emp = employeeRepository.findAll().stream()
+                .filter(e -> finalName.equalsIgnoreCase(e.getName() != null ? e.getName().trim() : ""))
+                .findFirst().orElse(null);
+          }
+          if (emp == null) {
+            fail++; errors.add("第" + (i+1) + "行: 员工不存在");
+            continue;
+          }
+
+          // Map leave type
+          String[] validTypes = {"ANNUAL","SICK","PERSONAL","COMPENSATORY","MARRIAGE","MATERNITY"};
+          String[] validLabels = {"年假","病假","事假","调休","婚假","产假"};
+          String leaveType = null;
+          String label = leaveTypeLabel != null ? leaveTypeLabel.trim() : "";
+          for (int j = 0; j < validLabels.length; j++) {
+            if (validLabels[j].equals(label)) { leaveType = validTypes[j]; break; }
+          }
+          if (leaveType == null) {
+            fail++; errors.add("第" + (i+1) + "行: 无效假期类型");
+            continue;
+          }
+
+          int year = yearStr != null ? Integer.parseInt(yearStr.trim()) : java.time.Year.now().getValue();
+          double totalDays = totalStr != null ? Double.parseDouble(totalStr.trim()) : 0;
+          double usedDays = usedStr != null ? Double.parseDouble(usedStr.trim()) : 0;
+
+          var existing = leaveBalanceRepository.findByEmployeeIdAndLeaveTypeAndYear(emp.getId(), leaveType, year);
+          LeaveBalance bal;
+          if (existing.isPresent()) {
+            bal = existing.get();
+          } else {
+            bal = new LeaveBalance();
+            bal.setEmployee(emp);
+            bal.setLeaveType(leaveType);
+            bal.setYear(year);
+          }
+          bal.setTotalDays(totalDays);
+          bal.setUsedDays(usedDays);
+          leaveBalanceRepository.save(bal);
+          success++;
+        } catch (Exception e) {
+          fail++;
+          errors.add("第" + (i+1) + "行: " + e.getMessage());
+        }
+      }
+    } catch (Exception e) {
+      log.error("Leave balance import failed", e);
+      throw new RuntimeException("导入失败: " + e.getMessage());
+    }
+    return new ImportResult(success, fail, errors);
   }
 
   @Transactional

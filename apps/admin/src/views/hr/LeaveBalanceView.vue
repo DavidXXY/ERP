@@ -127,7 +127,7 @@ import { useAuthStore } from "@/stores/auth";
 import { listQualificationEmployees, type QualificationEmployee } from "@/api/qualification";
 import {
   listAllLeaveBalances, setLeaveBalance, initLeaveBalances,
-  exportEmployeesExcel, downloadImportTemplate, importEmployeesExcel,
+  downloadLeaveBalanceTemplate, importLeaveBalancesExcel,
   type LeaveBalanceRecord, type LeaveBalancePayload,
 } from "@/api/hr";
 
@@ -300,7 +300,7 @@ async function doImport() {
   if (!importFile.value) { message.warning("请选择文件"); return; }
   importing.value = true;
   try {
-    const result = await importEmployeesExcel(importFile.value, auth.user?.displayName || "系统用户");
+    const result = await importLeaveBalancesExcel(importFile.value, auth.user?.displayName || "系统用户");
     importResult.value = result;
   } catch (error: any) {
     message.error(error.message || "导入失败");
@@ -310,7 +310,7 @@ async function doImport() {
 }
 
 async function downloadTemplate() {
-  try { await downloadImportTemplate(); } catch (error: any) { message.error(error.message || "下载失败"); }
+  try { await downloadLeaveBalanceTemplate(); } catch (error: any) { message.error(error.message || "下载失败"); }
 }
 
 async function loadData() {

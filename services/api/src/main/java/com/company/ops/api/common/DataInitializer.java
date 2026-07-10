@@ -35,6 +35,20 @@ public class DataInitializer implements CommandLineRunner {
     // Check if permissions exist. If not, create all permissions and ADMIN role + user
     // Always check user first (perm table might not exist yet on fresh H2)
     if (userRepo.existsByUsername("admin")) {
+      // Admin already exists - still ensure any missing permissions are seeded
+      String[][] missingPerms = {
+        {"crm:quote:approve","报价审批","crm"},
+        {"crm:quote:customer-result","客户结果登记","crm"},
+        {"crm:quote:convert","转合同","crm"},
+      };
+      for (String[] p : missingPerms) {
+        if (!permRepo.existsByCodeAndTenantId(p[0], "default")) {
+          SystemPermission sp = new SystemPermission();
+          sp.setCode(p[0]); sp.setName(p[1]); sp.setModule(p[2]); sp.setBuiltIn(false);
+          permRepo.save(sp);
+          log.info("  Added missing permission: {}", p[0]);
+        }
+      }
       log.info("Admin user already exists, skipping data initialization");
       return;
     }
@@ -44,7 +58,7 @@ public class DataInitializer implements CommandLineRunner {
       {"crm:dashboard:view","CRM仪表盘查看","crm"},
       {"crm:customer:view","客户查看","crm"},{"crm:customer:create","客户创建","crm"},{"crm:customer:update","客户修改","crm"},{"crm:customer:delete","客户删除","crm"},
       {"crm:opportunity:view","商机查看","crm"},{"crm:opportunity:create","商机创建","crm"},{"crm:opportunity:update","商机修改","crm"},{"crm:opportunity:delete","商机删除","crm"},
-      {"crm:quote:view","报价查看","crm"},{"crm:quote:create","报价创建","crm"},{"crm:quote:update","报价修改","crm"},{"crm:quote:delete","报价删除","crm"},{"crm:quote:submit","报价提交审批","crm"},
+      {"crm:quote:view","报价查看","crm"},{"crm:quote:create","报价创建","crm"},{"crm:quote:update","报价修改","crm"},{"crm:quote:delete","报价删除","crm"},{"crm:quote:submit","报价提交审批","crm"},{"crm:quote:approve","报价审批","crm"},{"crm:quote:customer-result","客户结果登记","crm"},{"crm:quote:convert","转合同","crm"},
       {"crm:contract:view","合同查看","crm"},{"crm:contract:create","合同创建","crm"},{"crm:contract:update","合同修改","crm"},{"crm:contract:delete","合同删除","crm"},
       {"crm:followup:view","跟进查看","crm"},{"crm:followup:create","跟进创建","crm"},{"crm:followup:delete","跟进删除","crm"},
       {"crm:renewal:view","续约查看","crm"},
@@ -143,7 +157,7 @@ public class DataInitializer implements CommandLineRunner {
         "dashboard:view", "crm:dashboard:view",
         "crm:customer:view", "crm:customer:create", "crm:customer:update",
         "crm:opportunity:view", "crm:opportunity:create", "crm:opportunity:update",
-        "crm:quote:view", "crm:quote:create", "crm:quote:update", "crm:quote:submit",
+        "crm:quote:view", "crm:quote:create", "crm:quote:update", "crm:quote:submit", "crm:quote:approve", "crm:quote:customer-result", "crm:quote:convert",
         "crm:contract:view", "crm:followup:view", "crm:followup:create",
         "crm:renewal:view", "crm:receivable:view", "crm:profile:view");
       

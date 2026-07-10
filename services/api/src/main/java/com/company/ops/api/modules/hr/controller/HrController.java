@@ -262,7 +262,27 @@ public class HrController {
         .body(result);
   }
 
+  @GetMapping("/export/leave-balance-template")
+  @PreAuthorize("hasAuthority('hr:employee:manage')")
+  public ResponseEntity<Resource> downloadLeaveBalanceTemplate() {
+    var result = hrExportImportService.exportLeaveBalanceTemplate();
+    return ResponseEntity.ok()
+        .header(HttpHeaders.CONTENT_DISPOSITION,
+            "attachment; filename=\"leave-balance-template.xlsx\"")
+        .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+        .body(result);
+  }
+
   // ====== Excel Import ======
+  @PostMapping("/import/leave-balances")
+  @PreAuthorize("hasAuthority('hr:employee:manage')")
+  public ApiResponse<ImportResult> importLeaveBalances(
+      @RequestParam("file") MultipartFile file,
+      @RequestParam(value = "operatorName", required = false) String operatorName) {
+    var result = hrExportImportService.importLeaveBalances(file, operatorName);
+    return ApiResponse.ok(result);
+  }
+
   @PostMapping("/import/employees")
   @PreAuthorize("hasAuthority('qualification:employee:manage')")
   public ApiResponse<ImportResult> importEmployeesExcel(

@@ -271,6 +271,20 @@ export async function downloadImportTemplate() {
   anchor.href = url; anchor.download = "hr-import-template.xlsx";
   anchor.click(); URL.revokeObjectURL(url);
 }
+export async function downloadLeaveBalanceTemplate() {
+  const response = await http.get<Blob>("/hr/export/leave-balance-template", { responseType: "blob" });
+  const url = URL.createObjectURL(response.data);
+  const anchor = document.createElement("a");
+  anchor.href = url; anchor.download = "leave-balance-template.xlsx";
+  anchor.click(); URL.revokeObjectURL(url);
+}
+export function importLeaveBalancesExcel(file: File, operatorName?: string) {
+  const form = new FormData();
+  form.append("file", file);
+  if (operatorName) form.append("operatorName", operatorName);
+  return request<{ success: number; fail: number; errors: string[] }>({ method: "POST", url: "/hr/import/leave-balances", data: form });
+}
+
 export function importEmployeesExcel(file: File, operatorName?: string) {
   const form = new FormData();
   form.append("file", file);

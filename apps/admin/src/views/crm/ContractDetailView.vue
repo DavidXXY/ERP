@@ -16,11 +16,11 @@
       </div>
 
       <template v-else-if="record">
+        <div class="print-area">
         <div class="detail-title">
           <h2>{{ record.code }}</h2>
           <a-tag :color="contractStatusColor(record.status)">{{ contractStatusLabel(record.status) }}</a-tag>
         </div>
-
         <a-descriptions bordered :column="{ xs: 1, sm: 2, md: 3 }" style="margin-top: 20px">
           <a-descriptions-item label="客户">{{ record.customerName }}</a-descriptions-item>
           <a-descriptions-item label="项目名称">{{ record.projectName }}</a-descriptions-item>
@@ -78,6 +78,7 @@
       <a-empty v-else description="未找到合同" />
     </a-card>
 
+    </div><!-- end print-area -->
     <a-tabs default-active-key="approval" style="margin-top: 16px">
       <a-tab-pane key="approval" tab="审批件">
         <template #extra>
@@ -329,3 +330,25 @@ function goBack() {
   router.push("/crm/contracts");
 }
 </script>
+<style>
+@media print {
+  .app-sider, .ant-layout-sider { display: none !important; }
+  .app-header, .ant-layout-header { display: none !important; }
+  .ant-card-extra { display: none !important; }
+  .ant-card-actions { display: none !important; }
+  .ant-btn { display: none !important; }
+  button { display: none !important; }
+  .app-content, .ant-layout-content { 
+    margin-left: 0 !important;
+    padding: 20px !important;
+    width: 100% !important;
+  }
+  .page-stack { width: 100% !important; }
+  .ant-card { box-shadow: none !important; border: 1px solid #ddd !important; break-inside: avoid; }
+  .ant-card-body { padding: 20px !important; }
+  table { font-size: 11pt !important; }
+  .ant-descriptions-item-label { font-size: 10pt !important; }
+  .ant-descriptions-item-content { font-size: 10pt !important; }
+  body { background: white !important; }
+}
+</style>

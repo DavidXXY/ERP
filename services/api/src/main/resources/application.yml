@@ -48,6 +48,8 @@ springdoc:
     path: /swagger-ui
 
 ops:
+  version: 0.1.0
+  build-time: 2026-07-10
   security:
     jwt-secret: ${JWT_SECRET:ops-erp-local-development-secret-please-change}
     jwt-expire-minutes: ${JWT_EXPIRE_MINUTES:720}

@@ -358,3 +358,7 @@ export type SearchResult = {
 export function searchGlobal(q: string) {
   return request<SearchResult[]>({ method: "GET", url: "/search", params: { q } });
 }
+
+export function getSystemVersion() {
+  return request<{ version: string; buildTime: string; appName: string }>({ method: "GET", url: "/system/version" });
+}

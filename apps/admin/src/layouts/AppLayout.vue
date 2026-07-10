@@ -129,6 +129,7 @@
           <a-menu-item key="/self/balances">我的额度</a-menu-item>
         </a-sub-menu>
       </a-menu>
+      <div class="sidebar-version" @click="router.push('/system/health')">v{{ sysVersion }}</div>
       </a-layout-sider>
 
     <a-layout>
@@ -189,6 +190,7 @@ import SearchOutlined from "@ant-design/icons-vue/SearchOutlined";
 import GlobalSearch from "./GlobalSearch.vue";
 import { getUnreadNotificationCount } from "@/api/office";
 import { useAppStore } from "@/stores/app";
+import { request } from "@/api/http";
 import { useAuthStore } from "@/stores/auth";
 
 const app = useAppStore();
@@ -233,7 +235,14 @@ function onOpenChange(keys: string[]) {
   openKeys.value = keys;
 }
 
-function onMenuClick(event: { key: string }) {
+function const sysVersion = ref("0.1.0");
+onMounted(async () => {
+  try {
+    const { data: versionData } = await request<{ version: string }>({ method: "GET", url: "/system/version" });
+    sysVersion.value = versionData.version;
+  } catch {}
+});
+onMenuClick(event: { key: string }) {
   router.push(event.key);
 }
 
@@ -242,3 +251,16 @@ function handleLogout() {
   router.replace("/login");
 }
 </script>
+
+<style>
+.sidebar-version {
+  padding: 8px 24px;
+  color: #8c8c8c;
+  font-size: 11px;
+  cursor: pointer;
+  text-align: center;
+  border-top: 1px solid #f0f0f0;
+  margin-top: auto;
+}
+.sidebar-version:hover { color: #1890ff; }
+</style>

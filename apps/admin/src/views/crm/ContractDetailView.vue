@@ -73,12 +73,12 @@
             <a-descriptions-item label="负责人">{{ relatedOpportunity.ownerName }}</a-descriptions-item>
           </a-descriptions>
         </a-card>
+        </div><!-- end print-area -->
       </template>
 
       <a-empty v-else description="未找到合同" />
     </a-card>
 
-    </div><!-- end print-area -->
     <a-tabs default-active-key="approval" style="margin-top: 16px">
       <a-tab-pane key="approval" tab="审批件">
         <template #extra>

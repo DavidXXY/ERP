@@ -41,7 +41,7 @@ public class SecurityConfig {
             .requestMatchers("/api/auth/login", "/api/auth/me").permitAll()
             .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
             .requestMatchers("/api-docs/**").permitAll()
-            .requestMatchers("/qualification-files/**").permitAll()
+            .requestMatchers("/qualification-files/**").authenticated()
             .requestMatchers("/actuator/health", "/actuator/info").permitAll()
             .anyRequest().authenticated())
         .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

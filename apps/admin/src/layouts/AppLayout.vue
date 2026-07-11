@@ -235,14 +235,14 @@ function onOpenChange(keys: string[]) {
   openKeys.value = keys;
 }
 
-function const sysVersion = ref("0.1.0");
+const sysVersion = ref("0.1.0");
 onMounted(async () => {
   try {
-    const { data: versionData } = await request<{ version: string }>({ method: "GET", url: "/system/version" });
+    const versionData = await request<{ version: string }>({ method: "GET", url: "/system/version" });
     sysVersion.value = versionData.version;
   } catch {}
 });
-onMenuClick(event: { key: string }) {
+function onMenuClick(event: { key: string }) {
   router.push(event.key);
 }
 

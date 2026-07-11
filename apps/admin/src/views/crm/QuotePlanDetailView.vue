@@ -80,10 +80,10 @@
             </template>
           </a-table>
         </a-card>
+        </div><!-- end print-area -->
       </template>
 
       <a-empty v-else description="未找到报价方案" />
-      </div><!-- end print-area -->
     </a-card>
   </div>
 </template>
@@ -163,7 +163,7 @@ const stepDescs = computed(() => {
   if (r.customerDecision === "ACCEPTED") descs[2] = "客户已接受";
   else if (r.customerDecision === "DECLINED") descs[2] = "客户已拒绝";
   else if (r.status === "APPROVED") descs[2] = "等待客户确认";
-  if (r.convertedContractId && relatedContract.value) descs[3] = relatedContract.value.code;
+  if (r.convertedContractId && relatedContract.value) descs[3] = relatedContract.value.code || "-";
   if (relatedReceivables.value.length > 0) descs[4] = receivableSummary.value.outstanding > 0 ? "待收款" : "已结清";
   return descs;
 });

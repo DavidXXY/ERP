@@ -159,7 +159,7 @@ import EditOutlined from "@ant-design/icons-vue/EditOutlined";
 import PlusOutlined from "@ant-design/icons-vue/PlusOutlined";
 import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
 import UploadOutlined from "@ant-design/icons-vue/UploadOutlined";
-import type { Attachment } from "@/api/qualification";
+import { getQualificationAttachmentObjectUrl, type Attachment } from "@/api/qualification";
 import {
   changeMyPasswordApi,
   createMyCertificateApi,
@@ -318,9 +318,13 @@ async function uploadCertificateFile(file: File) {
   return false;
 }
 
-function preview(items: Attachment[]) {
-  previewAttachments.value = items;
-  previewOpen.value = true;
+async function preview(items: Attachment[]) {
+  try {
+    previewAttachments.value = await Promise.all(items.map(async (item) => ({ ...item, dataUrl: await getQualificationAttachmentObjectUrl(item.dataUrl) })));
+    previewOpen.value = true;
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "附件加载失败");
+  }
 }
 
 function emptyCertificate(): MyCertificatePayload {

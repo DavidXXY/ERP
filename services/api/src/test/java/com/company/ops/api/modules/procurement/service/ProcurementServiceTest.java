@@ -142,7 +142,7 @@ class ProcurementServiceTest {
     order.setCostTargetCode(project.getCode());
     order.setCostTargetName(project.getName());
 
-    when(orderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+    when(orderRepository.findByIdForUpdate(order.getId())).thenReturn(Optional.of(order));
     when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
     when(partRepository.findById(part.getId())).thenReturn(Optional.of(part));
     when(receiptRepository.countByOrderId(order.getId())).thenReturn(0L);

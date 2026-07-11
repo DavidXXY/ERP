@@ -76,7 +76,7 @@ function distPercent(value:number,data:{value:number}[]){
 }
 
 onMounted(loadData);
-async function loadData(){loading.value=true;try{[costs.value,orders.value]=await Promise.all([listProcurementCostAllocations(),listPurchaseOrders()]);}catch(e:any){message.error(e.message||'加载失败');}finally{loading.value=false;}}
+async function loadData(){loading.value=true;try{const [costData,orderData]=await Promise.all([listProcurementCostAllocations(),listPurchaseOrders()]);costs.value=costData;orders.value=orderData.content;}catch(e:any){message.error(e.message||'加载失败');}finally{loading.value=false;}}
 function formatMoney(v:number){return new Intl.NumberFormat('zh-CN',{style:'currency',currency:'CNY'}).format(v||0);}
 function moneyFormatter({value}:{value:number|string}){return formatMoney(Number(value));}
 </script>

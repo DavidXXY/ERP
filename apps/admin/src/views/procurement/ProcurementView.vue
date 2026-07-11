@@ -846,6 +846,4 @@ function payableColor(status: PayableStatus) { return ({ PENDING: "orange", PART
 
 function handleOrderFilter() {}
 function handleOrderPageChange() {}
-function loadRequests() { loadData(); }
-function loadOrders() { loadData(); }
 </script>

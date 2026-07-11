@@ -1,4 +1,4 @@
-import { request } from "./http";
+import { http, request } from "./http";
 
 export type QualificationStatus = "VALID" | "EXPIRING" | "EXPIRED" | "VOIDED" | "LOCKED" | "UNVERIFIED";
 export type Attachment = { id?: string; name: string; type?: string; size?: number; dataUrl: string; uploadedAt?: string; uploadedBy?: string };
@@ -98,4 +98,9 @@ export function listQualificationWarnings() { return request<QualificationWarnin
 export function uploadQualificationAttachment(file: File, operatorName: string) {
   const form = new FormData(); form.append("file", file); form.append("operatorName", operatorName);
   return request<Attachment>({ method: "POST", url: "/qualifications/attachments", data: form });
+}
+
+export async function getQualificationAttachmentObjectUrl(dataUrl: string) {
+  const response = await http.get<Blob>(dataUrl, { responseType: "blob" });
+  return URL.createObjectURL(response.data);
 }

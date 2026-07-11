@@ -83,11 +83,10 @@ async function downloadTemplate() {
 async function doImport() {
   if (!importFile.value) { message.warning("请选择文件"); return; }
   try {
-    const importResult = { success: true, imported: 0, errors: [] as string[] };
-const { importEmployeesExcel } = await import("@/api/hr");
-    importResult.value = await importEmployeesExcel(importFile.value, auth.user?.displayName || "系统用户");
+    const { importEmployeesExcel } = await import("@/api/hr");
+    const importResult = await importEmployeesExcel(importFile.value, auth.user?.displayName || "系统用户");
     importModal.value = false;
-    message.success(`导入完成：成功 ${importResult.value.success} 条，失败 ${importResult.value.fail} 条`);
+    message.success(`导入完成：成功 ${importResult.success} 条，失败 ${importResult.fail} 条`);
     await loadMetrics();
   } catch (error: any) { message.error(error.message || "导入失败"); }
 }

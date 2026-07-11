@@ -221,7 +221,8 @@ async function handleCreate() {
   await formRef.value?.validate();
   saving.value = true;
   try {
-    await createFollowUp({ ...form, type: form.type as FollowUpType, followedAt: form.followedAt || new Date().toISOString() });
+    if (!form.customerId) throw new Error("请选择客户");
+    await createFollowUp({ ...form, customerId: form.customerId, type: form.type as FollowUpType, followedAt: form.followedAt || new Date().toISOString() });
     createOpen.value = false;
     message.success("跟进记录已创建");
     await loadData();

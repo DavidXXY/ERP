@@ -100,7 +100,7 @@ import { PlusOutlined, ReloadOutlined } from "@ant-design/icons-vue";
 import { useAuthStore } from "@/stores/auth";
 import { listQualificationEmployees, type QualificationEmployee } from "@/api/qualification";
 import {
-  listAllLeaves, createLeave, approveLeave,
+  listAllLeaves, createLeave, approveLeave as approveLeaveApi,
   type LeaveRecord, type LeavePayload,
 } from "@/api/hr";
 
@@ -224,7 +224,7 @@ async function confirmApprove() {
   if (!approveRecord.value) return;
   saving.value = true;
   try {
-    await approveLeave(approveRecord.value.id, {
+    await approveLeaveApi(approveRecord.value.id, {
       approved: approveAction.value!,
       remark: approveRemark.value,
       operatorName: auth.user?.displayName || "系统管理员",

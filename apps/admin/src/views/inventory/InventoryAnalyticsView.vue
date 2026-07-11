@@ -55,7 +55,7 @@ const lowStockColumns=[{title:'物料',key:'name',width:260},{title:'当前库�
 const byWarehouse=computed(()=>{
   const map=new Map<string,number>();
   parts.value.forEach(p=>{
-    const wh=p.warehouse||'未分类';
+    const wh=p.location||'未分类';
     map.set(wh,(map.get(wh)||0)+Number(p.stockQty||0)*Number(p.unitCost||0));
   });
   return Array.from(map.entries()).map(([name,value])=>({name,value})).sort((a,b)=>b.value-a.value);

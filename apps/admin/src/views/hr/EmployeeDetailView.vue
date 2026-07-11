@@ -4,7 +4,6 @@
       <template #extra>
         <a-space>
           <a-button @click="refresh"><template #icon><ReloadOutlined /></template>刷新</a-button>
-          <a-button type="primary" @click="openEdit">{{ canManage ? '编辑' : '查看' }}</a-button>
         </a-space>
       </template>
     </a-page-header>
@@ -203,7 +202,7 @@ const canManage = computed(() => auth.can("qualification:employee:manage"));
 
 const loading = ref(false);
 const saving = ref(false);
-const employee = ref<EmployeeDetail>();
+const employee = ref<EmployeeDetail["employee"]>();
 const detailTab = ref("educations");
 
 // Sub data
@@ -294,7 +293,7 @@ async function loadData() {
   loading.value = true;
   try {
     const emp = await getQualificationEmployee(employeeId.value);
-    employee.value = emp;
+    employee.value = emp.employee;
 
     // Load certificates and filter by employee
     const allCerts = await listPersonnelCertificates({});

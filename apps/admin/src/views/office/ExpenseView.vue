@@ -42,7 +42,7 @@ const projectOptions=computed(()=>references.projects.map((i:any)=>({label:i.cod
 const workOrderOptions=computed(()=>references.workOrders.map((i:any)=>({label:i.code+' · '+i.title,value:i.id})));
 const expenseTypeOptions=[{label:'差旅',value:'TRAVEL'},{label:'交通',value:'TRANSPORT'},{label:'住宿',value:'ACCOMMODATION'},{label:'工具采购',value:'TOOL'},{label:'其他',value:'OTHER'}];
 onMounted(loadData);
-async function loadData(){loading.value=true;try{[expenses.value,references.users,references.projects,references.workOrders]=await Promise.all([listExpenses(),getOfficeReferences().then(r=>r.users) as any,getOfficeReferences().then(r=>r.projects),getOfficeReferences().then(r=>r.workOrders)]).catch(()=>[]);}catch(error){message.error(error instanceof Error?error.message:'数据加载失败');}finally{loading.value=false;}}
+async function loadData(){loading.value=true;try{const [expenseData,referenceData]=await Promise.all([listExpenses(),getOfficeReferences()]);expenses.value=expenseData||[];references.users=referenceData.users||[];references.projects=referenceData.projects||[];references.workOrders=referenceData.workOrders||[];}catch(error){message.error(error instanceof Error?error.message:'数据加载失败');}finally{loading.value=false;}}
 function goBack(){router.push('/office');}
 function openExpense(){Object.assign(expenseForm,{code:generateCode('BX'),claimantId:auth.user?.id,claimantName:auth.user?.displayName||'',projectId:undefined,workOrderId:undefined,expenseType:'TRAVEL',amount:0,expenseDate:today(),description:''});expenseOpen.value=true;}
 function onClaimantChange(id:string){expenseForm.claimantName=references.users.find((i:any)=>i.id===id)?.displayName||'';}

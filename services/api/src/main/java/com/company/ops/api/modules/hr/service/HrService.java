@@ -334,9 +334,9 @@ public class HrService {
         entity.setApprovedAt(java.time.LocalDateTime.now());
         entity.setApprovalRemark(req.remark());
         var saved = leaveRequestRepository.save(entity);
-        // Deduct leave balance on approval
+        // Keep approval and leave-balance deduction in the same transaction.
         if (req.approved() && saved.getEmployee() != null) {
-            try { deductLeaveBalance(saved.getEmployee(), saved.getLeaveType(), saved.getTotalDays()); } catch (Exception ignored) {}
+            deductLeaveBalance(saved.getEmployee(), saved.getLeaveType(), saved.getTotalDays());
         }
         return toLeaveResponse(saved);
     }
@@ -429,9 +429,6 @@ public class HrService {
     public java.util.List<com.company.ops.api.modules.hr.dto.HrDtos.TodoItem> listEmployeeTodos(UUID employeeId) {
         var items = new java.util.ArrayList<com.company.ops.api.modules.hr.dto.HrDtos.TodoItem>();
         var now = java.time.LocalDate.now();
-        // Debug: always add a test item to verify the feature works
-        try { throw new RuntimeException(); } catch (Exception e) { items.add(new com.company.ops.api.modules.hr.dto.HrDtos.TodoItem("DEBUG", "DEBUG: 待办功能正常", "如果看到这个说明待办系统在运行", "/self", "HIGH", now.toString())); }
-
         // 1. My pending leave requests
         var pendingLeaves = leaveRequestRepository.findByEmployeeIdOrderByCreatedAtDesc(employeeId)
             .stream().filter(l -> "PENDING".equals(l.getStatus())).toList();

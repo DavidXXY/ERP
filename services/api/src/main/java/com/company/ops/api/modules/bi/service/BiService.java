@@ -112,6 +112,41 @@ public class BiService {
     }
   }
 
+  @Transactional(readOnly = true)
+  public CompanyKpiDashboard companyDashboard(LocalDate startDate, LocalDate endDate) {
+    LocalDate end = endDate == null ? LocalDate.now() : endDate;
+    LocalDate start = startDate == null ? end.minusMonths(6).withDayOfMonth(1) : startDate;
+    List<ServiceContract> contractRows = contracts.findAllByOrderByEndDateAsc().stream()
+        .filter(item -> inRange(firstDate(item.getStartDate(), item.getEndDate()), start, end)).toList();
+    List<Receivable> receivableRows = receivables.findAllByOrderByDueDateAsc().stream()
+        .filter(item -> inRange(item.getDueDate(), start, end)).toList();
+    List<Project> projectRows = projects.findAllByOrderByCreatedAtDesc();
+    List<WorkOrder> orderRows = orders.findAllByOrderByCreatedAtDesc().stream()
+        .filter(item -> inRange(item.getCreatedAt() == null ? null : item.getCreatedAt().toLocalDate(), start, end)).toList();
+    List<ProcurementPayable> payableRows = payables.findAllByOrderByDueDateAsc().stream()
+        .filter(item -> inRange(item.getDueDate(), start, end)).toList();
+    BigDecimal revenue = sum(contractRows.stream().map(ServiceContract::getAmount).toList())
+        .add(sum(orderRows.stream().map(WorkOrder::getBillableAmount).toList()));
+    BigDecimal projectActualCost = sum(projectRows.stream().map(Project::getActualCost).toList());
+    BigDecimal projectBudget = sum(projectRows.stream().map(Project::getBudgetAmount).toList());
+    BigDecimal workOrderCost = sum(orderRows.stream().map(WorkOrder::getCostAmount).toList());
+    BigDecimal procurementAmount = sum(payableRows.stream().map(ProcurementPayable::getAmount).toList());
+    BigDecimal inventoryValue = sum(parts.findAllByOrderByCreatedAtDesc().stream()
+        .map(part -> amount(part.getStockQty()).multiply(amount(part.getUnitCost()))).toList());
+    BigDecimal cashIn = sum(receivableRows.stream().map(Receivable::getSettledAmount).toList());
+    BigDecimal cashOut = sum(payableRows.stream().map(ProcurementPayable::getPaidAmount).toList());
+    BigDecimal grossProfit = revenue.subtract(projectActualCost).subtract(workOrderCost);
+    BigDecimal hours = sum(orderRows.stream().map(WorkOrder::getLaborHours).toList());
+    BigDecimal outboundCost = workOrderCost.add(projectActualCost);
+    return new CompanyKpiDashboard(start, end, revenue, grossProfit, percent(grossProfit, revenue),
+        cashIn, cashOut, cashIn.subtract(cashOut), projectBudget, projectActualCost,
+        percent(projectActualCost.subtract(projectBudget), projectBudget), procurementAmount,
+        percent(procurementAmount, revenue), inventoryValue,
+        inventoryValue.compareTo(BigDecimal.ZERO) > 0 ? outboundCost.divide(inventoryValue, 2, RoundingMode.HALF_UP) : BigDecimal.ZERO,
+        hours.compareTo(BigDecimal.ZERO) > 0 ? revenue.divide(hours, 2, RoundingMode.HALF_UP) : BigDecimal.ZERO,
+        monthlyTrends(), customerProfits(customers.findAllByOrderByCreatedAtDesc(), contractRows, receivableRows, orderRows));
+  }
+
   private List<MonthlyTrend> monthlyTrends() {
     List<MonthlyTrend> result = new ArrayList<>();
     try {
@@ -285,5 +320,19 @@ public class BiService {
 
   private BigDecimal amount(BigDecimal v) {
     return v == null ? BigDecimal.ZERO : v;
+  }
+
+  private LocalDate firstDate(LocalDate primary, LocalDate fallback) {
+    return primary == null ? fallback : primary;
+  }
+
+  private boolean inRange(LocalDate value, LocalDate start, LocalDate end) {
+    return value == null || (!value.isBefore(start) && !value.isAfter(end));
+  }
+
+  private BigDecimal percent(BigDecimal numerator, BigDecimal denominator) {
+    return amount(denominator).compareTo(BigDecimal.ZERO) > 0
+        ? amount(numerator).multiply(BigDecimal.valueOf(100)).divide(denominator, 2, RoundingMode.HALF_UP)
+        : BigDecimal.ZERO;
   }
 }

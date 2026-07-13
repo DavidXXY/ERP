@@ -127,7 +127,7 @@ public class CrmOperationsController {
   }
 
   @PostMapping("/quotes/{id}/approval")
-  @PreAuthorize("hasAuthority('crm:quote:approve')")
+  @PreAuthorize("hasAuthority('crm:quote:approve') and @approvalFlowSecurity.canApprove('QUOTE')")
   public ApiResponse<QuoteResponse> processQuoteApproval(
       @PathVariable UUID id,
       @Valid @RequestBody ProcessQuoteApprovalRequest request
@@ -272,7 +272,7 @@ public class CrmOperationsController {
   }
 
   @PostMapping("/contract-changes/{id}/approve")
-  @PreAuthorize("hasAuthority('crm:contract:update')")
+  @PreAuthorize("hasAuthority('crm:contract:update') and @approvalFlowSecurity.canApprove('CONTRACT_CHANGE')")
   public ApiResponse<ContractChangeResponse> approveContractChange(
       @PathVariable UUID id,
       @Valid @RequestBody ApprovalActionRequest request
@@ -305,7 +305,7 @@ public class CrmOperationsController {
     return ApiResponse.ok(crmOperationsService.renewContract(id));
   }
   @PostMapping("/contract-changes/{id}/reject")
-  @PreAuthorize("hasAuthority('crm:contract:update')")
+  @PreAuthorize("hasAuthority('crm:contract:update') and @approvalFlowSecurity.canApprove('CONTRACT_CHANGE')")
   public ApiResponse<ContractChangeResponse> rejectContractChange(
       @PathVariable UUID id,
       @Valid @RequestBody ApprovalActionRequest request

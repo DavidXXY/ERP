@@ -1,5 +1,6 @@
 package com.company.ops.api.modules.maintenance.service;
 
+import com.company.ops.api.common.service.CodeGenerator;
 import com.company.ops.api.modules.crm.domain.Customer;
 import com.company.ops.api.modules.crm.repository.CustomerRepository;
 import com.company.ops.api.modules.crm.repository.ServiceContractRepository;
@@ -29,18 +30,21 @@ public class MaintenanceService {
   private final WorkOrderStatusLogRepository statusLogRepository;
   private final CustomerRepository customerRepository;
   private final ServiceContractRepository contractRepository;
+  private final CodeGenerator codeGenerator;
 
   public MaintenanceService(
       WorkOrderRepository workOrderRepository,
       EquipmentAssetRepository equipmentRepository,
       WorkOrderStatusLogRepository statusLogRepository,
       CustomerRepository customerRepository,
-      ServiceContractRepository contractRepository) {
+      ServiceContractRepository contractRepository,
+      CodeGenerator codeGenerator) {
     this.workOrderRepository = workOrderRepository;
     this.equipmentRepository = equipmentRepository;
     this.statusLogRepository = statusLogRepository;
     this.customerRepository = customerRepository;
     this.contractRepository = contractRepository;
+    this.codeGenerator = codeGenerator;
   }
 
   @Transactional(readOnly = true)
@@ -79,11 +83,18 @@ public class MaintenanceService {
   @Transactional
   public WorkOrderResponse createWorkOrder(CreateWorkOrderRequest r) {
     WorkOrder o = new WorkOrder();
-    o.setCode("WO" + System.currentTimeMillis());
+    o.setCode(codeGenerator.generate("WORK_ORDER"));
     o.setTitle(r.title());
     o.setProblemDescription(r.description());
     o.setCustomerId(r.customerId());
     o.setEquipmentId(r.equipmentId());
+    if (r.equipmentId() != null) {
+      equipmentRepository.findById(r.equipmentId()).ifPresent(asset -> {
+        o.setEquipmentName(asset.getName());
+        o.setPlannedDate(asset.getNextMaintenanceDate());
+        o.setContractId(asset.getContractId());
+      });
+    }
     o.setWorkType(r.workType());
     o.setPriority(r.priority());
     o.setSource(r.source());

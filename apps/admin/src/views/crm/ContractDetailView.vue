@@ -170,7 +170,7 @@ import { useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
 const auth = useAuthStore();
 import { createProject } from "@/api/project";
-import { getContract, getOpportunity, getQuote, uploadAttachment, deleteAttachment, listAttachments, getAttachmentDownloadUrl, updateContract, createContractChange, approveContractChange, rejectContractChange, listContractChanges, type Opportunity, type QuotePlan, type ServiceContract, type CrmAttachment, type UpdateContractPayload, type CreateContractChangePayload, type ContractChangeResponse, type ApprovalActionPayload } from "@/api/crm";
+import { getContract, getOpportunity, getQuote, uploadAttachment, deleteAttachment, listAttachments, getAttachmentDownloadUrl, createContractChange, approveContractChange, rejectContractChange, listContractChanges, type Opportunity, type QuotePlan, type ServiceContract, type CrmAttachment, type ContractChangeResponse } from "@/api/crm";
 import { contractStatusColor, contractStatusLabel, formatMoney, opportunityStageColor, opportunityStageLabel, quoteStatusColor, quoteStatusLabel } from "./crm-options";
 
 const route = useRoute();
@@ -193,7 +193,9 @@ const changeColumns = [
 const editRules = { projectName: [{ required: true, message: "请输入项目名称" }], amount: [{ required: true, message: "请输入合同金额" }], };
 const id = route.params.id as string;
 
-onMounted(() => { loadData(); loadAttachments(); loadChanges(); });
+onMounted(loadData);
+onMounted(loadAttachments);
+onMounted(loadChanges);
 
 async function loadData() {
   loading.value = true;

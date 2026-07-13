@@ -43,6 +43,7 @@ fi
 export JAVA_HOME="$JAVA_HOME_VALUE"
 export PATH="$JAVA_HOME/bin:$(dirname "$MAVEN_BIN"):$PATH"
 export SPRING_PROFILES_ACTIVE=local
+export SERVER_PORT="${SERVER_PORT:-8081}"
 
 cd "$ROOT_DIR/services/api"
 exec "$MAVEN_BIN" spring-boot:run

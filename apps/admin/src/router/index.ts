@@ -21,10 +21,12 @@ import SystemHealthView from "@/views/system/SystemHealthView.vue";
 import RoleManagementView from "@/views/system/RoleManagementView.vue";
 import PermissionManagementView from "@/views/system/PermissionManagementView.vue";
 import OrganizationView from "@/views/system/OrganizationView.vue";
+import ApprovalConfigView from "@/views/system/ApprovalConfigView.vue";
 import { useAuthStore } from "@/stores/auth";
 
 const rootRoutes: RouteRecordRaw[] = [
   { path: "dashboard", name: "dashboard", component: CrmDashboardView, meta: { title: "\u7ecf\u8425\u9a7e\u9a76\u8231", permission: "dashboard:view" } },
+  { path: "risk-center", name: "risk-center", component: () => import("@/views/RiskCenterView.vue"), meta: { title: "统一风险中心", permissions: ["risk:view", "dashboard:view", "office:approval:view", "office:notification:view", "inventory:view", "procurement:view", "project:view", "finance:receivable:view", "finance:payable:view", "qualification:warning:view", "crm:renewal:view"] } },
   { path: "profile", name: "personal-settings", component: () => import("@/views/personal/PersonalSettingsView.vue"), meta: { title: "\u4e2a\u4eba\u8bbe\u7f6e" } },
   // CRM
   { path: "crm/dashboard", name: "crm-dashboard", component: CrmDashboardView, meta: { title: "CRM仪表盘", permission: "crm:dashboard:view" } },
@@ -99,6 +101,7 @@ const rootRoutes: RouteRecordRaw[] = [
   { path: "system/organizations", name: "system-organizations", component: OrganizationView, meta: { title: "\u7ec4\u7ec7\u67b6\u6784", permission: "system:organization:view" } },
   { path: "system/roles", name: "system-roles", component: RoleManagementView, meta: { title: "\u89d2\u8272\u7ba1\u7406", permission: "system:role:view" } },
   { path: "system/permissions", name: "system-permissions", component: PermissionManagementView, meta: { title: "\u6743\u9650\u7ba1\u7406", permission: "system:permission:view" } },
+  { path: "system/approval-configs", name: "system-approval-configs", component: ApprovalConfigView, meta: { title: "审批人员配置", permission: "system:role:view" } },
   // Self-service
   { path: "self", name: "self-dashboard", component: SelfDashboardView, meta: { title: "\u6211\u7684\u5de5\u4f5c\u53f0" } },
   { path: "self/profile", name: "self-profile", component: SelfProfileView, meta: { title: "\u6211\u7684\u6863\u6848" } },
@@ -131,4 +134,3 @@ router.beforeEach(async (to) => {
 });
 
 export default router;
-

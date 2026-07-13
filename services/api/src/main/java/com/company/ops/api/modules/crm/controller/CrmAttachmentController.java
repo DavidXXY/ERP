@@ -5,13 +5,11 @@ import com.company.ops.api.modules.crm.service.CrmAttachmentService;
 import com.company.ops.api.modules.crm.service.CrmAttachmentService.AttachmentDto;
 import com.company.ops.api.modules.system.security.UserPrincipal;
 import jakarta.servlet.http.HttpServletResponse;
-import java.io.InputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -53,7 +51,7 @@ public class CrmAttachmentController {
   }
 
   @PostMapping("/upload")
-  @PreAuthorize("hasAnyAuthority('crm:contract:update', 'crm:quote:update', 'crm:opportunity:update', 'crm:customer:update')")
+  @PreAuthorize("hasAnyAuthority('crm:contract:update', 'crm:quote:update', 'crm:quote:convert', 'crm:opportunity:update', 'crm:customer:update')")
   public ApiResponse<AttachmentDto> upload(
       @RequestParam String entityType, @RequestParam UUID entityId,
       @RequestParam(required = false) String attachmentType,
@@ -67,19 +65,24 @@ public class CrmAttachmentController {
   @PreAuthorize("hasAnyAuthority('crm:contract:view', 'crm:quote:view', 'crm:opportunity:view', 'crm:customer:view')")
   public void download(@PathVariable UUID id, HttpServletResponse response) {
     try {
-      Path filePath = service.getFilePath(id);
       String fileName = service.getFileName(id);
-      String contentType = Files.probeContentType(filePath);
-      if (contentType == null) contentType = "application/octet-stream";
-      response.setContentType(contentType);
+      Resource resource = service.load(id);
+      response.setContentType(service.getMimeType(id));
       response.setHeader(HttpHeaders.CONTENT_DISPOSITION,
           "inline; filename*=UTF-8''" + URLEncoder.encode(fileName, StandardCharsets.UTF_8));
-      try (InputStream is = Files.newInputStream(filePath)) {
+      try (var is = resource.getInputStream()) {
         is.transferTo(response.getOutputStream());
       }
     } catch (Exception e) {
       response.setStatus(500);
     }
+  }
+
+  @GetMapping("/{id}/temporary-url")
+  @PreAuthorize("hasAnyAuthority('crm:contract:view', 'crm:quote:view', 'crm:opportunity:view', 'crm:customer:view')")
+  public ApiResponse<String> temporaryUrl(@PathVariable UUID id) {
+    String url = service.temporaryUrl(id);
+    return ApiResponse.ok(url == null ? "" : url);
   }
 
   @DeleteMapping("/{id}")

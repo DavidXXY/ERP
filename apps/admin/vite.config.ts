@@ -4,6 +4,8 @@ import Components from "unplugin-vue-components/vite";
 import { AntDesignVueResolver } from "unplugin-vue-components/resolvers";
 import { fileURLToPath, URL } from "node:url";
 
+const apiProxyTarget = process.env.VITE_API_PROXY_TARGET || "http://localhost:8081";
+
 export default defineConfig({
   cacheDir: "../../node_modules/.vite-admin",
   plugins: [
@@ -28,6 +30,7 @@ export default defineConfig({
     },
   ],
   build: {
+    chunkSizeWarningLimit: 1600,
     rolldownOptions: {
       output: {
         codeSplitting: {
@@ -62,11 +65,11 @@ export default defineConfig({
     port: 5174,
     proxy: {
       "/api": {
-        target: "http://localhost:8080",
+        target: apiProxyTarget,
         changeOrigin: true,
       },
       "/qualification-files": {
-        target: "http://localhost:8080",
+        target: apiProxyTarget,
         changeOrigin: true,
       },
     },

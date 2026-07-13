@@ -96,6 +96,15 @@
           <a-col :xs="12" :md="6"><a-statistic title="净现金流" :value="biSummary.netCashFlow" :formatter="moneyFormatter" :value-style="{color:biSummary.netCashFlow<0?'#ff4d4f':'#237804'}" /></a-col>
         </a-row>
       </a-card>
+      <a-card title="经营风险摘要" :loading="loading">
+        <a-row :gutter="[12, 8]">
+          <a-col :xs="12" :md="6"><a-statistic title="高优先风险" :value="riskScore" suffix="项" :value-style="{color:riskScore>0?'#ff4d4f':'#52c41a'}" /></a-col>
+          <a-col :xs="12" :md="6"><a-statistic title="逾期应收" :value="stats.overdueCount" suffix="笔" /></a-col>
+          <a-col :xs="12" :md="6"><a-statistic title="低库存" :value="biSummary.lowStockParts" suffix="项" /></a-col>
+          <a-col :xs="12" :md="6"><a-statistic title="续约风险" :value="biSummary.renewalRisks" suffix="份" /></a-col>
+        </a-row>
+        <a-button block style="margin-top:12px" @click="router.push('/risk-center')">查看统一风险中心</a-button>
+      </a-card>
       <a-card title="团队排行" :loading="loading">
         <a-table :data-source="teamData" :columns="teamColumns" :pagination="false" size="small">
           <template #bodyCell="{ column, record, index }">
@@ -114,7 +123,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
 import { message } from "ant-design-vue";
 import { useRouter } from "vue-router";
 import { listCustomers, listOpportunities, listQuotes, listContracts, listReceivables, listFollowUps } from "@/api/crm";
@@ -155,6 +164,7 @@ const pendingList = ref<{ id: string; type: string; desc: string; time: string; 
 const teamData = ref<{ name: string; opps: number; won: number; amount: number }[]>([]);
 const trendData = ref<{ month: string; count: number; amount: number; barHeight: number }[]>([]);
 const trendYLabels = ref<string[]>([]);
+const riskScore = computed(() => stats.overdueCount + Number(biSummary.lowStockParts || 0) + Number(biSummary.renewalRisks || 0) + Number(biSummary.complaints || 0));
 const teamColumns = [
   { title: "#", key: "rank", width: 40 },
   { title: "负责人", dataIndex: "name", width: 80 },

@@ -54,8 +54,10 @@ ops:
     jwt-secret: ${JWT_SECRET:ops-erp-local-development-secret-please-change}
     jwt-expire-minutes: ${JWT_EXPIRE_MINUTES:720}
   storage:
+    type: ${STORAGE_TYPE:local}
     endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
     access-key: ${MINIO_ACCESS_KEY:ops_erp_minio}
     secret-key: ${MINIO_SECRET_KEY:ops_erp_minio_password}
     bucket: ${MINIO_BUCKET:ops-erp}
+    presigned-expiry-seconds: ${MINIO_PRESIGNED_EXPIRY_SECONDS:600}
     local-path: ${LOCAL_STORAGE_PATH:.local-data/uploads}

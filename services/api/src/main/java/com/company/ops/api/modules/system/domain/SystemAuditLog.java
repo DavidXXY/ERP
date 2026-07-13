@@ -25,6 +25,14 @@ public class SystemAuditLog extends BaseEntity {
 
   @Column(name = "client_ip", length = 50)
   private String clientIp;
+  @Column(name = "query_string", length = 1000)
+  private String queryString;
+  @Column(name = "operation_type", length = 40)
+  private String operationType;
+  @Column(name = "biz_module", length = 80)
+  private String bizModule;
+  @Column(name = "biz_object", length = 120)
+  private String bizObject;
 
   public String getUsername() { return username; }
   public void setUsername(String v) { username = v; }
@@ -38,4 +46,12 @@ public class SystemAuditLog extends BaseEntity {
   public void setDurationMs(long v) { durationMs = v; }
   public String getClientIp() { return clientIp; }
   public void setClientIp(String v) { clientIp = v; }
+  public String getQueryString() { return queryString; }
+  public void setQueryString(String v) { queryString = v; }
+  public String getOperationType() { return operationType; }
+  public void setOperationType(String v) { operationType = v; }
+  public String getBizModule() { return bizModule; }
+  public void setBizModule(String v) { bizModule = v; }
+  public String getBizObject() { return bizObject; }
+  public void setBizObject(String v) { bizObject = v; }
 }

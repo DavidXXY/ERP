@@ -93,7 +93,7 @@ public class FinanceController {
   }
 
   @PostMapping("/payment-applications/{id}/approval")
-  @PreAuthorize("hasAuthority('finance:payment:approve')")
+  @PreAuthorize("hasAuthority('finance:payment:approve') and @approvalFlowSecurity.canApprove('PAYMENT')")
   public ApiResponse<PaymentApplicationResponse> processApplication(
       @PathVariable UUID id,
       @Valid @RequestBody ProcessPaymentApplicationRequest request

@@ -28,6 +28,11 @@
           <span>经营驾驶舱</span>
         </a-menu-item>
 
+        <a-menu-item v-if="canAccessRiskCenter" key="/risk-center">
+          <template #icon><WarningOutlined /></template>
+          <span>统一风险中心</span>
+        </a-menu-item>
+
         <a-sub-menu
           v-if="canAccessCrm"
           key="crm"
@@ -119,6 +124,7 @@
           <a-menu-item v-if="auth.can('system:organization:view')" key="/system/organizations">组织架构</a-menu-item>
           <a-menu-item v-if="auth.can('system:role:view')" key="/system/roles">角色管理</a-menu-item>
           <a-menu-item v-if="auth.can('system:permission:view')" key="/system/permissions">权限管理</a-menu-item>
+          <a-menu-item v-if="auth.can('system:role:view')" key="/system/approval-configs">审批人员配置</a-menu-item>
         </a-sub-menu>
         <a-sub-menu key="self">
           <template #icon><UserOutlined /></template>
@@ -141,6 +147,12 @@
         <GlobalSearch />
         <a-space class="app-header-actions">
           <a-tag class="app-environment" color="green">开发环境</a-tag>
+          <a-badge :count="unreadCount" :overflow-count="99">
+            <a-button type="text" @click="router.push('/office/notifications')">
+              消息
+            </a-button>
+          </a-badge>
+          <a-button type="text" @click="router.push('/risk-center')">风险</a-button>
           <a-dropdown :trigger="['click']">
             <a-button type="text">
               {{ auth.user?.displayName || "当前用户" }}
@@ -185,6 +197,7 @@ import SettingOutlined from "@ant-design/icons-vue/SettingOutlined";
 import ShoppingCartOutlined from "@ant-design/icons-vue/ShoppingCartOutlined";
 import TeamOutlined from "@ant-design/icons-vue/TeamOutlined";
 import WalletOutlined from "@ant-design/icons-vue/WalletOutlined";
+import WarningOutlined from "@ant-design/icons-vue/WarningOutlined";
 import UserOutlined from "@ant-design/icons-vue/UserOutlined";
 import SearchOutlined from "@ant-design/icons-vue/SearchOutlined";
 import GlobalSearch from "./GlobalSearch.vue";
@@ -226,6 +239,21 @@ const canAccessFinance = computed(() => [
   "finance:payment:approve",
   "finance:payment:execute",
   "finance:ledger:view",
+].some((permission) => auth.can(permission)));
+const canAccessRiskCenter = computed(() => [
+  "dashboard:view",
+  "risk:view",
+  "office:approval:view",
+  "office:notification:view",
+  "office:expense:view",
+  "office:outsource:view",
+  "inventory:view",
+  "procurement:view",
+  "project:view",
+  "finance:receivable:view",
+  "finance:payable:view",
+  "qualification:warning:view",
+  "crm:renewal:view",
 ].some((permission) => auth.can(permission)));
 const canAccessHumanResources = computed(() => ["qualification:employee:view", "qualification:certificate:view", "workforce:view"].some((permission) => auth.can(permission)));
 const canAccessQualification = computed(() => ["qualification:view", "qualification:company:view", "qualification:tender:view", "qualification:warning:view"].some((permission) => auth.can(permission)));

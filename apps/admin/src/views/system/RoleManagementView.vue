@@ -257,7 +257,9 @@ const assignedUserCount = computed(() => roles.value.reduce((sum, role) => sum +
 const allScopeCount = computed(() => roles.value.filter((role) => role.dataScope === "ALL").length);
 const dataScopeDescription = computed(() => dataScopeDescriptions[formState.dataScope] || "");
 
-onMounted(reloadAll);
+onMounted(loadData);
+onMounted(loadPermissions);
+onMounted(loadOrganizations);
 
 async function reloadAll() {
   await Promise.all([loadData(), loadPermissions(), loadOrganizations()]);

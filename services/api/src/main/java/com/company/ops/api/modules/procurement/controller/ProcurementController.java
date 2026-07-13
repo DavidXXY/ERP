@@ -8,6 +8,7 @@ import com.company.ops.api.modules.procurement.dto.GoodsReceiptResponse;
 import com.company.ops.api.modules.procurement.dto.ProcessPurchaseRequestApprovalRequest;
 import com.company.ops.api.modules.procurement.dto.ProcurementCostAllocationResponse;
 import com.company.ops.api.modules.procurement.dto.ProcurementCostTargetOptionsResponse;
+import com.company.ops.api.modules.procurement.dto.ProcurementMatchingResponse;
 import com.company.ops.api.modules.procurement.dto.ProcurementPayableResponse;
 import com.company.ops.api.modules.procurement.dto.PurchaseOrderResponse;
 import com.company.ops.api.modules.procurement.dto.PurchaseRequestResponse;
@@ -75,6 +76,12 @@ public class ProcurementController {
     return ApiResponse.ok(procurementService.listCostAllocations());
   }
 
+  @GetMapping("/matching")
+  @PreAuthorize("hasAuthority('procurement:view')")
+  public ApiResponse<List<ProcurementMatchingResponse>> matching() {
+    return ApiResponse.ok(procurementService.matching());
+  }
+
   @GetMapping("/requests")
   @PreAuthorize("hasAuthority('procurement:view')")
   public ApiResponse<Page<PurchaseRequestResponse>> listPurchaseRequests(
@@ -100,7 +107,7 @@ public class ProcurementController {
   }
 
   @PostMapping("/requests/{id}/approval")
-  @PreAuthorize("hasAuthority('procurement:request:approve')")
+  @PreAuthorize("hasAuthority('procurement:request:approve') and @approvalFlowSecurity.canApprove('PURCHASE')")
   public ApiResponse<PurchaseRequestResponse> processRequestApproval(
       @PathVariable UUID id,
       @Valid @RequestBody ProcessPurchaseRequestApprovalRequest request

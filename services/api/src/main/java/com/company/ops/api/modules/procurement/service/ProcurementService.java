@@ -28,6 +28,7 @@ import com.company.ops.api.modules.procurement.dto.ProcessPurchaseRequestApprova
 import com.company.ops.api.modules.procurement.dto.ProcurementCostAllocationResponse;
 import com.company.ops.api.modules.procurement.dto.ProcurementCostTargetOptionResponse;
 import com.company.ops.api.modules.procurement.dto.ProcurementCostTargetOptionsResponse;
+import com.company.ops.api.modules.procurement.dto.ProcurementMatchingResponse;
 import com.company.ops.api.modules.procurement.dto.ProcurementPayableResponse;
 import com.company.ops.api.modules.procurement.dto.PurchaseOrderResponse;
 import com.company.ops.api.modules.procurement.dto.PurchaseRequestResponse;
@@ -513,6 +514,26 @@ public class ProcurementService {
         .toList();
   }
 
+  @Transactional(readOnly = true)
+  public List<ProcurementMatchingResponse> matching() {
+    List<PurchaseOrder> orders = orderRepository.findAllByOrderByCreatedAtDesc();
+    Map<UUID, Supplier> suppliers = supplierRepository.findAllById(
+        orders.stream().map(PurchaseOrder::getSupplierId).distinct().toList()
+    ).stream().collect(Collectors.toMap(Supplier::getId, Function.identity()));
+    Map<UUID, List<GoodsReceipt>> receiptsByOrder = receiptRepository.findAll().stream()
+        .collect(Collectors.groupingBy(GoodsReceipt::getOrderId));
+    Map<UUID, List<ProcurementPayable>> payablesByOrder = payableRepository.findAll().stream()
+        .collect(Collectors.groupingBy(ProcurementPayable::getOrderId));
+    return orders.stream()
+        .map(order -> toMatchingResponse(
+            order,
+            suppliers.get(order.getSupplierId()),
+            receiptsByOrder.getOrDefault(order.getId(), List.of()),
+            payablesByOrder.getOrDefault(order.getId(), List.of())
+        ))
+        .toList();
+  }
+
   private List<PurchaseOrderResponse> mapOrders(List<PurchaseOrder> orders) {
     Map<UUID, Supplier> suppliers = supplierRepository.findAllById(
         orders.stream().map(PurchaseOrder::getSupplierId).distinct().toList()
@@ -539,6 +560,39 @@ public class ProcurementService {
         supplier.getPhone(),
         supplier.getSettlementTerms(),
         supplier.getRiskStatus()
+    );
+  }
+
+  private ProcurementMatchingResponse toMatchingResponse(
+      PurchaseOrder order,
+      Supplier supplier,
+      List<GoodsReceipt> receipts,
+      List<ProcurementPayable> payables
+  ) {
+    BigDecimal receiptAmount = receipts.stream().map(GoodsReceipt::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+    BigDecimal payableAmount = payables.stream().map(ProcurementPayable::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+    BigDecimal paidAmount = payables.stream().map(ProcurementPayable::getPaidAmount).map(this::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
+    BigDecimal orderedQty = amount(order.getOrderedQty());
+    BigDecimal receivedQty = amount(order.getReceivedQty());
+    BigDecimal orderAmount = amount(order.getOrderAmount());
+    String status;
+    String risk;
+    if (order.getStatus() == PurchaseOrderStatus.CANCELLED) {
+      status = "CANCELLED"; risk = "订单已取消";
+    } else if (receivedQty.compareTo(orderedQty) < 0) {
+      status = "RECEIVING"; risk = "尚未收齐";
+    } else if (payableAmount.compareTo(receiptAmount) < 0) {
+      status = "PAYABLE_MISSING"; risk = "应付金额少于入库金额";
+    } else if (payableAmount.compareTo(receiptAmount) > 0) {
+      status = "AMOUNT_MISMATCH"; risk = "应付金额超过入库金额";
+    } else if (receiptAmount.compareTo(orderAmount) != 0) {
+      status = "AMOUNT_MISMATCH"; risk = "入库金额与订单金额不一致";
+    } else {
+      status = "MATCHED"; risk = "三单一致";
+    }
+    return new ProcurementMatchingResponse(
+        order.getId(), order.getCode(), supplier == null ? null : supplier.getName(), order.getPartName(),
+        orderedQty, receivedQty, orderAmount, receiptAmount, payableAmount, paidAmount, status, risk
     );
   }
 

@@ -6,6 +6,7 @@ echo
 
 missing=0
 has_local_profile=0
+API_PORT="${API_PORT:-8081}"
 
 check_command() {
   local name="$1"
@@ -78,11 +79,11 @@ else
   echo "MISS PostgreSQL: not listening on 5432"
   missing=1
 fi
-check_port 8080 "Spring Boot API"
+check_port "$API_PORT" "Spring Boot API"
 
 echo
-if curl -fsS http://localhost:8080/actuator/health >/dev/null 2>&1; then
-  echo "OK   API health: http://localhost:8080/actuator/health"
+if curl -fsS "http://localhost:${API_PORT}/actuator/health" >/dev/null 2>&1; then
+  echo "OK   API health: http://localhost:${API_PORT}/actuator/health"
 else
   echo "MISS API health: backend is not reachable"
   missing=1

@@ -36,8 +36,8 @@
           </template>
           <template v-else-if="column.key === 'actions'">
             <a-space v-if="record.status === 'PENDING'">
-              <a-button v-if="canManage" type="link" size="small" @click="approveLeave(record, true)">通过</a-button>
-              <a-button v-if="canManage" type="link" danger size="small" @click="approveLeave(record, false)">驳回</a-button>
+              <a-button v-if="canManage" type="link" size="small" @click="openApproveLeave(record, true)">通过</a-button>
+              <a-button v-if="canManage" type="link" danger size="small" @click="openApproveLeave(record, false)">驳回</a-button>
             </a-space>
           </template>
         </template>
@@ -100,7 +100,7 @@ import { PlusOutlined, ReloadOutlined } from "@ant-design/icons-vue";
 import { useAuthStore } from "@/stores/auth";
 import { listQualificationEmployees, type QualificationEmployee } from "@/api/qualification";
 import {
-  listAllLeaves, createLeave, approveLeave as approveLeaveApi,
+  listAllLeaves, createLeave, approveLeave,
   type LeaveRecord, type LeavePayload,
 } from "@/api/hr";
 
@@ -213,7 +213,7 @@ const approveAction = ref<boolean | null>(null);
 const approveRecord = ref<LeaveRecord>();
 const approveRemark = ref("");
 
-function approveLeave(record: LeaveRecord, approved: boolean) {
+function openApproveLeave(record: LeaveRecord, approved: boolean) {
   approveRecord.value = record;
   approveAction.value = approved;
   approveRemark.value = "";
@@ -224,7 +224,7 @@ async function confirmApprove() {
   if (!approveRecord.value) return;
   saving.value = true;
   try {
-    await approveLeaveApi(approveRecord.value.id, {
+    await approveLeave(approveRecord.value.id, {
       approved: approveAction.value!,
       remark: approveRemark.value,
       operatorName: auth.user?.displayName || "系统管理员",

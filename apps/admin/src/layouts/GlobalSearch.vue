@@ -31,7 +31,7 @@
 import { ref } from "vue";
 import SearchOutlined from "@ant-design/icons-vue/SearchOutlined";
 import { useRouter } from "vue-router";
-import { searchGlobal, type SearchResult } from "@/api/system";
+import { searchGlobal } from "@/api/system";
 
 const router = useRouter();
 const selectedValue = ref("");

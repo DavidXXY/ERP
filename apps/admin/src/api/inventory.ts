@@ -110,9 +110,25 @@ export type MaterialReturn = {
   lines: MaterialReturnLine[];
 };
 
+export type ReplenishmentSuggestion = {
+  partId: string;
+  partCode?: string;
+  partName: string;
+  model?: string;
+  stockQty: number;
+  safetyQty: number;
+  recentOutboundQty: number;
+  suggestedQty: number;
+  reason: string;
+  priority: string;
+};
 
 export function listInventoryParts() {
   return request<InventoryPart[]>({ method: "GET", url: "/inventory/parts" });
+}
+
+export function listReplenishmentSuggestions() {
+  return request<ReplenishmentSuggestion[]>({ method: "GET", url: "/inventory/replenishment-suggestions" });
 }
 
 export function createInventoryPart(payload: CreateInventoryPartPayload) {
@@ -146,4 +162,3 @@ export function listMaterialReturns() {
 export function createMaterialReturn(issueId: string, payload: { code: string; returnDate: string; handlerName: string; lines: Array<{ issueLineId: string; quantity: number }> }) {
   return request<MaterialReturn>({ method: "POST", url: `/inventory/issues/${issueId}/returns`, data: payload });
 }
-

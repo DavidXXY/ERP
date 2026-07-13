@@ -67,7 +67,7 @@ public class HrController {
 
   @PostMapping("/employees/{employeeId}/educations")
   @ResponseStatus(HttpStatus.CREATED)
-  @PreAuthorize("hasAuthority('qualification:employee:manage')")
+  @PreAuthorize("hasAuthority('qualification:employee:manage') and @approvalFlowSecurity.canApprove('LEAVE')")
   public ApiResponse<EducationResponse> createEducation(
       @PathVariable UUID employeeId,
       @Valid @RequestBody EducationRequest request) {

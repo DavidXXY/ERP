@@ -1,6 +1,8 @@
 package com.company.ops.api.modules.office.service;
 
 import com.company.ops.api.common.exception.BusinessException;
+import com.company.ops.api.common.storage.FileStorageService;
+import com.company.ops.api.common.storage.FileStorageService.FilePolicy;
 import com.company.ops.api.modules.maintenance.domain.WorkOrder;
 import com.company.ops.api.modules.maintenance.repository.WorkOrderRepository;
 import com.company.ops.api.modules.ledger.dto.LedgerDtos.PostingLine;
@@ -18,7 +20,10 @@ import com.company.ops.api.modules.office.domain.OutsourceStatus;
 import com.company.ops.api.modules.office.domain.SystemNotification;
 import com.company.ops.api.modules.office.dto.OfficeDtos.AuditResponse;
 import com.company.ops.api.modules.office.dto.OfficeDtos.ApprovalActionResponse;
+import com.company.ops.api.modules.office.dto.OfficeDtos.ApprovalAddSignRequest;
 import com.company.ops.api.modules.office.dto.OfficeDtos.ApprovalResponse;
+import com.company.ops.api.modules.office.dto.OfficeDtos.ApprovalTransferRequest;
+import com.company.ops.api.modules.office.dto.OfficeDtos.ApprovalWithdrawRequest;
 import com.company.ops.api.modules.office.dto.OfficeDtos.CompleteOutsourceRequest;
 import com.company.ops.api.modules.office.dto.OfficeDtos.CreateApprovalRequest;
 import com.company.ops.api.modules.office.dto.OfficeDtos.CreateExpenseRequest;
@@ -33,6 +38,9 @@ import com.company.ops.api.modules.office.dto.OfficeDtos.ProcessApprovalRequest;
 import com.company.ops.api.modules.office.dto.OfficeDtos.SupplierOption;
 import com.company.ops.api.modules.office.dto.OfficeDtos.ProjectOption;
 import com.company.ops.api.modules.office.dto.OfficeDtos.UserOption;
+import com.company.ops.api.modules.office.dto.OfficeDtos.TodoItemResponse;
+import com.company.ops.api.modules.office.dto.OfficeDtos.WarningItemResponse;
+import com.company.ops.api.modules.office.dto.OfficeDtos.WorkbenchResponse;
 import com.company.ops.api.modules.office.dto.OfficeDtos.WorkOrderOption;
 import com.company.ops.api.modules.office.repository.ApprovalActionRepository;
 import com.company.ops.api.modules.office.repository.ApprovalRequestRepository;
@@ -51,24 +59,23 @@ import com.company.ops.api.modules.project.service.ProjectService;
 import com.company.ops.api.modules.system.domain.SystemAuditLog;
 import com.company.ops.api.modules.system.repository.SystemAuditLogRepository;
 import com.company.ops.api.modules.system.repository.SystemUserRepository;
-import java.io.IOException;
+import com.company.ops.api.modules.system.service.ApprovalFlowSecurity;
+import com.company.ops.api.modules.system.service.ApprovalFlowSecurity.ApprovalContext;
+import com.company.ops.api.modules.system.service.ApprovalFlowSecurity.ApprovalPlan;
 import java.math.BigDecimal;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.ArrayList;
+import java.util.Set;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
-import org.springframework.core.io.UrlResource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -76,6 +83,13 @@ import static com.company.ops.api.common.util.MoneyUtils.amount;
 
 @Service
 public class OfficeService {
+  private static final FilePolicy DOCUMENT_POLICY = new FilePolicy(
+      20L * 1024 * 1024,
+      Set.of(".jpg", ".jpeg", ".png", ".webp", ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".txt", ".zip"),
+      "单个文件不能超过20MB",
+      "仅支持图片、PDF、Word、Excel、TXT 或 ZIP 档案",
+      false
+  );
   private final ApprovalRequestRepository approvalRepository;
   private final ApprovalActionRepository actionRepository;
   private final ExpenseClaimRepository expenseRepository;
@@ -89,25 +103,27 @@ public class OfficeService {
   private final SystemUserRepository userRepository;
   private final LedgerService ledgerService;
   private final SystemAuditLogRepository auditLogRepository;
-  private final Path storageRoot;
+  private final ApprovalFlowSecurity approvalFlowSecurity;
+  private final FileStorageService storageService;
 
   public OfficeService(ApprovalRequestRepository approvalRepository, ApprovalActionRepository actionRepository,
                        ExpenseClaimRepository expenseRepository, OutsourceOrderRepository outsourceRepository,
                        DocumentFileRepository documentRepository, SystemNotificationRepository notificationRepository,
-                       SupplierRepository supplierRepository,
-                       ProjectRepository projectRepository, WorkOrderRepository workOrderRepository,
-                       ProjectService projectService, SystemUserRepository userRepository, LedgerService ledgerService, SystemAuditLogRepository auditLogRepository,
-                       @Value("${ops.storage.local-path:.local-data/uploads}") String storagePath) {
+	                       SupplierRepository supplierRepository,
+	                       ProjectRepository projectRepository, WorkOrderRepository workOrderRepository,
+	                       ProjectService projectService, SystemUserRepository userRepository, LedgerService ledgerService, SystemAuditLogRepository auditLogRepository, ApprovalFlowSecurity approvalFlowSecurity,
+	                       FileStorageService storageService) {
     this.approvalRepository = approvalRepository; this.actionRepository = actionRepository;
     this.expenseRepository = expenseRepository; this.outsourceRepository = outsourceRepository;
     this.documentRepository = documentRepository; this.notificationRepository = notificationRepository;
     this.supplierRepository = supplierRepository;
     this.projectRepository = projectRepository; this.workOrderRepository = workOrderRepository;
     this.projectService = projectService; this.userRepository = userRepository;
-    this.ledgerService = ledgerService;
-    this.auditLogRepository = auditLogRepository;
-    this.storageRoot = Path.of(storagePath).toAbsolutePath().normalize();
-  }
+	    this.ledgerService = ledgerService;
+	    this.auditLogRepository = auditLogRepository;
+	    this.approvalFlowSecurity = approvalFlowSecurity;
+	    this.storageService = storageService;
+	  }
 
   @Transactional(readOnly = true)
   public OfficeOverview overview() {
@@ -137,9 +153,60 @@ public class OfficeService {
   @Transactional(readOnly = true)
   public List<ApprovalResponse> listApprovals() { return approvalRepository.findAllByOrderByCreatedAtDesc().stream().map(this::toApproval).toList(); }
 
+  @Transactional(readOnly = true)
+  public WorkbenchResponse workbench() {
+    List<TodoItemResponse> todos = new ArrayList<>();
+    approvalRepository.findAllByOrderByCreatedAtDesc().stream()
+        .filter(item -> item.getStatus() == ApprovalStatus.PENDING)
+        .forEach(item -> todos.add(new TodoItemResponse(
+            "APPROVAL", item.getId(), item.getTitle(), item.getApprovalType().name() + " · " + item.getApplicantName(),
+            amount(item.getAmount()), "HIGH", "/office/approvals", item.getCreatedAt()
+        )));
+    expenseRepository.findAllByOrderByExpenseDateDescCreatedAtDesc().stream()
+        .filter(item -> item.getStatus() == ExpenseStatus.PENDING_APPROVAL)
+        .forEach(item -> todos.add(new TodoItemResponse(
+            "EXPENSE", item.getId(), "费用报销待审批 " + item.getCode(), item.getClaimantName() + " · " + item.getDescription(),
+            amount(item.getAmount()), "MEDIUM", "/office/expenses", item.getCreatedAt()
+        )));
+    outsourceRepository.findAllByOrderByPlannedDateDescCreatedAtDesc().stream()
+        .filter(item -> item.getStatus() == OutsourceStatus.PENDING_APPROVAL)
+        .forEach(item -> todos.add(new TodoItemResponse(
+            "OUTSOURCE", item.getId(), "外包服务待审批 " + item.getCode(), item.getServiceType() + " · " + item.getDescription(),
+            amount(item.getAmount()), "MEDIUM", "/office/outsourcing", item.getCreatedAt()
+        )));
+
+    LocalDate today = LocalDate.now();
+    List<WarningItemResponse> warnings = new ArrayList<>();
+    approvalRepository.findAllByOrderByCreatedAtDesc().stream()
+        .filter(item -> item.getStatus() == ApprovalStatus.PENDING)
+        .filter(item -> item.getCreatedAt() != null && item.getCreatedAt().isBefore(OffsetDateTime.now().minusDays(2)))
+        .forEach(item -> warnings.add(new WarningItemResponse(
+            "APPROVAL_OVERDUE", item.getId(), "审批超时", item.getTitle() + " 已等待超过2天", "HIGH", "/office/approvals", item.getCreatedAt()
+        )));
+    outsourceRepository.findAllByOrderByPlannedDateDescCreatedAtDesc().stream()
+        .filter(item -> item.getStatus() == OutsourceStatus.APPROVED || item.getStatus() == OutsourceStatus.IN_PROGRESS)
+        .filter(item -> item.getPlannedDate() != null && item.getPlannedDate().isBefore(today))
+        .forEach(item -> warnings.add(new WarningItemResponse(
+            "OUTSOURCE_OVERDUE", item.getId(), "外包服务逾期", item.getCode() + " 计划日期 " + item.getPlannedDate(), "MEDIUM", "/office/outsourcing", item.getCreatedAt()
+        )));
+    notificationRepository.findAllByOrderByCreatedAtDesc().stream()
+        .filter(item -> !item.isRead())
+        .limit(20)
+        .forEach(item -> warnings.add(new WarningItemResponse(
+            item.getType(), item.getId(), item.getTitle(), item.getContent(), "LOW", "/office/notifications", item.getCreatedAt()
+        )));
+    return new WorkbenchResponse(
+        todos.stream().sorted((a, b) -> b.createdAt().compareTo(a.createdAt())).toList(),
+        warnings.stream().sorted((a, b) -> b.createdAt().compareTo(a.createdAt())).toList(),
+        todos.size(),
+        warnings.stream().filter(item -> "HIGH".equals(item.severity())).count()
+    );
+  }
+
   @Transactional
   public ApprovalResponse createApproval(CreateApprovalRequest request) {
-    ApprovalRequest saved = createApprovalEntity(request.code(), request.approvalType(), request.title(), request.sourceNo(), request.amount(), request.applicantName(), request.content());
+    ApprovalRequest saved = createApprovalEntity(request.code(), request.approvalType(), request.title(), request.sourceNo(), request.amount(), request.applicantName(), request.content(),
+        request.departmentName(), request.businessType(), request.projectCode(), request.supplierRisk(), request.customerLevel());
     notify("APPROVAL", "新的审批待办", saved.getTitle(), "APPROVAL", saved.getId());
     return toApproval(saved);
   }
@@ -149,14 +216,76 @@ public class OfficeService {
     if (request.decision() != ApprovalStatus.APPROVED && request.decision() != ApprovalStatus.REJECTED) throw new BusinessException("审批结论只能选择通过或驳回");
     ApprovalRequest approval = approvalRepository.findByIdForUpdate(id).orElseThrow(() -> new BusinessException("审批单不存在"));
     if (approval.getStatus() != ApprovalStatus.PENDING) throw new BusinessException("该审批单已处理");
-    approval.setStatus(request.decision()); approval.setApproverName(request.approverName());
+    String flowCode = approval.getApprovalType().name();
+    int completedApprovals = completedApprovals(id);
+    ApprovalContext context = approvalContext(approval);
+    ApprovalPlan plan = approvalFlowSecurity.resolve(context);
+    approvalFlowSecurity.requireApprover(context, completedApprovals, approval.getDelegatedUserId());
+    boolean sequential = "SEQUENTIAL".equals(plan.mode());
+    boolean finalStep = !sequential || completedApprovals + 1 >= Math.max(plan.stepCount(), 1);
+    approval.setStatus(request.decision() == ApprovalStatus.REJECTED || finalStep ? request.decision() : ApprovalStatus.PENDING);
+    approval.setApproverName(request.approverName());
     approval.setApprovalComment(request.comment()); approval.setProcessedAt(OffsetDateTime.now());
+    approval.setApprovalMode(plan.mode()); approval.setCurrentStep(finalStep ? Math.max(plan.stepCount(), 1) : completedApprovals + 2);
+    approval.setTotalSteps(Math.max(plan.stepCount(), 1)); approval.setMatchedRuleText(plan.ruleText());
+    approval.setCurrentApproverName(finalStep ? null : currentApproverNames(plan, completedApprovals + 1));
+    approval.setDelegatedUserId(null);
     ApprovalRequest saved = approvalRepository.save(approval);
     ApprovalAction action = new ApprovalAction(); action.setApprovalId(saved.getId()); action.setDecision(request.decision());
-    action.setOperatorName(request.approverName()); action.setComment(request.comment()); actionRepository.save(action);
+    action.setOperatorId(approvalFlowSecurity.currentUserId());
+    action.setOperatorName(request.approverName()); action.setComment(request.comment()); action.setActionType(request.decision() == ApprovalStatus.APPROVED ? "APPROVE" : "REJECT");
+    action.setStepNo(completedApprovals + 1); actionRepository.save(action);
     if (saved.getApprovalType() == ApprovalType.EXPENSE) processExpenseSource(saved);
     if (saved.getApprovalType() == ApprovalType.OUTSOURCE) processOutsourceSource(saved);
     notify("APPROVAL_RESULT", "审批结果：" + saved.getTitle(), request.decision() == ApprovalStatus.APPROVED ? "审批已通过" : "审批已驳回", "APPROVAL", saved.getId());
+    return toApproval(saved);
+  }
+
+  @Transactional
+  public ApprovalResponse transferApproval(UUID id, ApprovalTransferRequest request) {
+    ApprovalRequest approval = approvalRepository.findByIdForUpdate(id).orElseThrow(() -> new BusinessException("审批单不存在"));
+    if (approval.getStatus() != ApprovalStatus.PENDING) throw new BusinessException("该审批单已处理");
+    int completed = completedApprovals(id);
+    approvalFlowSecurity.requireApprover(approvalContext(approval), completed, approval.getDelegatedUserId());
+    var target = userRepository.findById(request.targetUserId()).orElseThrow(() -> new BusinessException("转交人员不存在"));
+    approval.setDelegatedUserId(request.targetUserId());
+    approval.setCurrentApproverName(target.getDisplayName());
+    ApprovalRequest saved = approvalRepository.save(approval);
+    saveRuntimeAction(saved.getId(), "TRANSFER", request.operatorName(), request.comment(), completed + 1);
+    notify("APPROVAL", "审批已转交", saved.getTitle() + " 转交给 " + target.getDisplayName(), "APPROVAL", saved.getId());
+    return toApproval(saved);
+  }
+
+  @Transactional
+  public ApprovalResponse addSignApproval(UUID id, ApprovalAddSignRequest request) {
+    ApprovalRequest approval = approvalRepository.findByIdForUpdate(id).orElseThrow(() -> new BusinessException("审批单不存在"));
+    if (approval.getStatus() != ApprovalStatus.PENDING) throw new BusinessException("该审批单已处理");
+    int completed = completedApprovals(id);
+    approvalFlowSecurity.requireApprover(approvalContext(approval), completed, approval.getDelegatedUserId());
+    var target = userRepository.findById(request.targetUserId()).orElseThrow(() -> new BusinessException("加签人员不存在"));
+    approval.setDelegatedUserId(request.targetUserId());
+    approval.setCurrentApproverName(target.getDisplayName());
+    ApprovalRequest saved = approvalRepository.save(approval);
+    saveRuntimeAction(saved.getId(), "ADD_SIGN", request.operatorName(), request.comment(), completed + 1);
+    notify("APPROVAL", "审批已加签", saved.getTitle() + " 加签给 " + target.getDisplayName(), "APPROVAL", saved.getId());
+    return toApproval(saved);
+  }
+
+  @Transactional
+  public ApprovalResponse withdrawApproval(UUID id, ApprovalWithdrawRequest request) {
+    ApprovalRequest approval = approvalRepository.findByIdForUpdate(id).orElseThrow(() -> new BusinessException("审批单不存在"));
+    if (approval.getStatus() != ApprovalStatus.PENDING) throw new BusinessException("只有待审批单据可以撤回");
+    approval.setStatus(ApprovalStatus.REJECTED);
+    approval.setApproverName(request.operatorName());
+    approval.setApprovalComment("撤回：" + request.comment());
+    approval.setProcessedAt(OffsetDateTime.now());
+    approval.setCurrentApproverName(null);
+    approval.setDelegatedUserId(null);
+    ApprovalRequest saved = approvalRepository.save(approval);
+    saveRuntimeAction(saved.getId(), "WITHDRAW", request.operatorName(), request.comment(), completedApprovals(id) + 1);
+    if (saved.getApprovalType() == ApprovalType.EXPENSE) processExpenseSource(saved);
+    if (saved.getApprovalType() == ApprovalType.OUTSOURCE) processOutsourceSource(saved);
+    notify("APPROVAL_RESULT", "审批已撤回：" + saved.getTitle(), request.comment(), "APPROVAL", saved.getId());
     return toApproval(saved);
   }
 
@@ -182,7 +311,8 @@ public class OfficeService {
     item.setExpenseType(request.expenseType()); item.setAmount(request.amount()); item.setExpenseDate(request.expenseDate());
     item.setDescription(request.description()); item.setStatus(ExpenseStatus.PENDING_APPROVAL);
     ExpenseClaim saved = expenseRepository.save(item);
-    ApprovalRequest approval = createApprovalEntity("SP-" + request.code(), ApprovalType.EXPENSE, "费用报销 " + request.code(), request.code(), request.amount(), request.claimantName(), request.description());
+    ApprovalRequest approval = createApprovalEntity("SP-" + request.code(), ApprovalType.EXPENSE, "费用报销 " + request.code(), request.code(), request.amount(), request.claimantName(), request.description(),
+        null, request.expenseType().name(), project == null ? null : project.getCode(), null, null);
     saved.setApprovalRequestId(approval.getId()); expenseRepository.save(saved);
     notify("APPROVAL", "费用报销待审批", request.code() + " · " + request.claimantName(), "EXPENSE", saved.getId());
     return toExpense(saved, project, order);
@@ -207,7 +337,8 @@ public class OfficeService {
     item.setProjectId(request.projectId()); item.setWorkOrderId(request.workOrderId()); item.setServiceType(request.serviceType());
     item.setDescription(request.description()); item.setAmount(request.amount()); item.setPlannedDate(request.plannedDate());
     item.setStatus(OutsourceStatus.PENDING_APPROVAL); OutsourceOrder saved = outsourceRepository.save(item);
-    ApprovalRequest approval = createApprovalEntity("SP-" + request.code(), ApprovalType.OUTSOURCE, "外包服务 " + request.code(), request.code(), request.amount(), request.applicantName(), request.description());
+    ApprovalRequest approval = createApprovalEntity("SP-" + request.code(), ApprovalType.OUTSOURCE, "外包服务 " + request.code(), request.code(), request.amount(), request.applicantName(), request.description(),
+        null, request.serviceType(), project == null ? null : project.getCode(), supplier.getRiskStatus() == null ? null : supplier.getRiskStatus().name(), null);
     saved.setApprovalRequestId(approval.getId()); outsourceRepository.save(saved);
     notify("APPROVAL", "外包服务待审批", request.code() + " · " + supplier.getName(), "OUTSOURCE", saved.getId());
     return toOutsource(saved, supplier, project, order);
@@ -268,21 +399,10 @@ public class OfficeService {
 
   @Transactional
   public DocumentResponse storeDocument(String bizType, UUID bizId, MultipartFile file) {
-    if (file.isEmpty()) throw new BusinessException("上传文件不能为空");
-    if (file.getSize() > 20L * 1024 * 1024) throw new BusinessException("单个文件不能超过20MB");
-    try {
-      Files.createDirectories(storageRoot);
-      String original = file.getOriginalFilename() == null ? "file" : Path.of(file.getOriginalFilename()).getFileName().toString();
-      String extension = original.contains(".") ? original.substring(original.lastIndexOf('.')) : "";
-      if (extension.length() > 12) extension = "";
-      String objectKey = UUID.randomUUID() + extension;
-      Path target = storageRoot.resolve(objectKey).normalize();
-      if (!target.startsWith(storageRoot)) throw new BusinessException("文件路径非法");
-      Files.copy(file.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
-      DocumentFile item = new DocumentFile(); item.setBizType(bizType); item.setBizId(bizId); item.setFileName(original);
-      item.setObjectKey(objectKey); item.setContentType(file.getContentType()); item.setSizeBytes(file.getSize());
-      return toDocument(documentRepository.save(item));
-    } catch (IOException error) { throw new BusinessException("文件保存失败"); }
+    var stored = storageService.store(file, "office", DOCUMENT_POLICY);
+    DocumentFile item = new DocumentFile(); item.setBizType(bizType); item.setBizId(bizId); item.setFileName(stored.originalName());
+    item.setObjectKey(stored.objectKey()); item.setContentType(stored.contentType()); item.setSizeBytes(stored.sizeBytes());
+    return toDocument(documentRepository.save(item));
   }
 
   @Transactional
@@ -298,10 +418,7 @@ public class OfficeService {
   @Transactional
   public void deleteDocument(UUID id) {
     DocumentFile item = documentRepository.findById(id).orElseThrow(() -> new BusinessException("档案不存在"));
-    try {
-      Path file = storageRoot.resolve(item.getObjectKey()).normalize();
-      if (file.startsWith(storageRoot)) Files.deleteIfExists(file);
-    } catch (IOException error) { /* file already missing, still delete the record */ }
+    storageService.deleteInNamespace("office", item.getObjectKey());
     documentRepository.delete(item);
   }
 
@@ -309,10 +426,7 @@ public class OfficeService {
   public void deleteDocumentsByBiz(String bizType, UUID bizId) {
     List<DocumentFile> items = documentRepository.findByBizTypeAndBizIdOrderByCreatedAtDesc(bizType, bizId);
     for (DocumentFile item : items) {
-      try {
-        Path file = storageRoot.resolve(item.getObjectKey()).normalize();
-        if (file.startsWith(storageRoot)) Files.deleteIfExists(file);
-      } catch (IOException error) { /* skip */ }
+      storageService.deleteInNamespace("office", item.getObjectKey());
     }
     documentRepository.deleteByBizTypeAndBizId(bizType, bizId);
   }
@@ -330,19 +444,11 @@ public class OfficeService {
   public DocumentFile requireDocument(UUID id) { return documentRepository.findById(id).orElseThrow(() -> new BusinessException("档案不存在")); }
 
   public Resource loadDocument(DocumentFile item) {
-    try {
-      Path file = storageRoot.resolve(item.getObjectKey()).normalize();
-      if (!file.startsWith(storageRoot) || !Files.exists(file)) throw new BusinessException("档案文件不存在");
-      return new UrlResource(file.toUri());
-    } catch (IOException error) { throw new BusinessException("档案读取失败"); }
+    return storageService.load("office/" + item.getObjectKey());
   }
 
   public Resource loadDocumentForPreview(DocumentFile item) {
-    try {
-      Path file = storageRoot.resolve(item.getObjectKey()).normalize();
-      if (!file.startsWith(storageRoot) || !Files.exists(file)) throw new BusinessException("档案文件不存在");
-      return new UrlResource(file.toUri());
-    } catch (IOException error) { throw new BusinessException("档案读取失败"); }
+    return storageService.load("office/" + item.getObjectKey());
   }
 
   @Transactional(readOnly = true)
@@ -354,11 +460,51 @@ public class OfficeService {
   }
   @Transactional(readOnly = true)
 
-  private ApprovalRequest createApprovalEntity(String code, ApprovalType type, String title, String sourceNo, BigDecimal amount, String applicant, String content) {
+  private ApprovalRequest createApprovalEntity(String code, ApprovalType type, String title, String sourceNo, BigDecimal amount, String applicant, String content,
+      String departmentName, String businessType, String projectCode, String supplierRisk, String customerLevel) {
     if (approvalRepository.existsByCode(code)) throw new BusinessException("审批单号已存在");
     ApprovalRequest item = new ApprovalRequest(); item.setCode(code); item.setApprovalType(type); item.setTitle(title);
     item.setSourceNo(sourceNo); item.setAmount(amount(amount)); item.setApplicantName(applicant); item.setContent(content); item.setStatus(ApprovalStatus.PENDING);
+    item.setDepartmentName(trimToNull(departmentName)); item.setBusinessType(trimToNull(businessType)); item.setProjectCode(trimToNull(projectCode));
+    item.setSupplierRisk(trimToNull(supplierRisk)); item.setCustomerLevel(trimToNull(customerLevel));
+    ApprovalPlan plan = approvalFlowSecurity.resolve(approvalContext(item));
+    item.setApprovalMode(plan.mode()); item.setCurrentStep(plan.configs().isEmpty() ? null : 1); item.setTotalSteps(plan.stepCount() == 0 ? null : plan.stepCount());
+    item.setCurrentApproverName(currentApproverNames(plan, 0)); item.setMatchedRuleText(plan.ruleText());
     return approvalRepository.save(item);
+  }
+
+  private ApprovalContext approvalContext(ApprovalRequest item) {
+    return new ApprovalContext(item.getApprovalType().name(), amount(item.getAmount()), item.getDepartmentName(), item.getBusinessType(),
+        item.getProjectCode(), item.getSupplierRisk(), item.getCustomerLevel());
+  }
+
+  private int completedApprovals(UUID approvalId) {
+    return (int) actionRepository.findByApprovalIdOrderByCreatedAtAsc(approvalId).stream()
+        .filter(item -> item.getDecision() == ApprovalStatus.APPROVED)
+        .filter(item -> item.getActionType() == null || "APPROVE".equals(item.getActionType()) || "ADD_SIGN_APPROVE".equals(item.getActionType()))
+        .count();
+  }
+
+  private String currentApproverNames(ApprovalPlan plan, int completedApprovals) {
+    if (plan.configs().isEmpty()) return null;
+    int step = "SEQUENTIAL".equals(plan.mode()) ? completedApprovals + 1 : 1;
+    return plan.configs().stream()
+        .filter(item -> !"SEQUENTIAL".equals(plan.mode()) || item.getSequenceNo() == step)
+        .map(item -> userRepository.findById(item.getUserId()).map(user -> user.getDisplayName()).orElse("已删除用户"))
+        .distinct()
+        .collect(Collectors.joining("、"));
+  }
+
+  private void saveRuntimeAction(UUID approvalId, String actionType, String operatorName, String comment, int stepNo) {
+    ApprovalAction action = new ApprovalAction();
+    action.setApprovalId(approvalId);
+    action.setDecision(ApprovalStatus.PENDING);
+    action.setOperatorId(approvalFlowSecurity.currentUserId());
+    action.setOperatorName(operatorName);
+    action.setComment(comment);
+    action.setActionType(actionType);
+    action.setStepNo(stepNo);
+    actionRepository.save(action);
   }
 
   private void processExpenseSource(ApprovalRequest approval) {
@@ -410,6 +556,10 @@ public class OfficeService {
             item.getResponseStatus(),
             item.getClientIp(),
             item.getDurationMs(),
+            item.getQueryString(),
+            item.getOperationType(),
+            item.getBizModule(),
+            item.getBizObject(),
             item.getCreatedAt()
         ));
         
@@ -420,12 +570,13 @@ public class OfficeService {
     SystemNotification item = new SystemNotification(); item.setType(type); item.setTitle(title); item.setContent(content);
     item.setRelatedType(relatedType); item.setRelatedId(relatedId); item.setRead(false); notificationRepository.save(item);
   }
-  private ApprovalResponse toApproval(ApprovalRequest item) { return new ApprovalResponse(item.getId(), item.getCode(), item.getApprovalType(), item.getTitle(), item.getSourceNo(), amount(item.getAmount()), item.getStatus(), item.getApplicantName(), item.getContent(), item.getApproverName(), item.getApprovalComment(), item.getProcessedAt(), item.getCreatedAt(), actionRepository.findByApprovalIdOrderByCreatedAtAsc(item.getId()).stream().map(action -> new ApprovalActionResponse(action.getId(), action.getDecision(), action.getOperatorName(), action.getComment(), action.getCreatedAt())).toList()); }
+  private ApprovalResponse toApproval(ApprovalRequest item) { return new ApprovalResponse(item.getId(), item.getCode(), item.getApprovalType(), item.getTitle(), item.getSourceNo(), amount(item.getAmount()), item.getStatus(), item.getApplicantName(), item.getContent(), item.getApproverName(), item.getApprovalComment(), item.getProcessedAt(), item.getCreatedAt(), item.getDepartmentName(), item.getBusinessType(), item.getProjectCode(), item.getSupplierRisk(), item.getCustomerLevel(), item.getApprovalMode(), item.getCurrentStep(), item.getTotalSteps(), item.getCurrentApproverName(), item.getMatchedRuleText(), actionRepository.findByApprovalIdOrderByCreatedAtAsc(item.getId()).stream().map(action -> new ApprovalActionResponse(action.getId(), action.getDecision(), action.getOperatorName(), action.getComment(), action.getActionType(), action.getStepNo(), action.getCreatedAt())).toList()); }
   private ExpenseResponse toExpense(ExpenseClaim item, Project project, WorkOrder order) { return new ExpenseResponse(item.getId(), item.getCode(), item.getClaimantId(), item.getClaimantName(), item.getProjectId(), project == null ? null : project.getCode(), item.getWorkOrderId(), order == null ? null : order.getCode(), item.getExpenseType(), item.getAmount(), item.getExpenseDate(), item.getDescription(), item.getStatus(), item.getApprovalRequestId()); }
   private OutsourceResponse toOutsource(OutsourceOrder item, Supplier supplier, Project project, WorkOrder order) { return new OutsourceResponse(item.getId(), item.getCode(), item.getSupplierId(), supplier == null ? null : supplier.getName(), item.getProjectId(), project == null ? null : project.getCode(), item.getWorkOrderId(), order == null ? null : order.getCode(), item.getServiceType(), item.getDescription(), item.getAmount(), item.getPlannedDate(), item.getStatus(), item.getApprovalRequestId(), item.getAcceptanceNote()); }
   private DocumentResponse toDocument(DocumentFile item) { return new DocumentResponse(item.getId(), item.getBizType(), item.getBizId(), item.getFileName(), item.getContentType(), item.getSizeBytes(), item.getCreatedAt()); }
   private NotificationResponse toNotification(SystemNotification item) { return new NotificationResponse(item.getId(), item.getType(), item.getTitle(), item.getContent(), item.getRelatedType(), item.getRelatedId(), item.isRead(), item.getReadAt(), item.getCreatedAt()); }
   private BigDecimal amount(BigDecimal value) { return value == null ? BigDecimal.ZERO : value; }
+  private String trimToNull(String value) { return value == null || value.isBlank() ? null : value.trim(); }
   private Map<UUID, Supplier> supplierMap(List<UUID> ids) { return ids.isEmpty() ? Map.of() : supplierRepository.findAllById(ids.stream().distinct().toList()).stream().collect(Collectors.toMap(Supplier::getId, Function.identity())); }
   private Map<UUID, Project> projectMap(List<UUID> ids) { return ids.isEmpty() ? Map.of() : projectRepository.findAllById(ids.stream().distinct().toList()).stream().collect(Collectors.toMap(Project::getId, Function.identity())); }
   private Map<UUID, WorkOrder> workOrderMap(List<UUID> ids) { return ids.isEmpty() ? Map.of() : workOrderRepository.findAllById(ids.stream().distinct().toList()).stream().collect(Collectors.toMap(WorkOrder::getId, Function.identity())); }

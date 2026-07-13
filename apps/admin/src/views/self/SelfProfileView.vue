@@ -27,7 +27,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import { message } from "ant-design-vue";
-import { getSelfProfile, type LeaveRecord } from "@/api/hr";
+import { getSelfProfile } from "@/api/hr";
 import type { EmployeeDetail } from "@/api/qualification";
 
 const loading = ref(false);

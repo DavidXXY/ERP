@@ -3,12 +3,10 @@ package com.company.ops.api.modules.maintenance.controller;
 import com.company.ops.api.common.api.ApiResponse;
 import com.company.ops.api.modules.maintenance.dto.MaintenanceDtos.*;
 import com.company.ops.api.modules.maintenance.service.MaintenanceService;
-import com.company.ops.api.modules.system.security.UserPrincipal;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -86,11 +84,8 @@ public class MaintenanceController {
   }
 
   @DeleteMapping("/work-orders/{id}")
-  public ApiResponse<Void> deleteWorkOrder(@PathVariable UUID id,
-      @AuthenticationPrincipal UserPrincipal principal) {
-    if (!principal.roleCodes().contains("ADMIN")) {
-      return ApiResponse.fail("删除需要管理员权限");
-    }
+  @PreAuthorize("hasAuthority('maintenance:order:delete')")
+  public ApiResponse<Void> deleteWorkOrder(@PathVariable UUID id) {
     service.deleteWorkOrder(id);
     return ApiResponse.ok();
   }
@@ -108,11 +103,13 @@ public class MaintenanceController {
   }
 
   @GetMapping("/certificates")
+  @PreAuthorize("hasAnyAuthority('maintenance:certificate:view', 'maintenance:view')")
   public ApiResponse<List<CertificateResponse>> certificates() {
     return ApiResponse.ok(service.listCertificates());
   }
 
   @GetMapping("/schedules")
+  @PreAuthorize("hasAnyAuthority('maintenance:schedule:view', 'maintenance:view')")
   public ApiResponse<List<ScheduleResponse>> schedules() {
     return ApiResponse.ok(service.listSchedules());
   }

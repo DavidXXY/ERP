@@ -20,6 +20,7 @@ import com.company.ops.api.modules.project.dto.ProjectBudgetItemRequest;
 import com.company.ops.api.modules.project.dto.ProjectBudgetItemResponse;
 import com.company.ops.api.modules.project.dto.ProjectCostEntryResponse;
 import com.company.ops.api.modules.project.dto.ProjectDetailResponse;
+import com.company.ops.api.modules.project.dto.ProjectProfitabilityResponse;
 import com.company.ops.api.modules.project.dto.ProjectResponse;
 import com.company.ops.api.modules.project.dto.ProjectStageRecordResponse;
 import com.company.ops.api.modules.project.repository.ProjectBudgetItemRepository;
@@ -28,6 +29,7 @@ import com.company.ops.api.modules.project.repository.ProjectRepository;
 import com.company.ops.api.modules.project.repository.ProjectStageRecordRepository;
 import com.company.ops.api.modules.system.security.DataScopeService;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import java.time.OffsetDateTime;
@@ -85,6 +87,17 @@ public class ProjectService {
     Project project = requireProject(id);
     if (!dataScopeService.canViewOwner(project.getManagerName())) throw new BusinessException("无权查看该项目");
     return toDetail(project);
+  }
+
+  @Transactional(readOnly = true)
+  public List<ProjectProfitabilityResponse> profitability() {
+    List<Project> projects = projectRepository.findAllByOrderByCreatedAtDesc().stream()
+        .filter(project -> dataScopeService.canViewOwner(project.getManagerName()))
+        .toList();
+    Map<UUID, String> customerNames = loadCustomerNames(projects);
+    return projects.stream()
+        .map(project -> toProfitability(project, customerNames.get(project.getCustomerId())))
+        .toList();
   }
 
   @Transactional
@@ -302,6 +315,35 @@ public class ProjectService {
         budgetAmount.subtract(actualCost),
         project.getProgress(),
         project.getWarrantyEndDate()
+    );
+  }
+
+  private ProjectProfitabilityResponse toProfitability(Project project, String customerName) {
+    BigDecimal contractAmount = amount(project.getContractAmount());
+    BigDecimal budgetAmount = amount(project.getBudgetAmount());
+    BigDecimal actualCost = amount(project.getActualCost());
+    BigDecimal grossMargin = contractAmount.subtract(actualCost);
+    BigDecimal grossMarginRate = contractAmount.compareTo(BigDecimal.ZERO) == 0
+        ? BigDecimal.ZERO
+        : grossMargin.multiply(BigDecimal.valueOf(100)).divide(contractAmount, 2, RoundingMode.HALF_UP);
+    BigDecimal budgetUsageRate = budgetAmount.compareTo(BigDecimal.ZERO) == 0
+        ? BigDecimal.ZERO
+        : actualCost.multiply(BigDecimal.valueOf(100)).divide(budgetAmount, 2, RoundingMode.HALF_UP);
+    String riskLevel = "LOW";
+    String riskMessage = "项目毛利和预算使用正常";
+    if (budgetAmount.compareTo(BigDecimal.ZERO) > 0 && actualCost.compareTo(budgetAmount) > 0) {
+      riskLevel = "HIGH";
+      riskMessage = "实际成本已超过预算";
+    } else if (grossMargin.compareTo(BigDecimal.ZERO) < 0) {
+      riskLevel = "HIGH";
+      riskMessage = "项目已亏损";
+    } else if (budgetUsageRate.compareTo(BigDecimal.valueOf(85)) >= 0 && project.getProgress() < 85) {
+      riskLevel = "MEDIUM";
+      riskMessage = "预算消耗快于项目进度";
+    }
+    return new ProjectProfitabilityResponse(
+        project.getId(), project.getCode(), project.getName(), customerName, project.getStage(), project.getApprovalStatus(),
+        contractAmount, budgetAmount, actualCost, grossMargin, grossMarginRate, budgetUsageRate, riskLevel, riskMessage
     );
   }
 

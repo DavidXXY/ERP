@@ -101,9 +101,29 @@ export type ProjectDetail = {
   stageRecords: ProjectStageRecord[];
 };
 
+export type ProjectProfitability = {
+  projectId: string;
+  projectCode?: string;
+  projectName: string;
+  customerName?: string;
+  stage: ProjectStage;
+  approvalStatus: ProjectApprovalStatus;
+  contractAmount: number;
+  budgetAmount: number;
+  actualCost: number;
+  grossMargin: number;
+  grossMarginRate: number;
+  budgetUsageRate: number;
+  riskLevel: string;
+  riskMessage: string;
+};
 
 export function listProjects(page?: number, size?: number) {
   return request<PageResponse<Project>>({ method: "GET", url: "/projects", params: { page, size } });
+}
+
+export function listProjectProfitability() {
+  return request<ProjectProfitability[]>({ method: "GET", url: "/projects/profitability" });
 }
 
 export function createProject(payload: CreateProjectPayload) {
@@ -125,4 +145,3 @@ export function advanceProjectStage(id: string, payload: { targetStage: ProjectS
 export function createProjectCost(id: string, payload: { category: ProjectCostCategory; sourceType: ProjectCostSource; sourceNo?: string; description: string; amount: number; incurredDate: string }) {
   return request<ProjectDetail>({ method: "POST", url: `/projects/${id}/costs`, data: payload });
 }
-

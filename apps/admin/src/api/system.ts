@@ -13,6 +13,39 @@ export type UserResponse = {
   updatedAt?: string;
 };
 
+export type ApprovalConfigResponse = {
+  id: string;
+  flowCode: string;
+  flowName: string;
+  userId: string;
+  userName: string;
+  approvalMode: "PARALLEL" | "SEQUENTIAL";
+  sequenceNo: number;
+  conditionType: "ANY" | "AMOUNT" | "DEPARTMENT" | "AMOUNT_AND_DEPARTMENT" | "BUSINESS_TYPE" | "PROJECT" | "SUPPLIER_RISK" | "CUSTOMER_LEVEL" | "COMPOSITE";
+  minAmount?: number;
+  maxAmount?: number;
+  departmentName?: string;
+  businessType?: string;
+  projectCode?: string;
+  supplierRisk?: string;
+  customerLevel?: string;
+  priority: number;
+  remark?: string;
+  enabled: boolean;
+};
+
+export function listApprovalConfigs() {
+  return request<ApprovalConfigResponse[]>({ method: "GET", url: "/system/approval-configs" });
+}
+
+export function createApprovalConfig(data: { flowCode: string; flowName: string; userId: string; approvalMode: "PARALLEL" | "SEQUENTIAL"; sequenceNo: number; conditionType?: ApprovalConfigResponse["conditionType"]; minAmount?: number; maxAmount?: number; departmentName?: string; businessType?: string; projectCode?: string; supplierRisk?: string; customerLevel?: string; priority?: number; remark?: string }) {
+  return request<ApprovalConfigResponse>({ method: "POST", url: "/system/approval-configs", data });
+}
+
+export function deleteApprovalConfig(id: string) {
+  return request<void>({ method: "DELETE", url: `/system/approval-configs/${id}` });
+}
+
 export type CreateUserRequest = {
   orgId?: string;
   username: string;

@@ -9,6 +9,7 @@ import com.company.ops.api.modules.inventory.dto.InventoryPartResponse;
 import com.company.ops.api.modules.inventory.dto.InventoryProjectOptionResponse;
 import com.company.ops.api.modules.inventory.dto.MaterialIssueResponse;
 import com.company.ops.api.modules.inventory.dto.MaterialReturnResponse;
+import com.company.ops.api.modules.inventory.dto.ReplenishmentSuggestionResponse;
 import com.company.ops.api.modules.inventory.dto.StockMovementResponse;
 import com.company.ops.api.modules.inventory.service.InventoryService;
 import jakarta.validation.Valid;
@@ -38,6 +39,12 @@ public class InventoryController {
   @PreAuthorize("hasAuthority('inventory:view')")
   public ApiResponse<List<InventoryPartResponse>> listParts() {
     return ApiResponse.ok(inventoryService.listParts());
+  }
+
+  @GetMapping("/replenishment-suggestions")
+  @PreAuthorize("hasAuthority('inventory:view')")
+  public ApiResponse<List<ReplenishmentSuggestionResponse>> replenishmentSuggestions() {
+    return ApiResponse.ok(inventoryService.replenishmentSuggestions());
   }
 
   @GetMapping("/eligible-projects")

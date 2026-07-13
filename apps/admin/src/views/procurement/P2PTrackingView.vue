@@ -7,9 +7,23 @@
           <a-col :xs="12" :xl="6"><a-card><a-statistic title="采购申请" :value="requests.length" suffix="单" /></a-card></a-col>
           <a-col :xs="12" :xl="6"><a-card><a-statistic title="待转订单" :value="pendingOrder" suffix="单" :value-style="{color:pendingOrder>0?'#faad14':'#52c41a'}" /></a-card></a-col>
           <a-col :xs="12" :xl="6"><a-card><a-statistic title="待入库" :value="pendingReceipt" suffix="单" :value-style="{color:pendingReceipt>0?'#faad14':'#52c41a'}" /></a-card></a-col>
-          <a-col :xs="12" :xl="6"><a-card><a-statistic title="全链路完成" :value="completed" suffix="单" :value-style="{color:'#52c41a'}" /></a-card></a-col>
+          <a-col :xs="12" :xl="6"><a-card><a-statistic title="匹配异常" :value="matchingRiskCount" suffix="单" :value-style="{color:matchingRiskCount>0?'#ff4d4f':'#52c41a'}" /></a-card></a-col>
         </a-row>
       </a-spin>
+    </a-card>
+
+    <a-card title="订单-入库-应付匹配" style="margin-top:16px">
+      <a-table :data-source="matchingItems" :columns="matchingColumns" :loading="loading" :pagination="{pageSize:8}" :row-key="(r:any)=>r.orderId" size="middle" :scroll="{x:1120}">
+        <template #bodyCell="{column,record}">
+          <template v-if="column.key==='order'"><strong>{{ record.orderCode || '-' }}</strong><span class="table-subtitle">{{ record.supplierName || '未知供应商' }} · {{ record.partName }}</span></template>
+          <template v-else-if="column.key==='qty'">{{ record.receivedQty }} / {{ record.orderedQty }}</template>
+          <template v-else-if="column.key==='orderAmount'">{{ formatMoney(record.orderAmount) }}</template>
+          <template v-else-if="column.key==='receiptAmount'">{{ formatMoney(record.receiptAmount) }}</template>
+          <template v-else-if="column.key==='payableAmount'">{{ formatMoney(record.payableAmount) }}</template>
+          <template v-else-if="column.key==='status'"><a-tag :color="matchStatusColor(record.matchStatus)">{{ matchStatusLabel(record.matchStatus) }}</a-tag></template>
+        </template>
+        <template #emptyText>暂无采购订单匹配数据</template>
+      </a-table>
     </a-card>
 
     <a-card title="采购申请 P2P 状态" style="margin-top:16px">
@@ -55,9 +69,10 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue"; import { useRouter } from "vue-router";
 import { message } from "ant-design-vue"; import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
-import { listPurchaseRequests, listPurchaseOrders, listGoodsReceipts, listProcurementPayables, type PurchaseRequest, type PurchaseOrder, type GoodsReceipt, type ProcurementPayable } from "@/api/procurement";
+import { listPurchaseRequests, listPurchaseOrders, listGoodsReceipts, listProcurementPayables, listProcurementMatching, type PurchaseRequest, type PurchaseOrder, type GoodsReceipt, type ProcurementPayable, type ProcurementMatching } from "@/api/procurement";
 const router=useRouter(); const loading=ref(false);
 const requests=ref<PurchaseRequest[]>([]); const orders=ref<PurchaseOrder[]>([]); const receipts=ref<GoodsReceipt[]>([]); const payables=ref<ProcurementPayable[]>([]);
+const matchingItems=ref<ProcurementMatching[]>([]);
 
 const p2pItems=computed(()=>requests.value.map(r=>{
   const order=orders.value.find(o=>o.requestId===r.id);
@@ -77,17 +92,24 @@ const p2pItems=computed(()=>requests.value.map(r=>{
 
 const pendingOrder=computed(()=>p2pItems.value.filter(i=>!i._order).length);
 const pendingReceipt=computed(()=>p2pItems.value.filter(i=>i._order&&!i._receipt).length);
-const completed=computed(()=>p2pItems.value.filter(i=>i._payable).length);
+const matchingRiskCount=computed(()=>matchingItems.value.filter(i=>i.matchStatus!=='MATCHED').length);
 
 const p2pColumns=[
   {title:'申请单',key:'code',width:200},{title:'金额',key:'amount',width:130},
   {title:'P2P 状态',key:'p2p',width:320},
   {title:'申请状态',dataIndex:'status',width:110},
 ];
+const matchingColumns=[
+  {title:'采购订单',key:'order',width:240},{title:'入库/订购数量',key:'qty',width:130},
+  {title:'订单金额',key:'orderAmount',width:130},{title:'入库金额',key:'receiptAmount',width:130},{title:'应付金额',key:'payableAmount',width:130},
+  {title:'匹配状态',key:'status',width:120},{title:'风险说明',dataIndex:'riskMessage',width:260},
+];
 
 onMounted(loadData);
-async function loadData(){loading.value=true;try{const[reqResult,ordResult,rcs,pay]=await Promise.all([listPurchaseRequests(),listPurchaseOrders(),listGoodsReceipts(),listProcurementPayables()]);requests.value=(reqResult as any).content||reqResult;orders.value=(ordResult as any).content||ordResult;receipts.value=rcs;payables.value=pay;}catch(e:any){message.error(e.message||'加载失败');}finally{loading.value=false;}}
+async function loadData(){loading.value=true;try{const[reqResult,ordResult,rcs,pay,matching]=await Promise.all([listPurchaseRequests(),listPurchaseOrders(),listGoodsReceipts(),listProcurementPayables(),listProcurementMatching()]);requests.value=(reqResult as any).content||reqResult;orders.value=(ordResult as any).content||ordResult;receipts.value=rcs;payables.value=pay;matchingItems.value=matching;}catch(e:any){message.error(e.message||'加载失败');}finally{loading.value=false;}}
 function formatMoney(v:number){return new Intl.NumberFormat('zh-CN',{style:'currency',currency:'CNY'}).format(v||0);}
+function matchStatusLabel(v:string){return ({MATCHED:'已匹配',RECEIVING:'待入库',PAYABLE_MISSING:'缺应付',AMOUNT_MISMATCH:'金额不一致',CANCELLED:'已取消'} as Record<string,string>)[v]||v;}
+function matchStatusColor(v:string){return ({MATCHED:'green',RECEIVING:'blue',PAYABLE_MISSING:'orange',AMOUNT_MISMATCH:'red',CANCELLED:'default'} as Record<string,string>)[v]||'default';}
 </script>
 <style scoped>
 .p2p-row{display:flex;align-items:center;gap:6px}.p2p-dot{display:flex;align-items:center;gap:4px}

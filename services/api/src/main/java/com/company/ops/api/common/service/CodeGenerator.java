@@ -63,4 +63,16 @@ public class CodeGenerator {
     String datePart = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
     return prefix + "-" + datePart + "-" + String.format("%0" + DEFAULT_WIDTH + "d", number);
   }
+
+  @Transactional
+  public String generate(String entityType, String organizationCode) {
+    String base = generate(entityType);
+    if (organizationCode == null || organizationCode.isBlank()) return base;
+    String[] parts = base.split("-", 3);
+    return parts.length == 3 ? parts[0] + "-" + organizationCode.trim().toUpperCase() + "-" + parts[1] + "-" + parts[2] : base;
+  }
+
+  public Map<String, String> rules() {
+    return PREFIXES;
+  }
 }

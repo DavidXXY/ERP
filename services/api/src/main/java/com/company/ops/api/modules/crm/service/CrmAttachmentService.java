@@ -1,17 +1,14 @@
 package com.company.ops.api.modules.crm.service;
 
 import com.company.ops.api.common.exception.BusinessException;
+import com.company.ops.api.common.storage.FileStorageService;
+import com.company.ops.api.common.storage.FileStorageService.FilePolicy;
 import com.company.ops.api.modules.crm.domain.CrmAttachment;
 import com.company.ops.api.modules.crm.repository.CrmAttachmentRepository;
 import jakarta.transaction.Transactional;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -22,15 +19,22 @@ public class CrmAttachmentService {
   private static final Set<String> ALLOWED = Set.of(
     ".jpg", ".jpeg", ".png", ".webp", ".pdf", ".doc", ".docx", ".xls", ".xlsx"
   );
+  private static final FilePolicy POLICY = new FilePolicy(
+      MAX_SIZE,
+      ALLOWED,
+      "附件不能超过30MB",
+      "仅支持图片、PDF、Word、Excel文件",
+      true
+  );
 
-  private final Path storageRoot;
+  private final FileStorageService storageService;
   private final CrmAttachmentRepository repository;
 
   public CrmAttachmentService(
-    @Value("${ops.storage.local-path:.local-data/uploads}") String storagePath,
+    FileStorageService storageService,
     CrmAttachmentRepository repository
   ) {
-    this.storageRoot = Path.of(storagePath).toAbsolutePath().normalize().resolve("crm");
+    this.storageService = storageService;
     this.repository = repository;
   }
 
@@ -51,53 +55,44 @@ public class CrmAttachmentService {
 
   @Transactional
   public AttachmentDto upload(String entityType, UUID entityId, String attachmentType, MultipartFile file, String uploadedBy) {
-    if (file.isEmpty()) throw new BusinessException("文件不能为空");
-    if (file.getSize() > MAX_SIZE) throw new BusinessException("附件不能超过30MB");
-    String original = file.getOriginalFilename();
-    if (original == null) original = "attachment";
-    original = Path.of(original).getFileName().toString();
-    String ext = original.contains(".") ? original.substring(original.lastIndexOf('.')).toLowerCase() : "";
-    if (!ALLOWED.contains(ext)) throw new BusinessException("仅支持图片、PDF、Word、Excel文件");
-    try {
-      Files.createDirectories(storageRoot);
-      String objectKey = UUID.randomUUID() + ext;
-      Path target = storageRoot.resolve(objectKey).normalize();
-      if (!target.startsWith(storageRoot)) throw new BusinessException("路径非法");
-      Files.copy(file.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
-
-      CrmAttachment attachment = new CrmAttachment();
-      attachment.setEntityType(entityType);
-      attachment.setEntityId(entityId);
-      attachment.setAttachmentType(attachmentType);
-      attachment.setFileName(original);
-      attachment.setFilePath("crm/" + objectKey);
-      attachment.setFileSize(file.getSize());
-      attachment.setMimeType(file.getContentType());
-      attachment.setUploadedBy(uploadedBy);
-      return toDto(repository.save(attachment));
-    } catch (IOException e) {
-      throw new BusinessException("附件保存失败");
-    }
+    var stored = storageService.store(file, "crm", POLICY);
+    CrmAttachment attachment = new CrmAttachment();
+    attachment.setEntityType(entityType);
+    attachment.setEntityId(entityId);
+    attachment.setAttachmentType(attachmentType);
+    attachment.setFileName(stored.originalName());
+    attachment.setFilePath(stored.relativePath());
+    attachment.setFileSize(stored.sizeBytes());
+    attachment.setMimeType(stored.contentType());
+    attachment.setUploadedBy(uploadedBy);
+    return toDto(repository.save(attachment));
   }
 
   @Transactional
   public void delete(UUID id) {
     CrmAttachment att = repository.findById(id).orElseThrow(() -> new BusinessException("附件不存在"));
-    try {
-      Path filePath = storageRoot.resolve(Path.of(att.getFilePath()).getFileName());
-      Files.deleteIfExists(filePath);
-    } catch (IOException ignored) {}
+    storageService.delete(att.getFilePath());
     repository.delete(att);
   }
 
-  public Path getFilePath(UUID id) {
+  public org.springframework.core.io.Resource load(UUID id) {
     CrmAttachment att = repository.findById(id).orElseThrow(() -> new BusinessException("附件不存在"));
-    return storageRoot.resolve(Path.of(att.getFilePath()).getFileName());
+    return storageService.load(att.getFilePath());
+  }
+
+  public String temporaryUrl(UUID id) {
+    CrmAttachment att = repository.findById(id).orElseThrow(() -> new BusinessException("附件不存在"));
+    return storageService.temporaryUrl(att.getFilePath());
   }
 
   public String getFileName(UUID id) {
     CrmAttachment att = repository.findById(id).orElseThrow(() -> new BusinessException("附件不存在"));
     return att.getFileName();
+  }
+
+  public String getMimeType(UUID id) {
+    CrmAttachment att = repository.findById(id).orElseThrow(() -> new BusinessException("附件不存在"));
+    return att.getMimeType() == null || att.getMimeType().isBlank() ? "application/octet-stream" : att.getMimeType();
   }
 
   private AttachmentDto toDto(CrmAttachment a) {

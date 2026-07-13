@@ -24,14 +24,27 @@ public final class OfficeDtos {
     String code, @NotNull ApprovalType approvalType,
                                       @NotBlank @Size(max=180) String title, @Size(max=64) String sourceNo,
                                       @DecimalMin("0.00") BigDecimal amount, @NotBlank @Size(max=80) String applicantName,
-                                      @NotBlank @Size(max=1000) String content) {}
+                                      @NotBlank @Size(max=1000) String content,
+                                      @Size(max=120) String departmentName, @Size(max=80) String businessType,
+                                      @Size(max=80) String projectCode, @Size(max=40) String supplierRisk,
+                                      @Size(max=40) String customerLevel) {}
   public record ProcessApprovalRequest(@NotNull ApprovalStatus decision, @NotBlank @Size(max=500) String comment,
                                        @NotBlank @Size(max=80) String approverName) {}
-  public record ApprovalActionResponse(UUID id, ApprovalStatus decision, String operatorName, String comment, OffsetDateTime createdAt) {}
+  public record ApprovalTransferRequest(@NotNull UUID targetUserId, @NotBlank @Size(max=500) String comment,
+                                        @NotBlank @Size(max=80) String operatorName) {}
+  public record ApprovalAddSignRequest(@NotNull UUID targetUserId, @NotBlank @Size(max=500) String comment,
+                                       @NotBlank @Size(max=80) String operatorName) {}
+  public record ApprovalWithdrawRequest(@NotBlank @Size(max=500) String comment,
+                                        @NotBlank @Size(max=80) String operatorName) {}
+  public record ApprovalActionResponse(UUID id, ApprovalStatus decision, String operatorName, String comment,
+                                       String actionType, Integer stepNo, OffsetDateTime createdAt) {}
   public record ApprovalResponse(UUID id, String code, ApprovalType approvalType, String title, String sourceNo,
                                  BigDecimal amount, ApprovalStatus status, String applicantName, String content,
                                  String approverName, String approvalComment, OffsetDateTime processedAt,
-                                 OffsetDateTime createdAt, List<ApprovalActionResponse> actions) {}
+                                 OffsetDateTime createdAt, String departmentName, String businessType, String projectCode,
+                                 String supplierRisk, String customerLevel, String approvalMode, Integer currentStep,
+                                 Integer totalSteps, String currentApproverName, String matchedRuleText,
+                                 List<ApprovalActionResponse> actions) {}
   public record CreateExpenseRequest(// auto-gen
     String code, UUID claimantId,
                                      @NotBlank @Size(max=80) String claimantName, UUID projectId, UUID workOrderId,
@@ -57,11 +70,18 @@ public final class OfficeDtos {
   public record NotificationResponse(UUID id, String type, String title, String content, String relatedType,
                                      UUID relatedId, boolean read, OffsetDateTime readAt, OffsetDateTime createdAt) {}
   public record AuditResponse(UUID id, String username, String httpMethod, String requestPath,
-                              Integer responseStatus, String clientIp, Long durationMs, OffsetDateTime createdAt) {}
+                              Integer responseStatus, String clientIp, Long durationMs, String queryString,
+                              String operationType, String bizModule, String bizObject, OffsetDateTime createdAt) {}
   public record SupplierOption(UUID id, String code, String name) {}
   public record ProjectOption(UUID id, String code, String name) {}
   public record WorkOrderOption(UUID id, String code, String title) {}
   public record UserOption(UUID id, String displayName, boolean enabled) {}
   public record OfficeReferenceResponse(List<SupplierOption> suppliers, List<ProjectOption> projects,
                                         List<WorkOrderOption> workOrders, List<UserOption> users) {}
+  public record TodoItemResponse(String type, UUID id, String title, String subtitle, BigDecimal amount,
+                                 String priority, String route, OffsetDateTime createdAt) {}
+  public record WarningItemResponse(String type, UUID id, String title, String content, String severity,
+                                    String route, OffsetDateTime createdAt) {}
+  public record WorkbenchResponse(List<TodoItemResponse> todos, List<WarningItemResponse> warnings,
+                                  long pendingTodoCount, long highSeverityWarningCount) {}
 }

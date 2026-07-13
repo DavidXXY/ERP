@@ -109,12 +109,9 @@ const receivableColumns = [
 
 import {
   listReceivables,
-  recordReceivableReceipt,
-  registerReceivableInvoice,
   updateReceivable,
   type Receivable,
   type ReceivableStatus,
-  type UpdateReceivablePayload,
 } from "@/api/crm";
 import { useAuthStore } from "@/stores/auth";
 import { formatMoney, receivableStatusColor, receivableStatusLabel } from "./crm-options";

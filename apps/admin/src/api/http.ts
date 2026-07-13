@@ -25,7 +25,7 @@ http.interceptors.response.use(
   (response) => response,
   (error) => {
     const status = error.response?.status;
-    if (status === 401 || status === 403) {
+    if (status === 401) {
       localStorage.removeItem(AUTH_TOKEN_KEY);
       if (window.location.pathname !== "/login") {
         window.location.href = "/login";
@@ -34,6 +34,8 @@ http.interceptors.response.use(
     let message = error.response?.data?.message || error.message || "接口请求失败";
     if (status === 502) {
       message = "后端 API 未启动或不可访问。请先启动 services/api 后端服务，再重新登录。";
+    } else if (status === 403) {
+      message = "当前账号没有执行此操作的权限。";
     } else if (status === 504 || error.code === "ECONNABORTED") {
       message = "后端 API 响应超时，请检查后端服务和数据库连接。";
     } else if (!error.response) {

@@ -66,7 +66,11 @@ sudo chown ops-erp:ops-erp /opt/engineering-ops-erp
 sudo cp deploy/ops-erp.env.example /etc/ops-erp/ops-erp.env
 sudo chmod 600 /etc/ops-erp/ops-erp.env
 sudo vi /etc/ops-erp/ops-erp.env   # 修改密码等敏感信息
+```
 
+`STORAGE_TYPE=minio` 时后端使用 MinIO/S3 兼容对象存储，`MINIO_ENDPOINT`、`MINIO_ACCESS_KEY`、`MINIO_SECRET_KEY`、`MINIO_BUCKET` 必须与 Docker Compose 或外部对象存储服务一致。`MINIO_PRESIGNED_EXPIRY_SECONDS` 控制附件临时下载链接有效期，建议生产保持 5-15 分钟。开发或单机调试可改为 `STORAGE_TYPE=local`，文件会写入 `LOCAL_STORAGE_PATH` 或默认本地目录。
+
+```bash
 # 启动基础设施（Docker）
 cd deploy
 docker compose up -d
@@ -99,6 +103,7 @@ docker compose -f docker-compose.yml up -d
 ```bash
 # 后端健康检查
 curl http://localhost:8080/actuator/health
+# 生产 profile 使用 MinIO 时，health 结果中应包含 minio 存储检查；MinIO 控制台默认在 http://localhost:9001
 
 # API 可达性
 curl -s http://localhost/api/auth/login \
@@ -135,3 +140,5 @@ docker exec ops-erp-postgres pg_dump -U ops_erp ops_erp > backup_$(date +%Y%m%d)
 - [ ] 限制 `management.endpoints.web.exposure.include` 为最小集
 - [ ] 配置防火墙，仅开放 80/443 端口对外
 - [ ] 关闭 Docker 基础设施端口的外部访问（已配置 `127.0.0.1:`）
+- [ ] MinIO bucket 保持私有读写，通过后端接口或预签名链接访问附件
+- [ ] 配置 MinIO 生命周期策略，按公司档案保留制度清理临时/过期对象

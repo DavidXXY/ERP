@@ -21,6 +21,7 @@ import com.company.ops.api.modules.inventory.dto.MaterialIssueLineResponse;
 import com.company.ops.api.modules.inventory.dto.MaterialIssueResponse;
 import com.company.ops.api.modules.inventory.dto.MaterialReturnLineResponse;
 import com.company.ops.api.modules.inventory.dto.MaterialReturnResponse;
+import com.company.ops.api.modules.inventory.dto.ReplenishmentSuggestionResponse;
 import com.company.ops.api.modules.inventory.dto.StockMovementResponse;
 import com.company.ops.api.modules.inventory.repository.InventoryIssueLineRepository;
 import com.company.ops.api.modules.inventory.repository.InventoryIssueOrderRepository;
@@ -37,6 +38,7 @@ import com.company.ops.api.modules.project.domain.ProjectStage;
 import com.company.ops.api.modules.project.repository.ProjectCostEntryRepository;
 import com.company.ops.api.modules.project.repository.ProjectRepository;
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -86,6 +88,23 @@ public class InventoryService {
   public List<InventoryPartResponse> listParts() {
     return partRepository.findAllByOrderByCreatedAtDesc().stream()
         .map(this::toPartResponse)
+        .toList();
+  }
+
+  @Transactional(readOnly = true)
+  public List<ReplenishmentSuggestionResponse> replenishmentSuggestions() {
+    OffsetDateTime since = OffsetDateTime.now().minusDays(30);
+    Map<UUID, BigDecimal> outboundByPart = movementRepository.findAll().stream()
+        .filter(item -> item.getCreatedAt() != null && item.getCreatedAt().isAfter(since))
+        .filter(item -> item.getMovementType() == StockMovementType.OUTBOUND || item.getMovementType() == StockMovementType.SCRAP)
+        .collect(Collectors.groupingBy(
+            StockMovement::getPartId,
+            Collectors.mapping(StockMovement::getQuantity, Collectors.reducing(BigDecimal.ZERO, BigDecimal::add))
+        ));
+    return partRepository.findAllByOrderByCreatedAtDesc().stream()
+        .map(part -> toReplenishmentSuggestion(part, outboundByPart.getOrDefault(part.getId(), BigDecimal.ZERO)))
+        .filter(item -> item.suggestedQty().compareTo(BigDecimal.ZERO) > 0)
+        .sorted((a, b) -> priorityRank(a.priority()) - priorityRank(b.priority()))
         .toList();
   }
 
@@ -464,6 +483,30 @@ public class InventoryService {
         part.getId(), part.getCode(), part.getName(), part.getModel(), part.getStockQty(),
         part.getSafetyQty(), part.getLocation(), part.getUnitCost(), part.isLowStock()
     );
+  }
+
+  private ReplenishmentSuggestionResponse toReplenishmentSuggestion(InventoryPart part, BigDecimal recentOutboundQty) {
+    BigDecimal stock = amount(part.getStockQty());
+    BigDecimal safety = amount(part.getSafetyQty());
+    BigDecimal target = safety.max(recentOutboundQty);
+    BigDecimal suggested = target.subtract(stock);
+    if (suggested.compareTo(BigDecimal.ZERO) < 0) suggested = BigDecimal.ZERO;
+    String priority = stock.compareTo(BigDecimal.ZERO) <= 0 ? "HIGH" : stock.compareTo(safety) < 0 ? "MEDIUM" : "LOW";
+    String reason = stock.compareTo(safety) < 0
+        ? "当前库存低于安全库存"
+        : recentOutboundQty.compareTo(stock) > 0 ? "近30天消耗高于当前库存" : "库存充足";
+    return new ReplenishmentSuggestionResponse(
+        part.getId(), part.getCode(), part.getName(), part.getModel(), stock, safety,
+        recentOutboundQty, suggested, reason, priority
+    );
+  }
+
+  private int priorityRank(String priority) {
+    return switch (priority) {
+      case "HIGH" -> 0;
+      case "MEDIUM" -> 1;
+      default -> 2;
+    };
   }
 
   private StockMovementResponse toMovementResponse(StockMovement movement) {

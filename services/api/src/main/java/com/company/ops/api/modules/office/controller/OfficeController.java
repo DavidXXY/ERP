@@ -4,6 +4,9 @@ import com.company.ops.api.common.api.ApiResponse;
 import com.company.ops.api.modules.office.domain.DocumentFile;
 import com.company.ops.api.modules.office.dto.OfficeDtos.AuditResponse;
 import com.company.ops.api.modules.office.dto.OfficeDtos.ApprovalResponse;
+import com.company.ops.api.modules.office.dto.OfficeDtos.ApprovalAddSignRequest;
+import com.company.ops.api.modules.office.dto.OfficeDtos.ApprovalTransferRequest;
+import com.company.ops.api.modules.office.dto.OfficeDtos.ApprovalWithdrawRequest;
 import com.company.ops.api.modules.office.dto.OfficeDtos.CompleteOutsourceRequest;
 import com.company.ops.api.modules.office.dto.OfficeDtos.CreateApprovalRequest;
 import com.company.ops.api.modules.office.dto.OfficeDtos.CreateExpenseRequest;
@@ -16,6 +19,7 @@ import com.company.ops.api.modules.office.dto.OfficeDtos.OfficeReferenceResponse
 import com.company.ops.api.modules.office.dto.OfficeDtos.OutsourceResponse;
 import com.company.ops.api.modules.office.dto.OfficeDtos.ProcessApprovalRequest;
 import com.company.ops.api.modules.office.dto.OfficeDtos.SupplierOption;
+import com.company.ops.api.modules.office.dto.OfficeDtos.WorkbenchResponse;
 import com.company.ops.api.modules.office.service.OfficeService;
 import com.company.ops.api.modules.office.service.ReminderScheduler;
 import jakarta.validation.Valid;
@@ -52,6 +56,8 @@ public class OfficeController {
 
   @GetMapping("/overview") @PreAuthorize("hasAuthority('office:view')")
   public ApiResponse<OfficeOverview> overview() { return ApiResponse.ok(service.overview()); }
+  @GetMapping("/workbench") @PreAuthorize("hasAnyAuthority('office:view', 'office:approval:view', 'office:notification:view')")
+  public ApiResponse<WorkbenchResponse> workbench() { return ApiResponse.ok(service.workbench()); }
   @GetMapping("/references") @PreAuthorize("hasAnyAuthority('office:view', 'office:expense:create', 'office:outsource:create')")
   public ApiResponse<OfficeReferenceResponse> references() { return ApiResponse.ok(service.references()); }
   @GetMapping("/approvals") @PreAuthorize("hasAuthority('office:approval:view')")
@@ -60,6 +66,12 @@ public class OfficeController {
   public ApiResponse<ApprovalResponse> createApproval(@Valid @RequestBody CreateApprovalRequest request) { return ApiResponse.ok(service.createApproval(request)); }
   @PostMapping("/approvals/{id}/process") @PreAuthorize("hasAuthority('office:approval:process')")
   public ApiResponse<ApprovalResponse> process(@PathVariable UUID id, @Valid @RequestBody ProcessApprovalRequest request) { return ApiResponse.ok(service.processApproval(id, request)); }
+  @PostMapping("/approvals/{id}/transfer") @PreAuthorize("hasAuthority('office:approval:process')")
+  public ApiResponse<ApprovalResponse> transfer(@PathVariable UUID id, @Valid @RequestBody ApprovalTransferRequest request) { return ApiResponse.ok(service.transferApproval(id, request)); }
+  @PostMapping("/approvals/{id}/add-sign") @PreAuthorize("hasAuthority('office:approval:process')")
+  public ApiResponse<ApprovalResponse> addSign(@PathVariable UUID id, @Valid @RequestBody ApprovalAddSignRequest request) { return ApiResponse.ok(service.addSignApproval(id, request)); }
+  @PostMapping("/approvals/{id}/withdraw") @PreAuthorize("hasAuthority('office:approval:create')")
+  public ApiResponse<ApprovalResponse> withdraw(@PathVariable UUID id, @Valid @RequestBody ApprovalWithdrawRequest request) { return ApiResponse.ok(service.withdrawApproval(id, request)); }
   @GetMapping("/expenses") @PreAuthorize("hasAuthority('office:expense:view')")
   public ApiResponse<List<ExpenseResponse>> expenses() { return ApiResponse.ok(service.listExpenses()); }
   @PostMapping("/expenses") @ResponseStatus(HttpStatus.CREATED) @PreAuthorize("hasAuthority('office:expense:create')")

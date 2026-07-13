@@ -22,6 +22,7 @@ management:
 
 ops:
   storage:
+    type: local
     local-path: ${OPS_ERP_UPLOAD_PATH:${user.home}/.ops-erp-data/uploads}
   qualification:
     import: false

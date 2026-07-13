@@ -228,6 +228,17 @@
           <a-col :xs="24" :md="8"><a-form-item label="服务周期"><a-input v-model:value="conversionForm.serviceCycle" /></a-form-item></a-col>
         </a-row>
 
+        <a-form-item label="合同附件" required>
+          <a-upload :show-upload-list="false" :before-upload="selectConversionAttachment" accept=".jpg,.jpeg,.png,.webp,.pdf,.doc,.docx,.xls,.xlsx">
+            <a-button><template #icon><UploadOutlined /></template>选择合同附件</a-button>
+          </a-upload>
+          <div v-if="conversionAttachment" class="selected-attachment">
+            <span>{{ conversionAttachment.name }}</span>
+            <a-button type="link" size="small" @click="conversionAttachment = null">移除</a-button>
+          </div>
+          <div v-else class="form-help">请上传合同文件，转合同后将自动归档到合同附件。</div>
+        </a-form-item>
+
         <a-divider>应收账款分期</a-divider><div class="receivable-summary" style="margin-bottom: 12px"><a-statistic title="合同总额" :value="selectedQuote?.amount || 0" :formatter="moneyFormatter" style="display: inline-block; margin-right: 32px" /><a-statistic title="已分配" :value="receivableAllocated" :formatter="moneyFormatter" style="display: inline-block; margin-right: 32px" /><a-statistic title="剩余" :value="Math.max(0, (selectedQuote?.amount || 0) - receivableAllocated)" :formatter="moneyFormatter" style="display: inline-block" :value-style="{ color: receivableAllocated > (selectedQuote?.amount || 0) ? '#ff4d4f' : '#52c41a' }" /></div><a-table :data-source="conversionForm.receivables" :columns="receivableColumns" :pagination="false" row-key="rowKey" size="small"><template #bodyCell="{ column, record, index }"><template v-if="column.key === 'amount'"><a-input-number v-model:value="record.amount" :min="0" :precision="2" style="width: 100%" @change="(val: any) => syncReceivable(index, 'amount', val)" /></template><template v-else-if="column.key === 'ratio'"><a-input-number v-model:value="record.ratio" :min="0" :max="100" :precision="1" style="width: 100%" @change="(val: any) => syncReceivable(index, 'ratio', val)" /></template><template v-else-if="column.key === 'dueDate'"><a-input v-model:value="record.dueDate" type="date" style="width: 100%" /></template><template v-else-if="column.key === 'action'"><a-button type="link" danger size="small" @click="removeReceivable(index)">删除</a-button></template></template></a-table><a-button type="dashed" block style="margin-top: 8px" @click="addReceivable">+ 新增分期</a-button>
       </a-form>
     </a-modal>
@@ -269,6 +280,7 @@
 import { computed, onMounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 import { message } from "ant-design-vue";
+import UploadOutlined from "@ant-design/icons-vue/UploadOutlined";
 import {
   convertQuote,
   createQuote,
@@ -279,6 +291,7 @@ import {
   processQuoteCustomerResult,
   submitQuote,
   updateQuote,
+  uploadAttachment,
   type ApprovalDecision,
   type Opportunity,
   type QuoteCustomerDecision,
@@ -317,6 +330,7 @@ const form = reactive(initialForm());
 const approvalForm = reactive(initialApprovalForm());
 const customerResultForm = reactive(initialCustomerResultForm());
 const conversionForm = reactive(initialConversionForm());
+const conversionAttachment = ref<File | null>(null);
 
 const rules = {
   code: [],
@@ -574,17 +588,36 @@ async function handleCustomerResult() {
 function openConversion(record: QuotePlan) {
   selectedQuote.value = record;
   Object.assign(conversionForm, initialConversionForm(record));
+  conversionAttachment.value = null;
   conversionOpen.value = true;
+}
+
+function selectConversionAttachment(file: File) {
+  conversionAttachment.value = file;
+  return false;
 }
 
 async function handleConversion() {
   await conversionFormRef.value?.validate();
   if (!selectedQuote.value) return;
+  if (!conversionAttachment.value) {
+    message.warning("请先上传合同附件");
+    return;
+  }
   saving.value = true;
   try {
     const result = await convertQuote(selectedQuote.value.id, { ...conversionForm });
+    if (!result.contract?.id) throw new Error("合同生成结果缺少合同编号");
+    try {
+      await uploadAttachment("CONTRACT", result.contract.id, "SIGNED_DOC", conversionAttachment.value);
+    } catch (error) {
+      conversionOpen.value = false;
+      message.warning(`合同已生成，但附件上传失败：${error instanceof Error ? error.message : "请到合同详情页补传"}`);
+      await loadData();
+      return;
+    }
     conversionOpen.value = false;
-    message.success(`已生成合同 ${result.contract?.code || ""}，共 ${result.receivables?.length || 0} 笔应收`);
+    message.success(`已生成合同 ${result.contract.code || ""}，合同附件已归档`);
     await loadData();
   } catch (error) {
     message.error(error instanceof Error ? error.message : "转合同失败");
@@ -721,6 +754,20 @@ function moneyFormatter({ value }: { value: number }) {
 
 .muted-text {
   color: #8c8c8c;
+}
+
+.selected-attachment {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  color: #475467;
+}
+
+.form-help {
+  margin-top: 6px;
+  color: #8c8c8c;
+  font-size: 12px;
 }
 
 .revision-heading {

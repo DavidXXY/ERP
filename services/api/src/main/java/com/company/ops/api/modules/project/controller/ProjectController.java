@@ -6,6 +6,7 @@ import com.company.ops.api.modules.project.dto.CreateProjectCostRequest;
 import com.company.ops.api.modules.project.dto.CreateProjectRequest;
 import com.company.ops.api.modules.project.dto.ProcessProjectApprovalRequest;
 import com.company.ops.api.modules.project.dto.ProjectDetailResponse;
+import com.company.ops.api.modules.project.dto.ProjectProfitabilityResponse;
 import com.company.ops.api.modules.project.dto.ProjectResponse;
 import com.company.ops.api.modules.project.service.ProjectService;
 import jakarta.validation.Valid;
@@ -40,6 +41,12 @@ public class ProjectController {
     return ApiResponse.ok(projectService.listProjects(pageable));
   }
 
+  @GetMapping("/profitability")
+  @PreAuthorize("hasAuthority('project:view')")
+  public ApiResponse<List<ProjectProfitabilityResponse>> profitability() {
+    return ApiResponse.ok(projectService.profitability());
+  }
+
   @GetMapping("/{id}")
   @PreAuthorize("hasAuthority('project:view')")
   public ApiResponse<ProjectDetailResponse> getProject(@PathVariable UUID id) {
@@ -54,7 +61,7 @@ public class ProjectController {
   }
 
   @PostMapping("/{id}/approval")
-  @PreAuthorize("hasAuthority('project:approve')")
+  @PreAuthorize("hasAuthority('project:approve') and @approvalFlowSecurity.canApprove('PROJECT')")
   public ApiResponse<ProjectDetailResponse> processApproval(
       @PathVariable UUID id,
       @Valid @RequestBody ProcessProjectApprovalRequest request

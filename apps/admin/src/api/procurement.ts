@@ -179,6 +179,21 @@ export type ProcurementCostAllocation = {
   incurredDate: string;
 };
 
+export type ProcurementMatching = {
+  orderId: string;
+  orderCode?: string;
+  supplierName?: string;
+  partName: string;
+  orderedQty: number;
+  receivedQty: number;
+  orderAmount: number;
+  receiptAmount: number;
+  payableAmount: number;
+  paidAmount: number;
+  matchStatus: string;
+  riskMessage: string;
+};
+
 export type ReceivePurchaseOrderResult = {
   order: PurchaseOrder;
   receipt: GoodsReceipt;
@@ -202,6 +217,10 @@ export function listProcurementCostTargets() {
 
 export function listProcurementCostAllocations() {
   return request<ProcurementCostAllocation[]>({ method: "GET", url: "/procurement/cost-allocations" });
+}
+
+export function listProcurementMatching() {
+  return request<ProcurementMatching[]>({ method: "GET", url: "/procurement/matching" });
 }
 
 export function listPurchaseRequests(params?: {

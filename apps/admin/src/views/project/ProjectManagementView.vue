@@ -20,8 +20,40 @@
         <a-col :xs="12" :lg="6"><a-statistic title="合同总额" :value="totalContract" :formatter="moneyFormatter" /></a-col>
         <a-col :xs="12" :lg="6"><a-statistic title="项目预算" :value="totalBudget" :formatter="moneyFormatter" /></a-col>
         <a-col :xs="12" :lg="6"><a-statistic title="已归集成本" :value="totalActualCost" :formatter="moneyFormatter" /></a-col>
-        <a-col :xs="12" :lg="6"><a-statistic title="当前毛利" :value="totalGrossMargin" :formatter="moneyFormatter" /></a-col>
+        <a-col :xs="12" :lg="6"><a-statistic title="高风险项目" :value="highRiskProjectCount" suffix="个" :value-style="{color:highRiskProjectCount>0?'#ff4d4f':'#52c41a'}" /></a-col>
       </a-row>
+
+      <a-table
+        :columns="profitabilityColumns"
+        :data-source="profitabilityHighlights"
+        :loading="loading"
+        :pagination="false"
+        :row-key="(record: ProjectProfitability) => record.projectId"
+        :scroll="{ x: 980 }"
+        size="small"
+        style="margin-bottom:16px"
+      >
+        <template #title>项目利润与预算风险</template>
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'project'">
+            <a-button type="link" class="table-link" @click="openProfitabilityProject(record.projectId)">{{ record.projectName }}</a-button>
+            <span class="table-subtitle">{{ record.projectCode || '-' }} · {{ record.customerName || '未关联客户' }}</span>
+          </template>
+          <template v-else-if="column.key === 'gross'">
+            <strong :class="{ 'text-danger': record.grossMargin < 0 }">{{ formatMoney(record.grossMargin) }}</strong>
+            <span class="table-subtitle">毛利率 {{ formatPercent(record.grossMarginRate) }}</span>
+          </template>
+          <template v-else-if="column.key === 'budget'">
+            {{ formatMoney(record.actualCost) }}
+            <span class="table-subtitle">预算使用 {{ formatPercent(record.budgetUsageRate) }}</span>
+          </template>
+          <template v-else-if="column.key === 'risk'">
+            <a-tag :color="riskColor(record.riskLevel)">{{ riskLabel(record.riskLevel) }}</a-tag>
+            <span class="table-subtitle">{{ record.riskMessage }}</span>
+          </template>
+        </template>
+        <template #emptyText>暂无项目利润风险</template>
+      </a-table>
 
       <a-space wrap class="table-toolbar">
         <a-input-search v-model:value="keyword" allow-clear placeholder="搜索项目、客户、负责人" style="width: 260px" />
@@ -197,9 +229,8 @@ import { message } from "ant-design-vue";
 import PlusOutlined from "@ant-design/icons-vue/PlusOutlined";
 import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
 import { listCustomers, type CustomerSummary } from "@/api/crm";
-import { listProjects, getProject } from "@/api/project";
+import { listProjects, getProject, listProjectProfitability } from "@/api/project";
 import {
-  type CreateProjectPayload,
   type Project,
   type ProjectApprovalStatus,
   type ProjectBudgetItem,
@@ -210,6 +241,7 @@ import {
   type ProjectStage,
   type ProjectStageRecord,
   type ProjectType,
+  type ProjectProfitability,
 } from "@/api/project";
 import { useAuthStore } from "@/stores/auth";
 import ProjectModals from "./ProjectModals.vue";
@@ -217,6 +249,7 @@ import ProjectModals from "./ProjectModals.vue";
 
 const auth = useAuthStore();
 const projects = ref<Project[]>([]);
+const profitabilityRows = ref<ProjectProfitability[]>([]);
 const pageMeta = ref({ totalElements: 0, totalPages: 0, number: 0, size: 999 });
 const customers = ref<CustomerSummary[]>([]);
 const detail = ref<ProjectDetail | null>(null);
@@ -267,6 +300,10 @@ const columns = [
   { title: "合同金额", key: "contract", width: 140 }, { title: "预算 / 实际", key: "cost", width: 180 },
   { title: "毛利 / 余额", key: "gross", width: 180 }, { title: "操作", key: "action", width: 130, fixed: "right" },
 ];
+const profitabilityColumns = [
+  { title: "项目 / 客户", key: "project", width: 280 }, { title: "毛利", key: "gross", width: 170 },
+  { title: "实际成本 / 预算", key: "budget", width: 180 }, { title: "风险", key: "risk", width: 320 },
+];
 const budgetColumns = [
   { title: "成本分类", key: "category", width: 140 }, { title: "预算金额", key: "planned", width: 150 },
   { title: "实际发生", key: "actual", width: 150 }, { title: "预算余额", key: "variance", width: 150 },
@@ -294,8 +331,11 @@ const customerOptions = computed(() => customers.value.map((item) => ({
 const totalContract = computed(() => projects.value.reduce((sum, item) => sum + Number(item.contractAmount || 0), 0));
 const totalBudget = computed(() => projects.value.reduce((sum, item) => sum + Number(item.budgetAmount || 0), 0));
 const totalActualCost = computed(() => projects.value.reduce((sum, item) => sum + Number(item.actualCost || 0), 0));
-const totalGrossMargin = computed(() => projects.value.reduce((sum, item) => sum + Number(item.grossMargin || 0), 0));
 const pendingApprovalCount = computed(() => projects.value.filter((item) => item.approvalStatus === "PENDING").length);
+const highRiskProjectCount = computed(() => profitabilityRows.value.filter((item) => item.riskLevel === "HIGH").length);
+const profitabilityHighlights = computed(() => [...profitabilityRows.value]
+  .sort((a, b) => riskRank(b.riskLevel) - riskRank(a.riskLevel) || Number(b.budgetUsageRate || 0) - Number(a.budgetUsageRate || 0))
+  .slice(0, 5));
 const nextStage = computed<ProjectStage | null>(() => {
   if (!detail.value || detail.value.project.stage === "CLOSED") return null;
   return stageOptions[stageOptions.findIndex((item) => item.value === detail.value?.project.stage) + 1]?.value || null;
@@ -305,10 +345,11 @@ onMounted(loadData);
 
 async function loadData() {
   loading.value = true; errorMessage.value = "";
-  try { const projectPage = await listProjects(0, 999);
+  try { const [projectPage, customerRows, profitability] = await Promise.all([listProjects(0, 999), listCustomers(), listProjectProfitability()]);
       projects.value = projectPage.content;
       pageMeta.value = { totalElements: projectPage.totalElements, totalPages: projectPage.totalPages, number: projectPage.number, size: projectPage.size };
-      [customers.value] = await Promise.all([listCustomers()]); }
+      customers.value = customerRows;
+      profitabilityRows.value = profitability; }
   catch (error) { errorMessage.value = error instanceof Error ? error.message : "项目数据加载失败"; }
   finally { loading.value = false; }
 }
@@ -324,6 +365,10 @@ async function openDetail(project: Project) {
   finally { detailLoading.value = false; }
 }
 
+function openProfitabilityProject(projectId: string) {
+  const project = projects.value.find((item) => item.id === projectId);
+  if (project) openDetail(project);
+}
 
 
 function canExecute(project: Project) { return project.approvalStatus === "APPROVED" && project.stage !== "CLOSED"; }
@@ -335,8 +380,12 @@ function approvalColor(status: ProjectApprovalStatus) { return ({ PENDING: "oran
 function projectTypeLabel(type: ProjectType) { return projectTypeOptions.find((item) => item.value === type)?.label || type; }
 function categoryLabel(category: ProjectCostCategory) { return categoryOptions.find((item) => item.value === category)?.label || category; }
 function sourceLabel(source: ProjectCostSource) { return sourceOptions.find((item) => item.value === source)?.label || source; }
+function riskRank(level: string) { return ({ HIGH: 3, MEDIUM: 2, LOW: 1 } as Record<string, number>)[level] || 0; }
+function riskLabel(level: string) { return ({ HIGH: "高风险", MEDIUM: "关注", LOW: "正常" } as Record<string, string>)[level] || level; }
+function riskColor(level: string) { return ({ HIGH: "red", MEDIUM: "orange", LOW: "green" } as Record<string, string>)[level] || "default"; }
 function formatMoney(value: number) { return new Intl.NumberFormat("zh-CN", { style: "currency", currency: "CNY", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value || 0); }
 function moneyFormatter(value: number | string) { return formatMoney(Number(value)); }
+function formatPercent(value: number) { return `${Number(value || 0).toFixed(1)}%`; }
 function formatDateTime(value: string) { return value ? new Intl.DateTimeFormat("zh-CN", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "-"; }
 </script>
 

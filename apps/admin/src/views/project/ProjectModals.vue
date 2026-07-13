@@ -64,7 +64,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from "vue";
 import { message } from "ant-design-vue";
-import { createProject, createProjectCost, advanceProjectStage, processProjectApproval, type ProjectApprovalStatus, type ProjectCostCategory, type ProjectCostSource, type ProjectStage } from "@/api/project";
+import { createProject, createProjectCost, advanceProjectStage, processProjectApproval, type ProjectApprovalStatus, type ProjectStage } from "@/api/project";
 import { useAuthStore } from "@/stores/auth";
 
 const auth = useAuthStore();

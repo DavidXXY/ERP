@@ -39,7 +39,7 @@ class DataInitializerTest {
     when(permissionRepository.existsByCodeAndTenantId(any(), eq("default"))).thenReturn(true);
     when(permissionRepository.existsByCodeAndTenantId(eq("maintenance:order:delete"), eq("default"))).thenReturn(false);
     when(permissionRepository.findAll()).thenReturn(List.of(deletePermission));
-    when(roleRepository.findByCodeAndTenantId("ADMIN", "default")).thenReturn(Optional.of(admin));
+    when(roleRepository.findByCodeAndTenantIdWithPermissions("ADMIN", "default")).thenReturn(Optional.of(admin));
 
     new DataInitializer(userRepository, roleRepository, permissionRepository, organizationRepository, passwordEncoder).run();
 

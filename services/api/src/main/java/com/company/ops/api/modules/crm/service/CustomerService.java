@@ -288,15 +288,117 @@ public class CustomerService {
     if (!customerRepository.existsById(id)) {
       throw new BusinessException("客户不存在");
     }
-    // Cascade delete all related records
-    entityManager.createNativeQuery("DELETE FROM crm_follow_ups WHERE customer_id = ?1").setParameter(1, id).executeUpdate();
-    entityManager.createNativeQuery("DELETE FROM crm_opportunities WHERE customer_id = ?1").setParameter(1, id).executeUpdate();
+    // PostgreSQL enforces every cross-module FK, so delete from leaf tables upward.
+    entityManager.createNativeQuery("""
+        DELETE FROM hr_field_attendance
+        WHERE work_order_id IN (SELECT id FROM work_orders WHERE customer_id = ?1 OR contract_id IN (SELECT id FROM crm_service_contracts WHERE customer_id = ?1) OR project_id IN (SELECT id FROM project_projects WHERE customer_id = ?1))
+        """).setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("""
+        DELETE FROM work_order_materials
+        WHERE work_order_id IN (SELECT id FROM work_orders WHERE customer_id = ?1 OR contract_id IN (SELECT id FROM crm_service_contracts WHERE customer_id = ?1) OR project_id IN (SELECT id FROM project_projects WHERE customer_id = ?1))
+        """).setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("""
+        DELETE FROM work_order_status_logs
+        WHERE work_order_id IN (SELECT id FROM work_orders WHERE customer_id = ?1 OR contract_id IN (SELECT id FROM crm_service_contracts WHERE customer_id = ?1) OR project_id IN (SELECT id FROM project_projects WHERE customer_id = ?1))
+        """).setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("""
+        DELETE FROM oa_expense_claims
+        WHERE project_id IN (SELECT id FROM project_projects WHERE customer_id = ?1)
+           OR work_order_id IN (SELECT id FROM work_orders WHERE customer_id = ?1 OR contract_id IN (SELECT id FROM crm_service_contracts WHERE customer_id = ?1) OR project_id IN (SELECT id FROM project_projects WHERE customer_id = ?1))
+        """).setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("""
+        DELETE FROM oa_outsource_orders
+        WHERE project_id IN (SELECT id FROM project_projects WHERE customer_id = ?1)
+           OR work_order_id IN (SELECT id FROM work_orders WHERE customer_id = ?1 OR contract_id IN (SELECT id FROM crm_service_contracts WHERE customer_id = ?1) OR project_id IN (SELECT id FROM project_projects WHERE customer_id = ?1))
+        """).setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("""
+        DELETE FROM work_orders
+        WHERE customer_id = ?1 OR contract_id IN (SELECT id FROM crm_service_contracts WHERE customer_id = ?1)
+           OR project_id IN (SELECT id FROM project_projects WHERE customer_id = ?1)
+        """).setParameter(1, id).executeUpdate();
+
+    entityManager.createNativeQuery("""
+        DELETE FROM inventory_return_lines
+        WHERE return_id IN (SELECT id FROM inventory_return_orders WHERE project_id IN (SELECT id FROM project_projects WHERE customer_id = ?1))
+        """).setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("""
+        DELETE FROM inventory_return_orders
+        WHERE project_id IN (SELECT id FROM project_projects WHERE customer_id = ?1)
+        """).setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("""
+        DELETE FROM inventory_issue_lines
+        WHERE issue_id IN (SELECT id FROM inventory_issue_orders WHERE project_id IN (SELECT id FROM project_projects WHERE customer_id = ?1))
+        """).setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("""
+        DELETE FROM inventory_issue_orders
+        WHERE project_id IN (SELECT id FROM project_projects WHERE customer_id = ?1)
+        """).setParameter(1, id).executeUpdate();
+
+    entityManager.createNativeQuery("""
+        DELETE FROM fin_payment_records
+        WHERE payable_id IN (
+          SELECT id FROM fin_procurement_payables
+          WHERE order_id IN (SELECT id FROM procurement_purchase_orders WHERE project_id IN (SELECT id FROM project_projects WHERE customer_id = ?1))
+             OR receipt_id IN (SELECT id FROM procurement_goods_receipts WHERE order_id IN (SELECT id FROM procurement_purchase_orders WHERE project_id IN (SELECT id FROM project_projects WHERE customer_id = ?1)))
+        )
+        """).setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("""
+        DELETE FROM fin_payment_applications
+        WHERE payable_id IN (
+          SELECT id FROM fin_procurement_payables
+          WHERE order_id IN (SELECT id FROM procurement_purchase_orders WHERE project_id IN (SELECT id FROM project_projects WHERE customer_id = ?1))
+             OR receipt_id IN (SELECT id FROM procurement_goods_receipts WHERE order_id IN (SELECT id FROM procurement_purchase_orders WHERE project_id IN (SELECT id FROM project_projects WHERE customer_id = ?1)))
+        )
+        """).setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("""
+        DELETE FROM fin_procurement_payables
+        WHERE order_id IN (SELECT id FROM procurement_purchase_orders WHERE project_id IN (SELECT id FROM project_projects WHERE customer_id = ?1))
+           OR receipt_id IN (SELECT id FROM procurement_goods_receipts WHERE order_id IN (SELECT id FROM procurement_purchase_orders WHERE project_id IN (SELECT id FROM project_projects WHERE customer_id = ?1)))
+        """).setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("""
+        DELETE FROM procurement_cost_allocations
+        WHERE project_id IN (SELECT id FROM project_projects WHERE customer_id = ?1)
+           OR order_id IN (SELECT id FROM procurement_purchase_orders WHERE project_id IN (SELECT id FROM project_projects WHERE customer_id = ?1))
+           OR receipt_id IN (SELECT id FROM procurement_goods_receipts WHERE order_id IN (SELECT id FROM procurement_purchase_orders WHERE project_id IN (SELECT id FROM project_projects WHERE customer_id = ?1)))
+        """).setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("""
+        DELETE FROM procurement_goods_receipts
+        WHERE order_id IN (SELECT id FROM procurement_purchase_orders WHERE project_id IN (SELECT id FROM project_projects WHERE customer_id = ?1))
+        """).setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("""
+        DELETE FROM procurement_purchase_orders
+        WHERE project_id IN (SELECT id FROM project_projects WHERE customer_id = ?1)
+        """).setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("""
+        DELETE FROM procurement_request_approval_records
+        WHERE request_id IN (SELECT id FROM procurement_purchase_requests WHERE project_id IN (SELECT id FROM project_projects WHERE customer_id = ?1))
+        """).setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("""
+        DELETE FROM procurement_purchase_requests
+        WHERE project_id IN (SELECT id FROM project_projects WHERE customer_id = ?1)
+        """).setParameter(1, id).executeUpdate();
+
+    entityManager.createNativeQuery("""
+        DELETE FROM maintenance_plans
+        WHERE contract_id IN (SELECT id FROM crm_service_contracts WHERE customer_id = ?1)
+           OR asset_id IN (SELECT id FROM maintenance_equipment_assets WHERE customer_id = ?1 OR contract_id IN (SELECT id FROM crm_service_contracts WHERE customer_id = ?1))
+        """).setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("""
+        DELETE FROM maintenance_equipment_assets
+        WHERE customer_id = ?1 OR contract_id IN (SELECT id FROM crm_service_contracts WHERE customer_id = ?1)
+        """).setParameter(1, id).executeUpdate();
+
     entityManager.createNativeQuery("DELETE FROM fin_receivable_receipts WHERE receivable_id IN (SELECT id FROM fin_receivables WHERE customer_id = ?1)").setParameter(1, id).executeUpdate();
     entityManager.createNativeQuery("UPDATE fin_receivables SET contract_id = NULL WHERE customer_id = ?1").setParameter(1, id).executeUpdate();
     entityManager.createNativeQuery("DELETE FROM fin_receivables WHERE customer_id = ?1").setParameter(1, id).executeUpdate();
     entityManager.createNativeQuery("DELETE FROM crm_quote_revisions WHERE quote_id IN (SELECT id FROM crm_quote_plans WHERE customer_id = ?1)").setParameter(1, id).executeUpdate();
     entityManager.createNativeQuery("DELETE FROM crm_quote_approval_records WHERE quote_id IN (SELECT id FROM crm_quote_plans WHERE customer_id = ?1)").setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("DELETE FROM crm_follow_ups WHERE customer_id = ?1").setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("DELETE FROM crm_attachment WHERE entity_type = 'QUOTE' AND entity_id IN (SELECT id FROM crm_quote_plans WHERE customer_id = ?1)").setParameter(1, id).executeUpdate();
     entityManager.createNativeQuery("DELETE FROM crm_quote_plans WHERE customer_id = ?1").setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("DELETE FROM crm_opportunities WHERE customer_id = ?1").setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("DELETE FROM crm_contract_changes WHERE contract_id IN (SELECT id FROM crm_service_contracts WHERE customer_id = ?1)").setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("DELETE FROM crm_attachment WHERE entity_type = 'CONTRACT' AND entity_id IN (SELECT id FROM crm_service_contracts WHERE customer_id = ?1)").setParameter(1, id).executeUpdate();
     entityManager.createNativeQuery("DELETE FROM crm_service_contracts WHERE customer_id = ?1").setParameter(1, id).executeUpdate();
     entityManager.createNativeQuery("DELETE FROM crm_customer_contacts WHERE customer_id = ?1").setParameter(1, id).executeUpdate();
     entityManager.createNativeQuery("DELETE FROM crm_customer_sites WHERE customer_id = ?1").setParameter(1, id).executeUpdate();

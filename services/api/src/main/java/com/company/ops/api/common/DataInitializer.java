@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 @Component
 public class DataInitializer implements CommandLineRunner {
@@ -67,6 +68,7 @@ public class DataInitializer implements CommandLineRunner {
   }
   
   @Override
+  @Transactional
   public void run(String... args) {
     // Check if permissions exist. If not, create all permissions and ADMIN role + user
     // Always check user first (perm table might not exist yet on fresh H2)
@@ -201,7 +203,7 @@ public class DataInitializer implements CommandLineRunner {
   }
 
   private void grantAllPermissionsToAdmin() {
-    roleRepo.findByCodeAndTenantId("ADMIN", "default").ifPresent(adminRole -> {
+    roleRepo.findByCodeAndTenantIdWithPermissions("ADMIN", "default").ifPresent(adminRole -> {
       adminRole.getPermissions().addAll(permRepo.findAll());
       roleRepo.save(adminRole);
     });

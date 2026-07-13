@@ -655,7 +655,7 @@ async function runAutomation(record: BusinessTodo) {
         type: "CALLBACK",
         subject: record.automation.subject,
         content: record.automation.content,
-        followedAt: todayText(),
+        followedAt: new Date().toISOString(),
         nextAction: record.automation.nextAction,
         ownerName: record.automation.ownerName || currentUser,
       });

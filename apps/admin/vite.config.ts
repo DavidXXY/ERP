@@ -31,30 +31,6 @@ export default defineConfig({
   ],
   build: {
     chunkSizeWarningLimit: 1600,
-    rolldownOptions: {
-      output: {
-        codeSplitting: {
-          groups: [
-            {
-              name: "vue-vendor",
-              test: /node_modules[\/](?:vue|vue-router|pinia)[\/]/,
-              priority: 30,
-            },
-            {
-              name: "ant-design-vendor",
-              test: /node_modules[\/](?:ant-design-vue|@ant-design)[\/]/,
-              priority: 20,
-            },
-            {
-              name: "vendor",
-              test: /node_modules[\/]/,
-              priority: 10,
-              maxSize: 450_000,
-            },
-          ],
-        },
-      },
-    },
   },
   resolve: {
     alias: {

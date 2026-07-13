@@ -43,6 +43,67 @@
           </a-row>
         </a-card>
 
+        <a-card title="合同闭环工作台" class="closure-card" style="margin-top: 16px">
+          <template #extra>
+            <a-space>
+              <a-tag :color="closureRisk.color">{{ closureRisk.label }}</a-tag>
+              <a-button size="small" @click="loadClosureData">刷新闭环</a-button>
+            </a-space>
+          </template>
+
+          <a-row :gutter="[12, 12]" class="closure-stats">
+            <a-col v-for="item in closureStats" :key="item.key" :xs="12" :lg="6">
+              <div class="closure-stat">
+                <span>{{ item.label }}</span>
+                <strong :class="{ danger: item.danger }">{{ item.value }}</strong>
+                <p>{{ item.hint }}</p>
+              </div>
+            </a-col>
+          </a-row>
+
+          <div class="closure-flow">
+            <button
+              v-for="item in closureSteps"
+              :key="item.key"
+              type="button"
+              class="closure-step"
+              :class="{ done: item.done, warn: item.warn }"
+              @click="item.route && router.push(item.route)"
+            >
+              <span>{{ item.label }}</span>
+              <strong>{{ item.title }}</strong>
+              <p>{{ item.hint }}</p>
+            </button>
+          </div>
+
+          <a-list class="closure-actions" size="small" :data-source="closureActions">
+            <template #header>
+              <strong>建议动作</strong>
+            </template>
+            <template #renderItem="{ item }">
+              <a-list-item>
+                <template #actions>
+                  <a-button v-if="item.route" size="small" type="link" @click="router.push(item.route)">处理</a-button>
+                </template>
+                <a-list-item-meta>
+                  <template #title>
+                    <a-space>
+                      <a-tag :color="item.level === 'high' ? 'red' : item.level === 'medium' ? 'orange' : 'blue'">
+                        {{ item.level === "high" ? "高优先" : item.level === "medium" ? "关注" : "建议" }}
+                      </a-tag>
+                      <span>{{ item.title }}</span>
+                    </a-space>
+                  </template>
+                  <template #description>{{ item.description }}</template>
+                </a-list-item-meta>
+              </a-list-item>
+            </template>
+            <template #empty>
+              <a-empty description="当前合同闭环完整，无待处理建议" />
+            </template>
+          </a-list>
+        </a-card>
+
         <a-alert
           v-if="record.status === 'ACTIVE'"
           class="section-alert"
@@ -188,8 +249,8 @@ import { Modal, message } from "ant-design-vue";
 import { useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
 const auth = useAuthStore();
-import { createProject } from "@/api/project";
-import { getContract, getOpportunity, getQuote, uploadAttachment, deleteAttachment, listAttachments, getAttachmentDownloadUrl, createContractChange, approveContractChange, rejectContractChange, listContractChanges, type Opportunity, type QuotePlan, type ServiceContract, type CrmAttachment, type ContractChangeResponse } from "@/api/crm";
+import { createProject, listProjects, type Project } from "@/api/project";
+import { getContract, getOpportunity, getQuote, uploadAttachment, deleteAttachment, listAttachments, getAttachmentDownloadUrl, createContractChange, approveContractChange, rejectContractChange, listContractChanges, listReceivables, type Opportunity, type QuotePlan, type ServiceContract, type CrmAttachment, type ContractChangeResponse, type Receivable } from "@/api/crm";
 import { contractStatusColor, contractStatusLabel, formatMoney, opportunityStageColor, opportunityStageLabel, quoteStatusColor, quoteStatusLabel } from "./crm-options";
 import BusinessTraceTimeline from "@/components/business/BusinessTraceTimeline.vue";
 
@@ -198,6 +259,8 @@ const router = useRouter();
 const record = ref<ServiceContract | null>(null);
 const relatedQuote = ref<QuotePlan | null>(null);
 const relatedOpportunity = ref<Opportunity | null>(null);
+const relatedProject = ref<Project | null>(null);
+const contractReceivables = ref<Receivable[]>([]);
 const loading = ref(true);
 const saving = ref(false);
 const editOpen = ref(false);
@@ -233,12 +296,89 @@ async function loadData() {
         }
       } catch { /* quote fetch is supplementary */ }
     }
+    await loadClosureData();
   } catch (error) {
     message.error(error instanceof Error ? error.message : "合同加载失败");
   } finally {
     loading.value = false;
   }
 }
+
+async function loadClosureData() {
+  if (!record.value) return;
+  const current = record.value;
+  const [projectsResult, receivablesResult] = await Promise.allSettled([
+    listProjects(0, 500),
+    listReceivables(),
+  ]);
+  if (projectsResult.status === "fulfilled") {
+    relatedProject.value = projectsResult.value.content.find((item) => item.contractId === current.id || item.contractCode === current.code) || null;
+  }
+  if (receivablesResult.status === "fulfilled") {
+    contractReceivables.value = receivablesResult.value.filter((item) =>
+      item.contractId === current.id || item.contractCode === current.code || item.sourceNo === current.code
+    );
+  }
+}
+
+const receivableTotal = computed(() => contractReceivables.value.reduce((sum, item) => sum + Number(item.amount || 0), 0));
+const receivedTotal = computed(() => contractReceivables.value.reduce((sum, item) => sum + Number(item.settledAmount || 0), 0));
+const outstandingTotal = computed(() => contractReceivables.value.reduce((sum, item) => sum + Number(item.outstandingAmount || 0), 0));
+const overdueReceivables = computed(() => contractReceivables.value.filter((item) => item.status === "OVERDUE"));
+const collectionRate = computed(() => receivableTotal.value > 0 ? Math.round(receivedTotal.value / receivableTotal.value * 1000) / 10 : 0);
+const contractProgress = computed(() => {
+  if (!record.value?.startDate || !record.value.endDate) return 0;
+  const start = new Date(record.value.startDate).getTime();
+  const end = new Date(record.value.endDate).getTime();
+  const now = Date.now();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return 0;
+  return Math.max(0, Math.min(100, Math.round((now - start) / (end - start) * 100)));
+});
+const daysToEnd = computed(() => {
+  if (!record.value?.endDate) return 0;
+  return Math.ceil((new Date(record.value.endDate).getTime() - Date.now()) / 86400000);
+});
+const closureRisk = computed(() => {
+  if (overdueReceivables.value.length > 0 || outstandingTotal.value > Number(record.value?.amount || 0) * 0.3) return { label: "高风险", color: "red" };
+  if (!relatedProject.value || contractReceivables.value.length === 0 || daysToEnd.value <= 30) return { label: "需关注", color: "orange" };
+  return { label: "闭环正常", color: "green" };
+});
+const closureStats = computed(() => [
+  { key: "progress", label: "合同进度", value: `${contractProgress.value}%`, hint: daysToEnd.value >= 0 ? `距到期 ${daysToEnd.value} 天` : `已到期 ${Math.abs(daysToEnd.value)} 天`, danger: daysToEnd.value <= 30 },
+  { key: "project", label: "项目承接", value: relatedProject.value ? "已承接" : "未承接", hint: relatedProject.value?.code || "合同生效后建议生成项目", danger: !relatedProject.value && record.value?.status === "ACTIVE" },
+  { key: "collection", label: "回款率", value: `${collectionRate.value}%`, hint: `${formatMoney(receivedTotal.value)} / ${formatMoney(receivableTotal.value)}`, danger: overdueReceivables.value.length > 0 },
+  { key: "outstanding", label: "未回款", value: formatMoney(outstandingTotal.value), hint: overdueReceivables.value.length ? `${overdueReceivables.value.length} 笔逾期` : "应收状态正常", danger: outstandingTotal.value > 0 },
+]);
+const closureSteps = computed(() => [
+  { key: "customer", label: "客户", title: record.value?.customerName || "-", hint: "客户档案与开票信息", done: Boolean(record.value?.customerId), warn: false, route: record.value?.customerId ? `/crm/customers?customer=${record.value.customerId}` : "" },
+  { key: "opportunity", label: "商机", title: relatedOpportunity.value?.code || "未关联", hint: relatedOpportunity.value?.stage || "建议从商机穿透来源", done: Boolean(relatedOpportunity.value), warn: !relatedOpportunity.value, route: relatedOpportunity.value ? `/crm/opportunities/${relatedOpportunity.value.id}` : "/crm/opportunities" },
+  { key: "quote", label: "报价", title: relatedQuote.value?.code || "未关联", hint: relatedQuote.value ? `V${relatedQuote.value.versionNo}` : "报价利润校验不可追溯", done: Boolean(relatedQuote.value), warn: !relatedQuote.value, route: relatedQuote.value ? `/crm/quotes/${relatedQuote.value.id}` : "/crm/quotes" },
+  { key: "contract", label: "合同", title: record.value?.code || "-", hint: contractStatusLabel(record.value?.status || "ACTIVE"), done: Boolean(record.value), warn: false, route: "" },
+  { key: "project", label: "项目", title: relatedProject.value?.code || "未承接", hint: relatedProject.value?.stage || "项目预算、采购、成本入口", done: Boolean(relatedProject.value), warn: !relatedProject.value && record.value?.status === "ACTIVE", route: relatedProject.value ? "/projects/list" : "" },
+  { key: "receivable", label: "应收回款", title: `${contractReceivables.value.length} 笔`, hint: `${collectionRate.value}% 已回款`, done: contractReceivables.value.length > 0, warn: contractReceivables.value.length === 0 || overdueReceivables.value.length > 0, route: "/finance/receivables" },
+]);
+const closureActions = computed(() => {
+  const rows: Array<{ key: string; level: "high" | "medium" | "low"; title: string; description: string; route?: string }> = [];
+  if (record.value?.status === "ACTIVE" && !relatedProject.value) {
+    rows.push({ key: "project", level: "high", title: "合同已生效但未承接项目", description: "建议立即生成项目草稿，带入合同额、周期和默认预算，避免采购和成本无法归集。" });
+  }
+  if (contractReceivables.value.length === 0) {
+    rows.push({ key: "receivable", level: "high", title: "缺少应收计划", description: "合同没有应收节点，财务无法跟踪开票、到期、回款和逾期。", route: "/crm/receivables" });
+  }
+  if (overdueReceivables.value.length > 0) {
+    rows.push({ key: "overdue", level: "high", title: "存在逾期应收", description: `当前 ${overdueReceivables.value.length} 笔逾期，未回款 ${formatMoney(outstandingTotal.value)}，建议生成催收跟进。`, route: "/finance/receivables" });
+  }
+  if (!relatedQuote.value) {
+    rows.push({ key: "quote", level: "medium", title: "报价链路缺失", description: "缺少报价会影响毛利、折扣权限、成本项校验的追溯。", route: "/crm/quotes" });
+  }
+  if (daysToEnd.value <= 30) {
+    rows.push({ key: "renewal", level: "medium", title: "合同临近到期", description: daysToEnd.value >= 0 ? `距到期 ${daysToEnd.value} 天，建议提前进入续约评估。` : `已到期 ${Math.abs(daysToEnd.value)} 天，建议关闭或续约。`, route: "/crm/renewals" });
+  }
+  if (rows.length === 0) {
+    rows.push({ key: "review", level: "low", title: "建议定期复盘利润", description: "合同执行稳定，可在项目关闭后沉淀采购、人工、外包、回款和毛利复盘。", route: "/projects/budget" });
+  }
+  return rows;
+});
 
 const attachments = ref<CrmAttachment[]>([]);
 const approvalAttachments = computed(() => attachments.value.filter((a) => a.attachmentType === "APPROVAL_DOC" || !a.attachmentType));
@@ -367,6 +507,122 @@ function goBack() {
   router.push("/crm/contracts");
 }
 </script>
+<style scoped>
+.closure-card :deep(.ant-card-body) {
+  padding-top: 14px;
+}
+
+.closure-stats {
+  margin-bottom: 14px;
+}
+
+.closure-stat {
+  min-height: 104px;
+  padding: 12px;
+  border: 1px solid #edf0f5;
+  border-radius: 8px;
+  background: #fbfcfe;
+}
+
+.closure-stat span {
+  color: #667085;
+  font-size: 12px;
+}
+
+.closure-stat strong {
+  display: block;
+  overflow: hidden;
+  margin: 8px 0 6px;
+  color: #172033;
+  font-size: 22px;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.closure-stat strong.danger {
+  color: #cf1322;
+}
+
+.closure-stat p {
+  overflow: hidden;
+  margin: 0;
+  color: #7a8699;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.closure-flow {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.closure-step {
+  min-height: 112px;
+  padding: 12px;
+  border: 1px solid #e6ebf2;
+  border-radius: 8px;
+  background: #f8fafc;
+  cursor: pointer;
+  text-align: left;
+}
+
+.closure-step.done {
+  border-color: #b7d7ff;
+  background: #f4f9ff;
+}
+
+.closure-step.warn {
+  border-color: #ffd6d6;
+  background: #fff7f7;
+}
+
+.closure-step span {
+  color: #667085;
+  font-size: 12px;
+}
+
+.closure-step strong {
+  display: block;
+  overflow: hidden;
+  margin-top: 8px;
+  color: #172033;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.closure-step p {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 6px 0 0;
+  color: #7a8699;
+  font-size: 12px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.closure-actions {
+  border-top: 1px solid #edf0f5;
+  padding-top: 4px;
+}
+
+@media (max-width: 1200px) {
+  .closure-flow {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .closure-flow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+</style>
+
 <style>
 @media print {
   .app-sider, .ant-layout-sider { display: none !important; }

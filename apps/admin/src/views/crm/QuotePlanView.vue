@@ -12,8 +12,9 @@
         <a-col :xs="12" :lg="6"><a-statistic title="报价总数" :value="quotes.length" suffix="份" /></a-col>
         <a-col :xs="12" :lg="6"><a-statistic title="当前报价总额" :value="totalAmount" :formatter="moneyFormatter" /></a-col>
         <a-col :xs="12" :lg="6"><a-statistic title="待客户确认" :value="customerPendingCount" suffix="份" /></a-col>
-        <a-col :xs="12" :lg="6"><a-statistic title="客户已接受" :value="customerAcceptedCount" suffix="份" /></a-col>
+        <a-col :xs="12" :lg="6"><a-statistic title="低毛利预警" :value="lowMarginCount" suffix="份" :value-style="{ color: lowMarginCount > 0 ? '#ff4d4f' : '#52c41a' }" /></a-col>
       </a-row>
+      <a-alert class="section-alert" type="info" show-icon message="报价利润校验：按默认成本率 70% 估算毛利，低于 15% 的报价建议复核成本项、折扣权限和服务范围。" />
 
       <div class="quote-toolbar">
         <a-input v-model:value="keyword" allow-clear placeholder="搜索报价编号、客户或服务范围" />
@@ -43,6 +44,10 @@
             <span v-if="record.inspectCycle" class="table-subtitle">{{ record.inspectCycle }}</span>
           </template>
           <template v-else-if="column.key === 'amount'"><strong>{{ formatMoney(record.amount) }}</strong></template>
+          <template v-else-if="column.key === 'margin'">
+            <a-tag :color="quoteMargin(record).rate < 15 ? 'red' : quoteMargin(record).rate < 25 ? 'orange' : 'green'">{{ quoteMargin(record).rate.toFixed(1) }}%</a-tag>
+            <span class="table-subtitle">估算毛利 {{ formatMoney(quoteMargin(record).gross) }}</span>
+          </template>
           <template v-else-if="column.key === 'status'">
             <a-tag :color="quoteStatusColor(record.status)">{{ quoteStatusLabel(record.status) }}</a-tag>
             <span v-if="record.lastApproverName" class="table-subtitle">
@@ -409,6 +414,7 @@ const columns = [
   { title: "报价 / 客户", key: "quote", width: 250 },
   { title: "方案内容", key: "scope", width: 320 },
   { title: "报价金额", key: "amount", width: 140 },
+  { title: "毛利校验", key: "margin", width: 150 },
   { title: "流程状态", key: "status", width: 220 },
   { title: "客户反馈", key: "customerResult", width: 260 },
   { title: "更新时间", key: "updatedAt", width: 150 },
@@ -435,6 +441,14 @@ const filteredQuotes = computed(() => {
 const totalAmount = computed(() => quotes.value.reduce((sum, item) => sum + Number(item.amount || 0), 0));
 const customerPendingCount = computed(() => quotes.value.filter((item) => item.status === "APPROVED").length);
 const customerAcceptedCount = computed(() => quotes.value.filter((item) => item.status === "CUSTOMER_ACCEPTED").length);
+const lowMarginCount = computed(() => quotes.value.filter((item) => quoteMargin(item).rate < 15).length);
+
+function quoteMargin(record: QuotePlan) {
+  const amount = Number(record.amount || 0);
+  const estimatedCost = amount * 0.7;
+  const gross = amount - estimatedCost;
+  return { gross, rate: amount > 0 ? gross / amount * 100 : 0 };
+}
 
 onMounted(loadData);
 

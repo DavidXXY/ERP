@@ -16,7 +16,7 @@ public class LeaveBalance extends BaseEntity {
     @JoinColumn(name = "employee_id", nullable = false)
     private QualificationEmployee employee;
     @Column(name = "leave_type", nullable = false, length = 40) private String leaveType;
-    @Column(nullable = false) private int year;
+    @Column(name = "leave_year", nullable = false) private int year;
     @Column(name = "total_days", nullable = false) private double totalDays = 0;
     @Column(name = "used_days", nullable = false) private double usedDays = 0;
 

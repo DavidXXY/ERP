@@ -16,6 +16,12 @@ cd "$ROOT_DIR/services/api"
 
 mvn clean package -DskipTests -q
 BACKEND_JAR="$ROOT_DIR/services/api/target/ops-erp-api-0.1.0.jar"
+ALT_BACKEND_JAR="/private/tmp/ops-erp-build/api/ops-erp-api-0.1.0.jar"
+
+if [ -f "$ALT_BACKEND_JAR" ]; then
+  mkdir -p "$ROOT_DIR/services/api/target"
+  cp "$ALT_BACKEND_JAR" "$BACKEND_JAR"
+fi
 
 if [ -f "$BACKEND_JAR" ]; then
   JAR_SIZE=$(du -h "$BACKEND_JAR" | cut -f1)

@@ -33,6 +33,11 @@
           <span>统一风险中心</span>
         </a-menu-item>
 
+        <a-menu-item v-if="canAccessBusinessTodos" key="/workbench/todos">
+          <template #icon><FileDoneOutlined /></template>
+          <span>业务待办中心</span>
+        </a-menu-item>
+
         <a-sub-menu
           v-if="canAccessCrm"
           key="crm"
@@ -115,7 +120,7 @@
         </a-sub-menu>
 
         <a-sub-menu
-          v-if="auth.can('system:view') || auth.can('system:organization:view') || auth.can('system:role:view') || auth.can('system:permission:view')"
+          v-if="auth.can('system:view') || auth.can('system:organization:view') || auth.can('system:role:view') || auth.can('system:permission:view') || auth.can('risk:update')"
           key="system"
         >
           <template #icon><SettingOutlined /></template>
@@ -125,6 +130,7 @@
           <a-menu-item v-if="auth.can('system:role:view')" key="/system/roles">角色管理</a-menu-item>
           <a-menu-item v-if="auth.can('system:permission:view')" key="/system/permissions">权限管理</a-menu-item>
           <a-menu-item v-if="auth.can('system:role:view')" key="/system/approval-configs">审批人员配置</a-menu-item>
+          <a-menu-item v-if="auth.can('system:role:view') || auth.can('risk:update')" key="/system/process-rules">流程规则配置</a-menu-item>
         </a-sub-menu>
         <a-sub-menu key="self">
           <template #icon><UserOutlined /></template>
@@ -254,6 +260,21 @@ const canAccessRiskCenter = computed(() => [
   "finance:payable:view",
   "qualification:warning:view",
   "crm:renewal:view",
+].some((permission) => auth.can(permission)));
+const canAccessBusinessTodos = computed(() => [
+  "dashboard:view",
+  "risk:view",
+  "office:approval:view",
+  "office:notification:view",
+  "crm:opportunity:view",
+  "crm:quote:view",
+  "crm:contract:view",
+  "crm:receivable:view",
+  "procurement:view",
+  "inventory:view",
+  "project:view",
+  "finance:receivable:view",
+  "finance:payable:view",
 ].some((permission) => auth.can(permission)));
 const canAccessHumanResources = computed(() => ["qualification:employee:view", "qualification:certificate:view", "workforce:view"].some((permission) => auth.can(permission)));
 const canAccessQualification = computed(() => ["qualification:view", "qualification:company:view", "qualification:tender:view", "qualification:warning:view"].some((permission) => auth.can(permission)));

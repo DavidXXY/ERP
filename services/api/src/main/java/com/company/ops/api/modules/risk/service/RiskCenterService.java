@@ -353,7 +353,7 @@ public class RiskCenterService {
     RiskWorkflowResponse workflow = workflows.get(key);
     RiskWorkflowResponse effectiveWorkflow = workflow;
     if (workflow == null && rule != null && trimToNull(rule.getDefaultOwner()) != null) {
-      effectiveWorkflow = new RiskWorkflowResponse(key, "UNCLAIMED", rule.getDefaultOwner(), null, null, "系统", null, null);
+      effectiveWorkflow = new RiskWorkflowResponse(key, "UNCLAIMED", rule.getDefaultOwner(), null, null, "系统", null, null, null, null, null, null, null);
     }
     Integer slaHours = rule == null ? null : rule.getSlaHours();
     OffsetDateTime dueAt = slaHours == null ? null : (startAt == null ? OffsetDateTime.now() : startAt).plusHours(slaHours);
@@ -372,7 +372,12 @@ public class RiskCenterService {
         workflow.getReason(),
         workflow.getUpdatedByName(),
         workflow.getProcessedAt(),
-        workflow.getUpdatedAt()
+        workflow.getUpdatedAt(),
+        workflow.getRootCause(),
+        workflow.getResponsibleDepartment(),
+        workflow.getHandlingHours(),
+        workflow.getRecurrence(),
+        workflow.getPreventionAction()
     );
   }
 

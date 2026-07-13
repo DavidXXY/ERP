@@ -13,6 +13,22 @@
     </a-card>
 
     <a-card title="订单-入库-应付匹配" style="margin-top:16px">
+      <section class="p2p-action-panel">
+        <div class="p2p-action-head">
+          <div>
+            <h3>三单匹配处理动作</h3>
+            <p>按异常类型给出下一步处理建议，避免只看见差异但不知道谁处理。</p>
+          </div>
+          <a-tag :color="matchingRiskCount > 0 ? 'red' : 'green'">{{ matchingRiskCount }} 个异常</a-tag>
+        </div>
+        <div class="p2p-action-grid">
+          <button v-for="item in matchingActions" :key="item.key" class="p2p-action-card" type="button" @click="router.push(item.link)">
+            <span>{{ item.label }}</span>
+            <strong>{{ item.count }}</strong>
+            <em>{{ item.action }}</em>
+          </button>
+        </div>
+      </section>
       <a-table :data-source="matchingItems" :columns="matchingColumns" :loading="loading" :pagination="{pageSize:8}" :row-key="(r:any)=>r.orderId" size="middle" :scroll="{x:1120}">
         <template #bodyCell="{column,record}">
           <template v-if="column.key==='order'"><strong>{{ record.orderCode || '-' }}</strong><span class="table-subtitle">{{ record.supplierName || '未知供应商' }} · {{ record.partName }}</span></template>
@@ -21,6 +37,9 @@
           <template v-else-if="column.key==='receiptAmount'">{{ formatMoney(record.receiptAmount) }}</template>
           <template v-else-if="column.key==='payableAmount'">{{ formatMoney(record.payableAmount) }}</template>
           <template v-else-if="column.key==='status'"><a-tag :color="matchStatusColor(record.matchStatus)">{{ matchStatusLabel(record.matchStatus) }}</a-tag></template>
+          <template v-else-if="column.key==='action'">
+            <a-button type="link" size="small" @click="router.push(matchAction(record).link)">{{ matchAction(record).label }}</a-button>
+          </template>
         </template>
         <template #emptyText>暂无采购订单匹配数据</template>
       </a-table>
@@ -93,6 +112,12 @@ const p2pItems=computed(()=>requests.value.map(r=>{
 const pendingOrder=computed(()=>p2pItems.value.filter(i=>!i._order).length);
 const pendingReceipt=computed(()=>p2pItems.value.filter(i=>i._order&&!i._receipt).length);
 const matchingRiskCount=computed(()=>matchingItems.value.filter(i=>i.matchStatus!=='MATCHED').length);
+const matchingActions=computed(()=>[
+  { key:'receiving', label:'待入库', count:matchingItems.value.filter(i=>i.matchStatus==='RECEIVING').length, action:'跟进仓库到货或催供应商交付', link:'/procurement/receipts' },
+  { key:'payable', label:'缺应付', count:matchingItems.value.filter(i=>i.matchStatus==='PAYABLE_MISSING').length, action:'补齐采购应付，进入付款计划', link:'/procurement/payables' },
+  { key:'amount', label:'金额不一致', count:matchingItems.value.filter(i=>i.matchStatus==='AMOUNT_MISMATCH').length, action:'复核订单、入库金额和发票应付', link:'/procurement/p2p' },
+  { key:'cancelled', label:'取消订单', count:matchingItems.value.filter(i=>i.matchStatus==='CANCELLED').length, action:'确认是否释放预算或重新请购', link:'/procurement/orders' },
+]);
 
 const p2pColumns=[
   {title:'申请单',key:'code',width:200},{title:'金额',key:'amount',width:130},
@@ -102,7 +127,7 @@ const p2pColumns=[
 const matchingColumns=[
   {title:'采购订单',key:'order',width:240},{title:'入库/订购数量',key:'qty',width:130},
   {title:'订单金额',key:'orderAmount',width:130},{title:'入库金额',key:'receiptAmount',width:130},{title:'应付金额',key:'payableAmount',width:130},
-  {title:'匹配状态',key:'status',width:120},{title:'风险说明',dataIndex:'riskMessage',width:260},
+  {title:'匹配状态',key:'status',width:120},{title:'风险说明',dataIndex:'riskMessage',width:260},{title:'处理动作',key:'action',width:120},
 ];
 
 onMounted(loadData);
@@ -110,12 +135,26 @@ async function loadData(){loading.value=true;try{const[reqResult,ordResult,rcs,p
 function formatMoney(v:number){return new Intl.NumberFormat('zh-CN',{style:'currency',currency:'CNY'}).format(v||0);}
 function matchStatusLabel(v:string){return ({MATCHED:'已匹配',RECEIVING:'待入库',PAYABLE_MISSING:'缺应付',AMOUNT_MISMATCH:'金额不一致',CANCELLED:'已取消'} as Record<string,string>)[v]||v;}
 function matchStatusColor(v:string){return ({MATCHED:'green',RECEIVING:'blue',PAYABLE_MISSING:'orange',AMOUNT_MISMATCH:'red',CANCELLED:'default'} as Record<string,string>)[v]||'default';}
+function matchAction(record:ProcurementMatching){return ({
+  RECEIVING:{label:'去入库',link:'/procurement/receipts'},
+  PAYABLE_MISSING:{label:'补应付',link:'/procurement/payables'},
+  AMOUNT_MISMATCH:{label:'查差异',link:'/procurement/p2p'},
+  CANCELLED:{label:'看订单',link:'/procurement/orders'},
+  MATCHED:{label:'已完成',link:'/procurement/p2p'},
+} as Record<string,{label:string;link:string}>)[record.matchStatus]||{label:'处理',link:'/procurement/p2p'};}
 </script>
 <style scoped>
+.p2p-action-panel{margin-bottom:14px;padding:14px;border:1px solid #e5e7eb;background:#fbfcfe}
+.p2p-action-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:12px}
+.p2p-action-head h3{margin:0;color:#111827;font-size:15px;font-weight:600}.p2p-action-head p{margin:4px 0 0;color:#6b7280;font-size:12px}
+.p2p-action-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.p2p-action-card{display:grid;gap:4px;min-width:0;padding:12px;border:1px solid #eef2f7;border-radius:8px;background:#fff;cursor:pointer;text-align:left}
+.p2p-action-card:hover{border-color:#91caff;background:#f6faff}.p2p-action-card span{color:#667085;font-size:12px}.p2p-action-card strong{color:#101828;font-size:20px}.p2p-action-card em{overflow:hidden;color:#98a2b3;font-size:12px;font-style:normal;text-overflow:ellipsis;white-space:nowrap}
 .p2p-row{display:flex;align-items:center;gap:6px}.p2p-dot{display:flex;align-items:center;gap:4px}
 .p2p-dot-circle{width:14px;height:14px;border-radius:50%;flex-shrink:0}
 .p2p-dot-circle.p2p-finish{background:#52c41a}.p2p-dot-circle.p2p-process{background:#1890ff;animation:pulse 1.5s infinite}
 .p2p-dot-circle.p2p-wait{background:#d9d9d9}.p2p-dot-circle.p2p-error{background:#ff4d4f}
 .p2p-dot-label{font-size:11px;color:#595959;white-space:nowrap}
 @keyframes pulse{0%{opacity:1}50%{opacity:.5}100%{opacity:1}}
+@media(max-width:900px){.p2p-action-head{flex-direction:column}.p2p-action-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>

@@ -22,6 +22,97 @@
         <a-col :xs="12" :lg="6"><a-statistic title="已关闭/忽略" :value="resolvedCount" suffix="项" /></a-col>
       </a-row>
 
+      <section class="task-closure-panel">
+        <div class="task-closure-title">
+          <div>
+            <h3>风险任务收口</h3>
+            <p>按当前筛选条件汇总待认领、处理中、超时和金额敞口，便于当天清单化推进。</p>
+          </div>
+          <a-space>
+            <a-button size="small" @click="workflowFilter = 'UNCLAIMED'">未认领</a-button>
+            <a-button size="small" @click="workflowFilter = 'PROCESSING'">处理中</a-button>
+            <a-button size="small" @click="showOverdueRisks">SLA超时</a-button>
+          </a-space>
+        </div>
+        <div class="task-closure-grid">
+          <button
+            v-for="card in taskCards"
+            :key="card.key"
+            class="task-closure-card"
+            type="button"
+            @click="card.action"
+          >
+            <span>{{ card.label }}</span>
+            <strong>{{ card.value }}</strong>
+            <em>{{ card.hint }}</em>
+          </button>
+        </div>
+      </section>
+
+      <section class="closure-command-panel">
+        <div class="closure-command-head">
+          <div>
+            <h3>闭环指挥台</h3>
+            <p>把风险按责任、时限和下一步动作拆开，便于当天推进和复盘。</p>
+          </div>
+          <a-space>
+            <a-button size="small" @click="claimTopRisk">认领首项</a-button>
+            <a-button size="small" @click="workflowFilter = undefined; statusFilter = undefined">看全部</a-button>
+          </a-space>
+        </div>
+        <div class="closure-command-grid">
+          <div class="closure-command-block">
+            <div class="block-title">
+              <span>责任人队列</span>
+              <strong>{{ ownerQueues.length }} 组</strong>
+            </div>
+            <button v-for="owner in ownerQueues" :key="owner.owner" class="owner-row" type="button" @click="filterOwner(owner.owner)">
+              <span>
+                <strong>{{ owner.owner }}</strong>
+                <small>{{ owner.modules }}</small>
+              </span>
+              <em>{{ owner.count }} 项</em>
+            </button>
+            <a-empty v-if="ownerQueues.length === 0" description="暂无待推进责任队列" />
+          </div>
+          <div class="closure-command-block">
+            <div class="block-title">
+              <span>SLA 临期</span>
+              <strong>{{ dueSoonItems.length }} 项</strong>
+            </div>
+            <button v-for="item in dueSoonItems" :key="item.key" class="due-row" type="button" @click="openWorkflow(item)">
+              <span>
+                <strong>{{ item.title }}</strong>
+                <small>{{ item.subject }}</small>
+              </span>
+              <em :class="{ danger: item.slaOverdue }">{{ slaText(item) }}</em>
+            </button>
+            <a-empty v-if="dueSoonItems.length === 0" description="暂无临期或超时事项" />
+          </div>
+          <div class="closure-command-block">
+            <div class="block-title">
+              <span>推荐动作</span>
+              <strong>{{ recommendedActions.length }} 条</strong>
+            </div>
+            <button v-for="item in recommendedActions" :key="item.key" class="action-suggestion-row" type="button" @click="openWorkflowWithSuggestion(item)">
+              <a-tag :color="item.color">{{ item.moduleName }}</a-tag>
+              <span>
+                <strong>{{ item.action }}</strong>
+                <small>{{ item.subject }}</small>
+              </span>
+            </button>
+            <a-empty v-if="recommendedActions.length === 0" description="暂无推荐动作" />
+          </div>
+        </div>
+        <div class="closure-review-strip">
+          <button v-for="item in reviewCards" :key="item.key" class="review-card" type="button" @click="item.action">
+            <span>{{ item.label }}</span>
+            <strong>{{ item.value }}</strong>
+            <em>{{ item.hint }}</em>
+          </button>
+        </div>
+      </section>
+
       <a-row :gutter="[16, 16]" class="metric-row" v-if="summary">
         <a-col :xs="24" :lg="12">
           <section class="risk-summary-panel">
@@ -51,6 +142,7 @@
         <a-select v-model:value="severityFilter" allow-clear placeholder="全部等级" :options="severityOptions" style="width: 140px" />
         <a-select v-model:value="statusFilter" allow-clear placeholder="全部状态" :options="statusOptions" style="width: 140px" />
         <a-select v-model:value="workflowFilter" allow-clear placeholder="处理状态" :options="workflowOptions" style="width: 150px" />
+        <a-select v-model:value="ownerFilter" allow-clear placeholder="责任人" :options="ownerOptions" style="width: 150px" />
         <a-select v-model:value="batchStatus" placeholder="批量处理" :options="workflowOptions" style="width: 150px" />
         <a-button :disabled="!selectedRowKeys.length" @click="handleBatchWorkflow">批量更新</a-button>
       </a-space>
@@ -126,6 +218,24 @@
           <a-form-item v-if="workflowForm.status === 'CLOSED' || workflowForm.status === 'IGNORED'" label="关闭/忽略原因">
             <a-textarea v-model:value="workflowForm.reason" :rows="2" />
           </a-form-item>
+          <template v-if="workflowForm.status === 'CLOSED'">
+            <a-divider orientation="left">异常闭环复盘</a-divider>
+            <a-form-item label="根因">
+              <a-textarea v-model:value="workflowForm.rootCause" :rows="2" placeholder="例如：采购到货延期、客户验收资料不完整、预算变更未同步" />
+            </a-form-item>
+            <a-form-item label="责任部门">
+              <a-input v-model:value="workflowForm.responsibleDepartment" placeholder="例如：项目部、采购部、财务部" />
+            </a-form-item>
+            <a-form-item label="是否复发">
+              <a-radio-group v-model:value="workflowForm.recurrence">
+                <a-radio :value="false">首次/偶发</a-radio>
+                <a-radio :value="true">复发</a-radio>
+              </a-radio-group>
+            </a-form-item>
+            <a-form-item label="下次预防动作">
+              <a-textarea v-model:value="workflowForm.preventionAction" :rows="2" placeholder="例如：阶段闸口增加资料校验；供应商评分低于阈值自动升级审批" />
+            </a-form-item>
+          </template>
         </a-form>
         <a-space>
           <a-button type="primary" @click="saveWorkflow">保存处理状态</a-button>
@@ -142,6 +252,13 @@
               <p v-if="action.owner" style="margin:2px 0;font-size:12px">处理人：{{ action.owner }}</p>
               <p v-if="action.note" style="margin:2px 0;font-size:12px">备注：{{ action.note }}</p>
               <p v-if="action.reason" style="margin:2px 0;font-size:12px">原因：{{ action.reason }}</p>
+              <div v-if="action.rootCause || action.responsibleDepartment || action.preventionAction" class="action-review-card">
+                <p v-if="action.rootCause">根因：{{ action.rootCause }}</p>
+                <p v-if="action.responsibleDepartment">责任部门：{{ action.responsibleDepartment }}</p>
+                <p v-if="action.handlingHours != null">处理耗时：{{ action.handlingHours }}h</p>
+                <p v-if="action.recurrence != null">是否复发：{{ action.recurrence ? '是' : '否' }}</p>
+                <p v-if="action.preventionAction">预防动作：{{ action.preventionAction }}</p>
+              </div>
             </a-timeline-item>
           </a-timeline>
         </a-spin>
@@ -169,7 +286,18 @@ import { downloadCsv } from "@/utils/csv";
 type RiskSeverity = "HIGH" | "MEDIUM" | "LOW";
 type RiskStatus = "OPEN" | "PENDING" | "OVERDUE";
 type WorkflowStatus = RiskWorkflowStatus;
-type RiskWorkflow = { status: WorkflowStatus; owner?: string; note?: string; reason?: string; updatedAt?: string };
+type RiskWorkflow = {
+  status: WorkflowStatus;
+  owner?: string;
+  note?: string;
+  reason?: string;
+  updatedAt?: string;
+  rootCause?: string;
+  responsibleDepartment?: string;
+  handlingHours?: number;
+  recurrence?: boolean;
+  preventionAction?: string;
+};
 type RiskItem = {
   key: string;
   module: string;
@@ -202,6 +330,7 @@ const moduleFilter = ref<string>();
 const severityFilter = ref<RiskSeverity>();
 const statusFilter = ref<RiskStatus>();
 const workflowFilter = ref<WorkflowStatus>();
+const ownerFilter = ref<string>();
 const workflowOpen = ref(false);
 const activeRisk = ref<RiskItem | null>(null);
 const workflowStore = ref<Record<string, RiskWorkflow>>({});
@@ -209,7 +338,16 @@ const workflowActions = ref<RiskWorkflowActionResponse[]>([]);
 const actionLoading = ref(false);
 const selectedRowKeys = ref<string[]>([]);
 const batchStatus = ref<WorkflowStatus>("CLAIMED");
-const workflowForm = reactive({ status: "UNCLAIMED" as WorkflowStatus, owner: "", note: "", reason: "" });
+const workflowForm = reactive({
+  status: "UNCLAIMED" as WorkflowStatus,
+  owner: "",
+  note: "",
+  reason: "",
+  rootCause: "",
+  responsibleDepartment: "",
+  recurrence: false,
+  preventionAction: "",
+});
 
 const columns = [
   { title: "风险事项 / 对象", key: "risk", width: 320 },
@@ -243,25 +381,124 @@ const workflowOptions = [
 ];
 
 const moduleOptions = computed(() => Array.from(new Map(items.value.map((item) => [item.module, { label: item.moduleName, value: item.module }])).values()));
+const ownerOptions = computed(() => Array.from(new Set(items.value.map((item) => item.workflow.owner || defaultOwnerLabel(item))))
+  .map((owner) => ({ label: owner, value: owner })));
 const filteredItems = computed(() => {
   const term = keyword.value.trim().toLowerCase();
   return items.value.filter((item) => {
     const text = `${item.title} ${item.subject} ${item.description}`.toLowerCase();
+    const owner = item.workflow.owner || defaultOwnerLabel(item);
     return (!moduleFilter.value || item.module === moduleFilter.value)
       && (!severityFilter.value || item.severity === severityFilter.value)
       && (!statusFilter.value || item.status === statusFilter.value)
       && (!workflowFilter.value || item.workflow.status === workflowFilter.value)
+      && (!ownerFilter.value || owner === ownerFilter.value)
       && (!term || text.includes(term));
   });
 });
 const riskAmount = computed(() => filteredItems.value.reduce((sum, item) => sum + Number(item.amount || 0), 0));
 const resolvedCount = computed(() => items.value.filter((item) => item.workflow.status === "CLOSED" || item.workflow.status === "IGNORED").length);
 const slaOverdueCount = computed(() => filteredItems.value.filter((item) => item.slaOverdue).length);
+const activeItems = computed(() => filteredItems.value.filter((item) => item.workflow.status !== "CLOSED" && item.workflow.status !== "IGNORED"));
+const closureRate = computed(() => items.value.length ? Math.round((resolvedCount.value / items.value.length) * 100) : 100);
+const dueSoonItems = computed(() => activeItems.value
+  .filter((item) => item.slaOverdue || hoursToDue(item) <= 24)
+  .sort((a, b) => hoursToDue(a) - hoursToDue(b))
+  .slice(0, 5));
+const ownerQueues = computed(() => {
+  const bucket = new Map<string, { owner: string; count: number; modules: Set<string> }>();
+  activeItems.value.forEach((item) => {
+    const owner = item.workflow.owner || defaultOwnerLabel(item);
+    const current = bucket.get(owner) || { owner, count: 0, modules: new Set<string>() };
+    current.count++;
+    current.modules.add(item.moduleName);
+    bucket.set(owner, current);
+  });
+  return Array.from(bucket.values())
+    .map((item) => ({ owner: item.owner, count: item.count, modules: Array.from(item.modules).slice(0, 3).join(" / ") }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5);
+});
+const recommendedActions = computed(() => activeItems.value
+  .map((item) => ({ ...item, action: recommendAction(item), color: item.slaOverdue ? "red" : severityColor(item.severity) }))
+  .sort((a, b) => Number(b.slaOverdue) - Number(a.slaOverdue) || severityRank(b.severity) - severityRank(a.severity))
+  .slice(0, 5));
+const repeatModule = computed(() => {
+  const module = [...(summary.value?.modules || [])].sort((a, b) => b.totalCount - a.totalCount)[0];
+  return module ? `${module.moduleName} ${module.totalCount} 项` : "暂无";
+});
+const reviewCards = computed(() => [
+  {
+    key: "closure-rate",
+    label: "闭环率",
+    value: `${closureRate.value}%`,
+    hint: `${resolvedCount.value}/${items.value.length || 0} 已收口`,
+    action: () => { workflowFilter.value = "CLOSED"; },
+  },
+  {
+    key: "repeat-module",
+    label: "复发模块",
+    value: repeatModule.value,
+    hint: "按快照总量排序",
+    action: () => {
+      const module = [...(summary.value?.modules || [])].sort((a, b) => b.totalCount - a.totalCount)[0];
+      moduleFilter.value = module?.module;
+    },
+  },
+  {
+    key: "due-soon",
+    label: "24小时内",
+    value: `${dueSoonItems.value.length} 项`,
+    hint: "临期与超时合计",
+    action: () => { statusFilter.value = "OVERDUE"; },
+  },
+  {
+    key: "unowned",
+    label: "未明确责任",
+    value: `${activeItems.value.filter((item) => !item.workflow.owner).length} 项`,
+    hint: "建议先认领分派",
+    action: () => { workflowFilter.value = "UNCLAIMED"; },
+  },
+]);
+const taskCards = computed(() => {
+  const unclaimed = filteredItems.value.filter((item) => item.workflow.status === "UNCLAIMED").length;
+  const processing = filteredItems.value.filter((item) => item.workflow.status === "PROCESSING").length;
+  return [
+    {
+      key: "unclaimed",
+      label: "待认领",
+      value: `${unclaimed} 项`,
+      hint: unclaimed ? "需要明确责任人" : "暂无待认领",
+      action: () => { workflowFilter.value = "UNCLAIMED"; },
+    },
+    {
+      key: "processing",
+      label: "处理中",
+      value: `${processing} 项`,
+      hint: processing ? "跟进处理进度" : "暂无处理中",
+      action: () => { workflowFilter.value = "PROCESSING"; },
+    },
+    {
+      key: "sla",
+      label: "SLA超时",
+      value: `${slaOverdueCount.value} 项`,
+      hint: slaOverdueCount.value ? "建议立即升级" : "SLA正常",
+      action: () => { statusFilter.value = "OVERDUE"; },
+    },
+    {
+      key: "amount",
+      label: "金额敞口",
+      value: formatMoney(riskAmount.value),
+      hint: "当前筛选范围",
+      action: () => { severityFilter.value = "HIGH"; },
+    },
+  ];
+});
 
 restoreWorkflow();
 restoreFilters();
 onMounted(loadData);
-watch([keyword, moduleFilter, severityFilter, statusFilter, workflowFilter], persistFilters);
+watch([keyword, moduleFilter, severityFilter, statusFilter, workflowFilter, ownerFilter], persistFilters);
 
 async function loadData() {
   loading.value = true;
@@ -587,6 +824,60 @@ function dateOnly(value?: string) { return value ? value.slice(0, 10) : undefine
 function formatPercent(value: number) { return `${Number(value || 0).toFixed(1)}%`; }
 function formatMoney(value: number) { return new Intl.NumberFormat("zh-CN", { style: "currency", currency: "CNY", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value || 0); }
 function moneyFormatter(value: number | string) { return formatMoney(Number(value)); }
+function hoursToDue(item: RiskItem) {
+  if (!item.dueAt) return Number.POSITIVE_INFINITY;
+  return Math.ceil((new Date(item.dueAt).getTime() - Date.now()) / 3600000);
+}
+function slaText(item: RiskItem) {
+  const hours = hoursToDue(item);
+  if (!Number.isFinite(hours)) return "-";
+  if (hours < 0) return `超时 ${Math.abs(hours)}h`;
+  if (hours === 0) return "1h内";
+  return `${hours}h`;
+}
+function defaultOwnerLabel(item: RiskItem) {
+  return ({ finance: "财务经理", procurement: "采购负责人", inventory: "仓库管理员", project: "项目经理", office: "综合管理员", qualification: "资质管理员", crm: "客户经理", maintenance: "维保主管" } as Record<string, string>)[item.module] || "待分派";
+}
+function recommendAction(item: RiskItem) {
+  if (item.slaOverdue) return "立即升级并补充处理备注";
+  if (item.workflow.status === "UNCLAIMED") return "先认领并明确责任人";
+  if (item.module === "finance" && item.title.includes("应收")) return "登记催收承诺或回款计划";
+  if (item.module === "procurement") return "复核订单、入库、应付三单差异";
+  if (item.module === "project") return "复盘预算、采购成本和未结算变更";
+  if (item.module === "inventory") return "确认采购申请或跨仓调拨";
+  if (item.module === "qualification") return "补齐证照续期材料和责任节点";
+  if (item.module === "crm") return "安排客户续约跟进和报价动作";
+  return "补充处理计划并推进到处理中";
+}
+function filterOwner(owner: string) {
+  ownerFilter.value = owner;
+  workflowFilter.value = undefined;
+}
+async function claimTopRisk() {
+  const target = activeItems.value.find((item) => item.workflow.status === "UNCLAIMED") || activeItems.value[0];
+  if (!target) {
+    message.info("暂无需要认领的风险");
+    return;
+  }
+  activeRisk.value = target;
+  Object.assign(workflowForm, {
+    status: "CLAIMED" as WorkflowStatus,
+    owner: target.workflow.owner || auth.user?.displayName || defaultOwnerLabel(target),
+    note: "已认领，准备推进闭环处理",
+    reason: "",
+    rootCause: "",
+    responsibleDepartment: "",
+    recurrence: false,
+    preventionAction: "",
+  });
+  await saveWorkflow();
+}
+function openWorkflowWithSuggestion(record: RiskItem & { action: string }) {
+  openWorkflow(record);
+  workflowForm.status = record.workflow.status === "UNCLAIMED" ? "CLAIMED" : "PROCESSING";
+  workflowForm.note = record.action;
+  workflowForm.owner = record.workflow.owner || auth.user?.displayName || defaultOwnerLabel(record);
+}
 
 function applyWorkflow(item: Omit<RiskItem, "workflow"> | RiskItem): RiskItem {
   return { ...item, workflow: workflowStore.value[item.key] || { status: "UNCLAIMED" } };
@@ -599,6 +890,10 @@ function openWorkflow(record: RiskItem) {
     owner: record.workflow.owner || auth.user?.displayName || "",
     note: record.workflow.note || "",
     reason: record.workflow.reason || "",
+    rootCause: record.workflow.rootCause || "",
+    responsibleDepartment: record.workflow.responsibleDepartment || "",
+    recurrence: Boolean(record.workflow.recurrence),
+    preventionAction: record.workflow.preventionAction || "",
   });
   workflowOpen.value = true;
   loadWorkflowActions(record.key);
@@ -606,6 +901,10 @@ function openWorkflow(record: RiskItem) {
 
 async function saveWorkflow() {
   if (!activeRisk.value) return;
+  if (workflowForm.status === "CLOSED" && (!workflowForm.rootCause.trim() || !workflowForm.responsibleDepartment.trim() || !workflowForm.preventionAction.trim())) {
+    message.error("关闭风险前请补齐根因、责任部门和下次预防动作");
+    return;
+  }
   let next: RiskWorkflow;
   try {
     const saved = await updateRiskWorkflow({
@@ -614,6 +913,10 @@ async function saveWorkflow() {
       owner: workflowForm.owner || auth.user?.displayName || "",
       note: workflowForm.note,
       reason: workflowForm.reason,
+      rootCause: workflowForm.status === "CLOSED" ? workflowForm.rootCause : undefined,
+      responsibleDepartment: workflowForm.status === "CLOSED" ? workflowForm.responsibleDepartment : undefined,
+      recurrence: workflowForm.status === "CLOSED" ? workflowForm.recurrence : undefined,
+      preventionAction: workflowForm.status === "CLOSED" ? workflowForm.preventionAction : undefined,
     });
     next = {
       status: saved.status,
@@ -621,6 +924,11 @@ async function saveWorkflow() {
       note: saved.note,
       reason: saved.reason,
       updatedAt: saved.updatedAt || saved.processedAt,
+      rootCause: saved.rootCause,
+      responsibleDepartment: saved.responsibleDepartment,
+      handlingHours: saved.handlingHours,
+      recurrence: saved.recurrence,
+      preventionAction: saved.preventionAction,
     };
   } catch {
     next = {
@@ -629,6 +937,10 @@ async function saveWorkflow() {
       note: workflowForm.note,
       reason: workflowForm.reason,
       updatedAt: new Date().toISOString(),
+      rootCause: workflowForm.rootCause,
+      responsibleDepartment: workflowForm.responsibleDepartment,
+      recurrence: workflowForm.recurrence,
+      preventionAction: workflowForm.preventionAction,
     };
     message.warning("后端风险状态保存失败，已暂存到当前浏览器");
   }
@@ -670,6 +982,11 @@ function toWorkflow(item: NonNullable<RiskItemResponse["workflow"]>): RiskWorkfl
     note: item.note,
     reason: item.reason,
     updatedAt: item.updatedAt || item.processedAt,
+    rootCause: item.rootCause,
+    responsibleDepartment: item.responsibleDepartment,
+    handlingHours: item.handlingHours,
+    recurrence: item.recurrence,
+    preventionAction: item.preventionAction,
   };
 }
 
@@ -689,6 +1006,7 @@ function restoreFilters() {
     severityFilter.value = filters.severityFilter;
     statusFilter.value = filters.statusFilter;
     workflowFilter.value = filters.workflowFilter;
+    ownerFilter.value = filters.ownerFilter;
   } catch {
     // Ignore invalid local preference payloads.
   }
@@ -701,11 +1019,259 @@ function persistFilters() {
     severityFilter: severityFilter.value,
     statusFilter: statusFilter.value,
     workflowFilter: workflowFilter.value,
+    ownerFilter: ownerFilter.value,
   }));
 }
 </script>
 
 <style scoped>
+.closure-command-panel {
+  margin: 16px 0;
+  padding: 14px;
+  border: 1px solid #e5e7eb;
+  background: #fbfcfe;
+}
+
+.closure-command-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.closure-command-head h3,
+.block-title span {
+  margin: 0;
+  color: #111827;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.closure-command-head p {
+  margin: 4px 0 0;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.closure-command-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.closure-command-block {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #eef2f7;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.block-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.block-title strong {
+  color: #1677ff;
+  font-size: 13px;
+}
+
+.owner-row,
+.due-row,
+.action-suggestion-row {
+  display: grid;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+  border: 0;
+  border-bottom: 1px solid #f2f4f7;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.owner-row,
+.due-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.action-suggestion-row {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.owner-row:last-child,
+.due-row:last-child,
+.action-suggestion-row:last-child {
+  border-bottom: 0;
+}
+
+.owner-row:hover,
+.due-row:hover,
+.action-suggestion-row:hover {
+  background: #f6faff;
+}
+
+.owner-row span,
+.due-row span,
+.action-suggestion-row span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.owner-row strong,
+.due-row strong,
+.action-suggestion-row strong {
+  overflow: hidden;
+  color: #1f2937;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.owner-row small,
+.due-row small,
+.action-suggestion-row small {
+  overflow: hidden;
+  color: #8c8c8c;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.owner-row em,
+.due-row em {
+  color: #595959;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.due-row em.danger {
+  color: #cf1322;
+}
+
+.closure-review-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.review-card {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #eef2f7;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  text-align: left;
+}
+
+.review-card:hover {
+  border-color: #91caff;
+  background: #f6faff;
+}
+
+.review-card span {
+  color: #667085;
+  font-size: 12px;
+}
+
+.review-card strong {
+  overflow: hidden;
+  color: #101828;
+  font-size: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.review-card em {
+  color: #98a2b3;
+  font-size: 12px;
+  font-style: normal;
+}
+
+.task-closure-panel {
+  margin: 16px 0;
+  padding: 14px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+}
+
+.task-closure-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.task-closure-title h3 {
+  margin: 0;
+  color: #111827;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.task-closure-title p {
+  margin: 4px 0 0;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.task-closure-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.task-closure-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid #eef2f7;
+  border-radius: 6px;
+  background: #f8fafc;
+  cursor: pointer;
+  text-align: left;
+}
+
+.task-closure-card:hover {
+  border-color: #91caff;
+  background: #f0f7ff;
+}
+
+.task-closure-card span {
+  color: #667085;
+  font-size: 12px;
+}
+
+.task-closure-card strong {
+  max-width: 100%;
+  color: #101828;
+  font-size: 20px;
+  overflow-wrap: anywhere;
+}
+
+.task-closure-card em {
+  color: #98a2b3;
+  font-size: 12px;
+  font-style: normal;
+}
+
 .risk-summary-panel {
   min-height: 76px;
   padding: 12px 14px;
@@ -716,5 +1282,39 @@ function persistFilters() {
   margin: 0 0 10px;
   font-size: 14px;
   font-weight: 600;
+}
+
+.action-review-card {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fbfcfe;
+}
+
+.action-review-card p {
+  margin: 2px 0;
+  color: #344054;
+  font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  .closure-command-head {
+    flex-direction: column;
+  }
+
+  .closure-command-grid,
+  .closure-review-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .task-closure-title {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .task-closure-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 </style>

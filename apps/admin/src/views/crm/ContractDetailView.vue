@@ -43,6 +43,23 @@
           </a-row>
         </a-card>
 
+        <a-alert
+          v-if="record.status === 'ACTIVE'"
+          class="section-alert"
+          type="success"
+          show-icon
+          message="合同已生效，可承接为项目"
+          description="转项目后会带入客户、合同金额、计划周期，并按默认成本结构拆分预算，后续采购、领料和成本会进入项目利润闭环。"
+        />
+        <a-alert
+          v-else
+          class="section-alert"
+          type="warning"
+          show-icon
+          message="建议合同生效后再转项目"
+          description="未生效合同仍可创建项目草稿，但项目审批和预算执行应以最终合同为准。"
+        />
+
         <a-card v-if="relatedQuote" title="关联报价" style="margin-top: 16px">
           <a-descriptions bordered :column="{ xs: 1, sm: 2, md: 3 }">
             <a-descriptions-item label="报价编号">{{ relatedQuote.code }}</a-descriptions-item>
@@ -73,6 +90,8 @@
             <a-descriptions-item label="负责人">{{ relatedOpportunity.ownerName }}</a-descriptions-item>
           </a-descriptions>
         </a-card>
+
+        <BusinessTraceTimeline :contract="record" />
         </div><!-- end print-area -->
       </template>
 
@@ -165,13 +184,14 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
-import { message } from "ant-design-vue";
+import { Modal, message } from "ant-design-vue";
 import { useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
 const auth = useAuthStore();
 import { createProject } from "@/api/project";
 import { getContract, getOpportunity, getQuote, uploadAttachment, deleteAttachment, listAttachments, getAttachmentDownloadUrl, createContractChange, approveContractChange, rejectContractChange, listContractChanges, type Opportunity, type QuotePlan, type ServiceContract, type CrmAttachment, type ContractChangeResponse } from "@/api/crm";
 import { contractStatusColor, contractStatusLabel, formatMoney, opportunityStageColor, opportunityStageLabel, quoteStatusColor, quoteStatusLabel } from "./crm-options";
+import BusinessTraceTimeline from "@/components/business/BusinessTraceTimeline.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -309,23 +329,38 @@ async function handleRejectChange(changeId: string) {
 function printPage() { window.print(); }
 async function convertToProject() {
   if (!record.value) return;
-  try {
-    const project = await createProject({
+  Modal.confirm({
+    title: "确认将合同承接为项目？",
+    content: "系统会按合同金额生成默认预算：人工20%、材料45%、外包20%、差旅5%、其他10%。后续可在项目详情中调整成本归集。",
+    okText: "生成项目",
+    cancelText: "取消",
+    async onOk() {
+      if (!record.value) return;
+      try {
+        const amount = Number(record.value.amount || 0);
+        await createProject({
       customerId: record.value.customerId,
       name: record.value.projectName + "项目",
       projectType: "RENOVATION",
       managerName: auth.user?.displayName || "",
-      siteAddress: "",
+      siteAddress: `${record.value.customerName || record.value.projectName}项目现场`,
       contractAmount: record.value.amount,
       plannedStartDate: record.value.startDate,
       plannedEndDate: record.value.endDate,
-      budgetItems: [{ category: "OTHER", plannedAmount: record.value.amount, remark: "合同预算" }],
+          budgetItems: [
+            { category: "LABOR", plannedAmount: Math.round(amount * 0.2 * 100) / 100, remark: "合同转项目默认人工预算" },
+            { category: "MATERIAL", plannedAmount: Math.round(amount * 0.45 * 100) / 100, remark: "合同转项目默认材料预算" },
+            { category: "SUBCONTRACT", plannedAmount: Math.round(amount * 0.2 * 100) / 100, remark: "合同转项目默认外包预算" },
+            { category: "TRAVEL", plannedAmount: Math.round(amount * 0.05 * 100) / 100, remark: "合同转项目默认差旅预算" },
+            { category: "OTHER", plannedAmount: Math.round(amount * 0.1 * 100) / 100, remark: "合同转项目默认其他预算" },
+          ],
       contractId: record.value.id,
     });
-    message.success("项目已创建");
-    router.push("/projects");
-    await loadData();
-  } catch (error) { message.error(error instanceof Error ? error.message : "项目创建失败"); }
+        message.success("项目已创建，并进入项目预算与成本闭环");
+        router.push("/projects/list");
+      } catch (error) { message.error(error instanceof Error ? error.message : "项目创建失败"); }
+    },
+  });
 }
 
 function goBack() {

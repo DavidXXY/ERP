@@ -16,8 +16,18 @@
           <a-radio-button value="quote">报价审批 ({{ quoteCount }})</a-radio-button>
           <a-radio-button value="change">合同变更 ({{ changeCount }})</a-radio-button>
         </a-radio-group>
+        <a-select v-model:value="slaFilter" allow-clear placeholder="处理时效" :options="slaOptions" style="width: 150px" />
+        <a-select v-model:value="riskFilter" allow-clear placeholder="审批风险" :options="riskOptions" style="width: 150px" />
         <a-button v-if="auth.can('office:approval:create')" type="primary" @click="openApprovalCreate"><template #icon><PlusOutlined /></template>发起审批</a-button>
       </a-space>
+
+      <section class="approval-health-panel">
+        <button v-for="card in healthCards" :key="card.key" class="health-card" type="button" @click="card.action">
+          <span>{{ card.label }}</span>
+          <strong :class="{ 'text-danger': card.danger }">{{ card.value }}</strong>
+          <small>{{ card.hint }}</small>
+        </button>
+      </section>
 
       <a-row :gutter="[16, 16]" style="margin-bottom:16px">
         <a-col :xs="24" :lg="12">
@@ -63,10 +73,12 @@
           <template v-else-if="column.key === 'amount'">{{ formatMoney(record.amount) }}</template>
           <template v-else-if="column.key === 'status'">
             <a-tag :color="record._statusColor">{{ record._statusLabel }}</a-tag>
+            <a-tag v-if="record._slaLevel === 'OVERDUE'" color="red">超时</a-tag>
+            <a-tag v-else-if="record._slaLevel === 'DUE_SOON'" color="orange">临近</a-tag>
             <span v-if="record.currentApproverName" class="table-subtitle">当前：{{ record.currentApproverName }}</span>
             <span v-if="record.matchedRuleText" class="table-subtitle">{{ record.matchedRuleText }}</span>
           </template>
-          <template v-else-if="column.key === 'date'">{{ record.date?.slice(0, 10) || '-' }}</template>
+          <template v-else-if="column.key === 'date'">{{ record.date?.slice(0, 10) || '-' }}<span class="table-subtitle">{{ approvalAgeLabel(record) }}</span></template>
           <template v-else-if="column.key === 'action'">
             <template v-if="record._source === 'office' && record.status === 'PENDING' && auth.can('office:approval:process')">
               <a-button type="link" size="small" @click="openProcess(record)">处理审批</a-button>
@@ -152,6 +164,8 @@ import { useAuthStore } from "@/stores/auth";
 
 const auth = useAuthStore(); const router = useRouter(); const loading = ref(false); const saving = ref(false);
 const sourceFilter = ref("all");
+const slaFilter = ref<string>();
+const riskFilter = ref<string>();
 
 // Office approval data
 const officeApprovals = ref<Approval[]>([]);
@@ -191,6 +205,8 @@ const mergedList = computed(() => {
       applicantName: a.applicantName, status: a.status, date: a.createdAt,
       approverName: a.approverName, approvalComment: a.approvalComment,
       currentApproverName: a.currentApproverName, matchedRuleText: a.matchedRuleText,
+      _slaLevel: slaLevel(a.createdAt, a.status === "PENDING"),
+      _riskLevel: approvalRiskLevel(a.amount, a.createdAt, a.status === "PENDING"),
     });
   });
   // CRM quote approvals
@@ -203,6 +219,8 @@ const mergedList = computed(() => {
       amount: q.amount, customerName: q.customerName, status: q.status, date: q.updatedAt,
       applicantName: (q as any).editorName, approverName: q.lastApproverName,
       approvalComment: q.lastApprovalComment,
+      _slaLevel: slaLevel(q.updatedAt, true),
+      _riskLevel: approvalRiskLevel(q.amount, q.updatedAt, true),
     });
   });
   // Contract changes
@@ -215,6 +233,8 @@ const mergedList = computed(() => {
       id: c.id, code: c.contractCode || "-", title: c.reason,
       desc: c.changeData, amount: 0, date: c.requestedAt,
       applicantName: c.requestedBy, status: c.status,
+      _slaLevel: slaLevel(c.requestedAt, true),
+      _riskLevel: approvalRiskLevel(0, c.requestedAt, true),
     });
   });
   items.sort((a, b) => ((a.date || "").localeCompare(b.date || "")) * -1);
@@ -222,14 +242,38 @@ const mergedList = computed(() => {
 });
 
 const filteredList = computed(() => {
-  if (sourceFilter.value === "all") return mergedList.value;
-  return mergedList.value.filter((i) => i._source === sourceFilter.value);
+  return mergedList.value.filter((item) => {
+    return (sourceFilter.value === "all" || item._source === sourceFilter.value)
+      && (!slaFilter.value || item._slaLevel === slaFilter.value)
+      && (!riskFilter.value || item._riskLevel === riskFilter.value);
+  });
 });
 const officeCount = computed(() => mergedList.value.filter((i) => i._source === "office").length);
 const quoteCount = computed(() => mergedList.value.filter((i) => i._source === "quote").length);
 const changeCount = computed(() => mergedList.value.filter((i) => i._source === "change").length);
 const workbenchTodos = computed(() => (workbench.value?.todos || []).slice(0, 5));
 const workbenchWarnings = computed(() => (workbench.value?.warnings || []).slice(0, 5));
+const pendingCount = computed(() => mergedList.value.filter((item) => isPendingApproval(item)).length);
+const overdueCount = computed(() => mergedList.value.filter((item) => item._slaLevel === "OVERDUE").length);
+const dueSoonCount = computed(() => mergedList.value.filter((item) => item._slaLevel === "DUE_SOON").length);
+const highRiskCount = computed(() => mergedList.value.filter((item) => item._riskLevel === "HIGH").length);
+const largeAmount = computed(() => mergedList.value.filter((item) => isPendingApproval(item)).reduce((sum, item) => sum + Number(item.amount || 0), 0));
+const healthCards = computed(() => [
+  { key: "pending", label: "待处理审批", value: `${pendingCount.value} 项`, hint: `待审金额 ${formatMoney(largeAmount.value)}`, danger: pendingCount.value > 0, action: () => { slaFilter.value = undefined; riskFilter.value = undefined; sourceFilter.value = "all"; } },
+  { key: "overdue", label: "SLA超时", value: `${overdueCount.value} 项`, hint: "超过48小时未处理", danger: overdueCount.value > 0, action: () => { slaFilter.value = "OVERDUE"; riskFilter.value = undefined; } },
+  { key: "dueSoon", label: "临近超时", value: `${dueSoonCount.value} 项`, hint: "24-48小时待处理", danger: dueSoonCount.value > 0, action: () => { slaFilter.value = "DUE_SOON"; riskFilter.value = undefined; } },
+  { key: "highRisk", label: "高风险审批", value: `${highRiskCount.value} 项`, hint: "大额或超时事项", danger: highRiskCount.value > 0, action: () => { riskFilter.value = "HIGH"; slaFilter.value = undefined; } },
+]);
+const slaOptions = [
+  { label: "SLA超时", value: "OVERDUE" },
+  { label: "临近超时", value: "DUE_SOON" },
+  { label: "正常", value: "NORMAL" },
+];
+const riskOptions = [
+  { label: "高风险", value: "HIGH" },
+  { label: "中风险", value: "MEDIUM" },
+  { label: "正常", value: "NORMAL" },
+];
 
 const mergedColumns = [
   { title: "来源", key: "source", width: 100 },
@@ -344,6 +388,34 @@ function generateCode(prefix: string) {
   const d = new Date(); const ds = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
   return `${prefix}-${ds}-${String(d.getHours()).padStart(2, "0")}${String(d.getMinutes()).padStart(2, "0")}`;
 }
+function isPendingApproval(item: any) {
+  return item.status === "PENDING" || item.status === "PENDING_APPROVAL";
+}
+function approvalAgeHours(value?: string) {
+  if (!value) return 0;
+  return Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 3600000));
+}
+function slaLevel(value?: string, pending = true) {
+  if (!pending) return "NORMAL";
+  const hours = approvalAgeHours(value);
+  if (hours >= 48) return "OVERDUE";
+  if (hours >= 24) return "DUE_SOON";
+  return "NORMAL";
+}
+function approvalRiskLevel(amount: number, value?: string, pending = true) {
+  if (!pending) return "NORMAL";
+  const hours = approvalAgeHours(value);
+  if (Number(amount || 0) >= 100000 || hours >= 48) return "HIGH";
+  if (Number(amount || 0) >= 30000 || hours >= 24) return "MEDIUM";
+  return "NORMAL";
+}
+function approvalAgeLabel(record: any) {
+  if (!isPendingApproval(record)) return "已处理";
+  const hours = approvalAgeHours(record.date);
+  if (hours < 1) return "刚提交";
+  if (hours < 24) return `已等待 ${hours} 小时`;
+  return `已等待 ${Math.floor(hours / 24)} 天`;
+}
 function approvalTypeLabel(v: ApprovalType) { return ({ QUOTE: "报价", CONTRACT: "合同", PURCHASE: "采购", OUTSOURCE: "外包", EXPENSE: "报销", PAYMENT: "付款", SEAL: "用章", LEAVE: "请假", TRAVEL: "出差", OTHER: "其他" } as Record<ApprovalType, string>)[v]; }
 function approvalStatusLabel(v: ApprovalStatus) { return ({ PENDING: "待审批", APPROVED: "已通过", REJECTED: "已驳回" } as Record<ApprovalStatus, string>)[v]; }
 function approvalStatusColor(v: ApprovalStatus) { return ({ PENDING: "orange", APPROVED: "green", REJECTED: "red" } as Record<ApprovalStatus, string>)[v]; }
@@ -353,3 +425,47 @@ function severityLabel(v: string) { return ({ HIGH: "高", MEDIUM: "中", LOW: "
 function severityColor(v: string) { return ({ HIGH: "red", MEDIUM: "orange", LOW: "green" } as Record<string, string>)[v] || "default"; }
 function formatMoney(v: number) { return new Intl.NumberFormat("zh-CN", { style: "currency", currency: "CNY", minimumFractionDigits: 2 }).format(v || 0); }
 </script>
+
+<style scoped>
+.approval-health-panel {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.health-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid #eef2f7;
+  border-radius: 6px;
+  background: #f8fafc;
+  cursor: pointer;
+  text-align: left;
+}
+
+.health-card span,
+.health-card small {
+  color: #667085;
+  font-size: 12px;
+}
+
+.health-card strong {
+  color: #101828;
+  font-size: 20px;
+}
+
+.text-danger {
+  color: #cf1322;
+}
+
+@media (max-width: 900px) {
+  .approval-health-panel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+</style>

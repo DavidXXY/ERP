@@ -2,10 +2,13 @@
   <div class="page-stack">
     <a-card title="付款申请">
       <template #extra>
-        <a-button :loading="loading" @click="loadData">
-          <template #icon><ReloadOutlined /></template>
-          刷新
-        </a-button>
+        <a-space>
+          <a-button @click="exportApplications">导出</a-button>
+          <a-button :loading="loading" @click="loadData">
+            <template #icon><ReloadOutlined /></template>
+            刷新
+          </a-button>
+        </a-space>
       </template>
 
       <a-row :gutter="[16, 16]" class="metric-row">
@@ -15,9 +18,36 @@
         <a-col :xs="12" :lg="6"><a-statistic title="累计实付" :value="paidAmount" :formatter="moneyFormatter" /></a-col>
       </a-row>
 
+      <section class="payment-workbench">
+        <div class="workbench-heading">
+          <div>
+            <h3>付款处理收口</h3>
+            <p>把审批、执行付款和大额占用拉到同一个工作区，减少漏处理。</p>
+          </div>
+          <a-space>
+            <a-button size="small" @click="statusFilter = 'PENDING_APPROVAL'">待审批</a-button>
+            <a-button size="small" @click="statusFilter = 'APPROVED'">待付款</a-button>
+          </a-space>
+        </div>
+        <div class="workbench-grid">
+          <button
+            v-for="card in workbenchCards"
+            :key="card.key"
+            class="workbench-card"
+            type="button"
+            @click="card.action"
+          >
+            <span>{{ card.label }}</span>
+            <strong>{{ card.value }}</strong>
+            <small>{{ card.hint }}</small>
+          </button>
+        </div>
+      </section>
+
       <a-space wrap class="table-toolbar">
         <a-input-search v-model:value="keyword" allow-clear placeholder="搜索申请单、应付单、供应商" style="width: 280px" />
         <a-select v-model:value="statusFilter" allow-clear placeholder="全部状态" :options="statusOptions" style="width: 150px" />
+        <a-select v-model:value="riskFilter" allow-clear placeholder="申请风险" :options="riskOptions" style="width: 150px" />
       </a-space>
 
       <a-table
@@ -38,6 +68,10 @@
             <span class="table-subtitle">{{ record.supplierName }}</span>
           </template>
           <template v-else-if="column.key === 'amount'"><strong>{{ formatMoney(record.requestedAmount) }}</strong></template>
+          <template v-else-if="column.key === 'risk'">
+            <a-tag :color="riskColor(record)">{{ riskLabel(record) }}</a-tag>
+            <span class="table-subtitle">{{ applicationAgeLabel(record) }}</span>
+          </template>
           <template v-else-if="column.key === 'applicant'">
             {{ record.applicantName }}
             <span class="table-subtitle line-clamp-2">{{ record.purpose }}</span>
@@ -114,6 +148,8 @@
 
     <a-modal v-model:open="paymentOpen" title="执行付款" width="680px" :confirm-loading="saving" @ok="handlePayment">
       <a-alert v-if="selectedApplication" class="section-alert" type="warning" :message="`${selectedApplication.code} · ${selectedApplication.supplierName} · 本次付款 ${formatMoney(selectedApplication.requestedAmount)}`" />
+      <a-alert v-if="selectedApplication && riskLevel(selectedApplication) !== 'NORMAL'" class="section-alert" type="info" show-icon :message="`该申请标记为${riskLabel(selectedApplication)}，执行付款前请复核审批意见、供应商和金额。`" />
+      <a-alert v-if="duplicateBankReference" class="section-alert" type="error" show-icon message="银行流水 / 付款凭证号已存在，请核对是否重复付款。" />
       <a-form ref="paymentFormRef" :model="paymentForm" :rules="paymentRules" layout="vertical">
         <a-row :gutter="16">
           <a-col :xs="24" :md="12"><a-form-item label="付款单号" name="paymentCode"><a-input v-model:value="paymentForm.paymentCode" /></a-form-item></a-col>
@@ -144,6 +180,7 @@ import {
   type PaymentRecord,
 } from "@/api/finance";
 import { useAuthStore } from "@/stores/auth";
+import { downloadCsv } from "@/utils/csv";
 
 type ApprovalDecision = "APPROVED" | "REJECTED";
 
@@ -157,6 +194,7 @@ const approvalOpen = ref(false);
 const paymentOpen = ref(false);
 const keyword = ref("");
 const statusFilter = ref<PaymentApplicationStatus>();
+const riskFilter = ref<string>();
 const approvalFormRef = ref();
 const paymentFormRef = ref();
 const approvalForm = reactive<{ decision: ApprovalDecision; comment: string; approverName: string }>({ decision: "APPROVED", comment: "同意付款", approverName: "" });
@@ -166,13 +204,16 @@ const statusOptions = [
   { label: "待审批", value: "PENDING_APPROVAL" }, { label: "待付款", value: "APPROVED" },
   { label: "已驳回", value: "REJECTED" }, { label: "已付款", value: "PAID" },
 ];
+const riskOptions = [
+  { label: "大额", value: "LARGE" }, { label: "滞留", value: "AGED" }, { label: "正常", value: "NORMAL" },
+];
 const methodOptions = [
   { label: "银行转账", value: "BANK_TRANSFER" }, { label: "支票", value: "CHECK" },
   { label: "现金", value: "CASH" }, { label: "其他", value: "OTHER" },
 ];
 const applicationColumns = [
   { title: "申请单", key: "application", width: 200 }, { title: "应付单 / 供应商", key: "payable", width: 240 },
-  { title: "申请金额", key: "amount", width: 150 }, { title: "申请人 / 用途", key: "applicant", width: 230 },
+  { title: "申请金额", key: "amount", width: 150 }, { title: "风险", key: "risk", width: 130 }, { title: "申请人 / 用途", key: "applicant", width: 230 },
   { title: "状态", key: "status", width: 110 }, { title: "审批信息", key: "approval", width: 220 },
   { title: "付款单", key: "payment", width: 180 }, { title: "操作", key: "action", width: 190, fixed: "right" },
 ];
@@ -188,10 +229,51 @@ const paymentRules = { paymentCode: [{ required: true, message: "请输入付款
 const filteredApplications = computed(() => applications.value.filter((item) => {
   const term = keyword.value.trim().toLowerCase();
   const text = `${item.code} ${item.payableCode} ${item.supplierName} ${item.applicantName} ${item.purpose}`.toLowerCase();
-  return (!statusFilter.value || item.status === statusFilter.value) && (!term || text.includes(term));
+  return (!statusFilter.value || item.status === statusFilter.value)
+    && (!riskFilter.value || riskLevel(item) === riskFilter.value)
+    && (!term || text.includes(term));
 }));
 const reservedAmount = computed(() => applications.value.filter((item) => item.status === "PENDING_APPROVAL" || item.status === "APPROVED").reduce((sum, item) => sum + Number(item.requestedAmount || 0), 0));
 const paidAmount = computed(() => payments.value.reduce((sum, item) => sum + Number(item.amount || 0), 0));
+const pendingApprovalAmount = computed(() => applications.value.filter((item) => item.status === "PENDING_APPROVAL").reduce((sum, item) => sum + Number(item.requestedAmount || 0), 0));
+const approvedAmount = computed(() => applications.value.filter((item) => item.status === "APPROVED").reduce((sum, item) => sum + Number(item.requestedAmount || 0), 0));
+const largeApplications = computed(() => applications.value.filter((item) => riskLevel(item) === "LARGE"));
+const agedApplications = computed(() => applications.value.filter((item) => riskLevel(item) === "AGED"));
+const duplicateBankReference = computed(() => {
+  const reference = paymentForm.bankReference.trim();
+  if (!reference) return false;
+  return payments.value.some((item) => item.bankReference === reference);
+});
+const workbenchCards = computed(() => [
+  {
+    key: "approval",
+    label: "待审批金额",
+    value: formatMoney(pendingApprovalAmount.value),
+    hint: `${countByStatus("PENDING_APPROVAL")} 笔待处理`,
+    action: () => { statusFilter.value = "PENDING_APPROVAL"; riskFilter.value = undefined; },
+  },
+  {
+    key: "payment",
+    label: "待付款金额",
+    value: formatMoney(approvedAmount.value),
+    hint: `${countByStatus("APPROVED")} 笔待执行`,
+    action: () => { statusFilter.value = "APPROVED"; riskFilter.value = undefined; },
+  },
+  {
+    key: "large",
+    label: "大额申请",
+    value: `${largeApplications.value.length} 笔`,
+    hint: "单笔 >= 10万",
+    action: () => { riskFilter.value = "LARGE"; statusFilter.value = undefined; },
+  },
+  {
+    key: "aged",
+    label: "滞留申请",
+    value: `${agedApplications.value.length} 笔`,
+    hint: "超过 3 天未闭环",
+    action: () => { riskFilter.value = "AGED"; statusFilter.value = undefined; },
+  },
+]);
 
 onMounted(loadData);
 
@@ -237,6 +319,10 @@ async function handleApproval() {
 async function handlePayment() {
   await paymentFormRef.value?.validate();
   if (!selectedApplication.value) return;
+  if (duplicateBankReference.value) {
+    message.error("银行流水 / 付款凭证号已存在，请核对后再执行付款");
+    return;
+  }
   saving.value = true;
   try {
     await executePayment(selectedApplication.value.id, { ...paymentForm });
@@ -253,7 +339,41 @@ async function handlePayment() {
 function hasAction(item: PaymentApplication) {
   return (auth.can("finance:payment:approve") && item.status === "PENDING_APPROVAL") || (auth.can("finance:payment:execute") && item.status === "APPROVED");
 }
+function exportApplications() {
+  const headers = ["申请单", "应付单", "供应商", "申请金额", "申请日期", "申请人", "用途", "状态", "风险", "审批人", "审批意见", "付款单"];
+  const rows = filteredApplications.value.map((item) => [
+    item.code || "",
+    item.payableCode,
+    item.supplierName,
+    item.requestedAmount,
+    item.requestedDate,
+    item.applicantName,
+    item.purpose,
+    statusLabel(item.status),
+    riskLabel(item),
+    item.approverName || "",
+    item.approvalComment || "",
+    item.paymentCode || "",
+  ]);
+  downloadCsv(`finance-payment-applications-${today()}.csv`, headers, rows);
+}
 function countByStatus(status: PaymentApplicationStatus) { return applications.value.filter((item) => item.status === status).length; }
+function applicationAge(item: PaymentApplication) {
+  const todayDate = new Date(today());
+  const requested = new Date(item.requestedDate);
+  return Math.max(0, Math.floor((todayDate.getTime() - requested.getTime()) / 86400000));
+}
+function riskLevel(item: PaymentApplication) {
+  if (Number(item.requestedAmount || 0) >= 100000 && item.status !== "PAID" && item.status !== "REJECTED") return "LARGE";
+  if (applicationAge(item) > 3 && (item.status === "PENDING_APPROVAL" || item.status === "APPROVED")) return "AGED";
+  return "NORMAL";
+}
+function riskLabel(item: PaymentApplication) { return ({ LARGE: "大额", AGED: "滞留", NORMAL: "正常" } as Record<string, string>)[riskLevel(item)]; }
+function riskColor(item: PaymentApplication) { return ({ LARGE: "red", AGED: "orange", NORMAL: "green" } as Record<string, string>)[riskLevel(item)]; }
+function applicationAgeLabel(item: PaymentApplication) {
+  const age = applicationAge(item);
+  return age === 0 ? "今日申请" : `已 ${age} 天`;
+}
 function statusLabel(status: PaymentApplicationStatus) { return ({ PENDING_APPROVAL: "待审批", APPROVED: "待付款", REJECTED: "已驳回", PAID: "已付款" } as Record<PaymentApplicationStatus, string>)[status]; }
 function statusColor(status: PaymentApplicationStatus) { return ({ PENDING_APPROVAL: "orange", APPROVED: "blue", REJECTED: "red", PAID: "green" } as Record<PaymentApplicationStatus, string>)[status]; }
 function methodLabel(method: PaymentMethod) { return ({ BANK_TRANSFER: "银行转账", CHECK: "支票", CASH: "现金", OTHER: "其他" } as Record<PaymentMethod, string>)[method]; }
@@ -262,3 +382,70 @@ function generateCode(prefix: string) { const value = new Date(); return `${pref
 function formatMoney(value: number) { return new Intl.NumberFormat("zh-CN", { style: "currency", currency: "CNY", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value || 0); }
 function moneyFormatter(value: number | string) { return formatMoney(Number(value)); }
 </script>
+
+<style scoped>
+.payment-workbench {
+  margin: 16px 0;
+  padding: 14px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+}
+
+.workbench-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.workbench-heading h3 {
+  margin: 0;
+  color: #101828;
+  font-size: 15px;
+}
+
+.workbench-heading p,
+.workbench-card span,
+.workbench-card small {
+  color: #667085;
+  font-size: 12px;
+}
+
+.workbench-heading p {
+  margin: 4px 0 0;
+}
+
+.workbench-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.workbench-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid #eef2f7;
+  border-radius: 6px;
+  background: #f8fafc;
+  cursor: pointer;
+  text-align: left;
+}
+
+.workbench-card strong {
+  max-width: 100%;
+  color: #101828;
+  font-size: 18px;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 900px) {
+  .workbench-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+</style>

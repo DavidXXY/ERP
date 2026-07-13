@@ -35,6 +35,25 @@
       </div>
     </section>
 
+    <!-- 应用与依赖 -->
+    <a-card title="应用与依赖">
+      <a-descriptions bordered :column="{ xs: 1, sm: 2, md: 3 }" size="small">
+        <a-descriptions-item label="应用名称">{{ health?.application?.appName ?? '-' }}</a-descriptions-item>
+        <a-descriptions-item label="版本号">{{ health?.application?.version ?? '-' }}</a-descriptions-item>
+        <a-descriptions-item label="构建时间">{{ health?.application?.buildTime || '-' }}</a-descriptions-item>
+        <a-descriptions-item label="运行环境">
+          <a-tag color="blue">{{ health?.application?.activeProfiles || 'default' }}</a-tag>
+        </a-descriptions-item>
+        <a-descriptions-item label="存储类型">{{ health?.application?.storageType ?? '-' }}</a-descriptions-item>
+        <a-descriptions-item label="Redis">{{ health?.dependencies?.redisEndpoint || '未配置' }}</a-descriptions-item>
+        <a-descriptions-item label="数据库" :span="3">{{ health?.dependencies?.databaseUrl || '-' }}</a-descriptions-item>
+        <a-descriptions-item label="数据库驱动" :span="3">{{ health?.dependencies?.databaseDriver || '-' }}</a-descriptions-item>
+        <a-descriptions-item label="本地存储路径" :span="3">{{ health?.dependencies?.localStoragePath || '-' }}</a-descriptions-item>
+        <a-descriptions-item label="工作目录" :span="3">{{ health?.dependencies?.workingDir || '-' }}</a-descriptions-item>
+        <a-descriptions-item label="临时目录" :span="3">{{ health?.dependencies?.tempDir || '-' }}</a-descriptions-item>
+      </a-descriptions>
+    </a-card>
+
     <!-- 系统概览 -->
     <a-card title="系统概览">
       <a-descriptions bordered :column="{ xs: 1, sm: 2, md: 3, lg: 4 }" size="small">

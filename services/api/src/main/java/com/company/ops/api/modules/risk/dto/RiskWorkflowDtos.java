@@ -20,7 +20,12 @@ public final class RiskWorkflowDtos {
       String reason,
       String updatedByName,
       OffsetDateTime processedAt,
-      OffsetDateTime updatedAt
+      OffsetDateTime updatedAt,
+      String rootCause,
+      String responsibleDepartment,
+      Integer handlingHours,
+      Boolean recurrence,
+      String preventionAction
   ) {}
 
   public record RiskWorkflowActionResponse(
@@ -31,6 +36,11 @@ public final class RiskWorkflowDtos {
       String owner,
       String note,
       String reason,
+      String rootCause,
+      String responsibleDepartment,
+      Integer handlingHours,
+      Boolean recurrence,
+      String preventionAction,
       OffsetDateTime createdAt
   ) {}
 
@@ -87,7 +97,12 @@ public final class RiskWorkflowDtos {
       @NotBlank @Size(max = 32) String status,
       @Size(max = 80) String owner,
       @Size(max = 1000) String note,
-      @Size(max = 500) String reason
+      @Size(max = 500) String reason,
+      @Size(max = 1000) String rootCause,
+      @Size(max = 120) String responsibleDepartment,
+      Integer handlingHours,
+      Boolean recurrence,
+      @Size(max = 1000) String preventionAction
   ) {}
 
   public record RiskTrendPointResponse(
@@ -125,6 +140,11 @@ public final class RiskWorkflowDtos {
       @NotBlank @Size(max = 32) String status,
       @Size(max = 80) String owner,
       @Size(max = 1000) String note,
-      @Size(max = 500) String reason
+      @Size(max = 500) String reason,
+      @Size(max = 1000) String rootCause,
+      @Size(max = 120) String responsibleDepartment,
+      Integer handlingHours,
+      Boolean recurrence,
+      @Size(max = 1000) String preventionAction
   ) {}
 }

@@ -10,6 +10,7 @@ import com.company.ops.api.modules.risk.dto.RiskWorkflowDtos.UpdateRiskWorkflowR
 import com.company.ops.api.modules.risk.repository.RiskWorkflowActionRepository;
 import com.company.ops.api.modules.risk.repository.RiskWorkflowRepository;
 import com.company.ops.api.modules.system.security.UserPrincipal;
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.List;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -39,7 +40,8 @@ public class RiskWorkflowService {
 
   @Transactional
   public RiskWorkflowResponse update(UpdateRiskWorkflowRequest request) {
-    return updateOne(request.riskKey(), request.status(), request.owner(), request.note(), request.reason());
+    return updateOne(request.riskKey(), request.status(), request.owner(), request.note(), request.reason(),
+        request.rootCause(), request.responsibleDepartment(), request.handlingHours(), request.recurrence(), request.preventionAction());
   }
 
   @Transactional
@@ -47,11 +49,13 @@ public class RiskWorkflowService {
     if (!STATUSES.contains(request.status())) throw new BusinessException("风险处理状态不正确");
     return request.riskKeys().stream()
         .distinct()
-        .map(riskKey -> updateOne(riskKey, request.status(), request.owner(), request.note(), request.reason()))
+        .map(riskKey -> updateOne(riskKey, request.status(), request.owner(), request.note(), request.reason(),
+            request.rootCause(), request.responsibleDepartment(), request.handlingHours(), request.recurrence(), request.preventionAction()))
         .toList();
   }
 
-  private RiskWorkflowResponse updateOne(String riskKey, String status, String ownerValue, String noteValue, String reasonValue) {
+  private RiskWorkflowResponse updateOne(String riskKey, String status, String ownerValue, String noteValue, String reasonValue,
+      String rootCauseValue, String responsibleDepartmentValue, Integer handlingHoursValue, Boolean recurrenceValue, String preventionActionValue) {
     if (!STATUSES.contains(status)) throw new BusinessException("风险处理状态不正确");
     RiskWorkflow workflow = repository.findByRiskKey(riskKey).orElseGet(() -> {
       RiskWorkflow created = new RiskWorkflow();
@@ -62,11 +66,23 @@ public class RiskWorkflowService {
     String owner = trimToNull(ownerValue);
     String note = trimToNull(noteValue);
     String reason = trimToNull(reasonValue);
+    String rootCause = trimToNull(rootCauseValue);
+    String responsibleDepartment = trimToNull(responsibleDepartmentValue);
+    String preventionAction = trimToNull(preventionActionValue);
+    Integer handlingHours = handlingHoursValue;
+    if ("CLOSED".equals(status) && handlingHours == null && workflow.getCreatedAt() != null) {
+      handlingHours = Math.max(0, (int) Duration.between(workflow.getCreatedAt(), OffsetDateTime.now()).toHours());
+    }
     String operator = currentDisplayName();
     workflow.setStatus(status);
     workflow.setOwner(owner);
     workflow.setNote(note);
     workflow.setReason(reason);
+    workflow.setRootCause(rootCause);
+    workflow.setResponsibleDepartment(responsibleDepartment);
+    workflow.setHandlingHours(handlingHours);
+    workflow.setRecurrence(recurrenceValue);
+    workflow.setPreventionAction(preventionAction);
     workflow.setUpdatedByName(operator);
     workflow.setProcessedAt(OffsetDateTime.now());
     RiskWorkflow saved = repository.save(workflow);
@@ -78,6 +94,11 @@ public class RiskWorkflowService {
     action.setOwner(owner);
     action.setNote(note);
     action.setReason(reason);
+    action.setRootCause(rootCause);
+    action.setResponsibleDepartment(responsibleDepartment);
+    action.setHandlingHours(handlingHours);
+    action.setRecurrence(recurrenceValue);
+    action.setPreventionAction(preventionAction);
     actionRepository.save(action);
     return toResponse(saved);
   }
@@ -91,7 +112,12 @@ public class RiskWorkflowService {
         workflow.getReason(),
         workflow.getUpdatedByName(),
         workflow.getProcessedAt(),
-        workflow.getUpdatedAt()
+        workflow.getUpdatedAt(),
+        workflow.getRootCause(),
+        workflow.getResponsibleDepartment(),
+        workflow.getHandlingHours(),
+        workflow.getRecurrence(),
+        workflow.getPreventionAction()
     );
   }
 
@@ -104,6 +130,11 @@ public class RiskWorkflowService {
         action.getOwner(),
         action.getNote(),
         action.getReason(),
+        action.getRootCause(),
+        action.getResponsibleDepartment(),
+        action.getHandlingHours(),
+        action.getRecurrence(),
+        action.getPreventionAction(),
         action.getCreatedAt()
     );
   }

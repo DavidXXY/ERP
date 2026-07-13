@@ -338,6 +338,22 @@ export function deleteOrganizationApi(id: string) {
 // --- System Health ---
 
 export type SystemHealthResponse = {
+  application?: {
+    appName: string;
+    version: string;
+    buildTime: string;
+    activeProfiles: string;
+    storageType: string;
+  };
+  dependencies?: {
+    databaseUrl: string;
+    databaseDriver: string;
+    redisEndpoint: string;
+    storageType: string;
+    localStoragePath: string;
+    tempDir: string;
+    workingDir: string;
+  };
   operatingSystem: {
     name: string;
     version: string;

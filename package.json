@@ -25,6 +25,7 @@
     "api:check": "bash scripts/check-backend.sh",
     "api:dev": "cd services/api && mvn spring-boot:run",
     "api:dev:local": "bash scripts/start-local-api.sh",
+    "data:local": "bash scripts/local-data.sh",
     "infra:up": "docker compose -f infra/docker-compose.yml up -d",
     "infra:down": "docker compose -f infra/docker-compose.yml down",
     "tools:install": "bash scripts/install-local-tools.sh",

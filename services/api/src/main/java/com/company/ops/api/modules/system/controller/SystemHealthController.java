@@ -8,9 +8,12 @@ import java.lang.management.MemoryUsage;
 import java.lang.management.OperatingSystemMXBean;
 import java.lang.management.RuntimeMXBean;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -19,15 +22,90 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/system/health")
 public class SystemHealthController {
 
+  private final Environment environment;
+
+  @Value("${spring.application.name:ops-erp-api}")
+  private String appName;
+
+  @Value("${ops.version:0.1.0}")
+  private String version;
+
+  @Value("${ops.build-time:}")
+  private String buildTime;
+
+  @Value("${ops.storage.type:local}")
+  private String storageType;
+
+  @Value("${ops.storage.local-path:}")
+  private String localStoragePath;
+
+  @Value("${spring.datasource.url:}")
+  private String datasourceUrl;
+
+  @Value("${spring.datasource.driver-class-name:}")
+  private String datasourceDriver;
+
+  @Value("${spring.data.redis.host:}")
+  private String redisHost;
+
+  @Value("${spring.data.redis.port:}")
+  private String redisPort;
+
+  public SystemHealthController(Environment environment) {
+    this.environment = environment;
+  }
+
   @GetMapping
   public ApiResponse<Map<String, Object>> getSystemHealth() {
     Map<String, Object> result = new LinkedHashMap<>();
+    result.put("application", getApplicationInfo());
+    result.put("dependencies", getDependencyInfo());
     result.put("operatingSystem", getOperatingSystemInfo());
     result.put("cpu", getCpuInfo());
     result.put("memory", getMemoryInfo());
     result.put("jvm", getJvmInfo());
     result.put("disk", getDiskInfo());
     return ApiResponse.ok(result);
+  }
+
+  private Map<String, Object> getApplicationInfo() {
+    Map<String, Object> app = new LinkedHashMap<>();
+    app.put("appName", appName);
+    app.put("version", version);
+    app.put("buildTime", buildTime);
+    app.put("activeProfiles", getActiveProfiles());
+    app.put("storageType", storageType);
+    return app;
+  }
+
+  private Map<String, Object> getDependencyInfo() {
+    Map<String, Object> deps = new LinkedHashMap<>();
+    deps.put("databaseUrl", maskSensitiveUrl(datasourceUrl));
+    deps.put("databaseDriver", datasourceDriver);
+    deps.put("redisEndpoint", redisHost == null || redisHost.isBlank() ? "" : redisHost + ":" + redisPort);
+    deps.put("storageType", storageType);
+    deps.put("localStoragePath", localStoragePath);
+    deps.put("tempDir", System.getProperty("java.io.tmpdir"));
+    deps.put("workingDir", System.getProperty("user.dir"));
+    return deps;
+  }
+
+  private String getActiveProfiles() {
+    String[] profiles = environment.getActiveProfiles();
+    if (profiles.length == 0) {
+      profiles = environment.getDefaultProfiles();
+    }
+    return String.join(", ", Arrays.stream(profiles).filter((item) -> !item.isBlank()).toList());
+  }
+
+  private String maskSensitiveUrl(String value) {
+    if (value == null || value.isBlank()) {
+      return "";
+    }
+    return value
+        .replaceAll("(?i)(password=)[^;&]+", "$1******")
+        .replaceAll("(?i)(pwd=)[^;&]+", "$1******")
+        .replaceAll("(?i)(://[^:/?#]+:)[^@/]+(@)", "$1******$2");
   }
 
   private Map<String, Object> getOperatingSystemInfo() {

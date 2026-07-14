@@ -15,6 +15,7 @@ import SelfProfileView from "@/views/self/SelfProfileView.vue";
 import SelfLeaveSubmitView from "@/views/self/SelfLeaveSubmitView.vue";
 import SelfLeaveHistoryView from "@/views/self/SelfLeaveHistoryView.vue";
 import SelfBalanceView from "@/views/self/SelfBalanceView.vue";
+import SelfApprovalTodoView from "@/views/self/SelfApprovalTodoView.vue";
 import HumanResourcesView from "@/views/hr/HumanResourcesView.vue";
 import LoginView from "@/views/system/LoginView.vue";
 import SystemHealthView from "@/views/system/SystemHealthView.vue";
@@ -110,6 +111,7 @@ const rootRoutes: RouteRecordRaw[] = [
   { path: "self/leaves", name: "self-leaves", component: SelfLeaveHistoryView, meta: { title: "\u6211\u7684\u8bf7\u5047" } },
   { path: "self/leaves/new", name: "self-leave-new", component: SelfLeaveSubmitView, meta: { title: "\u63d0\u4ea4\u8bf7\u5047" } },
   { path: "self/balances", name: "self-balances", component: SelfBalanceView, meta: { title: "\u6211\u7684\u989d\u5ea6" } },
+  { path: "self/approvals", name: "self-approvals", component: SelfApprovalTodoView, meta: { title: "\u6211\u7684\u5f85\u529e\u5ba1\u6279" } },
 ];
 
 const router = createRouter({

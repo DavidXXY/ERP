@@ -1,4 +1,5 @@
 import { request, http } from "./http";
+import type { Approval } from "./office";
 import type { EmployeeContract, EmployeeDetail, PersonnelCertificate } from "./qualification";
 
 // ====== Types ======
@@ -334,4 +335,12 @@ export interface TodoItem {
 
 export function getSelfTodos() {
   return request<TodoItem[]>({ method: "GET", url: "/hr/self/todos" });
+}
+
+export function getSelfApprovals() {
+  return request<Approval[]>({ method: "GET", url: "/hr/self/approvals" });
+}
+
+export function processSelfApproval(id: string, data: { decision: "APPROVED" | "REJECTED"; comment: string; approverName: string }) {
+  return request<Approval>({ method: "POST", url: `/hr/self/approvals/${id}/process`, data });
 }

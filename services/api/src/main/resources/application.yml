@@ -61,3 +61,5 @@ ops:
     bucket: ${MINIO_BUCKET:ops-erp}
     presigned-expiry-seconds: ${MINIO_PRESIGNED_EXPIRY_SECONDS:600}
     local-path: ${LOCAL_STORAGE_PATH:.local-data/uploads}
+  qualification:
+    import: ${QUALIFICATION_IMPORT_ENABLED:false}

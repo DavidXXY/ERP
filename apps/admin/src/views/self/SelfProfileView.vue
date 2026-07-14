@@ -1,12 +1,23 @@
 <template>
-  <div class="self-page">
-    <a-page-header title="我的档案" @back="$router.back()" />
+  <div class="page-stack self-page">
+    <a-card title="我的档案">
+      <template #extra>
+        <a-button :loading="loading" @click="loadData">刷新</a-button>
+      </template>
 
-    <div v-if="loading"><a-skeleton active :paragraph="{ rows: 10 }" /></div>
+      <div v-if="loading"><a-skeleton active :paragraph="{ rows: 10 }" /></div>
 
-    <template v-else-if="detail">
-      <a-card title="基本信息" class="profile-section">
-        <a-descriptions bordered :column="2" size="small">
+      <template v-else-if="detail">
+        <section class="profile-summary">
+          <div class="profile-avatar">{{ detail.employee.name?.slice(0, 1) || "我" }}</div>
+          <div>
+            <strong>{{ detail.employee.name }}</strong>
+            <span>{{ detail.employee.workNo || "未登记工号" }} · {{ detail.employee.position || "未设置岗位" }}</span>
+          </div>
+          <a-tag v-if="detail.employee.contractEnd" :color="contractTagColor(detail.employee.contractEnd)">{{ contractTagLabel(detail.employee.contractEnd) }}</a-tag>
+        </section>
+
+        <a-descriptions bordered :column="{ xs: 1, sm: 1, md: 2 }" size="small">
           <a-descriptions-item label="姓名">{{ detail.employee.name }}</a-descriptions-item>
           <a-descriptions-item label="工号">{{ detail.employee.workNo || '-' }}</a-descriptions-item>
           <a-descriptions-item label="部门">{{ detail.employee.organizationName || '-' }}</a-descriptions-item>
@@ -19,8 +30,9 @@
             <span v-else>-</span>
           </a-descriptions-item>
         </a-descriptions>
-      </a-card>
-    </template>
+      </template>
+      <a-empty v-else description="暂无员工档案" />
+    </a-card>
   </div>
 </template>
 
@@ -56,4 +68,58 @@ onMounted(loadData);
 <style scoped>
 .self-page { max-width: 900px; }
 .profile-section { margin-bottom: 12px; }
+.profile-summary {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 16px;
+  padding: 14px;
+  border: 1px solid #e8edf3;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.profile-summary strong,
+.profile-summary span {
+  display: block;
+}
+
+.profile-summary strong {
+  color: #17212b;
+  font-size: 18px;
+}
+
+.profile-summary span {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.profile-avatar {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  place-items: center;
+  border-radius: 8px;
+  background: #1f6a5b;
+  color: #fff;
+  font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  .profile-summary {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .self-page :deep(.ant-descriptions-item-label),
+  .self-page :deep(.ant-descriptions-item-content) {
+    padding: 10px 12px;
+  }
+
+  .self-page :deep(.ant-descriptions-item-label) {
+    width: 92px;
+    white-space: nowrap;
+  }
+}
 </style>

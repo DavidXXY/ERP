@@ -246,6 +246,126 @@ body {
   line-height: 1.4;
 }
 
+.self-page,
+.self-approval-page {
+  width: 100%;
+  min-width: 0;
+  margin: 0 auto;
+}
+
+.self-page > *,
+.self-approval-page > *,
+.self-page .ant-card,
+.self-approval-page .ant-card,
+.self-page .ant-table-wrapper,
+.self-approval-page .ant-table-wrapper {
+  min-width: 0;
+}
+
+.self-page .ant-page-header,
+.self-approval-page .ant-page-header {
+  padding-inline: 0;
+}
+
+.self-page .ant-page-header-heading,
+.self-approval-page .ant-page-header-heading {
+  min-width: 0;
+  gap: 10px;
+}
+
+.self-page .ant-page-header-heading-left,
+.self-approval-page .ant-page-header-heading-left {
+  min-width: 0;
+}
+
+.self-page .ant-page-header-heading-title,
+.self-approval-page .ant-page-header-heading-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.self-page .ant-page-header-heading-extra,
+.self-approval-page .ant-page-header-heading-extra {
+  margin-inline-start: 0;
+}
+
+.self-metric-grid {
+  margin-top: 18px;
+}
+
+.self-metric-card,
+.self-mini-metric {
+  display: grid;
+  gap: 6px;
+  border: 1px solid #e8edf3;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.self-metric-card {
+  padding: 14px;
+}
+
+.self-mini-metric {
+  padding: 12px;
+}
+
+.self-metric-card span,
+.self-mini-metric span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.self-metric-card strong {
+  color: #17212b;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.self-mini-metric strong {
+  color: #17212b;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.self-metric-card.warn strong,
+.self-mini-metric.warn strong {
+  color: #b45309;
+}
+
+.self-metric-card.good strong,
+.self-mini-metric.good strong {
+  color: #15803d;
+}
+
+.self-metric-card.danger strong,
+.self-mini-metric.danger strong {
+  color: #cf1322;
+}
+
+@media (max-width: 640px) {
+  .self-page .ant-page-header-heading,
+  .self-approval-page .ant-page-header-heading,
+  .self-page .ant-card-head-wrapper,
+  .self-approval-page .ant-card-head-wrapper {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .self-page .ant-page-header-heading-extra,
+  .self-approval-page .ant-page-header-heading-extra,
+  .self-page .ant-card-extra,
+  .self-approval-page .ant-card-extra {
+    width: 100%;
+  }
+
+  .self-page .ant-card-head,
+  .self-approval-page .ant-card-head {
+    min-height: auto;
+  }
+}
+
 .ant-table-row {
   cursor: pointer;
 }

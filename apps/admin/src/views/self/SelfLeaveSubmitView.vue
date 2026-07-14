@@ -1,28 +1,35 @@
 <template>
-  <div class="self-page">
-    <a-page-header title="提交请假" @back="$router.back()" />
-
-    <a-card>
+  <div class="page-stack self-page">
+    <a-card title="提交请假">
+      <template #extra>
+        <a-button @click="$router.back()">返回</a-button>
+      </template>
+      <a-alert
+        class="section-alert"
+        type="info"
+        show-icon
+        message="请确认请假类型、日期和剩余额度，提交后进入审批流程。"
+      />
       <a-form ref="formRef" :model="form" layout="vertical">
         <a-row :gutter="16">
-          <a-col :span="12">
+          <a-col :xs="24" :sm="12">
             <a-form-item label="请假类型" name="leaveType" :rules="[{ required: true, message: '请选择请假类型' }]">
               <a-select v-model:value="form.leaveType" :options="leaveTypeOptions" @change="onTypeChange" />
             </a-form-item>
           </a-col>
-          <a-col :span="12">
+          <a-col :xs="24" :sm="12">
             <a-form-item label="共计天数">
               <a-input-number v-model:value="form.totalDays" :min="0.5" :step="0.5" style="width:100%" />
             </a-form-item>
           </a-col>
         </a-row>
         <a-row :gutter="16">
-          <a-col :span="12">
+          <a-col :xs="24" :sm="12">
             <a-form-item label="开始日期" name="startDate" :rules="[{ required: true, message: '请选择开始日期' }]">
               <a-date-picker v-model:value="form.startDate" value-format="YYYY-MM-DD" style="width:100%" @change="calcDays" />
             </a-form-item>
           </a-col>
-          <a-col :span="12">
+          <a-col :xs="24" :sm="12">
             <a-form-item label="结束日期" name="endDate" :rules="[{ required: true, message: '请选择结束日期' }]">
               <a-date-picker v-model:value="form.endDate" value-format="YYYY-MM-DD" style="width:100%" @change="calcDays" />
             </a-form-item>
@@ -34,9 +41,9 @@
         <div v-if="selectedTypeBalance" class="balance-hint">
           <a-alert :message="`${typeLabel(form.leaveType)}剩余额度：${selectedTypeBalance.remainingDays.toFixed(1)} 天`" type="info" show-icon />
         </div>
-        <a-form-item>
+        <a-form-item class="form-actions">
           <a-button type="primary" :loading="saving" @click="submitLeave">提交申请</a-button>
-          <a-button style="margin-left:12px" @click="$router.back()">取消</a-button>
+          <a-button @click="$router.back()">取消</a-button>
         </a-form-item>
       </a-form>
     </a-card>
@@ -98,4 +105,15 @@ onMounted(async () => {
 <style scoped>
 .self-page { max-width: 700px; }
 .balance-hint { margin-bottom: 16px; }
+.form-actions :deep(.ant-form-item-control-input-content) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+@media (max-width: 640px) {
+  .form-actions :deep(.ant-btn) {
+    flex: 1 1 140px;
+  }
+}
 </style>

@@ -136,6 +136,7 @@
           <template #icon><UserOutlined /></template>
           <template #title>员工自助</template>
           <a-menu-item key="/self">我的工作台</a-menu-item>
+          <a-menu-item key="/self/approvals">我的待办审批</a-menu-item>
           <a-menu-item key="/self/profile">我的档案</a-menu-item>
           <a-menu-item key="/self/leaves">我的请假</a-menu-item>
           <a-menu-item key="/self/balances">我的额度</a-menu-item>
@@ -224,7 +225,7 @@ onMounted(async () => {
 });
 const route = useRoute();
 const router = useRouter();
-const openKeys = ref<string[]>(route.path.startsWith("/finance") ? ["finance"] : route.path.startsWith("/office") ? ["office"] : route.path.startsWith("/qualification") ? ["qualification"] : route.path.startsWith("/system") ? ["system"] : route.path.startsWith("/crm") ? ["crm"] : route.path.startsWith("/procurement") ? ["procurement"] : route.path.startsWith("/inventory") ? ["inventory"] : route.path.startsWith("/projects") ? ["projects"] : []);
+const openKeys = ref<string[]>(route.path.startsWith("/self") ? ["self"] : route.path.startsWith("/finance") ? ["finance"] : route.path.startsWith("/office") ? ["office"] : route.path.startsWith("/qualification") ? ["qualification"] : route.path.startsWith("/system") ? ["system"] : route.path.startsWith("/crm") ? ["crm"] : route.path.startsWith("/procurement") ? ["procurement"] : route.path.startsWith("/inventory") ? ["inventory"] : route.path.startsWith("/projects") ? ["projects"] : []);
 
 const activeKey = computed(() => route.path);
 const canAccessCrm = computed(() => [

@@ -1,11 +1,13 @@
 package com.company.ops.api.modules.crm.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.company.ops.api.common.exception.BusinessException;
 import com.company.ops.api.modules.crm.domain.ApprovalDecision;
 import com.company.ops.api.modules.crm.domain.QuoteCustomerDecision;
 import com.company.ops.api.modules.crm.domain.QuotePlan;
@@ -61,6 +63,45 @@ class CrmOperationsServiceQuoteTest {
 
   @InjectMocks
   private CrmOperationsService crmOperationsService;
+
+  @Test
+  void submitQuoteRequiresConfirmedBudget() {
+    UUID quoteId = UUID.randomUUID();
+    QuotePlan quote = quote(quoteId, QuoteStatus.DRAFT, 1);
+    quote.setLaborBudget(BigDecimal.ZERO);
+    quote.setMaterialBudget(BigDecimal.ZERO);
+    quote.setSubcontractBudget(BigDecimal.ZERO);
+    quote.setTravelBudget(BigDecimal.ZERO);
+    quote.setOtherBudget(BigDecimal.ZERO);
+    when(quoteRepository.findById(quoteId)).thenReturn(Optional.of(quote));
+
+    assertThatThrownBy(() -> crmOperationsService.submitQuote(quoteId))
+        .isInstanceOf(BusinessException.class)
+        .hasMessage("请先在报价中确认项目预算，再提交审批");
+
+    verify(quoteRepository, never()).save(any(QuotePlan.class));
+  }
+
+  @Test
+  void submitQuoteAllowsGrossMarginBelowFifteenPercent() {
+    UUID quoteId = UUID.randomUUID();
+    QuotePlan quote = quote(quoteId, QuoteStatus.DRAFT, 1);
+    quote.setLaborBudget(new BigDecimal("300000"));
+    quote.setMaterialBudget(new BigDecimal("300000"));
+    quote.setSubcontractBudget(new BigDecimal("100000"));
+    quote.setTravelBudget(new BigDecimal("20000"));
+    quote.setOtherBudget(BigDecimal.ZERO);
+    when(quoteRepository.findById(quoteId)).thenReturn(Optional.of(quote));
+    when(quoteRepository.save(quote)).thenReturn(quote);
+    when(quoteApprovalRepository.findFirstByQuoteIdOrderByDecidedAtDesc(quoteId))
+        .thenReturn(Optional.empty());
+    when(contractRepository.findByQuoteId(quoteId)).thenReturn(Optional.empty());
+
+    var response = crmOperationsService.submitQuote(quoteId);
+
+    assertThat(response.status()).isEqualTo(QuoteStatus.PENDING_APPROVAL);
+    verify(quoteRepository).save(quote);
+  }
 
   @Test
   void approvingQuoteOnlyCompletesInternalApproval() {

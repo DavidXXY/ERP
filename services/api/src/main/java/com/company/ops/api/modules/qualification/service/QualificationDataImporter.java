@@ -20,6 +20,7 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
@@ -34,23 +35,30 @@ public class QualificationDataImporter {
   private final PersonnelCertificateRepository certificateRepository;
   private final QualificationPerformanceRepository performanceRepository;
   private final SystemOrganizationRepository organizationRepository;
+  private final boolean importEnabled;
 
   public QualificationDataImporter(ObjectMapper objectMapper, QualificationEmployeeRepository employeeRepository,
                                    CompanyQualificationRepository companyRepository,
                                    PersonnelCertificateRepository certificateRepository,
                                    QualificationPerformanceRepository performanceRepository,
-                                   SystemOrganizationRepository organizationRepository) {
+                                   SystemOrganizationRepository organizationRepository,
+                                   @Value("${ops.qualification.import:false}") boolean importEnabled) {
     this.objectMapper = objectMapper;
     this.employeeRepository = employeeRepository;
     this.companyRepository = companyRepository;
     this.certificateRepository = certificateRepository;
     this.performanceRepository = performanceRepository;
     this.organizationRepository = organizationRepository;
+    this.importEnabled = importEnabled;
   }
 
   @EventListener(ApplicationReadyEvent.class)
   @Transactional
   public void importLegacyData() {
+    if (!importEnabled) {
+      log.info("Qualification legacy data import is disabled");
+      return;
+    }
     try {
       JsonNode root = objectMapper.readTree(new ClassPathResource("qualification-import.json").getInputStream());
       Map<String, QualificationEmployee> employees = importEmployees(root.path("employees"));

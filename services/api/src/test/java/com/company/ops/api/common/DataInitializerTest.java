@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.company.ops.api.modules.system.domain.SystemPermission;
 import com.company.ops.api.modules.system.domain.SystemRole;
+import com.company.ops.api.modules.system.repository.ApprovalAssigneeConfigRepository;
 import com.company.ops.api.modules.system.repository.SystemOrganizationRepository;
 import com.company.ops.api.modules.system.repository.SystemPermissionRepository;
 import com.company.ops.api.modules.system.repository.SystemRoleRepository;
@@ -28,6 +29,7 @@ class DataInitializerTest {
   @Mock private SystemRoleRepository roleRepository;
   @Mock private SystemPermissionRepository permissionRepository;
   @Mock private SystemOrganizationRepository organizationRepository;
+  @Mock private ApprovalAssigneeConfigRepository approvalConfigRepository;
   @Mock private PasswordEncoder passwordEncoder;
 
   @Test
@@ -40,8 +42,10 @@ class DataInitializerTest {
     when(permissionRepository.existsByCodeAndTenantId(eq("maintenance:order:delete"), eq("default"))).thenReturn(false);
     when(permissionRepository.findAll()).thenReturn(List.of(deletePermission));
     when(roleRepository.findByCodeAndTenantIdWithPermissions("ADMIN", "default")).thenReturn(Optional.of(admin));
+    when(roleRepository.existsByCodeAndTenantId(any(), eq("default"))).thenReturn(true);
+    when(approvalConfigRepository.count()).thenReturn(1L);
 
-    new DataInitializer(userRepository, roleRepository, permissionRepository, organizationRepository, passwordEncoder).run();
+    new DataInitializer(userRepository, roleRepository, permissionRepository, organizationRepository, approvalConfigRepository, passwordEncoder).run();
 
     ArgumentCaptor<SystemPermission> captor = ArgumentCaptor.forClass(SystemPermission.class);
     verify(permissionRepository, atLeastOnce()).save(captor.capture());

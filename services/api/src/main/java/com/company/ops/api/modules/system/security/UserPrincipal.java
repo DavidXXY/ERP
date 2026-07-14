@@ -20,6 +20,7 @@ public class UserPrincipal implements UserDetails {
   private final String password;
   private final boolean enabled;
   private final List<String> roleCodes;
+  private final List<UUID> roleIds;
   private final List<String> permissions;
   private final List<String> dataScopes;
   private final Set<UUID> dataScopeOrganizationIds;
@@ -32,6 +33,7 @@ public class UserPrincipal implements UserDetails {
     this.password = user.getPasswordHash();
     this.enabled = user.isEnabled();
     this.roleCodes = user.getRoles().stream().map(SystemRole::getCode).sorted().toList();
+    this.roleIds = user.getRoles().stream().map(SystemRole::getId).sorted().toList();
     this.permissions = user.getRoles().stream()
         .flatMap(role -> role.getPermissions().stream())
         .map(SystemPermission::getCode)
@@ -60,6 +62,10 @@ public class UserPrincipal implements UserDetails {
 
   public List<String> roleCodes() {
     return roleCodes;
+  }
+
+  public List<UUID> roleIds() {
+    return roleIds;
   }
 
   public List<String> permissions() {

@@ -158,15 +158,7 @@ const budgetRows = computed(() => {
     { key: "travel", label: "差旅", amount: Number(record.value?.travelBudget || 0) },
     { key: "other", label: "其他", amount: Number(record.value?.otherBudget || 0) },
   ];
-  const total = rows.reduce((sum, item) => sum + item.amount, 0);
-  const fallback = total > 0 ? rows : [
-    { key: "labor", label: "人工", amount: amount * 0.2 },
-    { key: "material", label: "材料", amount: amount * 0.35 },
-    { key: "subcontract", label: "外包", amount: amount * 0.1 },
-    { key: "travel", label: "差旅", amount: amount * 0.03 },
-    { key: "other", label: "其他", amount: amount * 0.02 },
-  ];
-  return fallback.map((item) => ({
+  return rows.map((item) => ({
     ...item,
     amount: Math.round(item.amount * 100) / 100,
     ratio: amount > 0 ? item.amount / amount * 100 : 0,

@@ -14,8 +14,12 @@ public class ApprovalAssigneeConfig extends BaseEntity {
   private String flowCode;
   @Column(name = "flow_name", nullable = false, length = 120)
   private String flowName;
-  @Column(name = "user_id", nullable = false)
+  @Column(name = "assignee_type", nullable = false, length = 20)
+  private String assigneeType = "USER";
+  @Column(name = "user_id")
   private UUID userId;
+  @Column(name = "role_id")
+  private UUID roleId;
   @Column(name = "approval_mode", nullable = false, length = 20)
   private String approvalMode = "PARALLEL";
   @Column(name = "sequence_no", nullable = false)
@@ -47,8 +51,12 @@ public class ApprovalAssigneeConfig extends BaseEntity {
   public void setFlowCode(String value) { flowCode = value; }
   public String getFlowName() { return flowName; }
   public void setFlowName(String value) { flowName = value; }
+  public String getAssigneeType() { return assigneeType; }
+  public void setAssigneeType(String value) { assigneeType = value; }
   public UUID getUserId() { return userId; }
   public void setUserId(UUID value) { userId = value; }
+  public UUID getRoleId() { return roleId; }
+  public void setRoleId(UUID value) { roleId = value; }
   public String getApprovalMode() { return approvalMode; }
   public void setApprovalMode(String value) { approvalMode = value; }
   public int getSequenceNo() { return sequenceNo; }

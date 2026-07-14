@@ -1,19 +1,27 @@
 <template>
-  <div class="self-page">
-    <a-page-header title="我的请假记录" @back="$router.back()">
+  <div class="page-stack self-page">
+    <a-card title="我的请假记录">
       <template #extra>
-        <a-button type="primary" @click="$router.push('/self/leaves/new')"><PlusOutlined />提交请假</a-button>
+        <a-space wrap class="self-card-toolbar">
+          <a-button @click="$router.push('/self')">返回工作台</a-button>
+          <a-button type="primary" @click="$router.push('/self/leaves/new')"><PlusOutlined />提交请假</a-button>
+        </a-space>
       </template>
-    </a-page-header>
 
-    <a-card>
-      <a-tabs v-model:active-key="statusFilter">
+      <a-row :gutter="[16, 16]" class="self-inline-metrics">
+        <a-col :xs="12" :md="6"><div class="self-mini-metric"><span>全部</span><strong>{{ data.length }}</strong></div></a-col>
+        <a-col :xs="12" :md="6"><div class="self-mini-metric warn"><span>待审批</span><strong>{{ countByStatus('PENDING') }}</strong></div></a-col>
+        <a-col :xs="12" :md="6"><div class="self-mini-metric good"><span>已通过</span><strong>{{ countByStatus('APPROVED') }}</strong></div></a-col>
+        <a-col :xs="12" :md="6"><div class="self-mini-metric danger"><span>已驳回</span><strong>{{ countByStatus('REJECTED') }}</strong></div></a-col>
+      </a-row>
+
+      <a-tabs v-model:active-key="statusFilter" class="self-tabs">
         <a-tab-pane key="all" tab="全部" />
         <a-tab-pane key="PENDING" tab="待审批" />
         <a-tab-pane key="APPROVED" tab="已通过" />
         <a-tab-pane key="REJECTED" tab="已驳回" />
       </a-tabs>
-      <a-table :data-source="filteredData" :columns="columns" row-key="id" size="middle" :pagination="{ pageSize: 10 }" :loading="loading">
+      <a-table :data-source="filteredData" :columns="columns" row-key="id" size="middle" :pagination="{ pageSize: 10 }" :loading="loading" :scroll="{ x: 840 }">
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'leaveType'"><a-tag :color="typeColor(record.leaveType)">{{ typeLabel(record.leaveType) }}</a-tag></template>
           <template v-else-if="column.key === 'period'">{{ record.startDate }} ~ {{ record.endDate }}<br><small>共 {{ record.totalDays }} 天</small></template>
@@ -36,6 +44,7 @@ const data = ref<LeaveRecord[]>([]);
 const statusFilter = ref("all");
 
 const filteredData = computed(() => statusFilter.value === "all" ? data.value : data.value.filter(d => d.status === statusFilter.value));
+function countByStatus(status: string) { return data.value.filter((item) => item.status === status).length; }
 
 function typeColor(t: string) { const c: Record<string,string> = {ANNUAL:"blue",SICK:"red",PERSONAL:"default",MARRIAGE:"pink",MATERNITY:"purple",COMPENSATORY:"cyan",OTHER:"default"}; return c[t]||"default"; }
 function typeLabel(t: string) { const l: Record<string,string> = {ANNUAL:"年假",SICK:"病假",PERSONAL:"事假",MARRIAGE:"婚假",MATERNITY:"产假",COMPENSATORY:"调休",OTHER:"其他"}; return l[t]||t; }
@@ -61,4 +70,18 @@ onMounted(async () => {
 
 <style scoped>
 .self-page { max-width: 1000px; }
+.self-inline-metrics { margin-bottom: 14px; }
+.self-tabs { margin-top: 4px; }
+
+@media (max-width: 640px) {
+  .self-page :deep(.ant-tabs-nav) {
+    margin-bottom: 10px;
+  }
+
+  .self-card-toolbar,
+  .self-card-toolbar :deep(.ant-space-item),
+  .self-card-toolbar :deep(.ant-btn) {
+    width: 100%;
+  }
+}
 </style>

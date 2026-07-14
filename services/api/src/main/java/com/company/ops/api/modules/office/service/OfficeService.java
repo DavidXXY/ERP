@@ -58,6 +58,7 @@ import com.company.ops.api.modules.project.repository.ProjectRepository;
 import com.company.ops.api.modules.project.service.ProjectService;
 import com.company.ops.api.modules.system.domain.SystemAuditLog;
 import com.company.ops.api.modules.system.repository.SystemAuditLogRepository;
+import com.company.ops.api.modules.system.repository.SystemRoleRepository;
 import com.company.ops.api.modules.system.repository.SystemUserRepository;
 import com.company.ops.api.modules.system.service.ApprovalFlowSecurity;
 import com.company.ops.api.modules.system.service.ApprovalFlowSecurity.ApprovalContext;
@@ -101,6 +102,7 @@ public class OfficeService {
   private final WorkOrderRepository workOrderRepository;
   private final ProjectService projectService;
   private final SystemUserRepository userRepository;
+  private final SystemRoleRepository roleRepository;
   private final LedgerService ledgerService;
   private final SystemAuditLogRepository auditLogRepository;
   private final ApprovalFlowSecurity approvalFlowSecurity;
@@ -111,14 +113,14 @@ public class OfficeService {
                        DocumentFileRepository documentRepository, SystemNotificationRepository notificationRepository,
 	                       SupplierRepository supplierRepository,
 	                       ProjectRepository projectRepository, WorkOrderRepository workOrderRepository,
-	                       ProjectService projectService, SystemUserRepository userRepository, LedgerService ledgerService, SystemAuditLogRepository auditLogRepository, ApprovalFlowSecurity approvalFlowSecurity,
+	                       ProjectService projectService, SystemUserRepository userRepository, SystemRoleRepository roleRepository, LedgerService ledgerService, SystemAuditLogRepository auditLogRepository, ApprovalFlowSecurity approvalFlowSecurity,
 	                       FileStorageService storageService) {
     this.approvalRepository = approvalRepository; this.actionRepository = actionRepository;
     this.expenseRepository = expenseRepository; this.outsourceRepository = outsourceRepository;
     this.documentRepository = documentRepository; this.notificationRepository = notificationRepository;
     this.supplierRepository = supplierRepository;
     this.projectRepository = projectRepository; this.workOrderRepository = workOrderRepository;
-    this.projectService = projectService; this.userRepository = userRepository;
+    this.projectService = projectService; this.userRepository = userRepository; this.roleRepository = roleRepository;
 	    this.ledgerService = ledgerService;
 	    this.auditLogRepository = auditLogRepository;
 	    this.approvalFlowSecurity = approvalFlowSecurity;
@@ -152,6 +154,14 @@ public class OfficeService {
 
   @Transactional(readOnly = true)
   public List<ApprovalResponse> listApprovals() { return approvalRepository.findAllByOrderByCreatedAtDesc().stream().map(this::toApproval).toList(); }
+
+  @Transactional(readOnly = true)
+  public List<ApprovalResponse> listMyPendingApprovals() {
+    return approvalRepository.findByStatusOrderByCreatedAtDesc(ApprovalStatus.PENDING).stream()
+        .filter(this::canCurrentUserApprove)
+        .map(this::toApproval)
+        .toList();
+  }
 
   @Transactional(readOnly = true)
   public WorkbenchResponse workbench() {
@@ -485,14 +495,29 @@ public class OfficeService {
         .count();
   }
 
+  private boolean canCurrentUserApprove(ApprovalRequest item) {
+    try {
+      return approvalFlowSecurity.canApprove(approvalContext(item), completedApprovals(item.getId()), item.getDelegatedUserId());
+    } catch (RuntimeException ignored) {
+      return false;
+    }
+  }
+
   private String currentApproverNames(ApprovalPlan plan, int completedApprovals) {
     if (plan.configs().isEmpty()) return null;
     int step = "SEQUENTIAL".equals(plan.mode()) ? completedApprovals + 1 : 1;
     return plan.configs().stream()
         .filter(item -> !"SEQUENTIAL".equals(plan.mode()) || item.getSequenceNo() == step)
-        .map(item -> userRepository.findById(item.getUserId()).map(user -> user.getDisplayName()).orElse("已删除用户"))
+        .map(this::assigneeName)
         .distinct()
         .collect(Collectors.joining("、"));
+  }
+
+  private String assigneeName(com.company.ops.api.modules.system.domain.ApprovalAssigneeConfig item) {
+    if ("ROLE".equals(item.getAssigneeType())) {
+      return roleRepository.findById(item.getRoleId()).map(role -> role.getName()).orElse("已删除角色");
+    }
+    return userRepository.findById(item.getUserId()).map(user -> user.getDisplayName()).orElse("已删除用户");
   }
 
   private void saveRuntimeAction(UUID approvalId, String actionType, String operatorName, String comment, int stepNo) {

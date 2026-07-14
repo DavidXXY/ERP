@@ -31,6 +31,7 @@ import com.company.ops.api.modules.crm.domain.Receivable;
 import com.company.ops.api.modules.crm.domain.ReceivableStatus;
 import com.company.ops.api.modules.crm.repository.ReceivableRepository;
 import com.company.ops.api.modules.office.domain.ApprovalRequest;
+import com.company.ops.api.modules.office.domain.ApprovalStatus;
 import com.company.ops.api.modules.office.repository.ApprovalRequestRepository;
 import com.company.ops.api.modules.maintenance.domain.WorkOrder;
 import com.company.ops.api.modules.maintenance.repository.WorkOrderRepository;
@@ -475,13 +476,13 @@ public class HrService {
         // 4. Pending office approvals (if any)
         try {
             var pendingApprovals = approvalRequestRepository.findAll().stream()
-                .filter(a -> "PENDING".equals(a.getStatus()))
+                .filter(a -> a.getStatus() == ApprovalStatus.PENDING)
                 .limit(10).toList();
             for (var a : pendingApprovals) {
                 items.add(new com.company.ops.api.modules.hr.dto.HrDtos.TodoItem(
                     "APPROVAL_PENDING", a.getTitle() != null ? a.getTitle() : "待审批事项",
                     a.getContent() != null ? a.getContent() : "",
-                    "/office/approvals", "MEDIUM", a.getCreatedAt() != null ? a.getCreatedAt().toLocalDate().toString() : now.toString()));
+                    "/self/approvals", "MEDIUM", a.getCreatedAt() != null ? a.getCreatedAt().toLocalDate().toString() : now.toString()));
             }
         } catch (Exception ignored) {}
 

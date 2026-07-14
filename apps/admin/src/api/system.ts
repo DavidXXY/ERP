@@ -17,8 +17,10 @@ export type ApprovalConfigResponse = {
   id: string;
   flowCode: string;
   flowName: string;
-  userId: string;
-  userName: string;
+  assigneeType: "USER" | "ROLE";
+  userId?: string;
+  roleId?: string;
+  assigneeName: string;
   approvalMode: "PARALLEL" | "SEQUENTIAL";
   sequenceNo: number;
   conditionType: "ANY" | "AMOUNT" | "DEPARTMENT" | "AMOUNT_AND_DEPARTMENT" | "BUSINESS_TYPE" | "PROJECT" | "SUPPLIER_RISK" | "CUSTOMER_LEVEL" | "COMPOSITE";
@@ -38,8 +40,12 @@ export function listApprovalConfigs() {
   return request<ApprovalConfigResponse[]>({ method: "GET", url: "/system/approval-configs" });
 }
 
-export function createApprovalConfig(data: { flowCode: string; flowName: string; userId: string; approvalMode: "PARALLEL" | "SEQUENTIAL"; sequenceNo: number; conditionType?: ApprovalConfigResponse["conditionType"]; minAmount?: number; maxAmount?: number; departmentName?: string; businessType?: string; projectCode?: string; supplierRisk?: string; customerLevel?: string; priority?: number; remark?: string }) {
+export function createApprovalConfig(data: { flowCode: string; flowName: string; assigneeType: "USER" | "ROLE"; userId?: string; roleId?: string; approvalMode: "PARALLEL" | "SEQUENTIAL"; sequenceNo: number; conditionType?: ApprovalConfigResponse["conditionType"]; minAmount?: number; maxAmount?: number; departmentName?: string; businessType?: string; projectCode?: string; supplierRisk?: string; customerLevel?: string; priority?: number; remark?: string }) {
   return request<ApprovalConfigResponse>({ method: "POST", url: "/system/approval-configs", data });
+}
+
+export function updateApprovalConfig(id: string, data: { flowCode: string; flowName: string; assigneeType: "USER" | "ROLE"; userId?: string; roleId?: string; approvalMode: "PARALLEL" | "SEQUENTIAL"; sequenceNo: number; conditionType?: ApprovalConfigResponse["conditionType"]; minAmount?: number; maxAmount?: number; departmentName?: string; businessType?: string; projectCode?: string; supplierRisk?: string; customerLevel?: string; priority?: number; remark?: string; enabled?: boolean }) {
+  return request<ApprovalConfigResponse>({ method: "PUT", url: `/system/approval-configs/${id}`, data });
 }
 
 export function deleteApprovalConfig(id: string) {

@@ -22,7 +22,7 @@ public class ApprovalFlowSecurity {
     Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
     if (authentication == null || !(authentication.getPrincipal() instanceof UserPrincipal principal)) return false;
     var configs = repository.findByFlowCodeAndEnabledTrue(flowCode);
-    return configs.isEmpty() || configs.stream().map(ApprovalAssigneeConfig::getUserId).anyMatch(principal.id()::equals);
+    return configs.isEmpty() || configs.stream().anyMatch(item -> assigneeMatches(item, principal));
   }
 
   public UUID currentUserId() {
@@ -39,7 +39,7 @@ public class ApprovalFlowSecurity {
     if (configs.isEmpty()) return true;
     boolean sequential = configs.stream().anyMatch(item -> "SEQUENTIAL".equals(item.getApprovalMode()));
     return configs.stream().filter(item -> !sequential || item.getSequenceNo() == completedApprovals + 1)
-        .map(ApprovalAssigneeConfig::getUserId).anyMatch(userId::equals);
+        .anyMatch(item -> assigneeMatches(item, principal));
   }
 
   public void requireApprover(String flowCode) {
@@ -82,8 +82,7 @@ public class ApprovalFlowSecurity {
     int step = "SEQUENTIAL".equals(plan.mode()) ? completedApprovals + 1 : 1;
     return plan.configs().stream()
         .filter(item -> !"SEQUENTIAL".equals(plan.mode()) || item.getSequenceNo() == step)
-        .map(ApprovalAssigneeConfig::getUserId)
-        .anyMatch(principal.id()::equals);
+        .anyMatch(item -> assigneeMatches(item, principal));
   }
 
   public void requireApprover(ApprovalContext context, int completedApprovals, UUID delegatedUserId) {
@@ -99,6 +98,13 @@ public class ApprovalFlowSecurity {
     if (!blank(item.getSupplierRisk()) && !equalsText(item.getSupplierRisk(), context.supplierRisk())) return false;
     if (!blank(item.getCustomerLevel()) && !equalsText(item.getCustomerLevel(), context.customerLevel())) return false;
     return true;
+  }
+
+  private boolean assigneeMatches(ApprovalAssigneeConfig item, UserPrincipal principal) {
+    if ("ROLE".equals(item.getAssigneeType())) {
+      return item.getRoleId() != null && principal.roleIds().contains(item.getRoleId());
+    }
+    return item.getUserId() != null && principal.id().equals(item.getUserId());
   }
 
   private String describe(List<ApprovalAssigneeConfig> configs) {

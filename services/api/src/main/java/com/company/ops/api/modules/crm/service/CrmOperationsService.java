@@ -681,11 +681,11 @@ public class CrmOperationsService {
         item.getInspectCycle(),
         item.getPaymentNodes(),
         item.getAmount(),
-        effectiveBudget(item.getLaborBudget(), item.getAmount(), "LABOR"),
-        effectiveBudget(item.getMaterialBudget(), item.getAmount(), "MATERIAL"),
-        effectiveBudget(item.getSubcontractBudget(), item.getAmount(), "SUBCONTRACT"),
-        effectiveBudget(item.getTravelBudget(), item.getAmount(), "TRAVEL"),
-        effectiveBudget(item.getOtherBudget(), item.getAmount(), "OTHER"),
+        defaultAmount(item.getLaborBudget()),
+        defaultAmount(item.getMaterialBudget()),
+        defaultAmount(item.getSubcontractBudget()),
+        defaultAmount(item.getTravelBudget()),
+        defaultAmount(item.getOtherBudget()),
         quoteBudgetAmount(item),
         quoteGrossMargin(item),
         quoteGrossMarginRate(item),
@@ -803,11 +803,11 @@ public class CrmOperationsService {
     revision.setInspectCycle(quote.getInspectCycle());
     revision.setPaymentNodes(quote.getPaymentNodes());
     revision.setAmount(defaultAmount(quote.getAmount()));
-    revision.setLaborBudget(effectiveBudget(quote.getLaborBudget(), quote.getAmount(), "LABOR"));
-    revision.setMaterialBudget(effectiveBudget(quote.getMaterialBudget(), quote.getAmount(), "MATERIAL"));
-    revision.setSubcontractBudget(effectiveBudget(quote.getSubcontractBudget(), quote.getAmount(), "SUBCONTRACT"));
-    revision.setTravelBudget(effectiveBudget(quote.getTravelBudget(), quote.getAmount(), "TRAVEL"));
-    revision.setOtherBudget(effectiveBudget(quote.getOtherBudget(), quote.getAmount(), "OTHER"));
+    revision.setLaborBudget(defaultAmount(quote.getLaborBudget()));
+    revision.setMaterialBudget(defaultAmount(quote.getMaterialBudget()));
+    revision.setSubcontractBudget(defaultAmount(quote.getSubcontractBudget()));
+    revision.setTravelBudget(defaultAmount(quote.getTravelBudget()));
+    revision.setOtherBudget(defaultAmount(quote.getOtherBudget()));
     revision.setStatus(quote.getStatus());
     revision.setRevisionNote(revisionNote);
     revision.setEditorName(editorName);
@@ -824,11 +824,11 @@ public class CrmOperationsService {
         revision.getInspectCycle(),
         revision.getPaymentNodes(),
         revision.getAmount(),
-        effectiveBudget(revision.getLaborBudget(), revision.getAmount(), "LABOR"),
-        effectiveBudget(revision.getMaterialBudget(), revision.getAmount(), "MATERIAL"),
-        effectiveBudget(revision.getSubcontractBudget(), revision.getAmount(), "SUBCONTRACT"),
-        effectiveBudget(revision.getTravelBudget(), revision.getAmount(), "TRAVEL"),
-        effectiveBudget(revision.getOtherBudget(), revision.getAmount(), "OTHER"),
+        defaultAmount(revision.getLaborBudget()),
+        defaultAmount(revision.getMaterialBudget()),
+        defaultAmount(revision.getSubcontractBudget()),
+        defaultAmount(revision.getTravelBudget()),
+        defaultAmount(revision.getOtherBudget()),
         revisionBudgetAmount(revision),
         revisionGrossMargin(revision),
         revisionGrossMarginRate(revision),
@@ -1003,8 +1003,7 @@ public class CrmOperationsService {
   }
 
   private BigDecimal quoteBudgetAmount(QuotePlan quote) {
-    BigDecimal total = quoteBudgetRawAmount(quote);
-    return total.compareTo(BigDecimal.ZERO) > 0 ? total : defaultAmount(quote.getAmount()).multiply(BigDecimal.valueOf(0.7));
+    return quoteBudgetRawAmount(quote);
   }
 
   private BigDecimal quoteBudgetRawAmount(QuotePlan quote) {
@@ -1025,7 +1024,7 @@ public class CrmOperationsService {
         revision.getTravelBudget(),
         revision.getOtherBudget()
     ));
-    return total.compareTo(BigDecimal.ZERO) > 0 ? total : defaultAmount(revision.getAmount()).multiply(BigDecimal.valueOf(0.7));
+    return total;
   }
 
   private BigDecimal quoteGrossMargin(QuotePlan quote) {
@@ -1049,21 +1048,6 @@ public class CrmOperationsService {
       return BigDecimal.ZERO;
     }
     return grossMargin.multiply(BigDecimal.valueOf(100)).divide(amount, 2, RoundingMode.HALF_UP);
-  }
-
-  private BigDecimal effectiveBudget(BigDecimal value, BigDecimal amount, String category) {
-    BigDecimal current = defaultAmount(value);
-    if (current.compareTo(BigDecimal.ZERO) > 0) {
-      return current;
-    }
-    BigDecimal rate = switch (category) {
-      case "LABOR" -> BigDecimal.valueOf(0.20);
-      case "MATERIAL" -> BigDecimal.valueOf(0.35);
-      case "SUBCONTRACT" -> BigDecimal.valueOf(0.10);
-      case "TRAVEL" -> BigDecimal.valueOf(0.03);
-      default -> BigDecimal.valueOf(0.02);
-    };
-    return defaultAmount(amount).multiply(rate).setScale(2, RoundingMode.HALF_UP);
   }
 
   private BigDecimal defaultAmount(BigDecimal value) {

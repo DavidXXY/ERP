@@ -14,7 +14,7 @@
         <a-col :xs="12" :lg="6"><a-statistic title="待客户确认" :value="customerPendingCount" suffix="份" /></a-col>
         <a-col :xs="12" :lg="6"><a-statistic title="低毛利预警" :value="lowMarginCount" suffix="份" :value-style="{ color: lowMarginCount > 0 ? '#ff4d4f' : '#52c41a' }" /></a-col>
       </a-row>
-      <a-alert class="section-alert" type="info" show-icon message="报价利润校验：报价阶段必须确认项目预算，系统按预算测算毛利率；低于 15% 会在提交和审批时高亮提醒，但不阻断审批。" />
+      <a-alert class="section-alert" type="info" show-icon message="报价利润校验：报价阶段必须确认项目预算，系统按预算测算毛利率；低于 15% 的报价可提交内部审批，审批时重点提醒。" />
 
       <div class="quote-toolbar">
         <a-input v-model:value="keyword" allow-clear placeholder="搜索报价编号、客户或服务范围" />
@@ -74,10 +74,10 @@
               </a-button>
               <a-popconfirm
                 v-if="auth.can('crm:quote:submit') && record.status === 'DRAFT'"
-                title="当前版本将进入内部审批，确认提交？"
+                :title="quoteSubmitTip(record)"
                 @confirm="handleSubmit(record)"
               >
-                <a-button size="small" type="link">提交审批</a-button>
+                <a-button size="small" type="link" :disabled="!quoteBudgetConfirmed(record)">提交审批</a-button>
               </a-popconfirm>
               <a-button
                 v-if="auth.can('crm:quote:approve') && record.status === 'PENDING_APPROVAL'"
@@ -159,7 +159,7 @@
           </a-col>
           <a-col :span="24"><a-form-item label="服务范围" name="serviceScope"><a-textarea v-model:value="form.serviceScope" :rows="3" /></a-form-item></a-col>
           <a-col :xs="24" :md="12"><a-form-item label="服务频次"><a-input v-model:value="form.inspectCycle" placeholder="例如：季度服务，年度检测" /></a-form-item></a-col>
-          <a-col :xs="24" :md="12"><a-form-item label="报价金额" name="amount"><a-input-number v-model:value="form.amount" :min="0" class="full-input" @change="applyDefaultBudget" /></a-form-item></a-col>
+          <a-col :xs="24" :md="12"><a-form-item label="报价金额" name="amount"><a-input-number v-model:value="form.amount" :min="0" class="full-input" /></a-form-item></a-col>
           <a-col :span="24">
             <div class="quote-budget-panel">
               <div class="quote-budget-head">
@@ -203,7 +203,7 @@
         :type="selectedQuoteMargin.rate < 15 ? 'warning' : 'info'"
         show-icon
         :message="`${selectedQuote.code} V${selectedQuote.versionNo} · ${selectedQuote.customerName} · ${formatMoney(selectedQuote.amount)} · 毛利率 ${selectedQuoteMargin.rate.toFixed(1)}%`"
-        :description="selectedQuoteMargin.rate < 15 ? `毛利率低于 15%，预算 ${formatMoney(selectedQuoteMargin.cost)}，预计毛利 ${formatMoney(selectedQuoteMargin.gross)}。仍可审批，请在意见中说明原因或要求补充授权。` : '审批通过仅代表允许向客户发送本版报价，不会生成合同或应收。'"
+        :description="selectedQuoteMargin.rate < 15 ? `毛利率低于 15%，预算 ${formatMoney(selectedQuoteMargin.cost)}，预计毛利 ${formatMoney(selectedQuoteMargin.gross)}。请重点复核预算构成、折扣授权和服务范围，必要时在审批意见中说明风险。` : '审批通过仅代表允许向客户发送本版报价，不会生成合同或应收。'"
       />
       <div v-if="selectedQuote" class="approval-margin-card" :class="{ warning: selectedQuoteMargin.rate < 15 }">
         <div>
@@ -498,8 +498,7 @@ function quoteMargin(record: Pick<QuotePlan, "amount" | "laborBudget" | "materia
 }
 
 function quoteBudgetTotal(record: { laborBudget?: number; materialBudget?: number; subcontractBudget?: number; travelBudget?: number; otherBudget?: number; amount?: number }) {
-  const total = quoteBudgetRawTotal(record);
-  return total > 0 ? total : Number(record.amount || 0) * 0.7;
+  return quoteBudgetRawTotal(record);
 }
 
 function quoteBudgetRawTotal(record: { laborBudget?: number; materialBudget?: number; subcontractBudget?: number; travelBudget?: number; otherBudget?: number }) {
@@ -631,19 +630,34 @@ async function handleSaveQuote() {
 
 async function handleSubmit(record: QuotePlan) {
   const margin = quoteMargin(record);
-  if (quoteBudgetRawTotal(record) <= 0) {
+  if (!quoteBudgetConfirmed(record)) {
     message.warning("请先修订报价并确认项目预算，再提交审批");
     return;
   }
   try {
     await submitQuote(record.id);
     message.success(margin.rate < 15
-      ? `${record.code} V${record.versionNo} 已提交审批，低毛利风险将提示审批人`
-      : `${record.code} V${record.versionNo} 已提交内部审批`);
+      ? `${record.code} V${record.versionNo} 已提交内部审批，毛利率 ${margin.rate.toFixed(1)}%，请审批重点关注`
+      : `${record.code} V${record.versionNo} 已提交内部审批，毛利率 ${margin.rate.toFixed(1)}%`);
     await loadData();
   } catch (error) {
     message.error(error instanceof Error ? error.message : "提交审批失败");
   }
+}
+
+function quoteBudgetConfirmed(record: QuotePlan) {
+  return quoteBudgetRawTotal(record) > 0;
+}
+
+function quoteSubmitTip(record: QuotePlan) {
+  const margin = quoteMargin(record);
+  if (!quoteBudgetConfirmed(record)) {
+    return "请先修订报价并确认项目预算，再提交审批";
+  }
+  if (margin.rate < 15) {
+    return `当前毛利率 ${margin.rate.toFixed(1)}%，低于 15%，将作为审批重点提醒。确认提交？`;
+  }
+  return "当前版本将进入内部审批，确认提交？";
 }
 
 function openApproval(record: QuotePlan) {

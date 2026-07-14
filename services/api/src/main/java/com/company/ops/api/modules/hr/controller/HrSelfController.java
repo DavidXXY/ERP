@@ -4,6 +4,9 @@ import com.company.ops.api.common.api.ApiResponse;
 import com.company.ops.api.common.exception.BusinessException;
 import com.company.ops.api.modules.hr.dto.HrDtos.*;
 import com.company.ops.api.modules.hr.service.HrService;
+import com.company.ops.api.modules.office.dto.OfficeDtos.ApprovalResponse;
+import com.company.ops.api.modules.office.dto.OfficeDtos.ProcessApprovalRequest;
+import com.company.ops.api.modules.office.service.OfficeService;
 import com.company.ops.api.modules.qualification.domain.QualificationEmployee;
 import com.company.ops.api.modules.qualification.dto.QualificationDtos.*;
 import com.company.ops.api.modules.qualification.repository.QualificationEmployeeRepository;
@@ -20,10 +23,12 @@ import org.springframework.web.bind.annotation.*;
 public class HrSelfController {
     private final HrService hrService;
     private final QualificationEmployeeRepository employeeRepository;
+    private final OfficeService officeService;
 
-    public HrSelfController(HrService hrService, QualificationEmployeeRepository employeeRepository) {
+    public HrSelfController(HrService hrService, QualificationEmployeeRepository employeeRepository, OfficeService officeService) {
         this.hrService = hrService;
         this.employeeRepository = employeeRepository;
+        this.officeService = officeService;
     }
 
     // Returns empty if no employee linked - avoids 400 errors disrupting the dashboard
@@ -104,5 +109,15 @@ public class HrSelfController {
     @GetMapping("/todos")
     public ApiResponse<java.util.List<com.company.ops.api.modules.hr.dto.HrDtos.TodoItem>> todos(@AuthenticationPrincipal UserPrincipal principal) {
         return listOrEmpty(principal.id(), e -> hrService.listEmployeeTodos(e.getId()));
+    }
+
+    @GetMapping("/approvals")
+    public ApiResponse<List<ApprovalResponse>> approvals() {
+        return ApiResponse.ok(officeService.listMyPendingApprovals());
+    }
+
+    @PostMapping("/approvals/{id}/process")
+    public ApiResponse<ApprovalResponse> processApproval(@PathVariable UUID id, @Valid @RequestBody ProcessApprovalRequest request) {
+        return ApiResponse.ok(officeService.processApproval(id, request));
     }
 }

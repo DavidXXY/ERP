@@ -103,6 +103,11 @@ class CrmOperationsServiceQuoteTest {
             "季度服务",
             "签约40%，验收60%",
             new BigDecimal("880000"),
+            new BigDecimal("160000"),
+            new BigDecimal("280000"),
+            new BigDecimal("80000"),
+            new BigDecimal("24000"),
+            new BigDecimal("16000"),
             "按客户意见调整服务范围",
             "客户经理A"
         )
@@ -114,6 +119,11 @@ class CrmOperationsServiceQuoteTest {
             "月度服务",
             "签约30%，验收70%",
             new BigDecimal("920000"),
+            new BigDecimal("180000"),
+            new BigDecimal("300000"),
+            new BigDecimal("90000"),
+            new BigDecimal("27000"),
+            new BigDecimal("18000"),
             "增加月度服务并更新价格",
             "客户经理A"
         )
@@ -139,6 +149,11 @@ class CrmOperationsServiceQuoteTest {
     quote.setInspectCycle("季度服务");
     quote.setPaymentNodes("签约30%，验收70%");
     quote.setAmount(new BigDecimal("800000"));
+    quote.setLaborBudget(new BigDecimal("160000"));
+    quote.setMaterialBudget(new BigDecimal("280000"));
+    quote.setSubcontractBudget(new BigDecimal("80000"));
+    quote.setTravelBudget(new BigDecimal("24000"));
+    quote.setOtherBudget(new BigDecimal("16000"));
     quote.setVersionNo(versionNo);
     quote.setStatus(status);
     return quote;

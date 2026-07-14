@@ -14,7 +14,7 @@
         <a-col :xs="12" :lg="6"><a-statistic title="待客户确认" :value="customerPendingCount" suffix="份" /></a-col>
         <a-col :xs="12" :lg="6"><a-statistic title="低毛利预警" :value="lowMarginCount" suffix="份" :value-style="{ color: lowMarginCount > 0 ? '#ff4d4f' : '#52c41a' }" /></a-col>
       </a-row>
-      <a-alert class="section-alert" type="info" show-icon message="报价利润校验：按默认成本率 70% 估算毛利，低于 15% 的报价建议复核成本项、折扣权限和服务范围。" />
+      <a-alert class="section-alert" type="info" show-icon message="报价利润校验：报价阶段必须确认项目预算，系统按预算测算毛利率；低于 15% 会在提交和审批时高亮提醒，但不阻断审批。" />
 
       <div class="quote-toolbar">
         <a-input v-model:value="keyword" allow-clear placeholder="搜索报价编号、客户或服务范围" />
@@ -46,7 +46,7 @@
           <template v-else-if="column.key === 'amount'"><strong>{{ formatMoney(record.amount) }}</strong></template>
           <template v-else-if="column.key === 'margin'">
             <a-tag :color="quoteMargin(record).rate < 15 ? 'red' : quoteMargin(record).rate < 25 ? 'orange' : 'green'">{{ quoteMargin(record).rate.toFixed(1) }}%</a-tag>
-            <span class="table-subtitle">估算毛利 {{ formatMoney(quoteMargin(record).gross) }}</span>
+            <span class="table-subtitle">预算 {{ formatMoney(quoteMargin(record).cost) }} · 毛利 {{ formatMoney(quoteMargin(record).gross) }}</span>
           </template>
           <template v-else-if="column.key === 'status'">
             <a-tag :color="quoteStatusColor(record.status)">{{ quoteStatusLabel(record.status) }}</a-tag>
@@ -159,7 +159,32 @@
           </a-col>
           <a-col :span="24"><a-form-item label="服务范围" name="serviceScope"><a-textarea v-model:value="form.serviceScope" :rows="3" /></a-form-item></a-col>
           <a-col :xs="24" :md="12"><a-form-item label="服务频次"><a-input v-model:value="form.inspectCycle" placeholder="例如：季度服务，年度检测" /></a-form-item></a-col>
-          <a-col :xs="24" :md="12"><a-form-item label="报价金额" name="amount"><a-input-number v-model:value="form.amount" :min="0" class="full-input" /></a-form-item></a-col>
+          <a-col :xs="24" :md="12"><a-form-item label="报价金额" name="amount"><a-input-number v-model:value="form.amount" :min="0" class="full-input" @change="applyDefaultBudget" /></a-form-item></a-col>
+          <a-col :span="24">
+            <div class="quote-budget-panel">
+              <div class="quote-budget-head">
+                <strong>项目预算确认</strong>
+                <a-space>
+                  <a-tag :color="formMargin.rate < 15 ? 'red' : formMargin.rate < 25 ? 'orange' : 'green'">毛利率 {{ formMargin.rate.toFixed(1) }}%</a-tag>
+                  <a-button size="small" @click="applyDefaultBudget">按标准比例生成</a-button>
+                </a-space>
+              </div>
+              <a-row :gutter="12">
+                <a-col :xs="12" :md="8"><a-form-item label="人工预算"><a-input-number v-model:value="form.laborBudget" :min="0" :precision="2" class="full-input" /></a-form-item></a-col>
+                <a-col :xs="12" :md="8"><a-form-item label="材料预算"><a-input-number v-model:value="form.materialBudget" :min="0" :precision="2" class="full-input" /></a-form-item></a-col>
+                <a-col :xs="12" :md="8"><a-form-item label="外包预算"><a-input-number v-model:value="form.subcontractBudget" :min="0" :precision="2" class="full-input" /></a-form-item></a-col>
+                <a-col :xs="12" :md="8"><a-form-item label="差旅预算"><a-input-number v-model:value="form.travelBudget" :min="0" :precision="2" class="full-input" /></a-form-item></a-col>
+                <a-col :xs="12" :md="8"><a-form-item label="其他预算"><a-input-number v-model:value="form.otherBudget" :min="0" :precision="2" class="full-input" /></a-form-item></a-col>
+                <a-col :xs="12" :md="8">
+                  <div class="quote-budget-summary">
+                    <span>预算合计</span>
+                    <strong>{{ formatMoney(formMargin.cost) }}</strong>
+                    <p>预计毛利 {{ formatMoney(formMargin.gross) }}</p>
+                  </div>
+                </a-col>
+              </a-row>
+            </div>
+          </a-col>
           <a-col :span="24"><a-form-item label="付款节点"><a-input v-model:value="form.paymentNodes" placeholder="例如：签约30%，半年节点30%，验收40%" /></a-form-item></a-col>
           <a-col v-if="editingQuote" :span="24">
             <a-form-item label="本次修订说明" required>
@@ -175,11 +200,25 @@
       <a-alert
         v-if="selectedQuote"
         class="section-alert"
-        type="info"
+        :type="selectedQuoteMargin.rate < 15 ? 'warning' : 'info'"
         show-icon
-        :message="`${selectedQuote.code} V${selectedQuote.versionNo} · ${selectedQuote.customerName} · ${formatMoney(selectedQuote.amount)}`"
-        description="审批通过仅代表允许向客户发送本版报价，不会生成合同或应收。"
+        :message="`${selectedQuote.code} V${selectedQuote.versionNo} · ${selectedQuote.customerName} · ${formatMoney(selectedQuote.amount)} · 毛利率 ${selectedQuoteMargin.rate.toFixed(1)}%`"
+        :description="selectedQuoteMargin.rate < 15 ? `毛利率低于 15%，预算 ${formatMoney(selectedQuoteMargin.cost)}，预计毛利 ${formatMoney(selectedQuoteMargin.gross)}。仍可审批，请在意见中说明原因或要求补充授权。` : '审批通过仅代表允许向客户发送本版报价，不会生成合同或应收。'"
       />
+      <div v-if="selectedQuote" class="approval-margin-card" :class="{ warning: selectedQuoteMargin.rate < 15 }">
+        <div>
+          <span>预算成本</span>
+          <strong>{{ formatMoney(selectedQuoteMargin.cost) }}</strong>
+        </div>
+        <div>
+          <span>预计毛利</span>
+          <strong>{{ formatMoney(selectedQuoteMargin.gross) }}</strong>
+        </div>
+        <div>
+          <span>毛利率</span>
+          <strong>{{ selectedQuoteMargin.rate.toFixed(1) }}%</strong>
+        </div>
+      </div>
       <a-form ref="approvalFormRef" :model="approvalForm" :rules="approvalRules" layout="vertical">
         <a-form-item label="审批结论" name="decision">
           <a-radio-group v-model:value="approvalForm.decision" button-style="solid">
@@ -269,7 +308,7 @@
           <template v-if="column.key === 'version'"><strong>V{{ record.versionNo }}</strong></template>
           <template v-else-if="column.key === 'content'">
             <span class="line-clamp-2">{{ record.serviceScope }}</span>
-            <span class="table-subtitle">{{ record.inspectCycle || "未设置频次" }} · {{ formatMoney(record.amount) }}</span>
+            <span class="table-subtitle">{{ record.inspectCycle || "未设置频次" }} · {{ formatMoney(record.amount) }} · 毛利率 {{ quoteMargin(record).rate.toFixed(1) }}%</span>
           </template>
           <template v-else-if="column.key === 'revision'">
             <span>{{ record.revisionNote }}</span>
@@ -442,12 +481,46 @@ const totalAmount = computed(() => quotes.value.reduce((sum, item) => sum + Numb
 const customerPendingCount = computed(() => quotes.value.filter((item) => item.status === "APPROVED").length);
 const customerAcceptedCount = computed(() => quotes.value.filter((item) => item.status === "CUSTOMER_ACCEPTED").length);
 const lowMarginCount = computed(() => quotes.value.filter((item) => quoteMargin(item).rate < 15).length);
+const selectedQuoteMargin = computed(() => selectedQuote.value ? quoteMargin(selectedQuote.value) : { cost: 0, gross: 0, rate: 0 });
+const formMargin = computed(() => {
+  const amount = Number(form.amount || 0);
+  const cost = quoteBudgetTotal(form);
+  const gross = amount - cost;
+  return { cost, gross, rate: amount > 0 ? gross / amount * 100 : 0 };
+});
 
-function quoteMargin(record: QuotePlan) {
+function quoteMargin(record: Pick<QuotePlan, "amount" | "laborBudget" | "materialBudget" | "subcontractBudget" | "travelBudget" | "otherBudget" | "budgetAmount" | "grossMargin" | "grossMarginRate">) {
   const amount = Number(record.amount || 0);
-  const estimatedCost = amount * 0.7;
-  const gross = amount - estimatedCost;
-  return { gross, rate: amount > 0 ? gross / amount * 100 : 0 };
+  const cost = Number(record.budgetAmount ?? quoteBudgetTotal(record));
+  const gross = Number(record.grossMargin ?? (amount - cost));
+  const rate = Number(record.grossMarginRate ?? (amount > 0 ? gross / amount * 100 : 0));
+  return { cost, gross, rate };
+}
+
+function quoteBudgetTotal(record: { laborBudget?: number; materialBudget?: number; subcontractBudget?: number; travelBudget?: number; otherBudget?: number; amount?: number }) {
+  const total = quoteBudgetRawTotal(record);
+  return total > 0 ? total : Number(record.amount || 0) * 0.7;
+}
+
+function quoteBudgetRawTotal(record: { laborBudget?: number; materialBudget?: number; subcontractBudget?: number; travelBudget?: number; otherBudget?: number }) {
+  return Number(record.laborBudget || 0)
+    + Number(record.materialBudget || 0)
+    + Number(record.subcontractBudget || 0)
+    + Number(record.travelBudget || 0)
+    + Number(record.otherBudget || 0);
+}
+
+function applyDefaultBudget() {
+  const amount = Number(form.amount || 0);
+  form.laborBudget = roundMoney(amount * 0.2);
+  form.materialBudget = roundMoney(amount * 0.35);
+  form.subcontractBudget = roundMoney(amount * 0.1);
+  form.travelBudget = roundMoney(amount * 0.03);
+  form.otherBudget = roundMoney(amount * 0.02);
+}
+
+function roundMoney(value: number) {
+  return Math.round(Number(value || 0) * 100) / 100;
 }
 
 onMounted(loadData);
@@ -479,6 +552,11 @@ function openEdit(record: QuotePlan) {
     inspectCycle: record.inspectCycle || "",
     paymentNodes: record.paymentNodes || "",
     amount: Number(record.amount),
+    laborBudget: Number(record.laborBudget || 0),
+    materialBudget: Number(record.materialBudget || 0),
+    subcontractBudget: Number(record.subcontractBudget || 0),
+    travelBudget: Number(record.travelBudget || 0),
+    otherBudget: Number(record.otherBudget || 0),
     revisionNote: "",
     editorName: auth.user?.displayName || "",
   });
@@ -503,6 +581,10 @@ async function handleSaveQuote() {
     message.warning("请填写本次修订说明");
     return;
   }
+  if (formMargin.value.cost <= 0) {
+    message.warning("请先确认项目预算");
+    return;
+  }
   saving.value = true;
   try {
     if (editingQuote.value) {
@@ -511,6 +593,11 @@ async function handleSaveQuote() {
         inspectCycle: form.inspectCycle,
         paymentNodes: form.paymentNodes,
         amount: form.amount,
+        laborBudget: form.laborBudget,
+        materialBudget: form.materialBudget,
+        subcontractBudget: form.subcontractBudget,
+        travelBudget: form.travelBudget,
+        otherBudget: form.otherBudget,
         revisionNote: form.revisionNote,
         editorName: form.editorName,
       });
@@ -524,6 +611,11 @@ async function handleSaveQuote() {
         inspectCycle: form.inspectCycle,
         paymentNodes: form.paymentNodes,
         amount: form.amount,
+        laborBudget: form.laborBudget,
+        materialBudget: form.materialBudget,
+        subcontractBudget: form.subcontractBudget,
+        travelBudget: form.travelBudget,
+        otherBudget: form.otherBudget,
         editorName: form.editorName,
       });
       message.success("报价方案已保存为 V1 草稿");
@@ -538,9 +630,16 @@ async function handleSaveQuote() {
 }
 
 async function handleSubmit(record: QuotePlan) {
+  const margin = quoteMargin(record);
+  if (quoteBudgetRawTotal(record) <= 0) {
+    message.warning("请先修订报价并确认项目预算，再提交审批");
+    return;
+  }
   try {
     await submitQuote(record.id);
-    message.success(`${record.code} V${record.versionNo} 已提交内部审批`);
+    message.success(margin.rate < 15
+      ? `${record.code} V${record.versionNo} 已提交审批，低毛利风险将提示审批人`
+      : `${record.code} V${record.versionNo} 已提交内部审批`);
     await loadData();
   } catch (error) {
     message.error(error instanceof Error ? error.message : "提交审批失败");
@@ -677,6 +776,11 @@ function initialForm() {
     inspectCycle: "",
     paymentNodes: "",
     amount: 0,
+    laborBudget: 0,
+    materialBudget: 0,
+    subcontractBudget: 0,
+    travelBudget: 0,
+    otherBudget: 0,
     revisionNote: "",
     editorName: auth.user?.displayName || "",
   };
@@ -782,6 +886,46 @@ function moneyFormatter({ value }: { value: number }) {
   margin-top: 6px;
   color: #8c8c8c;
   font-size: 12px;
+}
+
+.approval-margin-card {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 12px 0 16px;
+  padding: 12px;
+  border: 1px solid #d6e4ff;
+  border-radius: 8px;
+  background: #f5f9ff;
+}
+
+.approval-margin-card.warning {
+  border-color: #ffccc7;
+  background: #fff7f6;
+}
+
+.approval-margin-card div {
+  min-width: 0;
+}
+
+.approval-margin-card span {
+  display: block;
+  color: #667085;
+  font-size: 12px;
+}
+
+.approval-margin-card strong {
+  display: block;
+  overflow: hidden;
+  margin-top: 5px;
+  color: #172033;
+  font-size: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.approval-margin-card.warning strong {
+  color: #cf1322;
 }
 
 .revision-heading {

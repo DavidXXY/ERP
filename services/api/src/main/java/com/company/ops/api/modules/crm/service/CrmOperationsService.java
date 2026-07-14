@@ -57,6 +57,7 @@ import com.company.ops.api.modules.crm.repository.ServiceContractRepository;
 import com.company.ops.api.modules.ledger.dto.LedgerDtos.PostingLine;
 import com.company.ops.api.modules.ledger.service.LedgerService;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
@@ -228,6 +229,7 @@ public class CrmOperationsService {
     quote.setInspectCycle(request.inspectCycle());
     quote.setPaymentNodes(request.paymentNodes());
     quote.setAmount(defaultAmount(request.amount()));
+    applyQuoteBudget(quote, request.laborBudget(), request.materialBudget(), request.subcontractBudget(), request.travelBudget(), request.otherBudget());
     quote.setVersionNo(1);
     quote.setStatus(QuoteStatus.DRAFT);
     QuotePlan saved = quoteRepository.save(quote);
@@ -254,6 +256,7 @@ public class CrmOperationsService {
     quote.setInspectCycle(request.inspectCycle());
     quote.setPaymentNodes(request.paymentNodes());
     quote.setAmount(defaultAmount(request.amount()));
+    applyQuoteBudget(quote, request.laborBudget(), request.materialBudget(), request.subcontractBudget(), request.travelBudget(), request.otherBudget());
     quote.setVersionNo(Math.max(quote.getVersionNo(), 1) + 1);
     quote.setStatus(QuoteStatus.DRAFT);
     clearCustomerResult(quote);
@@ -283,6 +286,7 @@ public class CrmOperationsService {
     if (quote.getStatus() != QuoteStatus.DRAFT) {
       throw new BusinessException("只有草稿版本可以提交审批");
     }
+    validateQuoteBudgetForSubmit(quote);
     quote.setStatus(QuoteStatus.PENDING_APPROVAL);
     QuotePlan saved = quoteRepository.save(quote);
     return toQuote(
@@ -677,6 +681,14 @@ public class CrmOperationsService {
         item.getInspectCycle(),
         item.getPaymentNodes(),
         item.getAmount(),
+        effectiveBudget(item.getLaborBudget(), item.getAmount(), "LABOR"),
+        effectiveBudget(item.getMaterialBudget(), item.getAmount(), "MATERIAL"),
+        effectiveBudget(item.getSubcontractBudget(), item.getAmount(), "SUBCONTRACT"),
+        effectiveBudget(item.getTravelBudget(), item.getAmount(), "TRAVEL"),
+        effectiveBudget(item.getOtherBudget(), item.getAmount(), "OTHER"),
+        quoteBudgetAmount(item),
+        quoteGrossMargin(item),
+        quoteGrossMarginRate(item),
         item.getVersionNo(),
         item.getStatus(),
         approval == null ? null : approval.getComment(),
@@ -791,6 +803,11 @@ public class CrmOperationsService {
     revision.setInspectCycle(quote.getInspectCycle());
     revision.setPaymentNodes(quote.getPaymentNodes());
     revision.setAmount(defaultAmount(quote.getAmount()));
+    revision.setLaborBudget(effectiveBudget(quote.getLaborBudget(), quote.getAmount(), "LABOR"));
+    revision.setMaterialBudget(effectiveBudget(quote.getMaterialBudget(), quote.getAmount(), "MATERIAL"));
+    revision.setSubcontractBudget(effectiveBudget(quote.getSubcontractBudget(), quote.getAmount(), "SUBCONTRACT"));
+    revision.setTravelBudget(effectiveBudget(quote.getTravelBudget(), quote.getAmount(), "TRAVEL"));
+    revision.setOtherBudget(effectiveBudget(quote.getOtherBudget(), quote.getAmount(), "OTHER"));
     revision.setStatus(quote.getStatus());
     revision.setRevisionNote(revisionNote);
     revision.setEditorName(editorName);
@@ -807,6 +824,14 @@ public class CrmOperationsService {
         revision.getInspectCycle(),
         revision.getPaymentNodes(),
         revision.getAmount(),
+        effectiveBudget(revision.getLaborBudget(), revision.getAmount(), "LABOR"),
+        effectiveBudget(revision.getMaterialBudget(), revision.getAmount(), "MATERIAL"),
+        effectiveBudget(revision.getSubcontractBudget(), revision.getAmount(), "SUBCONTRACT"),
+        effectiveBudget(revision.getTravelBudget(), revision.getAmount(), "TRAVEL"),
+        effectiveBudget(revision.getOtherBudget(), revision.getAmount(), "OTHER"),
+        revisionBudgetAmount(revision),
+        revisionGrossMargin(revision),
+        revisionGrossMarginRate(revision),
         revision.getStatus(),
         revision.getRevisionNote(),
         revision.getEditorName(),
@@ -953,6 +978,92 @@ public class CrmOperationsService {
 
   private BigDecimal sum(List<BigDecimal> values) {
     return values.stream().map(this::defaultAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+  }
+
+  private void applyQuoteBudget(
+      QuotePlan quote,
+      BigDecimal laborBudget,
+      BigDecimal materialBudget,
+      BigDecimal subcontractBudget,
+      BigDecimal travelBudget,
+      BigDecimal otherBudget
+  ) {
+    quote.setLaborBudget(defaultAmount(laborBudget));
+    quote.setMaterialBudget(defaultAmount(materialBudget));
+    quote.setSubcontractBudget(defaultAmount(subcontractBudget));
+    quote.setTravelBudget(defaultAmount(travelBudget));
+    quote.setOtherBudget(defaultAmount(otherBudget));
+  }
+
+  private void validateQuoteBudgetForSubmit(QuotePlan quote) {
+    BigDecimal budget = quoteBudgetRawAmount(quote);
+    if (budget.compareTo(BigDecimal.ZERO) <= 0) {
+      throw new BusinessException("请先在报价中确认项目预算，再提交审批");
+    }
+  }
+
+  private BigDecimal quoteBudgetAmount(QuotePlan quote) {
+    BigDecimal total = quoteBudgetRawAmount(quote);
+    return total.compareTo(BigDecimal.ZERO) > 0 ? total : defaultAmount(quote.getAmount()).multiply(BigDecimal.valueOf(0.7));
+  }
+
+  private BigDecimal quoteBudgetRawAmount(QuotePlan quote) {
+    return sum(List.of(
+        quote.getLaborBudget(),
+        quote.getMaterialBudget(),
+        quote.getSubcontractBudget(),
+        quote.getTravelBudget(),
+        quote.getOtherBudget()
+    ));
+  }
+
+  private BigDecimal revisionBudgetAmount(QuoteRevision revision) {
+    BigDecimal total = sum(List.of(
+        revision.getLaborBudget(),
+        revision.getMaterialBudget(),
+        revision.getSubcontractBudget(),
+        revision.getTravelBudget(),
+        revision.getOtherBudget()
+    ));
+    return total.compareTo(BigDecimal.ZERO) > 0 ? total : defaultAmount(revision.getAmount()).multiply(BigDecimal.valueOf(0.7));
+  }
+
+  private BigDecimal quoteGrossMargin(QuotePlan quote) {
+    return defaultAmount(quote.getAmount()).subtract(quoteBudgetAmount(quote));
+  }
+
+  private BigDecimal revisionGrossMargin(QuoteRevision revision) {
+    return defaultAmount(revision.getAmount()).subtract(revisionBudgetAmount(revision));
+  }
+
+  private BigDecimal quoteGrossMarginRate(QuotePlan quote) {
+    return marginRate(defaultAmount(quote.getAmount()), quoteGrossMargin(quote));
+  }
+
+  private BigDecimal revisionGrossMarginRate(QuoteRevision revision) {
+    return marginRate(defaultAmount(revision.getAmount()), revisionGrossMargin(revision));
+  }
+
+  private BigDecimal marginRate(BigDecimal amount, BigDecimal grossMargin) {
+    if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+      return BigDecimal.ZERO;
+    }
+    return grossMargin.multiply(BigDecimal.valueOf(100)).divide(amount, 2, RoundingMode.HALF_UP);
+  }
+
+  private BigDecimal effectiveBudget(BigDecimal value, BigDecimal amount, String category) {
+    BigDecimal current = defaultAmount(value);
+    if (current.compareTo(BigDecimal.ZERO) > 0) {
+      return current;
+    }
+    BigDecimal rate = switch (category) {
+      case "LABOR" -> BigDecimal.valueOf(0.20);
+      case "MATERIAL" -> BigDecimal.valueOf(0.35);
+      case "SUBCONTRACT" -> BigDecimal.valueOf(0.10);
+      case "TRAVEL" -> BigDecimal.valueOf(0.03);
+      default -> BigDecimal.valueOf(0.02);
+    };
+    return defaultAmount(amount).multiply(rate).setScale(2, RoundingMode.HALF_UP);
   }
 
   private BigDecimal defaultAmount(BigDecimal value) {

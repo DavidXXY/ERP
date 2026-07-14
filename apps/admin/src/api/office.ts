@@ -64,7 +64,17 @@ export function updateDocumentName(id: string, fileName: string) { return reques
 export function deleteDocument(id: string) { return request<void>({ method: "DELETE", url: `/office/documents/${id}` }); }
 export function deleteDocumentsByBiz(bizType: string, bizId: string) { return request<void>({ method: "DELETE", url: "/office/documents/by-biz", params: { bizType, bizId } }); }
 export async function downloadDocument(item: DocumentRecord) { const response = await http.get<Blob>(`/office/documents/${item.id}/download`, { responseType: "blob" }); const url = URL.createObjectURL(response.data); const anchor = document.createElement("a"); anchor.href = url; anchor.download = item.fileName; anchor.click(); URL.revokeObjectURL(url); }
-export async function previewDocument(item: DocumentRecord) { window.open(`/api/office/documents/${item.id}/preview`, "_blank"); }
+export async function previewDocument(item: DocumentRecord) {
+  const response = await http.get<Blob>(`/office/documents/${item.id}/preview`, { responseType: "blob" });
+  const type = response.data.type || item.contentType || "";
+  if (!type.startsWith("image/") && type !== "application/pdf") {
+    await downloadDocument(item);
+    return;
+  }
+  const url = URL.createObjectURL(response.data);
+  window.open(url, "_blank", "noopener,noreferrer");
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
 export function listNotifications() { return request<NotificationRecord[]>({ method: "GET", url: "/office/notifications" }); }
 export function readNotification(id: string) { return request<NotificationRecord>({ method: "POST", url: `/office/notifications/${id}/read` }); }
 export function refreshNotifications() { return request<number>({ method: "POST", url: "/office/notifications/refresh" }); }

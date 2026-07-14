@@ -134,13 +134,37 @@ public class ProcurementService {
     }
     Supplier supplier = new Supplier();
     supplier.setCode(supplierCode);
+    applySupplierRequest(supplier, request);
+    return toSupplierResponse(supplierRepository.save(supplier));
+  }
+
+  @Transactional
+  public SupplierResponse updateSupplier(UUID id, CreateSupplierRequest request) {
+    Supplier supplier = supplierRepository.findById(id)
+        .orElseThrow(() -> new BusinessException("供应商不存在"));
+    applySupplierRequest(supplier, request);
+    return toSupplierResponse(supplierRepository.save(supplier));
+  }
+
+  private void applySupplierRequest(Supplier supplier, CreateSupplierRequest request) {
     supplier.setName(request.name());
     supplier.setCategory(request.category());
     supplier.setContactName(request.contactName());
     supplier.setPhone(request.phone());
     supplier.setSettlementTerms(request.settlementTerms());
+    supplier.setLegalRepresentative(request.legalRepresentative());
+    supplier.setUnifiedSocialCreditCode(request.unifiedSocialCreditCode());
+    supplier.setRegisteredCapital(request.registeredCapital());
+    supplier.setRegisteredAddress(request.registeredAddress());
+    supplier.setBusinessScope(request.businessScope());
+    supplier.setLicenseValidTo(request.licenseValidTo());
+    supplier.setQualificationValidTo(request.qualificationValidTo());
+    supplier.setTaxpayerType(request.taxpayerType());
+    supplier.setBankName(request.bankName());
+    supplier.setBankAccount(request.bankAccount());
+    supplier.setAdmissionStatus(request.admissionStatus());
+    supplier.setRemark(request.remark());
     supplier.setRiskStatus(request.riskStatus() == null ? SupplierRiskStatus.NORMAL : request.riskStatus());
-    return toSupplierResponse(supplierRepository.save(supplier));
   }
 
   @Transactional(readOnly = true)
@@ -559,6 +583,18 @@ public class ProcurementService {
         supplier.getContactName(),
         supplier.getPhone(),
         supplier.getSettlementTerms(),
+        supplier.getLegalRepresentative(),
+        supplier.getUnifiedSocialCreditCode(),
+        supplier.getRegisteredCapital(),
+        supplier.getRegisteredAddress(),
+        supplier.getBusinessScope(),
+        supplier.getLicenseValidTo(),
+        supplier.getQualificationValidTo(),
+        supplier.getTaxpayerType(),
+        supplier.getBankName(),
+        supplier.getBankAccount(),
+        supplier.getAdmissionStatus(),
+        supplier.getRemark(),
         supplier.getRiskStatus()
     );
   }

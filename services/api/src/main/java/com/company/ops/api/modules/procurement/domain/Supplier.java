@@ -6,6 +6,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
+import java.time.LocalDate;
 
 @Entity
 @Table(name = "procurement_suppliers")
@@ -28,6 +29,42 @@ public class Supplier extends BaseEntity {
 
   @Column(name = "settlement_terms", length = 160)
   private String settlementTerms;
+
+  @Column(name = "legal_representative", length = 80)
+  private String legalRepresentative;
+
+  @Column(name = "unified_social_credit_code", length = 80)
+  private String unifiedSocialCreditCode;
+
+  @Column(name = "registered_capital", length = 80)
+  private String registeredCapital;
+
+  @Column(name = "registered_address", length = 240)
+  private String registeredAddress;
+
+  @Column(name = "business_scope", length = 800)
+  private String businessScope;
+
+  @Column(name = "license_valid_to")
+  private LocalDate licenseValidTo;
+
+  @Column(name = "qualification_valid_to")
+  private LocalDate qualificationValidTo;
+
+  @Column(name = "taxpayer_type", length = 80)
+  private String taxpayerType;
+
+  @Column(name = "bank_name", length = 120)
+  private String bankName;
+
+  @Column(name = "bank_account", length = 120)
+  private String bankAccount;
+
+  @Column(name = "admission_status", length = 40)
+  private String admissionStatus;
+
+  @Column(name = "remark", length = 1000)
+  private String remark;
 
   @Enumerated(EnumType.STRING)
   @Column(name = "risk_status", nullable = false, length = 32)
@@ -80,6 +117,54 @@ public class Supplier extends BaseEntity {
   public void setSettlementTerms(String settlementTerms) {
     this.settlementTerms = settlementTerms;
   }
+
+  public String getLegalRepresentative() { return legalRepresentative; }
+
+  public void setLegalRepresentative(String legalRepresentative) { this.legalRepresentative = legalRepresentative; }
+
+  public String getUnifiedSocialCreditCode() { return unifiedSocialCreditCode; }
+
+  public void setUnifiedSocialCreditCode(String unifiedSocialCreditCode) { this.unifiedSocialCreditCode = unifiedSocialCreditCode; }
+
+  public String getRegisteredCapital() { return registeredCapital; }
+
+  public void setRegisteredCapital(String registeredCapital) { this.registeredCapital = registeredCapital; }
+
+  public String getRegisteredAddress() { return registeredAddress; }
+
+  public void setRegisteredAddress(String registeredAddress) { this.registeredAddress = registeredAddress; }
+
+  public String getBusinessScope() { return businessScope; }
+
+  public void setBusinessScope(String businessScope) { this.businessScope = businessScope; }
+
+  public LocalDate getLicenseValidTo() { return licenseValidTo; }
+
+  public void setLicenseValidTo(LocalDate licenseValidTo) { this.licenseValidTo = licenseValidTo; }
+
+  public LocalDate getQualificationValidTo() { return qualificationValidTo; }
+
+  public void setQualificationValidTo(LocalDate qualificationValidTo) { this.qualificationValidTo = qualificationValidTo; }
+
+  public String getTaxpayerType() { return taxpayerType; }
+
+  public void setTaxpayerType(String taxpayerType) { this.taxpayerType = taxpayerType; }
+
+  public String getBankName() { return bankName; }
+
+  public void setBankName(String bankName) { this.bankName = bankName; }
+
+  public String getBankAccount() { return bankAccount; }
+
+  public void setBankAccount(String bankAccount) { this.bankAccount = bankAccount; }
+
+  public String getAdmissionStatus() { return admissionStatus; }
+
+  public void setAdmissionStatus(String admissionStatus) { this.admissionStatus = admissionStatus; }
+
+  public String getRemark() { return remark; }
+
+  public void setRemark(String remark) { this.remark = remark; }
 
   public SupplierRiskStatus getRiskStatus() {
     return riskStatus;

@@ -148,6 +148,14 @@ export type QuotePlan = {
   inspectCycle?: string;
   paymentNodes?: string;
   amount: number;
+  laborBudget?: number;
+  materialBudget?: number;
+  subcontractBudget?: number;
+  travelBudget?: number;
+  otherBudget?: number;
+  budgetAmount?: number;
+  grossMargin?: number;
+  grossMarginRate?: number;
   versionNo: number;
   status: QuoteStatus;
   lastApprovalComment?: string;
@@ -169,6 +177,11 @@ export type CreateQuotePayload = {
   inspectCycle?: string;
   paymentNodes?: string;
   amount: number;
+  laborBudget?: number;
+  materialBudget?: number;
+  subcontractBudget?: number;
+  travelBudget?: number;
+  otherBudget?: number;
   editorName: string;
 };
 
@@ -177,6 +190,11 @@ export type UpdateQuotePayload = {
   inspectCycle?: string;
   paymentNodes?: string;
   amount: number;
+  laborBudget?: number;
+  materialBudget?: number;
+  subcontractBudget?: number;
+  travelBudget?: number;
+  otherBudget?: number;
   revisionNote: string;
   editorName: string;
 };
@@ -217,6 +235,14 @@ export type QuoteRevision = {
   inspectCycle?: string;
   paymentNodes?: string;
   amount: number;
+  laborBudget?: number;
+  materialBudget?: number;
+  subcontractBudget?: number;
+  travelBudget?: number;
+  otherBudget?: number;
+  budgetAmount?: number;
+  grossMargin?: number;
+  grossMarginRate?: number;
   status: QuoteStatus;
   revisionNote: string;
   editorName: string;

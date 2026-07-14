@@ -35,6 +35,21 @@ public class QuotePlan extends BaseEntity {
   @Column(nullable = false, precision = 14, scale = 2)
   private BigDecimal amount = BigDecimal.ZERO;
 
+  @Column(name = "labor_budget", nullable = false, precision = 14, scale = 2)
+  private BigDecimal laborBudget = BigDecimal.ZERO;
+
+  @Column(name = "material_budget", nullable = false, precision = 14, scale = 2)
+  private BigDecimal materialBudget = BigDecimal.ZERO;
+
+  @Column(name = "subcontract_budget", nullable = false, precision = 14, scale = 2)
+  private BigDecimal subcontractBudget = BigDecimal.ZERO;
+
+  @Column(name = "travel_budget", nullable = false, precision = 14, scale = 2)
+  private BigDecimal travelBudget = BigDecimal.ZERO;
+
+  @Column(name = "other_budget", nullable = false, precision = 14, scale = 2)
+  private BigDecimal otherBudget = BigDecimal.ZERO;
+
   @Column(name = "version_no", nullable = false)
   private int versionNo = 1;
 
@@ -109,6 +124,46 @@ public class QuotePlan extends BaseEntity {
 
   public void setAmount(BigDecimal amount) {
     this.amount = amount;
+  }
+
+  public BigDecimal getLaborBudget() {
+    return laborBudget;
+  }
+
+  public void setLaborBudget(BigDecimal laborBudget) {
+    this.laborBudget = laborBudget;
+  }
+
+  public BigDecimal getMaterialBudget() {
+    return materialBudget;
+  }
+
+  public void setMaterialBudget(BigDecimal materialBudget) {
+    this.materialBudget = materialBudget;
+  }
+
+  public BigDecimal getSubcontractBudget() {
+    return subcontractBudget;
+  }
+
+  public void setSubcontractBudget(BigDecimal subcontractBudget) {
+    this.subcontractBudget = subcontractBudget;
+  }
+
+  public BigDecimal getTravelBudget() {
+    return travelBudget;
+  }
+
+  public void setTravelBudget(BigDecimal travelBudget) {
+    this.travelBudget = travelBudget;
+  }
+
+  public BigDecimal getOtherBudget() {
+    return otherBudget;
+  }
+
+  public void setOtherBudget(BigDecimal otherBudget) {
+    this.otherBudget = otherBudget;
   }
 
   public int getVersionNo() {

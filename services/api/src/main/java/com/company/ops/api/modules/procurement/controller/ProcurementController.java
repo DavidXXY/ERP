@@ -64,6 +64,15 @@ public class ProcurementController {
     return ApiResponse.ok(procurementService.createSupplier(request));
   }
 
+  @PutMapping("/suppliers/{id}")
+  @PreAuthorize("hasAuthority('procurement:supplier:create')")
+  public ApiResponse<SupplierResponse> updateSupplier(
+      @PathVariable UUID id,
+      @Valid @RequestBody CreateSupplierRequest request
+  ) {
+    return ApiResponse.ok(procurementService.updateSupplier(id, request));
+  }
+
   @GetMapping("/cost-targets")
   @PreAuthorize("hasAuthority('procurement:view')")
   public ApiResponse<ProcurementCostTargetOptionsResponse> listCostTargets() {

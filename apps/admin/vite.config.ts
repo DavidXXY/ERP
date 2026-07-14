@@ -4,7 +4,7 @@ import Components from "unplugin-vue-components/vite";
 import { AntDesignVueResolver } from "unplugin-vue-components/resolvers";
 import { fileURLToPath, URL } from "node:url";
 
-const apiProxyTarget = process.env.VITE_API_PROXY_TARGET || "http://localhost:8081";
+const apiProxyTarget = process.env.VITE_API_PROXY_TARGET || "http://localhost:8080";
 
 export default defineConfig({
   cacheDir: "../../node_modules/.vite-admin",

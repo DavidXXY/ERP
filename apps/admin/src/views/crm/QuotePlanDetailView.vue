@@ -45,6 +45,29 @@
           <p style="margin: 0; white-space: pre-wrap">{{ record.serviceScope }}</p>
         </a-card>
 
+        <a-card title="报价预算与毛利测算" style="margin-top: 16px">
+          <a-row :gutter="[16, 16]" class="metric-row">
+            <a-col :xs="12" :md="6"><a-statistic title="报价金额" :value="record.amount" :formatter="moneyFormatter" /></a-col>
+            <a-col :xs="12" :md="6"><a-statistic title="预算成本" :value="quoteMargin.cost" :formatter="moneyFormatter" /></a-col>
+            <a-col :xs="12" :md="6"><a-statistic title="预计毛利" :value="quoteMargin.gross" :formatter="moneyFormatter" :value-style="{ color: quoteMargin.gross < 0 ? '#ff4d4f' : '#52c41a' }" /></a-col>
+            <a-col :xs="12" :md="6"><a-statistic title="毛利率" :value="quoteMargin.rate" suffix="%" :precision="1" :value-style="{ color: quoteMargin.rate < 15 ? '#ff4d4f' : quoteMargin.rate < 25 ? '#faad14' : '#52c41a' }" /></a-col>
+          </a-row>
+          <a-table size="small" :data-source="budgetRows" :columns="budgetColumns" :pagination="false" row-key="key" style="margin-top: 12px">
+            <template #bodyCell="{ column, record: row }">
+              <template v-if="column.key === 'amount'">{{ formatMoney(row.amount) }}</template>
+              <template v-else-if="column.key === 'ratio'">{{ row.ratio.toFixed(1) }}%</template>
+            </template>
+          </a-table>
+          <a-alert
+            v-if="quoteMargin.rate < 15"
+            style="margin-top: 12px"
+            type="warning"
+            show-icon
+            message="毛利率低于审批阈值"
+            description="请在报价修订中复核预算、折扣权限或服务范围后再提交内部审批。"
+          />
+        </a-card>
+
         <!-- Enhanced converted contract card -->
         <a-card v-if="record.convertedContractId" title="已转合同" style="margin-top: 16px">
           <a-descriptions v-if="relatedContract" bordered :column="2" size="small">
@@ -111,6 +134,44 @@ const receivableMiniColumns = [
   { title: "到期日", dataIndex: "dueDate", width: 120 },
   { title: "状态", key: "status", width: 110 },
 ];
+const budgetColumns = [
+  { title: "成本类型", dataIndex: "label", key: "label", width: 140 },
+  { title: "预算金额", key: "amount", width: 140 },
+  { title: "占报价比", key: "ratio", width: 120 },
+];
+
+const quoteMargin = computed(() => {
+  if (!record.value) return { cost: 0, gross: 0, rate: 0 };
+  const amount = Number(record.value.amount || 0);
+  const cost = Number(record.value.budgetAmount ?? budgetRows.value.reduce((sum, item) => sum + item.amount, 0));
+  const gross = Number(record.value.grossMargin ?? (amount - cost));
+  const rate = Number(record.value.grossMarginRate ?? (amount > 0 ? gross / amount * 100 : 0));
+  return { cost, gross, rate };
+});
+
+const budgetRows = computed(() => {
+  const amount = Number(record.value?.amount || 0);
+  const rows = [
+    { key: "labor", label: "人工", amount: Number(record.value?.laborBudget || 0) },
+    { key: "material", label: "材料", amount: Number(record.value?.materialBudget || 0) },
+    { key: "subcontract", label: "外包", amount: Number(record.value?.subcontractBudget || 0) },
+    { key: "travel", label: "差旅", amount: Number(record.value?.travelBudget || 0) },
+    { key: "other", label: "其他", amount: Number(record.value?.otherBudget || 0) },
+  ];
+  const total = rows.reduce((sum, item) => sum + item.amount, 0);
+  const fallback = total > 0 ? rows : [
+    { key: "labor", label: "人工", amount: amount * 0.2 },
+    { key: "material", label: "材料", amount: amount * 0.35 },
+    { key: "subcontract", label: "外包", amount: amount * 0.1 },
+    { key: "travel", label: "差旅", amount: amount * 0.03 },
+    { key: "other", label: "其他", amount: amount * 0.02 },
+  ];
+  return fallback.map((item) => ({
+    ...item,
+    amount: Math.round(item.amount * 100) / 100,
+    ratio: amount > 0 ? item.amount / amount * 100 : 0,
+  }));
+});
 
 const receivableSummary = computed(() => {
   const items = relatedReceivables.value;

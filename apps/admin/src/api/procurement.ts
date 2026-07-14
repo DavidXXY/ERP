@@ -26,6 +26,18 @@ export type Supplier = {
   contactName?: string;
   phone?: string;
   settlementTerms?: string;
+  legalRepresentative?: string;
+  unifiedSocialCreditCode?: string;
+  registeredCapital?: string;
+  registeredAddress?: string;
+  businessScope?: string;
+  licenseValidTo?: string;
+  qualificationValidTo?: string;
+  taxpayerType?: string;
+  bankName?: string;
+  bankAccount?: string;
+  admissionStatus?: string;
+  remark?: string;
   riskStatus: SupplierRiskStatus;
 };
 
@@ -92,6 +104,18 @@ export type CreateSupplierPayload = {
   contactName?: string;
   phone?: string;
   settlementTerms?: string;
+  legalRepresentative?: string;
+  unifiedSocialCreditCode?: string;
+  registeredCapital?: string;
+  registeredAddress?: string;
+  businessScope?: string;
+  licenseValidTo?: string;
+  qualificationValidTo?: string;
+  taxpayerType?: string;
+  bankName?: string;
+  bankAccount?: string;
+  admissionStatus?: string;
+  remark?: string;
   riskStatus?: SupplierRiskStatus;
 };
 
@@ -209,6 +233,10 @@ export function listSuppliers(page?: number, size?: number) {
 
 export function createSupplier(payload: CreateSupplierPayload) {
   return request<Supplier>({ method: "POST", url: "/procurement/suppliers", data: payload });
+}
+
+export function updateSupplier(id: string, payload: CreateSupplierPayload) {
+  return request<Supplier>({ method: "PUT", url: `/procurement/suppliers/${id}`, data: payload });
 }
 
 export function listProcurementCostTargets() {

@@ -9,6 +9,7 @@ import com.company.ops.api.modules.ledger.dto.LedgerDtos.PostingLine;
 import com.company.ops.api.modules.ledger.service.LedgerService;
 import com.company.ops.api.modules.office.domain.ApprovalAction;
 import com.company.ops.api.modules.office.domain.ApprovalRequest;
+import com.company.ops.api.modules.office.domain.ApprovalRuntimeNode;
 import com.company.ops.api.modules.office.domain.ApprovalStatus;
 import com.company.ops.api.modules.office.domain.ApprovalType;
 import com.company.ops.api.modules.office.domain.DocumentFile;
@@ -22,6 +23,9 @@ import com.company.ops.api.modules.office.dto.OfficeDtos.AuditResponse;
 import com.company.ops.api.modules.office.dto.OfficeDtos.ApprovalActionResponse;
 import com.company.ops.api.modules.office.dto.OfficeDtos.ApprovalAddSignRequest;
 import com.company.ops.api.modules.office.dto.OfficeDtos.ApprovalResponse;
+import com.company.ops.api.modules.office.dto.OfficeDtos.ApprovalReturnRequest;
+import com.company.ops.api.modules.office.dto.OfficeDtos.ApprovalRuntimeNodeResponse;
+import com.company.ops.api.modules.office.dto.OfficeDtos.ApprovalResubmitRequest;
 import com.company.ops.api.modules.office.dto.OfficeDtos.ApprovalTransferRequest;
 import com.company.ops.api.modules.office.dto.OfficeDtos.ApprovalWithdrawRequest;
 import com.company.ops.api.modules.office.dto.OfficeDtos.CompleteOutsourceRequest;
@@ -44,10 +48,12 @@ import com.company.ops.api.modules.office.dto.OfficeDtos.WorkbenchResponse;
 import com.company.ops.api.modules.office.dto.OfficeDtos.WorkOrderOption;
 import com.company.ops.api.modules.office.repository.ApprovalActionRepository;
 import com.company.ops.api.modules.office.repository.ApprovalRequestRepository;
+import com.company.ops.api.modules.office.repository.ApprovalRuntimeNodeRepository;
 import com.company.ops.api.modules.office.repository.DocumentFileRepository;
 import com.company.ops.api.modules.office.repository.ExpenseClaimRepository;
 import com.company.ops.api.modules.office.repository.OutsourceOrderRepository;
 import com.company.ops.api.modules.office.repository.SystemNotificationRepository;
+import com.company.ops.api.modules.crm.repository.CustomerRepository;
 import com.company.ops.api.modules.procurement.domain.Supplier;
 import com.company.ops.api.modules.procurement.repository.SupplierRepository;
 import com.company.ops.api.modules.project.domain.Project;
@@ -57,7 +63,10 @@ import com.company.ops.api.modules.project.dto.CreateProjectCostRequest;
 import com.company.ops.api.modules.project.repository.ProjectRepository;
 import com.company.ops.api.modules.project.service.ProjectService;
 import com.company.ops.api.modules.system.domain.SystemAuditLog;
+import com.company.ops.api.modules.system.domain.SystemRole;
+import com.company.ops.api.modules.system.domain.SystemUser;
 import com.company.ops.api.modules.system.repository.SystemAuditLogRepository;
+import com.company.ops.api.modules.system.repository.SystemOrganizationRepository;
 import com.company.ops.api.modules.system.repository.SystemRoleRepository;
 import com.company.ops.api.modules.system.repository.SystemUserRepository;
 import com.company.ops.api.modules.system.service.ApprovalFlowSecurity;
@@ -93,6 +102,7 @@ public class OfficeService {
   );
   private final ApprovalRequestRepository approvalRepository;
   private final ApprovalActionRepository actionRepository;
+  private final ApprovalRuntimeNodeRepository runtimeNodeRepository;
   private final ExpenseClaimRepository expenseRepository;
   private final OutsourceOrderRepository outsourceRepository;
   private final DocumentFileRepository documentRepository;
@@ -101,26 +111,28 @@ public class OfficeService {
   private final ProjectRepository projectRepository;
   private final WorkOrderRepository workOrderRepository;
   private final ProjectService projectService;
+  private final CustomerRepository customerRepository;
   private final SystemUserRepository userRepository;
   private final SystemRoleRepository roleRepository;
+  private final SystemOrganizationRepository organizationRepository;
   private final LedgerService ledgerService;
   private final SystemAuditLogRepository auditLogRepository;
   private final ApprovalFlowSecurity approvalFlowSecurity;
   private final FileStorageService storageService;
 
-  public OfficeService(ApprovalRequestRepository approvalRepository, ApprovalActionRepository actionRepository,
+  public OfficeService(ApprovalRequestRepository approvalRepository, ApprovalActionRepository actionRepository, ApprovalRuntimeNodeRepository runtimeNodeRepository,
                        ExpenseClaimRepository expenseRepository, OutsourceOrderRepository outsourceRepository,
                        DocumentFileRepository documentRepository, SystemNotificationRepository notificationRepository,
-	                       SupplierRepository supplierRepository,
+	                       SupplierRepository supplierRepository, CustomerRepository customerRepository,
 	                       ProjectRepository projectRepository, WorkOrderRepository workOrderRepository,
-	                       ProjectService projectService, SystemUserRepository userRepository, SystemRoleRepository roleRepository, LedgerService ledgerService, SystemAuditLogRepository auditLogRepository, ApprovalFlowSecurity approvalFlowSecurity,
+	                       ProjectService projectService, SystemUserRepository userRepository, SystemRoleRepository roleRepository, SystemOrganizationRepository organizationRepository, LedgerService ledgerService, SystemAuditLogRepository auditLogRepository, ApprovalFlowSecurity approvalFlowSecurity,
 	                       FileStorageService storageService) {
-    this.approvalRepository = approvalRepository; this.actionRepository = actionRepository;
+    this.approvalRepository = approvalRepository; this.actionRepository = actionRepository; this.runtimeNodeRepository = runtimeNodeRepository;
     this.expenseRepository = expenseRepository; this.outsourceRepository = outsourceRepository;
     this.documentRepository = documentRepository; this.notificationRepository = notificationRepository;
-    this.supplierRepository = supplierRepository;
+    this.supplierRepository = supplierRepository; this.customerRepository = customerRepository;
     this.projectRepository = projectRepository; this.workOrderRepository = workOrderRepository;
-    this.projectService = projectService; this.userRepository = userRepository; this.roleRepository = roleRepository;
+    this.projectService = projectService; this.userRepository = userRepository; this.roleRepository = roleRepository; this.organizationRepository = organizationRepository;
 	    this.ledgerService = ledgerService;
 	    this.auditLogRepository = auditLogRepository;
 	    this.approvalFlowSecurity = approvalFlowSecurity;
@@ -228,17 +240,28 @@ public class OfficeService {
     if (approval.getStatus() != ApprovalStatus.PENDING) throw new BusinessException("该审批单已处理");
     String flowCode = approval.getApprovalType().name();
     int completedApprovals = completedApprovals(id);
-    ApprovalContext context = approvalContext(approval);
-    ApprovalPlan plan = approvalFlowSecurity.resolve(context);
-    approvalFlowSecurity.requireApprover(context, completedApprovals, approval.getDelegatedUserId());
-    boolean sequential = "SEQUENTIAL".equals(plan.mode());
-    boolean finalStep = !sequential || completedApprovals + 1 >= Math.max(plan.stepCount(), 1);
+    List<ApprovalRuntimeNode> currentNodes = currentRuntimeNodes(approval);
+    requireRuntimeApprover(currentNodes, approval.getDelegatedUserId());
+    ApprovalRuntimeNode handled = selectRuntimeNode(currentNodes, approval.getDelegatedUserId());
+    handled.setNodeStatus(request.decision() == ApprovalStatus.APPROVED ? "APPROVED" : "REJECTED");
+    handled.setApproverId(approvalFlowSecurity.currentUserId());
+    handled.setApproverName(request.approverName());
+    handled.setApprovalComment(request.comment());
+    handled.setCompletedAt(OffsetDateTime.now());
+    runtimeNodeRepository.save(handled);
+    if (request.decision() == ApprovalStatus.REJECTED) {
+      currentNodes.stream().filter(item -> !"REJECTED".equals(item.getNodeStatus())).forEach(item -> { item.setNodeStatus("SKIPPED"); item.setCompletedAt(OffsetDateTime.now()); });
+      runtimeNodeRepository.saveAll(currentNodes);
+    } else if (stepSatisfied(currentNodes)) {
+      currentNodes.stream().filter(item -> "PENDING".equals(item.getNodeStatus())).forEach(item -> { item.setNodeStatus("SKIPPED"); item.setCompletedAt(OffsetDateTime.now()); });
+      runtimeNodeRepository.saveAll(currentNodes);
+    }
+    boolean finalStep = request.decision() == ApprovalStatus.REJECTED || noPendingRuntimeNodes(approval.getId());
     approval.setStatus(request.decision() == ApprovalStatus.REJECTED || finalStep ? request.decision() : ApprovalStatus.PENDING);
     approval.setApproverName(request.approverName());
     approval.setApprovalComment(request.comment()); approval.setProcessedAt(OffsetDateTime.now());
-    approval.setApprovalMode(plan.mode()); approval.setCurrentStep(finalStep ? Math.max(plan.stepCount(), 1) : completedApprovals + 2);
-    approval.setTotalSteps(Math.max(plan.stepCount(), 1)); approval.setMatchedRuleText(plan.ruleText());
-    approval.setCurrentApproverName(finalStep ? null : currentApproverNames(plan, completedApprovals + 1));
+    approval.setCurrentStep(finalStep ? approval.getCurrentStep() : nextPendingStep(approval.getId()));
+    approval.setCurrentApproverName(finalStep ? null : currentRuntimeApproverNames(approval.getId(), approval.getCurrentStep()));
     approval.setDelegatedUserId(null);
     ApprovalRequest saved = approvalRepository.save(approval);
     ApprovalAction action = new ApprovalAction(); action.setApprovalId(saved.getId()); action.setDecision(request.decision());
@@ -256,7 +279,7 @@ public class OfficeService {
     ApprovalRequest approval = approvalRepository.findByIdForUpdate(id).orElseThrow(() -> new BusinessException("审批单不存在"));
     if (approval.getStatus() != ApprovalStatus.PENDING) throw new BusinessException("该审批单已处理");
     int completed = completedApprovals(id);
-    approvalFlowSecurity.requireApprover(approvalContext(approval), completed, approval.getDelegatedUserId());
+    approvalFlowSecurity.requireApprover(approvalContext(approval), completed, approval.getDelegatedUserId(), approval.getApprovalConfigVersion());
     var target = userRepository.findById(request.targetUserId()).orElseThrow(() -> new BusinessException("转交人员不存在"));
     approval.setDelegatedUserId(request.targetUserId());
     approval.setCurrentApproverName(target.getDisplayName());
@@ -271,7 +294,7 @@ public class OfficeService {
     ApprovalRequest approval = approvalRepository.findByIdForUpdate(id).orElseThrow(() -> new BusinessException("审批单不存在"));
     if (approval.getStatus() != ApprovalStatus.PENDING) throw new BusinessException("该审批单已处理");
     int completed = completedApprovals(id);
-    approvalFlowSecurity.requireApprover(approvalContext(approval), completed, approval.getDelegatedUserId());
+    approvalFlowSecurity.requireApprover(approvalContext(approval), completed, approval.getDelegatedUserId(), approval.getApprovalConfigVersion());
     var target = userRepository.findById(request.targetUserId()).orElseThrow(() -> new BusinessException("加签人员不存在"));
     approval.setDelegatedUserId(request.targetUserId());
     approval.setCurrentApproverName(target.getDisplayName());
@@ -296,6 +319,40 @@ public class OfficeService {
     if (saved.getApprovalType() == ApprovalType.EXPENSE) processExpenseSource(saved);
     if (saved.getApprovalType() == ApprovalType.OUTSOURCE) processOutsourceSource(saved);
     notify("APPROVAL_RESULT", "审批已撤回：" + saved.getTitle(), request.comment(), "APPROVAL", saved.getId());
+    return toApproval(saved);
+  }
+
+  @Transactional
+  public ApprovalResponse returnApproval(UUID id, ApprovalReturnRequest request) {
+    ApprovalRequest approval = approvalRepository.findByIdForUpdate(id).orElseThrow(() -> new BusinessException("审批单不存在"));
+    if (approval.getStatus() != ApprovalStatus.PENDING) throw new BusinessException("只有待审批单据可以退回");
+    List<ApprovalRuntimeNode> currentNodes = currentRuntimeNodes(approval);
+    requireRuntimeApprover(currentNodes, approval.getDelegatedUserId());
+    int targetStep = Math.max(1, approval.getCurrentStep() == null ? 1 : approval.getCurrentStep() - 1);
+    runtimeNodeRepository.findByApprovalIdOrderByStepNoAscCreatedAtAsc(id).stream()
+        .filter(item -> item.getStepNo() >= targetStep)
+        .forEach(item -> { item.setNodeStatus("PENDING"); item.setCompletedAt(null); item.setApproverId(null); item.setApproverName(null); item.setApprovalComment(null); });
+    approval.setCurrentStep(targetStep);
+    approval.setCurrentApproverName(currentRuntimeApproverNames(id, targetStep));
+    ApprovalRequest saved = approvalRepository.save(approval);
+    saveRuntimeAction(id, "RETURN", request.operatorName(), request.comment(), targetStep);
+    notify("APPROVAL", "审批已退回", saved.getTitle() + " 退回到第 " + targetStep + " 步", "APPROVAL", saved.getId());
+    return toApproval(saved);
+  }
+
+  @Transactional
+  public ApprovalResponse resubmitApproval(UUID id, ApprovalResubmitRequest request) {
+    ApprovalRequest approval = approvalRepository.findByIdForUpdate(id).orElseThrow(() -> new BusinessException("审批单不存在"));
+    if (approval.getStatus() != ApprovalStatus.REJECTED) throw new BusinessException("只有已驳回/撤回审批可以重新提交");
+    List<ApprovalRuntimeNode> nodes = runtimeNodeRepository.findByApprovalIdOrderByStepNoAscCreatedAtAsc(id);
+    if (nodes.isEmpty()) throw new BusinessException("审批运行节点不存在，不能重新提交");
+    nodes.forEach(item -> { item.setNodeStatus("PENDING"); item.setCompletedAt(null); item.setApproverId(null); item.setApproverName(null); item.setApprovalComment(null); });
+    runtimeNodeRepository.saveAll(nodes);
+    approval.setStatus(ApprovalStatus.PENDING); approval.setApplicantName(request.applicantName()); approval.setApprovalComment("重新提交：" + request.comment());
+    approval.setProcessedAt(null); approval.setApproverName(null); approval.setCurrentStep(nextPendingStep(id)); approval.setCurrentApproverName(currentRuntimeApproverNames(id, approval.getCurrentStep()));
+    ApprovalRequest saved = approvalRepository.save(approval);
+    saveRuntimeAction(id, "RESUBMIT", request.applicantName(), request.comment(), approval.getCurrentStep());
+    notify("APPROVAL", "审批重新提交", saved.getTitle(), "APPROVAL", saved.getId());
     return toApproval(saved);
   }
 
@@ -324,6 +381,7 @@ public class OfficeService {
     ApprovalRequest approval = createApprovalEntity("SP-" + request.code(), ApprovalType.EXPENSE, "费用报销 " + request.code(), request.code(), request.amount(), request.claimantName(), request.description(),
         null, request.expenseType().name(), project == null ? null : project.getCode(), null, null);
     saved.setApprovalRequestId(approval.getId()); expenseRepository.save(saved);
+    if (approval.getStatus() == ApprovalStatus.APPROVED) processExpenseSource(approval);
     notify("APPROVAL", "费用报销待审批", request.code() + " · " + request.claimantName(), "EXPENSE", saved.getId());
     return toExpense(saved, project, order);
   }
@@ -350,6 +408,7 @@ public class OfficeService {
     ApprovalRequest approval = createApprovalEntity("SP-" + request.code(), ApprovalType.OUTSOURCE, "外包服务 " + request.code(), request.code(), request.amount(), request.applicantName(), request.description(),
         null, request.serviceType(), project == null ? null : project.getCode(), supplier.getRiskStatus() == null ? null : supplier.getRiskStatus().name(), null);
     saved.setApprovalRequestId(approval.getId()); outsourceRepository.save(saved);
+    if (approval.getStatus() == ApprovalStatus.APPROVED) processOutsourceSource(approval);
     notify("APPROVAL", "外包服务待审批", request.code() + " · " + supplier.getName(), "OUTSOURCE", saved.getId());
     return toOutsource(saved, supplier, project, order);
   }
@@ -478,9 +537,16 @@ public class OfficeService {
     item.setDepartmentName(trimToNull(departmentName)); item.setBusinessType(trimToNull(businessType)); item.setProjectCode(trimToNull(projectCode));
     item.setSupplierRisk(trimToNull(supplierRisk)); item.setCustomerLevel(trimToNull(customerLevel));
     ApprovalPlan plan = approvalFlowSecurity.resolve(approvalContext(item));
-    item.setApprovalMode(plan.mode()); item.setCurrentStep(plan.configs().isEmpty() ? null : 1); item.setTotalSteps(plan.stepCount() == 0 ? null : plan.stepCount());
-    item.setCurrentApproverName(currentApproverNames(plan, 0)); item.setMatchedRuleText(plan.ruleText());
-    return approvalRepository.save(item);
+    validatePlan(plan);
+    item.setApprovalConfigVersion(plan.versionNo()); item.setApprovalPlanSnapshot(planSnapshot(plan));
+    boolean autoApproved = isAutoApprovalPlan(plan);
+    item.setStatus(autoApproved ? ApprovalStatus.APPROVED : ApprovalStatus.PENDING);
+    item.setApprovalMode(plan.mode()); item.setCurrentStep(plan.configs().isEmpty() || autoApproved ? null : 1); item.setTotalSteps(plan.stepCount() == 0 ? null : plan.stepCount());
+    item.setCurrentApproverName(autoApproved ? null : currentApproverNames(plan, 0)); item.setMatchedRuleText(ruleTextWithRuntime(plan));
+    if (autoApproved) { item.setApproverName("系统自动审批"); item.setApprovalComment("命中自动通过规则"); item.setProcessedAt(OffsetDateTime.now()); }
+    ApprovalRequest saved = approvalRepository.save(item);
+    createRuntimeNodes(saved, plan);
+    return saved;
   }
 
   private ApprovalContext approvalContext(ApprovalRequest item) {
@@ -497,7 +563,7 @@ public class OfficeService {
 
   private boolean canCurrentUserApprove(ApprovalRequest item) {
     try {
-      return approvalFlowSecurity.canApprove(approvalContext(item), completedApprovals(item.getId()), item.getDelegatedUserId());
+      return approvalFlowSecurity.canApprove(approvalContext(item), completedApprovals(item.getId()), item.getDelegatedUserId(), item.getApprovalConfigVersion());
     } catch (RuntimeException ignored) {
       return false;
     }
@@ -513,11 +579,222 @@ public class OfficeService {
         .collect(Collectors.joining("、"));
   }
 
+  private void createRuntimeNodes(ApprovalRequest approval, ApprovalPlan plan) {
+    OffsetDateTime now = OffsetDateTime.now();
+    List<ApprovalRuntimeNode> nodes = new ArrayList<>();
+    for (var config : plan.configs()) {
+      for (RuntimeAssignee assignee : resolveRuntimeAssignees(approval, config)) {
+        ApprovalRuntimeNode node = new ApprovalRuntimeNode();
+        node.setApprovalId(approval.getId());
+        node.setStepNo(config.getSequenceNo());
+        node.setApprovalMode(plan.mode());
+        node.setStepPolicy(config.getStepPolicy() == null ? "ANY_APPROVE" : config.getStepPolicy());
+        node.setAssigneeType(assignee.type());
+        node.setAssigneeId(assignee.id());
+        node.setAssigneeName(assignee.name());
+        node.setSourceType(config.getAssigneeType());
+        node.setSourceValue(config.getDynamicAssignee() == null ? config.getAssigneeType() : config.getDynamicAssignee());
+        node.setConditionText(conditionText(config));
+        node.setSlaHours(config.getSlaHours());
+        node.setDueAt(config.getSlaHours() == null ? null : now.plusHours(config.getSlaHours()));
+        node.setEscalationRoleId(config.getEscalationRoleId());
+        if ("AUTO".equals(config.getAssigneeType())) {
+          node.setNodeStatus("APPROVED");
+          node.setAssigneeName("系统自动审批");
+          node.setApproverName("系统自动审批");
+          node.setApprovalComment("命中自动通过规则");
+          node.setCompletedAt(now);
+        }
+        nodes.add(node);
+      }
+    }
+    runtimeNodeRepository.saveAll(nodes);
+  }
+
+  private List<RuntimeAssignee> resolveRuntimeAssignees(ApprovalRequest approval, com.company.ops.api.modules.system.domain.ApprovalAssigneeConfig config) {
+    if ("USER".equals(config.getAssigneeType())) return userRepository.findById(config.getUserId()).filter(SystemUser::isEnabled)
+        .map(user -> List.of(new RuntimeAssignee("USER", user.getId(), user.getDisplayName()))).orElseGet(List::of);
+    if ("ROLE".equals(config.getAssigneeType())) return roleRepository.findById(config.getRoleId())
+        .map(role -> List.of(new RuntimeAssignee("ROLE", role.getId(), role.getName()))).orElseGet(List::of);
+    if ("AUTO".equals(config.getAssigneeType())) return List.of(new RuntimeAssignee("AUTO", null, "系统自动审批"));
+    List<RuntimeAssignee> exact = resolveExactDynamicAssignee(approval, config.getDynamicAssignee());
+    if (!exact.isEmpty()) return exact;
+    return dynamicRoleCodes(config.getDynamicAssignee()).stream()
+        .map(code -> roleRepository.findByCodeAndTenantId(code, "default"))
+        .filter(java.util.Optional::isPresent)
+        .map(java.util.Optional::get)
+        .findFirst()
+        .map(role -> List.of(new RuntimeAssignee("ROLE", role.getId(), role.getName())))
+        .orElseGet(List::of);
+  }
+
+  private List<RuntimeAssignee> resolveExactDynamicAssignee(ApprovalRequest approval, String dynamicAssignee) {
+    String name = switch (dynamicAssignee == null ? "" : dynamicAssignee) {
+      case "PROJECT_MANAGER" -> projectRepository.findByCode(approval.getProjectCode()).map(Project::getManagerName).orElse(null);
+      case "CUSTOMER_OWNER" -> customerRepository.findByCode(approval.getSourceNo()).map(item -> item.getOwnerName()).orElse(null);
+      case "DEPARTMENT_LEADER", "DIRECT_MANAGER" -> organizationRepository.findFirstByName(approval.getDepartmentName()).map(item -> item.getLeaderName()).orElse(null);
+      default -> null;
+    };
+    if (name == null || name.isBlank()) return List.of();
+    return userRepository.findByDisplayNameAndEnabledTrue(name).stream()
+        .map(user -> new RuntimeAssignee("USER", user.getId(), user.getDisplayName()))
+        .toList();
+  }
+
+  private List<String> dynamicRoleCodes(String value) {
+    return switch (value == null ? "" : value) {
+      case "FINANCE_MANAGER" -> List.of("FINANCE_MANAGER", "FINANCE_DIRECTOR", "CFO", "ADMIN");
+      case "PROCUREMENT_MANAGER" -> List.of("PROCUREMENT_MANAGER", "PURCHASE_MANAGER", "ADMIN");
+      case "HR_MANAGER" -> List.of("HR_MANAGER", "HR_ADMIN", "ADMIN");
+      case "PROJECT_MANAGER" -> List.of("PROJECT_MANAGER", "PROJECT_DIRECTOR", "ADMIN");
+      case "CUSTOMER_OWNER" -> List.of("SALES_MANAGER", "CRM_MANAGER", "ADMIN");
+      case "DEPARTMENT_LEADER", "DIRECT_MANAGER" -> List.of("DEPARTMENT_MANAGER", "MANAGER", "ADMIN");
+      default -> List.of("ADMIN");
+    };
+  }
+
+  private List<ApprovalRuntimeNode> currentRuntimeNodes(ApprovalRequest approval) {
+    ensureRuntimeNodes(approval);
+    Integer step = approval.getCurrentStep() == null ? nextPendingStep(approval.getId()) : approval.getCurrentStep();
+    List<ApprovalRuntimeNode> nodes = runtimeNodeRepository.findByApprovalIdAndStepNoOrderByCreatedAtAsc(approval.getId(), step == null ? 1 : step).stream()
+        .filter(item -> "PENDING".equals(item.getNodeStatus()))
+        .toList();
+    if (nodes.isEmpty()) throw new BusinessException("当前审批节点不存在或已处理");
+    return nodes;
+  }
+
+  private void ensureRuntimeNodes(ApprovalRequest approval) {
+    if (!runtimeNodeRepository.findByApprovalIdOrderByStepNoAscCreatedAtAsc(approval.getId()).isEmpty()) return;
+    ApprovalPlan plan = approvalFlowSecurity.resolve(approvalContext(approval), approval.getApprovalConfigVersion());
+    createRuntimeNodes(approval, plan);
+    if (approval.getCurrentStep() == null) approval.setCurrentStep(nextPendingStep(approval.getId()));
+    if (approval.getCurrentApproverName() == null) approval.setCurrentApproverName(currentRuntimeApproverNames(approval.getId(), approval.getCurrentStep()));
+    approvalRepository.save(approval);
+  }
+
+  private void requireRuntimeApprover(List<ApprovalRuntimeNode> nodes, UUID delegatedUserId) {
+    if (delegatedUserId != null && delegatedUserId.equals(approvalFlowSecurity.currentUserId())) return;
+    if (nodes.stream().noneMatch(this::runtimeNodeMatchesCurrentUser)) throw new org.springframework.security.access.AccessDeniedException("当前账号不是该审批节点处理人");
+  }
+
+  private ApprovalRuntimeNode selectRuntimeNode(List<ApprovalRuntimeNode> nodes, UUID delegatedUserId) {
+    if (delegatedUserId != null && delegatedUserId.equals(approvalFlowSecurity.currentUserId())) return nodes.get(0);
+    return nodes.stream().filter(this::runtimeNodeMatchesCurrentUser).findFirst().orElse(nodes.get(0));
+  }
+
+  private boolean runtimeNodeMatchesCurrentUser(ApprovalRuntimeNode node) {
+    UUID currentUserId = approvalFlowSecurity.currentUserId();
+    if (currentUserId == null) return false;
+    if ("USER".equals(node.getAssigneeType())) return currentUserId.equals(node.getAssigneeId());
+    if ("ROLE".equals(node.getAssigneeType())) return userRepository.findDetailById(currentUserId)
+        .map(user -> user.getRoles().stream().map(SystemRole::getId).anyMatch(node.getAssigneeId()::equals))
+        .orElse(false);
+    return false;
+  }
+
+  private boolean stepSatisfied(List<ApprovalRuntimeNode> nodes) {
+    String policy = nodes.stream().map(ApprovalRuntimeNode::getStepPolicy).filter(v -> v != null).findFirst().orElse("ANY_APPROVE");
+    long approved = nodes.stream().filter(item -> "APPROVED".equals(item.getNodeStatus())).count();
+    if ("ALL_APPROVE".equals(policy)) return approved >= nodes.size();
+    if ("MAJORITY_APPROVE".equals(policy)) return approved * 2 > nodes.size();
+    return approved > 0;
+  }
+
+  private boolean noPendingRuntimeNodes(UUID approvalId) {
+    return runtimeNodeRepository.findByApprovalIdAndNodeStatusOrderByStepNoAscCreatedAtAsc(approvalId, "PENDING").isEmpty();
+  }
+
+  private Integer nextPendingStep(UUID approvalId) {
+    return runtimeNodeRepository.findByApprovalIdAndNodeStatusOrderByStepNoAscCreatedAtAsc(approvalId, "PENDING").stream()
+        .map(ApprovalRuntimeNode::getStepNo).min(Integer::compareTo).orElse(null);
+  }
+
+  private String currentRuntimeApproverNames(UUID approvalId, Integer stepNo) {
+    if (stepNo == null) return null;
+    return runtimeNodeRepository.findByApprovalIdAndStepNoOrderByCreatedAtAsc(approvalId, stepNo).stream()
+        .filter(item -> "PENDING".equals(item.getNodeStatus()))
+        .map(ApprovalRuntimeNode::getAssigneeName)
+        .distinct()
+        .collect(Collectors.joining("、"));
+  }
+
+  private String conditionText(com.company.ops.api.modules.system.domain.ApprovalAssigneeConfig item) {
+    List<String> parts = new ArrayList<>();
+    parts.add(item.getConditionType());
+    if (item.getMinAmount() != null || item.getMaxAmount() != null) parts.add("金额 " + (item.getMinAmount() == null ? "0" : item.getMinAmount()) + "-" + (item.getMaxAmount() == null ? "不限" : item.getMaxAmount()));
+    if (item.getDepartmentName() != null) parts.add("部门 " + item.getDepartmentName());
+    if (item.getBusinessType() != null) parts.add("业务 " + item.getBusinessType());
+    if (item.getProjectCode() != null) parts.add("项目 " + item.getProjectCode());
+    if (item.getSupplierRisk() != null) parts.add("供应商 " + item.getSupplierRisk());
+    if (item.getCustomerLevel() != null) parts.add("客户 " + item.getCustomerLevel());
+    return String.join(" · ", parts);
+  }
+
   private String assigneeName(com.company.ops.api.modules.system.domain.ApprovalAssigneeConfig item) {
     if ("ROLE".equals(item.getAssigneeType())) {
       return roleRepository.findById(item.getRoleId()).map(role -> role.getName()).orElse("已删除角色");
     }
+    if ("DYNAMIC".equals(item.getAssigneeType())) return dynamicAssigneeName(item.getDynamicAssignee());
+    if ("AUTO".equals(item.getAssigneeType())) return "自动通过";
     return userRepository.findById(item.getUserId()).map(user -> user.getDisplayName()).orElse("已删除用户");
+  }
+
+  private void validatePlan(ApprovalPlan plan) {
+    for (var item : plan.configs()) {
+      if ("ROLE".equals(item.getAssigneeType()) && item.getRoleId() != null && userRepository.countByRoles_Id(item.getRoleId()) == 0) {
+        throw new BusinessException("审批流配置存在空角色：" + assigneeName(item) + "，请先给角色分配成员");
+      }
+      if (!"AUTO".equals(item.getAssigneeType()) && !"DYNAMIC".equals(item.getAssigneeType()) && currentSingleAssigneeMissing(item)) {
+        throw new BusinessException("审批流配置存在无效审批对象，请检查人员/角色是否仍然存在");
+      }
+    }
+  }
+
+  private boolean currentSingleAssigneeMissing(com.company.ops.api.modules.system.domain.ApprovalAssigneeConfig item) {
+    if ("USER".equals(item.getAssigneeType())) return item.getUserId() == null || !userRepository.existsById(item.getUserId());
+    if ("ROLE".equals(item.getAssigneeType())) return item.getRoleId() == null || !roleRepository.existsById(item.getRoleId());
+    return false;
+  }
+
+  private boolean isAutoApprovalPlan(ApprovalPlan plan) {
+    return !plan.configs().isEmpty() && plan.configs().stream().allMatch(item -> "AUTO".equals(item.getAssigneeType()) && "APPROVE".equals(item.getAutoAction()));
+  }
+
+  private String ruleTextWithRuntime(ApprovalPlan plan) {
+    StringBuilder builder = new StringBuilder(plan.ruleText()).append(" · V").append(plan.versionNo());
+    plan.configs().stream().map(com.company.ops.api.modules.system.domain.ApprovalAssigneeConfig::getSlaHours).filter(v -> v != null).min(Integer::compareTo)
+        .ifPresent(value -> builder.append(" · SLA ").append(value).append("小时"));
+    plan.configs().stream().map(this::escalationRoleName).filter(value -> value != null).findFirst()
+        .ifPresent(value -> builder.append(" · 超时升级至").append(value));
+    return builder.toString();
+  }
+
+  private String escalationRoleName(com.company.ops.api.modules.system.domain.ApprovalAssigneeConfig item) {
+    return item.getEscalationRoleId() == null ? null : roleRepository.findById(item.getEscalationRoleId()).map(role -> role.getName()).orElse("已删除角色");
+  }
+
+  private String planSnapshot(ApprovalPlan plan) {
+    String steps = plan.configs().stream()
+        .map(item -> "{\"step\":" + item.getSequenceNo() + ",\"assignee\":\"" + json(assigneeName(item)) + "\",\"condition\":\"" + json(item.getConditionType()) + "\"}")
+        .collect(Collectors.joining(","));
+    return "{\"version\":" + plan.versionNo() + ",\"mode\":\"" + json(plan.mode()) + "\",\"ruleText\":\"" + json(ruleTextWithRuntime(plan)) + "\",\"steps\":[" + steps + "]}";
+  }
+
+  private String json(String value) {
+    if (value == null) return "";
+    return value.replace("\\", "\\\\").replace("\"", "\\\"");
+  }
+
+  private String dynamicAssigneeName(String value) {
+    return Map.of(
+        "DEPARTMENT_LEADER", "部门负责人",
+        "DIRECT_MANAGER", "直属上级",
+        "PROJECT_MANAGER", "项目经理",
+        "CUSTOMER_OWNER", "客户负责人",
+        "FINANCE_MANAGER", "财务经理",
+        "PROCUREMENT_MANAGER", "采购经理",
+        "HR_MANAGER", "人事经理"
+    ).getOrDefault(value, "动态审批人");
   }
 
   private void saveRuntimeAction(UUID approvalId, String actionType, String operatorName, String comment, int stepNo) {
@@ -570,6 +847,39 @@ public class OfficeService {
     return (int) count;
   }
 
+  @Transactional
+  public int scanApprovalSla() {
+    OffsetDateTime now = OffsetDateTime.now();
+    List<ApprovalRuntimeNode> overdue = runtimeNodeRepository.findByNodeStatusAndDueAtBeforeOrderByDueAtAsc("PENDING", now);
+    int touched = 0;
+    for (ApprovalRuntimeNode node : overdue) {
+      if (node.getRemindedAt() == null) {
+        approvalRepository.findById(node.getApprovalId()).ifPresent(approval ->
+            notify("APPROVAL_SLA", "审批临近/已超时", approval.getTitle() + " 当前节点：" + node.getAssigneeName(), "APPROVAL", approval.getId()));
+        node.setRemindedAt(now);
+        touched++;
+      }
+      if (node.getEscalationRoleId() != null && node.getEscalatedAt() == null) {
+        roleRepository.findById(node.getEscalationRoleId()).ifPresent(role -> {
+          node.setAssigneeType("ROLE");
+          node.setAssigneeId(role.getId());
+          node.setAssigneeName(role.getName());
+          node.setNodeStatus("PENDING");
+          node.setEscalatedAt(now);
+          approvalRepository.findById(node.getApprovalId()).ifPresent(approval -> {
+            approval.setCurrentApproverName(currentRuntimeApproverNames(approval.getId(), approval.getCurrentStep()));
+            approval.setMatchedRuleText((approval.getMatchedRuleText() == null ? "" : approval.getMatchedRuleText()) + " · 已升级至" + role.getName());
+            approvalRepository.save(approval);
+            notify("APPROVAL_ESCALATED", "审批已超时升级", approval.getTitle() + " 升级至 " + role.getName(), "APPROVAL", approval.getId());
+          });
+        });
+        touched++;
+      }
+    }
+    runtimeNodeRepository.saveAll(overdue);
+    return touched;
+  }
+
   @Transactional(readOnly = true)
   public org.springframework.data.domain.Page<AuditResponse> listAudits(org.springframework.data.domain.Pageable pageable) {
     return auditLogRepository.findAllByOrderByCreatedAtDesc(pageable)
@@ -595,7 +905,8 @@ public class OfficeService {
     SystemNotification item = new SystemNotification(); item.setType(type); item.setTitle(title); item.setContent(content);
     item.setRelatedType(relatedType); item.setRelatedId(relatedId); item.setRead(false); notificationRepository.save(item);
   }
-  private ApprovalResponse toApproval(ApprovalRequest item) { return new ApprovalResponse(item.getId(), item.getCode(), item.getApprovalType(), item.getTitle(), item.getSourceNo(), amount(item.getAmount()), item.getStatus(), item.getApplicantName(), item.getContent(), item.getApproverName(), item.getApprovalComment(), item.getProcessedAt(), item.getCreatedAt(), item.getDepartmentName(), item.getBusinessType(), item.getProjectCode(), item.getSupplierRisk(), item.getCustomerLevel(), item.getApprovalMode(), item.getCurrentStep(), item.getTotalSteps(), item.getCurrentApproverName(), item.getMatchedRuleText(), actionRepository.findByApprovalIdOrderByCreatedAtAsc(item.getId()).stream().map(action -> new ApprovalActionResponse(action.getId(), action.getDecision(), action.getOperatorName(), action.getComment(), action.getActionType(), action.getStepNo(), action.getCreatedAt())).toList()); }
+  private ApprovalResponse toApproval(ApprovalRequest item) { return new ApprovalResponse(item.getId(), item.getCode(), item.getApprovalType(), item.getTitle(), item.getSourceNo(), amount(item.getAmount()), item.getStatus(), item.getApplicantName(), item.getContent(), item.getApproverName(), item.getApprovalComment(), item.getProcessedAt(), item.getCreatedAt(), item.getDepartmentName(), item.getBusinessType(), item.getProjectCode(), item.getSupplierRisk(), item.getCustomerLevel(), item.getApprovalMode(), item.getCurrentStep(), item.getTotalSteps(), item.getCurrentApproverName(), item.getMatchedRuleText(), item.getApprovalConfigVersion(), item.getApprovalPlanSnapshot(), runtimeNodeRepository.findByApprovalIdOrderByStepNoAscCreatedAtAsc(item.getId()).stream().map(this::toRuntimeNode).toList(), actionRepository.findByApprovalIdOrderByCreatedAtAsc(item.getId()).stream().map(action -> new ApprovalActionResponse(action.getId(), action.getDecision(), action.getOperatorName(), action.getComment(), action.getActionType(), action.getStepNo(), action.getCreatedAt())).toList()); }
+  private ApprovalRuntimeNodeResponse toRuntimeNode(ApprovalRuntimeNode item) { return new ApprovalRuntimeNodeResponse(item.getId(), item.getStepNo(), item.getNodeStatus(), item.getApprovalMode(), item.getStepPolicy(), item.getAssigneeType(), item.getAssigneeId(), item.getAssigneeName(), item.getSourceType(), item.getSourceValue(), item.getConditionText(), item.getSlaHours(), item.getDueAt(), item.getRemindedAt(), item.getEscalatedAt(), item.getCompletedAt(), item.getApproverName(), item.getApprovalComment()); }
   private ExpenseResponse toExpense(ExpenseClaim item, Project project, WorkOrder order) { return new ExpenseResponse(item.getId(), item.getCode(), item.getClaimantId(), item.getClaimantName(), item.getProjectId(), project == null ? null : project.getCode(), item.getWorkOrderId(), order == null ? null : order.getCode(), item.getExpenseType(), item.getAmount(), item.getExpenseDate(), item.getDescription(), item.getStatus(), item.getApprovalRequestId()); }
   private OutsourceResponse toOutsource(OutsourceOrder item, Supplier supplier, Project project, WorkOrder order) { return new OutsourceResponse(item.getId(), item.getCode(), item.getSupplierId(), supplier == null ? null : supplier.getName(), item.getProjectId(), project == null ? null : project.getCode(), item.getWorkOrderId(), order == null ? null : order.getCode(), item.getServiceType(), item.getDescription(), item.getAmount(), item.getPlannedDate(), item.getStatus(), item.getApprovalRequestId(), item.getAcceptanceNote()); }
   private DocumentResponse toDocument(DocumentFile item) { return new DocumentResponse(item.getId(), item.getBizType(), item.getBizId(), item.getFileName(), item.getContentType(), item.getSizeBytes(), item.getCreatedAt()); }
@@ -606,4 +917,5 @@ public class OfficeService {
   private Map<UUID, Project> projectMap(List<UUID> ids) { return ids.isEmpty() ? Map.of() : projectRepository.findAllById(ids.stream().distinct().toList()).stream().collect(Collectors.toMap(Project::getId, Function.identity())); }
   private Map<UUID, WorkOrder> workOrderMap(List<UUID> ids) { return ids.isEmpty() ? Map.of() : workOrderRepository.findAllById(ids.stream().distinct().toList()).stream().collect(Collectors.toMap(WorkOrder::getId, Function.identity())); }
 
+  private record RuntimeAssignee(String type, UUID id, String name) {}
 }

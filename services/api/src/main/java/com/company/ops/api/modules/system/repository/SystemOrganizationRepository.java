@@ -24,4 +24,5 @@ public interface SystemOrganizationRepository extends JpaRepository<SystemOrgani
   long countByParent_Id(UUID parentId);
 
   SystemOrganization findByCodeAndTenantId(String code, String tenantId);
+  java.util.Optional<SystemOrganization> findFirstByName(String name);
 }

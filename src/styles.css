@@ -490,6 +490,7 @@ small {
 }
 
 select,
+input,
 textarea {
   width: 100%;
   border: 1px solid #d7dfd8;
@@ -498,6 +499,7 @@ textarea {
   color: #1d2826;
 }
 
+input,
 select {
   height: 38px;
   padding: 0 10px;
@@ -545,6 +547,94 @@ textarea {
   width: 100%;
   min-width: 0;
   overflow-x: auto;
+}
+
+.account-layout {
+  grid-template-columns: minmax(0, 1.3fr) minmax(320px, 0.7fr);
+}
+
+.account-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.account-table {
+  min-width: 920px;
+}
+
+.account-table tbody tr {
+  cursor: pointer;
+}
+
+.account-table tbody tr:hover {
+  background: #f8fbf8;
+}
+
+.account-editor {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+.account-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.account-form label {
+  display: grid;
+  gap: 7px;
+}
+
+.account-form label span,
+.account-switch span {
+  color: #56625f;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.account-switch {
+  display: flex !important;
+  align-items: center;
+  min-height: 38px;
+  gap: 8px !important;
+}
+
+.account-switch input {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+}
+
+.role-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid #edf0ec;
+}
+
+.role-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 31px;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid #cfd9d3;
+  border-radius: 7px;
+  color: #34413e;
+  background: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.role-chip.active {
+  border-color: #1f6a5b;
+  color: #174f45;
+  background: #edf4f0;
 }
 
 table {

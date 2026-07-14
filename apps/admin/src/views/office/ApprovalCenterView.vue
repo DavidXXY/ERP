@@ -75,13 +75,19 @@
             <a-tag :color="record._statusColor">{{ record._statusLabel }}</a-tag>
             <a-tag v-if="record._slaLevel === 'OVERDUE'" color="red">超时</a-tag>
             <a-tag v-else-if="record._slaLevel === 'DUE_SOON'" color="orange">临近</a-tag>
+          </template>
+          <template v-else-if="column.key === 'rule'">
             <span v-if="record.currentApproverName" class="table-subtitle">当前：{{ record.currentApproverName }}</span>
             <span v-if="record.matchedRuleText" class="table-subtitle">{{ record.matchedRuleText }}</span>
+            <a-tag v-if="record.approvalConfigVersion">V{{ record.approvalConfigVersion }}</a-tag>
+            <span v-if="record.nodes?.length" class="table-subtitle">{{ runtimeNodeSummary(record.nodes) }}</span>
+            <span v-if="!record.currentApproverName && !record.matchedRuleText">-</span>
           </template>
           <template v-else-if="column.key === 'date'">{{ record.date?.slice(0, 10) || '-' }}<span class="table-subtitle">{{ approvalAgeLabel(record) }}</span></template>
           <template v-else-if="column.key === 'action'">
             <template v-if="record._source === 'office' && record.status === 'PENDING' && auth.can('office:approval:process')">
               <a-button type="link" size="small" @click="openProcess(record)">处理审批</a-button>
+              <a-button type="link" size="small" @click="handleReturn(record)">退回</a-button>
               <a-button type="link" size="small" @click="openRuntime(record, 'transfer')">转交</a-button>
               <a-button type="link" size="small" @click="openRuntime(record, 'addSign')">加签</a-button>
               <a-popconfirm title="确认撤回该审批？" @confirm="handleWithdraw(record)">
@@ -158,7 +164,7 @@ import { computed, onMounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 import { message } from "ant-design-vue";
 import PlusOutlined from "@ant-design/icons-vue/PlusOutlined"; import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
-import { addSignApproval, createApproval, getOfficeReferences, getOfficeWorkbench, listApprovals, processApproval, transferApproval, withdrawApproval, type Approval, type ApprovalStatus, type ApprovalType, type Workbench } from "@/api/office";
+import { addSignApproval, createApproval, getOfficeReferences, getOfficeWorkbench, listApprovals, processApproval, returnApproval, transferApproval, withdrawApproval, type Approval, type ApprovalRuntimeNode, type ApprovalStatus, type ApprovalType, type Workbench } from "@/api/office";
 import { listQuotes, listContracts, listContractChanges, processQuoteApproval, approveContractChange, rejectContractChange, type QuotePlan } from "@/api/crm";
 import { useAuthStore } from "@/stores/auth";
 
@@ -205,6 +211,7 @@ const mergedList = computed(() => {
       applicantName: a.applicantName, status: a.status, date: a.createdAt,
       approverName: a.approverName, approvalComment: a.approvalComment,
       currentApproverName: a.currentApproverName, matchedRuleText: a.matchedRuleText,
+      approvalConfigVersion: a.approvalConfigVersion, nodes: a.nodes || [],
       _slaLevel: slaLevel(a.createdAt, a.status === "PENDING"),
       _riskLevel: approvalRiskLevel(a.amount, a.createdAt, a.status === "PENDING"),
     });
@@ -281,7 +288,8 @@ const mergedColumns = [
   { title: "类型", key: "type", width: 100 },
   { title: "申请人", key: "applicant", width: 120 },
   { title: "金额", key: "amount", width: 130 },
-  { title: "状态", key: "status", width: 100 },
+  { title: "状态", key: "status", width: 120 },
+  { title: "规则来源", key: "rule", width: 260 },
   { title: "时间", key: "date", width: 120 },
   { title: "操作", key: "action", width: 220, fixed: "right" as const },
 ];
@@ -367,6 +375,12 @@ async function handleWithdraw(item: any) {
   catch (error) { message.error(error instanceof Error ? error.message : "撤回失败"); }
   finally { saving.value = false; }
 }
+async function handleReturn(item: any) {
+  saving.value = true;
+  try { await returnApproval(item.id, { comment: "退回上一节点", operatorName: auth.user?.displayName || "" }); message.success("审批已退回"); await loadData(); }
+  catch (error) { message.error(error instanceof Error ? error.message : "退回失败"); }
+  finally { saving.value = false; }
+}
 function openCrmProcess(item: any) { selectedCrmApproval.value = item; Object.assign(crmProcessForm, { decision: "APPROVED", comment: "同意", approverName: auth.user?.displayName || "" }); crmProcessOpen.value = true; }
 async function handleCrmProcess() {
   await crmProcessFormRef.value?.validate(); if (!selectedCrmApproval.value) return; saving.value = true;
@@ -415,6 +429,9 @@ function approvalAgeLabel(record: any) {
   if (hours < 1) return "刚提交";
   if (hours < 24) return `已等待 ${hours} 小时`;
   return `已等待 ${Math.floor(hours / 24)} 天`;
+}
+function runtimeNodeSummary(nodes: ApprovalRuntimeNode[]) {
+  return nodes.map(node => `第${node.stepNo}步 ${node.assigneeName || "-"} ${node.nodeStatus}${node.dueAt ? " 截止" + node.dueAt.slice(0, 16).replace("T", " ") : ""}`).join(" / ");
 }
 function approvalTypeLabel(v: ApprovalType) { return ({ QUOTE: "报价", CONTRACT: "合同", PURCHASE: "采购", OUTSOURCE: "外包", EXPENSE: "报销", PAYMENT: "付款", SEAL: "用章", LEAVE: "请假", TRAVEL: "出差", OTHER: "其他" } as Record<ApprovalType, string>)[v]; }
 function approvalStatusLabel(v: ApprovalStatus) { return ({ PENDING: "待审批", APPROVED: "已通过", REJECTED: "已驳回" } as Record<ApprovalStatus, string>)[v]; }

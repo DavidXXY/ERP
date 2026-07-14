@@ -38,6 +38,11 @@
           <span>业务待办中心</span>
         </a-menu-item>
 
+        <a-menu-item v-if="auth.can('office:approval:view')" key="/office/approvals">
+          <template #icon><FileDoneOutlined /></template>
+          <span>审批中心</span>
+        </a-menu-item>
+
         <a-sub-menu
           v-if="canAccessCrm"
           key="crm"
@@ -102,7 +107,6 @@
         <a-sub-menu v-if="canAccessOffice" key="office">
           <template #icon><FileDoneOutlined /></template>
           <template #title>OA协同</template>
-          <a-menu-item v-if="auth.can('office:approval:view')" key="/office/approvals">审批中心</a-menu-item>
           <a-menu-item v-if="auth.can('office:expense:view')" key="/office/expenses">费用报销</a-menu-item>
           <a-menu-item v-if="auth.can('office:outsource:view')" key="/office/outsourcing">外包服务</a-menu-item>
           <a-menu-item v-if="auth.can('office:document:view')" key="/office/documents">电子档案</a-menu-item>
@@ -120,12 +124,13 @@
         </a-sub-menu>
 
         <a-sub-menu
-          v-if="auth.can('system:view') || auth.can('system:organization:view') || auth.can('system:role:view') || auth.can('system:permission:view') || auth.can('risk:update')"
+          v-if="auth.can('system:view') || auth.can('system:user:view') || auth.can('system:organization:view') || auth.can('system:role:view') || auth.can('system:permission:view') || auth.can('risk:update')"
           key="system"
         >
           <template #icon><SettingOutlined /></template>
           <template #title>系统设置</template>
           <a-menu-item v-if="auth.can('system:view')" key="/system/health">系统运行情况</a-menu-item>
+          <a-menu-item v-if="auth.can('system:user:view')" key="/system/users">账号管理</a-menu-item>
           <a-menu-item v-if="auth.can('system:organization:view')" key="/system/organizations">组织架构</a-menu-item>
           <a-menu-item v-if="auth.can('system:role:view')" key="/system/roles">角色管理</a-menu-item>
           <a-menu-item v-if="auth.can('system:permission:view')" key="/system/permissions">权限管理</a-menu-item>
@@ -136,7 +141,6 @@
           <template #icon><UserOutlined /></template>
           <template #title>员工自助</template>
           <a-menu-item key="/self">我的工作台</a-menu-item>
-          <a-menu-item key="/self/approvals">我的待办审批</a-menu-item>
           <a-menu-item key="/self/profile">我的档案</a-menu-item>
           <a-menu-item key="/self/leaves">我的请假</a-menu-item>
           <a-menu-item key="/self/balances">我的额度</a-menu-item>
@@ -279,7 +283,7 @@ const canAccessBusinessTodos = computed(() => [
 ].some((permission) => auth.can(permission)));
 const canAccessHumanResources = computed(() => ["qualification:employee:view", "qualification:certificate:view", "workforce:view"].some((permission) => auth.can(permission)));
 const canAccessQualification = computed(() => ["qualification:view", "qualification:company:view", "qualification:tender:view", "qualification:warning:view"].some((permission) => auth.can(permission)));
-const canAccessOffice = computed(() => ["office:view", "office:approval:view", "office:expense:view", "office:outsource:view", "office:document:view", "office:notification:view", "office:audit:view"].some((permission) => auth.can(permission)));
+const canAccessOffice = computed(() => ["office:view", "office:expense:view", "office:outsource:view", "office:document:view", "office:notification:view", "office:audit:view"].some((permission) => auth.can(permission)));
 
 function onOpenChange(keys: string[]) {
   openKeys.value = keys;

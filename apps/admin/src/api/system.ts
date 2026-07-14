@@ -17,10 +17,18 @@ export type ApprovalConfigResponse = {
   id: string;
   flowCode: string;
   flowName: string;
-  assigneeType: "USER" | "ROLE";
+  assigneeType: "USER" | "ROLE" | "DYNAMIC" | "AUTO";
   userId?: string;
   roleId?: string;
   assigneeName: string;
+  versionNo: number;
+  dynamicAssignee?: string;
+  autoAction?: string;
+  slaHours?: number;
+  escalationRoleId?: string;
+  escalationRoleName?: string;
+  stepPolicy?: "ANY_APPROVE" | "ALL_APPROVE" | "MAJORITY_APPROVE";
+  publishStatus?: "DRAFT" | "PUBLISHED";
   approvalMode: "PARALLEL" | "SEQUENTIAL";
   sequenceNo: number;
   conditionType: "ANY" | "AMOUNT" | "DEPARTMENT" | "AMOUNT_AND_DEPARTMENT" | "BUSINESS_TYPE" | "PROJECT" | "SUPPLIER_RISK" | "CUSTOMER_LEVEL" | "COMPOSITE";
@@ -36,15 +44,58 @@ export type ApprovalConfigResponse = {
   enabled: boolean;
 };
 
+export type ApprovalFlowPreview = {
+  flowCode: string;
+  flowName: string;
+  approvalMode?: "PARALLEL" | "SEQUENTIAL";
+  totalSteps: number;
+  versionNo: number;
+  ruleText: string;
+  steps: Array<{ stepNo: number; assignees: string[]; conditions: string[]; slaHours?: number; escalationRoleName?: string; autoApproved: boolean }>;
+};
+
+export type ApprovalFlowDiagnostic = { flowCode: string; flowName: string; severity: "HIGH" | "MEDIUM" | "LOW"; message: string };
+
+type ApprovalAssigneePayload = { flowCode: string; flowName: string; assigneeType: "USER" | "ROLE" | "DYNAMIC" | "AUTO"; userId?: string; roleId?: string; dynamicAssignee?: string; autoAction?: string; slaHours?: number; escalationRoleId?: string; stepPolicy?: ApprovalConfigResponse["stepPolicy"]; approvalMode: "PARALLEL" | "SEQUENTIAL"; sequenceNo: number; conditionType?: ApprovalConfigResponse["conditionType"]; minAmount?: number; maxAmount?: number; departmentName?: string; businessType?: string; projectCode?: string; supplierRisk?: string; customerLevel?: string; priority?: number; remark?: string };
+export type ApprovalFlowVersion = { flowCode: string; flowName: string; versionNo: number; ruleCount: number; publishStatus: string };
+
 export function listApprovalConfigs() {
   return request<ApprovalConfigResponse[]>({ method: "GET", url: "/system/approval-configs" });
 }
 
-export function createApprovalConfig(data: { flowCode: string; flowName: string; assigneeType: "USER" | "ROLE"; userId?: string; roleId?: string; approvalMode: "PARALLEL" | "SEQUENTIAL"; sequenceNo: number; conditionType?: ApprovalConfigResponse["conditionType"]; minAmount?: number; maxAmount?: number; departmentName?: string; businessType?: string; projectCode?: string; supplierRisk?: string; customerLevel?: string; priority?: number; remark?: string }) {
+export function previewApprovalFlow(data: { flowCode: string; amount?: number; departmentName?: string; businessType?: string; projectCode?: string; supplierRisk?: string; customerLevel?: string }) {
+  return request<ApprovalFlowPreview>({ method: "POST", url: "/system/approval-configs/preview", data });
+}
+
+export function batchPreviewApprovalFlows(items: Array<{ flowCode: string; amount?: number; departmentName?: string; businessType?: string; projectCode?: string; supplierRisk?: string; customerLevel?: string }>) {
+  return request<ApprovalFlowPreview[]>({ method: "POST", url: "/system/approval-configs/batch-preview", data: { items } });
+}
+
+export function listApprovalDiagnostics() {
+  return request<ApprovalFlowDiagnostic[]>({ method: "GET", url: "/system/approval-configs/diagnostics" });
+}
+
+export function copyApprovalFlow(data: { sourceFlowCode: string; targetFlowCode: string; targetFlowName: string; overwrite: boolean }) {
+  return request<ApprovalConfigResponse[]>({ method: "POST", url: "/system/approval-configs/copy", data });
+}
+
+export function listApprovalFlowVersions(flowCode: string) {
+  return request<ApprovalFlowVersion[]>({ method: "GET", url: `/system/approval-configs/${flowCode}/versions` });
+}
+
+export function publishApprovalFlow(flowCode: string) {
+  return request<ApprovalConfigResponse[]>({ method: "POST", url: `/system/approval-configs/${flowCode}/publish` });
+}
+
+export function rollbackApprovalFlow(flowCode: string, versionNo: number) {
+  return request<ApprovalConfigResponse[]>({ method: "POST", url: `/system/approval-configs/${flowCode}/rollback/${versionNo}` });
+}
+
+export function createApprovalConfig(data: ApprovalAssigneePayload) {
   return request<ApprovalConfigResponse>({ method: "POST", url: "/system/approval-configs", data });
 }
 
-export function updateApprovalConfig(id: string, data: { flowCode: string; flowName: string; assigneeType: "USER" | "ROLE"; userId?: string; roleId?: string; approvalMode: "PARALLEL" | "SEQUENTIAL"; sequenceNo: number; conditionType?: ApprovalConfigResponse["conditionType"]; minAmount?: number; maxAmount?: number; departmentName?: string; businessType?: string; projectCode?: string; supplierRisk?: string; customerLevel?: string; priority?: number; remark?: string; enabled?: boolean }) {
+export function updateApprovalConfig(id: string, data: ApprovalAssigneePayload & { enabled?: boolean }) {
   return request<ApprovalConfigResponse>({ method: "PUT", url: `/system/approval-configs/${id}`, data });
 }
 

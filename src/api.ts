@@ -13,6 +13,88 @@ export interface LoginResponse {
   user: { id: string; username: string; displayName: string; roles: string[]; permissions: string[] };
 }
 
+export interface PageResponse<T> {
+  content: T[];
+  totalElements: number;
+  totalPages: number;
+  number: number;
+  size: number;
+}
+
+export interface UserRoleSummary {
+  id: string;
+  code: string;
+  name: string;
+}
+
+export interface UserResponse {
+  id: string;
+  orgId: string | null;
+  username: string;
+  displayName: string;
+  phone: string | null;
+  email: string | null;
+  enabled: boolean;
+  roles: UserRoleSummary[];
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface RoleResponse {
+  id: string;
+  code: string;
+  name: string;
+  dataScope: string;
+  permissions: Array<{ id: string; code: string; name: string; module: string }>;
+  dataOrganizations: Array<{ id: string; code: string; name: string }>;
+  userCount: number;
+  builtIn: boolean;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface OrganizationResponse {
+  id: string;
+  code: string;
+  name: string;
+  type: string;
+  sortOrder: number | null;
+  parentId: string | null;
+  parentName: string | null;
+  fullPath: string | null;
+  leaderName: string | null;
+  phone: string | null;
+  enabled: boolean;
+  description: string | null;
+  directUserCount: number;
+  totalUserCount: number;
+  directEmployeeCount: number;
+  totalEmployeeCount: number;
+  childCount: number;
+  children: OrganizationResponse[];
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface CreateUserPayload {
+  orgId: string | null;
+  username: string;
+  displayName: string;
+  password: string;
+  phone?: string;
+  email?: string;
+  roleIds: string[];
+}
+
+export interface UpdateUserPayload {
+  orgId: string | null;
+  displayName: string;
+  phone?: string;
+  email?: string;
+  enabled: boolean;
+  roleIds: string[];
+}
+
 export type ReceivableStatus = "INVOICE_PENDING" | "PAYMENT_PENDING" | "SETTLED" | "OVERDUE";
 export type FinancePayableStatus = "PENDING" | "PARTIAL_PAID" | "PAID" | "CANCELLED";
 
@@ -92,6 +174,45 @@ export function recordReceipt(id: string, amount: number, receivedDate: string, 
 }
 export function fetchPayables(): Promise<FinancePayableResponse[]> {
   return authFetch<FinancePayableResponse[]>("/api/finance/payables");
+}
+
+// ---- Account Management API ----
+
+export function fetchUsers(page = 0, size = 50): Promise<PageResponse<UserResponse>> {
+  return authFetch<PageResponse<UserResponse>>(`/api/users?page=${page}&size=${size}`);
+}
+
+export function createUser(payload: CreateUserPayload): Promise<UserResponse> {
+  return authFetch<UserResponse>("/api/users", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateUser(id: string, payload: UpdateUserPayload): Promise<UserResponse> {
+  return authFetch<UserResponse>(`/api/users/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteUser(id: string): Promise<void> {
+  return authFetch<void>(`/api/users/${id}`, { method: "DELETE" });
+}
+
+export function resetUserPassword(id: string, newPassword: string): Promise<void> {
+  return authFetch<void>(`/api/users/${id}/reset-password`, {
+    method: "POST",
+    body: JSON.stringify({ newPassword }),
+  });
+}
+
+export function fetchRoles(page = 0, size = 100): Promise<PageResponse<RoleResponse>> {
+  return authFetch<PageResponse<RoleResponse>>(`/api/roles?page=${page}&size=${size}`);
+}
+
+export function fetchOrganizationsFlat(): Promise<OrganizationResponse[]> {
+  return authFetch<OrganizationResponse[]>("/api/organizations/flat");
 }
 
 // ---- Ledger API ----

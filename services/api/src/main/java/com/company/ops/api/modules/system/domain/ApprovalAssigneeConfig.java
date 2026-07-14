@@ -20,6 +20,20 @@ public class ApprovalAssigneeConfig extends BaseEntity {
   private UUID userId;
   @Column(name = "role_id")
   private UUID roleId;
+  @Column(name = "version_no", nullable = false)
+  private int versionNo = 1;
+  @Column(name = "dynamic_assignee", length = 40)
+  private String dynamicAssignee;
+  @Column(name = "auto_action", length = 20)
+  private String autoAction;
+  @Column(name = "step_policy", length = 32)
+  private String stepPolicy = "ANY_APPROVE";
+  @Column(name = "publish_status", length = 20)
+  private String publishStatus = "PUBLISHED";
+  @Column(name = "sla_hours")
+  private Integer slaHours;
+  @Column(name = "escalation_role_id")
+  private UUID escalationRoleId;
   @Column(name = "approval_mode", nullable = false, length = 20)
   private String approvalMode = "PARALLEL";
   @Column(name = "sequence_no", nullable = false)
@@ -57,6 +71,20 @@ public class ApprovalAssigneeConfig extends BaseEntity {
   public void setUserId(UUID value) { userId = value; }
   public UUID getRoleId() { return roleId; }
   public void setRoleId(UUID value) { roleId = value; }
+  public int getVersionNo() { return versionNo; }
+  public void setVersionNo(int value) { versionNo = value; }
+  public String getDynamicAssignee() { return dynamicAssignee; }
+  public void setDynamicAssignee(String value) { dynamicAssignee = value; }
+  public String getAutoAction() { return autoAction; }
+  public void setAutoAction(String value) { autoAction = value; }
+  public String getStepPolicy() { return stepPolicy; }
+  public void setStepPolicy(String value) { stepPolicy = value; }
+  public String getPublishStatus() { return publishStatus; }
+  public void setPublishStatus(String value) { publishStatus = value; }
+  public Integer getSlaHours() { return slaHours; }
+  public void setSlaHours(Integer value) { slaHours = value; }
+  public UUID getEscalationRoleId() { return escalationRoleId; }
+  public void setEscalationRoleId(UUID value) { escalationRoleId = value; }
   public String getApprovalMode() { return approvalMode; }
   public void setApprovalMode(String value) { approvalMode = value; }
   public int getSequenceNo() { return sequenceNo; }

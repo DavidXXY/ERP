@@ -5,7 +5,11 @@ import { login, getToken, fetchFinanceOverview, fetchReceivables, fetchPayables,
   type PaymentApplicationResponse, type PaymentRecordResponse,
   fetchLedgerOverview, fetchLedgerVouchers, fetchFinancialStatements,
   fetchPaymentApplications, fetchPaymentRecords,
-  createPaymentApplication, approvePaymentApplication, executePayment
+  createPaymentApplication, approvePaymentApplication, executePayment,
+  fetchUsers, createUser, updateUser, deleteUser, resetUserPassword,
+  fetchRoles, fetchOrganizationsFlat,
+  type UserResponse, type RoleResponse, type OrganizationResponse,
+  type CreateUserPayload, type UpdateUserPayload
 } from "./api";
 import {
   Activity,
@@ -31,6 +35,7 @@ import {
   Link2,
   ListChecks,
   LockKeyhole,
+  KeyRound,
   MapPin,
   PackageCheck,
   PackageMinus,
@@ -41,14 +46,17 @@ import {
   Route,
   Search,
   Send,
+  Save,
   ShieldCheck,
   TimerReset,
   TrendingUp,
   Truck,
+  UserCog,
   UserRoundCheck,
   UsersRound,
   WalletCards,
   Wrench,
+  X,
   type LucideIcon,
 } from "lucide-react";
 import "./styles.css";
@@ -66,6 +74,7 @@ type ModuleId =
   | "hr"
   | "oa"
   | "documents"
+  | "accounts"
   | "permissions"
   | "bi";
 
@@ -256,6 +265,28 @@ type FollowUpActivity = {
   tone: Tone;
 };
 
+type AccountFormState = {
+  username: string;
+  displayName: string;
+  password: string;
+  phone: string;
+  email: string;
+  orgId: string;
+  roleIds: string[];
+  enabled: boolean;
+};
+
+const emptyAccountForm: AccountFormState = {
+  username: "",
+  displayName: "",
+  password: "Admin@123",
+  phone: "",
+  email: "",
+  orgId: "",
+  roleIds: [],
+  enabled: true,
+};
+
 const modules: Array<{
   id: ModuleId;
   label: string;
@@ -271,6 +302,7 @@ const modules: Array<{
   { id: "hr", label: "组织人事", group: "底层支撑", icon: UsersRound },
   { id: "oa", label: "OA审批", group: "底层支撑", icon: ClipboardCheck },
   { id: "documents", label: "电子档案", group: "底层支撑", icon: FileArchive },
+  { id: "accounts", label: "账号管理", group: "底层支撑", icon: UserCog },
   { id: "permissions", label: "权限审计", group: "底层支撑", icon: ShieldCheck },
   { id: "bi", label: "BI看板", group: "经营驾驶舱", icon: BarChart3 },
 ];
@@ -1060,6 +1092,13 @@ function App() {
   const [filterDateStart, setFilterDateStart] = useState("");
   const [filterDateEnd, setFilterDateEnd] = useState("");
   const [auditLog, setAuditLog] = useState<Array<{id:string;time:string;user:string;action:string;detail:string;entity:string}>>([]);
+  const [systemUsers, setSystemUsers] = useState<UserResponse[]>([]);
+  const [systemRoles, setSystemRoles] = useState<RoleResponse[]>([]);
+  const [systemOrganizations, setSystemOrganizations] = useState<OrganizationResponse[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [accountForm, setAccountForm] = useState<AccountFormState>(emptyAccountForm);
+  const [accountMode, setAccountMode] = useState<"create" | "edit">("create");
+  const [accountSaving, setAccountSaving] = useState(false);
   const [isPeriodClosed, setPeriodClosed] = useState(false);
   const logAudit = (action: string, detail: string, entity: string) => {
     setAuditLog(prev => [{id:"LOG-"+Date.now(),time:new Date().toLocaleString("zh-CN"),user:"系统管理员",action,detail,entity}, ...prev].slice(0,200));
@@ -1073,6 +1112,39 @@ function App() {
   const [initializing, setInitializing] = useState(true);
   const receivableApiData = useRef<Map<string, ReceivableResponse>>(new Map());
   const payableApiData = useRef<Map<string, FinancePayableResponse>>(new Map());
+
+  const refreshAccounts = async () => {
+    const [usersPage, rolesPage, organizations] = await Promise.all([
+      fetchUsers(0, 100),
+      fetchRoles(0, 100),
+      fetchOrganizationsFlat(),
+    ]);
+    setSystemUsers(usersPage.content);
+    setSystemRoles(rolesPage.content);
+    setSystemOrganizations(organizations);
+    setSelectedUserId((current) => current ?? usersPage.content[0]?.id ?? null);
+  };
+
+  const loadAccountForm = (user: UserResponse) => {
+    setAccountMode("edit");
+    setSelectedUserId(user.id);
+    setAccountForm({
+      username: user.username,
+      displayName: user.displayName,
+      password: "",
+      phone: user.phone ?? "",
+      email: user.email ?? "",
+      orgId: user.orgId ?? "",
+      roleIds: user.roles.map((role) => role.id),
+      enabled: user.enabled,
+    });
+  };
+
+  const startCreateAccount = () => {
+    setAccountMode("create");
+    setSelectedUserId(null);
+    setAccountForm(emptyAccountForm);
+  };
 
   // Auto-login + fetch on mount
   useEffect(() => {
@@ -1123,6 +1195,11 @@ function App() {
           if (pa.length) setPaymentApps(pa as PaymentApplicationResponse[]);
           if (pr.length) setPaymentRecords(pr as PaymentRecordResponse[]);
         }).catch(() => {});
+
+        refreshAccounts().catch(() => {
+          setSystemUsers([]);
+          setToast("账号管理数据未加载，请确认当前账号具备系统管理权限");
+        });
 
         setToast("已加载后端数据");
       } catch (e) {
@@ -1727,6 +1804,8 @@ function App() {
         return <OaModule />;
       case "documents":
         return <DocumentsModule />;
+      case "accounts":
+        return <AccountsModule />;
       case "permissions":
         return <PermissionsModule />;
       case "bi":
@@ -2971,6 +3050,290 @@ function App() {
           </article>
         ))}
       </section>
+    );
+  }
+
+  function AccountsModule() {
+    const selectedUser = systemUsers.find((user) => user.id === selectedUserId) ?? null;
+    const enabledCount = systemUsers.filter((user) => user.enabled).length;
+    const selectedOrganization = selectedUser?.orgId
+      ? systemOrganizations.find((org) => org.id === selectedUser.orgId)
+      : null;
+
+    const toggleRole = (roleId: string) => {
+      setAccountForm((current) => ({
+        ...current,
+        roleIds: current.roleIds.includes(roleId)
+          ? current.roleIds.filter((id) => id !== roleId)
+          : [...current.roleIds, roleId],
+      }));
+    };
+
+    const submitAccount = async () => {
+      if (!accountForm.username.trim() || !accountForm.displayName.trim()) {
+        pushEvent("账号保存失败", "用户名和姓名不能为空", "danger");
+        return;
+      }
+      if (accountMode === "create" && accountForm.password.length < 6) {
+        pushEvent("账号保存失败", "初始密码至少 6 位", "danger");
+        return;
+      }
+      setAccountSaving(true);
+      try {
+        if (accountMode === "create") {
+          const payload: CreateUserPayload = {
+            orgId: accountForm.orgId || null,
+            username: accountForm.username.trim(),
+            displayName: accountForm.displayName.trim(),
+            password: accountForm.password,
+            phone: accountForm.phone.trim() || undefined,
+            email: accountForm.email.trim() || undefined,
+            roleIds: accountForm.roleIds,
+          };
+          const created = await createUser(payload);
+          await refreshAccounts();
+          setSelectedUserId(created.id);
+          setAccountMode("edit");
+          setAccountForm({ ...accountForm, password: "" });
+          pushEvent("账号已创建", `${created.displayName} 已加入系统`, "good");
+          logAudit("账号创建", created.username, "SystemUser");
+        } else if (selectedUser) {
+          const payload: UpdateUserPayload = {
+            orgId: accountForm.orgId || null,
+            displayName: accountForm.displayName.trim(),
+            phone: accountForm.phone.trim() || undefined,
+            email: accountForm.email.trim() || undefined,
+            enabled: accountForm.enabled,
+            roleIds: accountForm.roleIds,
+          };
+          const updated = await updateUser(selectedUser.id, payload);
+          await refreshAccounts();
+          setSelectedUserId(updated.id);
+          pushEvent("账号已更新", `${updated.displayName} 的资料已保存`, "good");
+          logAudit("账号更新", updated.username, "SystemUser");
+        }
+      } catch (error) {
+        pushEvent("账号保存失败", error instanceof Error ? error.message : "请稍后重试", "danger");
+      } finally {
+        setAccountSaving(false);
+      }
+    };
+
+    const toggleUserEnabled = async (user: UserResponse) => {
+      try {
+        await updateUser(user.id, {
+          orgId: user.orgId,
+          displayName: user.displayName,
+          phone: user.phone ?? undefined,
+          email: user.email ?? undefined,
+          enabled: !user.enabled,
+          roleIds: user.roles.map((role) => role.id),
+        });
+        await refreshAccounts();
+        pushEvent(user.enabled ? "账号已停用" : "账号已启用", user.username, user.enabled ? "warn" : "good");
+      } catch (error) {
+        pushEvent("账号状态变更失败", error instanceof Error ? error.message : "请稍后重试", "danger");
+      }
+    };
+
+    const resetPassword = async (user: UserResponse) => {
+      try {
+        await resetUserPassword(user.id, "Admin@123");
+        pushEvent("密码已重置", `${user.username} 的密码已重置为 Admin@123`, "good");
+        logAudit("密码重置", user.username, "SystemUser");
+      } catch (error) {
+        pushEvent("密码重置失败", error instanceof Error ? error.message : "请稍后重试", "danger");
+      }
+    };
+
+    const removeUser = async (user: UserResponse) => {
+      if (!window.confirm(`确认删除账号 ${user.username}？`)) return;
+      try {
+        await deleteUser(user.id);
+        await refreshAccounts();
+        startCreateAccount();
+        pushEvent("账号已删除", user.username, "warn");
+        logAudit("账号删除", user.username, "SystemUser");
+      } catch (error) {
+        pushEvent("账号删除失败", error instanceof Error ? error.message : "请稍后重试", "danger");
+      }
+    };
+
+    return (
+      <div className="page-stack">
+        <section className="metric-grid">
+          <MetricCard icon={UsersRound} label="系统账号" value={`${systemUsers.length}个`} meta={`${enabledCount}个启用`} tone="info" />
+          <MetricCard icon={ShieldCheck} label="角色模板" value={`${systemRoles.length}类`} meta="按角色授予权限" tone="good" />
+          <MetricCard icon={Building2} label="组织范围" value={`${systemOrganizations.length}个`} meta="账号绑定部门" tone="neutral" />
+          <MetricCard icon={LockKeyhole} label="默认初始密码" value="Admin@123" meta="创建后可重置" tone="warn" />
+        </section>
+
+        <section className="split-grid account-layout">
+          <div className="panel">
+            <SectionTitle icon={UserCog} title="账号列表" right="用户 / 角色 / 状态" />
+            <div className="account-toolbar">
+              <button className="primary-action" type="button" onClick={startCreateAccount}>
+                <Plus size={15} />
+                <span>新建账号</span>
+              </button>
+              <button className="mini-action" type="button" onClick={() => refreshAccounts().then(() => pushEvent("账号已刷新", "已同步最新账号数据", "good")).catch((error) => pushEvent("账号刷新失败", error instanceof Error ? error.message : "请稍后重试", "danger"))}>
+                <RefreshCw size={13} />
+                <span>刷新</span>
+              </button>
+            </div>
+            <div className="table-wrap">
+              <table className="account-table">
+                <thead>
+                  <tr>
+                    <th>账号</th>
+                    <th>组织</th>
+                    <th>角色</th>
+                    <th>状态</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {systemUsers.map((user) => {
+                    const org = user.orgId ? systemOrganizations.find((item) => item.id === user.orgId) : null;
+                    return (
+                      <tr key={user.id} className={selectedUserId === user.id ? "selected-row" : ""} onClick={() => loadAccountForm(user)}>
+                        <td>
+                          <strong>{user.displayName}</strong>
+                          <small>{user.username} · {user.phone || "未填手机号"}</small>
+                        </td>
+                        <td>{org?.name ?? "未绑定"}</td>
+                        <td>{user.roles.map((role) => role.name).join("、") || "未分配"}</td>
+                        <td><StatusTag tone={user.enabled ? "good" : "neutral"}>{user.enabled ? "启用" : "停用"}</StatusTag></td>
+                        <td>
+                          <div className="row-actions" onClick={(event) => event.stopPropagation()}>
+                            <button className="mini-action" type="button" onClick={() => toggleUserEnabled(user)}>
+                              <CheckCircle2 size={13} />
+                              <span>{user.enabled ? "停用" : "启用"}</span>
+                            </button>
+                            <button className="mini-action" type="button" onClick={() => resetPassword(user)}>
+                              <KeyRound size={13} />
+                              <span>重置</span>
+                            </button>
+                            <button className="mini-action" type="button" onClick={() => removeUser(user)}>
+                              <X size={13} />
+                              <span>删除</span>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {!systemUsers.length && (
+                    <tr>
+                      <td colSpan={5}>暂无账号数据，请确认后端服务和系统管理权限。</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="panel account-editor">
+            <SectionTitle
+              icon={accountMode === "create" ? Plus : UserRoundCheck}
+              title={accountMode === "create" ? "新建账号" : "编辑账号"}
+              right={selectedUser ? selectedOrganization?.name ?? "未绑定组织" : "账号资料"}
+            />
+            <div className="account-form">
+              <label>
+                <span>登录账号</span>
+                <input
+                  value={accountForm.username}
+                  onChange={(event) => setAccountForm((current) => ({ ...current, username: event.target.value }))}
+                  disabled={accountMode === "edit"}
+                  placeholder="例如 zhangsan"
+                />
+              </label>
+              <label>
+                <span>姓名</span>
+                <input
+                  value={accountForm.displayName}
+                  onChange={(event) => setAccountForm((current) => ({ ...current, displayName: event.target.value }))}
+                  placeholder="员工姓名"
+                />
+              </label>
+              {accountMode === "create" && (
+                <label>
+                  <span>初始密码</span>
+                  <input
+                    type="password"
+                    value={accountForm.password}
+                    onChange={(event) => setAccountForm((current) => ({ ...current, password: event.target.value }))}
+                    placeholder="至少 6 位"
+                  />
+                </label>
+              )}
+              <label>
+                <span>所属组织</span>
+                <select
+                  value={accountForm.orgId}
+                  onChange={(event) => setAccountForm((current) => ({ ...current, orgId: event.target.value }))}
+                >
+                  <option value="">未绑定组织</option>
+                  {systemOrganizations.map((org) => (
+                    <option key={org.id} value={org.id}>{org.fullPath || org.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span>手机号</span>
+                <input
+                  value={accountForm.phone}
+                  onChange={(event) => setAccountForm((current) => ({ ...current, phone: event.target.value }))}
+                  placeholder="手机号"
+                />
+              </label>
+              <label>
+                <span>邮箱</span>
+                <input
+                  value={accountForm.email}
+                  onChange={(event) => setAccountForm((current) => ({ ...current, email: event.target.value }))}
+                  placeholder="name@company.com"
+                />
+              </label>
+              <label className="account-switch">
+                <input
+                  type="checkbox"
+                  checked={accountForm.enabled}
+                  onChange={(event) => setAccountForm((current) => ({ ...current, enabled: event.target.checked }))}
+                />
+                <span>启用账号</span>
+              </label>
+            </div>
+
+            <div className="role-picker">
+              {systemRoles.map((role) => (
+                <button
+                  key={role.id}
+                  type="button"
+                  className={accountForm.roleIds.includes(role.id) ? "role-chip active" : "role-chip"}
+                  onClick={() => toggleRole(role.id)}
+                >
+                  <ShieldCheck size={13} />
+                  <span>{role.name}</span>
+                </button>
+              ))}
+              {!systemRoles.length && <small>暂无角色数据，请先确认角色权限配置。</small>}
+            </div>
+
+            <div className="detail-actions">
+              <button className="primary-action" type="button" onClick={submitAccount} disabled={accountSaving}>
+                <Save size={15} />
+                <span>{accountSaving ? "保存中" : accountMode === "create" ? "创建账号" : "保存账号"}</span>
+              </button>
+              <button className="mini-action" type="button" onClick={startCreateAccount}>
+                <X size={13} />
+                <span>清空</span>
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
     );
   }
 

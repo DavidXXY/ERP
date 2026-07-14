@@ -7,6 +7,8 @@ import com.company.ops.api.modules.office.dto.OfficeDtos.ApprovalResponse;
 import com.company.ops.api.modules.office.dto.OfficeDtos.ApprovalAddSignRequest;
 import com.company.ops.api.modules.office.dto.OfficeDtos.ApprovalTransferRequest;
 import com.company.ops.api.modules.office.dto.OfficeDtos.ApprovalWithdrawRequest;
+import com.company.ops.api.modules.office.dto.OfficeDtos.ApprovalReturnRequest;
+import com.company.ops.api.modules.office.dto.OfficeDtos.ApprovalResubmitRequest;
 import com.company.ops.api.modules.office.dto.OfficeDtos.CompleteOutsourceRequest;
 import com.company.ops.api.modules.office.dto.OfficeDtos.CreateApprovalRequest;
 import com.company.ops.api.modules.office.dto.OfficeDtos.CreateExpenseRequest;
@@ -72,6 +74,10 @@ public class OfficeController {
   public ApiResponse<ApprovalResponse> addSign(@PathVariable UUID id, @Valid @RequestBody ApprovalAddSignRequest request) { return ApiResponse.ok(service.addSignApproval(id, request)); }
   @PostMapping("/approvals/{id}/withdraw") @PreAuthorize("hasAuthority('office:approval:create')")
   public ApiResponse<ApprovalResponse> withdraw(@PathVariable UUID id, @Valid @RequestBody ApprovalWithdrawRequest request) { return ApiResponse.ok(service.withdrawApproval(id, request)); }
+  @PostMapping("/approvals/{id}/return") @PreAuthorize("hasAuthority('office:approval:process')")
+  public ApiResponse<ApprovalResponse> returnApproval(@PathVariable UUID id, @Valid @RequestBody ApprovalReturnRequest request) { return ApiResponse.ok(service.returnApproval(id, request)); }
+  @PostMapping("/approvals/{id}/resubmit") @PreAuthorize("hasAuthority('office:approval:create')")
+  public ApiResponse<ApprovalResponse> resubmit(@PathVariable UUID id, @Valid @RequestBody ApprovalResubmitRequest request) { return ApiResponse.ok(service.resubmitApproval(id, request)); }
   @GetMapping("/expenses") @PreAuthorize("hasAuthority('office:expense:view')")
   public ApiResponse<List<ExpenseResponse>> expenses() { return ApiResponse.ok(service.listExpenses()); }
   @PostMapping("/expenses") @ResponseStatus(HttpStatus.CREATED) @PreAuthorize("hasAuthority('office:expense:create')")
@@ -139,7 +145,7 @@ public class OfficeController {
   public ApiResponse<List<NotificationResponse>> notifications() { return ApiResponse.ok(service.notifications()); }
   @PostMapping("/notifications/refresh") @PreAuthorize("hasAuthority('office:notification:view')")
   public ApiResponse<Integer> refreshNotifications() {
-    return ApiResponse.ok(service.refreshNotifications());
+    return ApiResponse.ok(reminderScheduler.refresh());
   }
 
   @GetMapping("/audits") @PreAuthorize("hasAuthority('office:audit:view')")

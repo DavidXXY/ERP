@@ -36,14 +36,27 @@ public final class OfficeDtos {
                                        @NotBlank @Size(max=80) String operatorName) {}
   public record ApprovalWithdrawRequest(@NotBlank @Size(max=500) String comment,
                                         @NotBlank @Size(max=80) String operatorName) {}
+  public record ApprovalReturnRequest(@NotBlank @Size(max=500) String comment,
+                                      @NotBlank @Size(max=80) String operatorName) {}
+  public record ApprovalResubmitRequest(@NotBlank @Size(max=500) String comment,
+                                        @NotBlank @Size(max=80) String applicantName) {}
   public record ApprovalActionResponse(UUID id, ApprovalStatus decision, String operatorName, String comment,
                                        String actionType, Integer stepNo, OffsetDateTime createdAt) {}
+  public record ApprovalRuntimeNodeResponse(UUID id, Integer stepNo, String nodeStatus, String approvalMode,
+                                            String stepPolicy, String assigneeType, UUID assigneeId,
+                                            String assigneeName, String sourceType, String sourceValue,
+                                            String conditionText, Integer slaHours, OffsetDateTime dueAt,
+                                            OffsetDateTime remindedAt, OffsetDateTime escalatedAt,
+                                            OffsetDateTime completedAt, String approverName,
+                                            String approvalComment) {}
   public record ApprovalResponse(UUID id, String code, ApprovalType approvalType, String title, String sourceNo,
                                  BigDecimal amount, ApprovalStatus status, String applicantName, String content,
                                  String approverName, String approvalComment, OffsetDateTime processedAt,
                                  OffsetDateTime createdAt, String departmentName, String businessType, String projectCode,
                                  String supplierRisk, String customerLevel, String approvalMode, Integer currentStep,
                                  Integer totalSteps, String currentApproverName, String matchedRuleText,
+                                 Integer approvalConfigVersion, String approvalPlanSnapshot,
+                                 List<ApprovalRuntimeNodeResponse> nodes,
                                  List<ApprovalActionResponse> actions) {}
   public record CreateExpenseRequest(// auto-gen
     String code, UUID claimantId,

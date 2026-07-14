@@ -33,6 +33,8 @@ public class ApprovalRequest extends BaseEntity {
   @Column(name = "current_approver_name", length = 120) private String currentApproverName;
   @Column(name = "delegated_user_id") private java.util.UUID delegatedUserId;
   @Column(name = "matched_rule_text", length = 500) private String matchedRuleText;
+  @Column(name = "approval_config_version") private Integer approvalConfigVersion;
+  @Column(name = "approval_plan_snapshot", columnDefinition = "text") private String approvalPlanSnapshot;
   public String getCode() { return code; } public void setCode(String v) { code = v; }
   public ApprovalType getApprovalType() { return approvalType; } public void setApprovalType(ApprovalType v) { approvalType = v; }
   public String getTitle() { return title; } public void setTitle(String v) { title = v; }
@@ -55,4 +57,6 @@ public class ApprovalRequest extends BaseEntity {
   public String getCurrentApproverName() { return currentApproverName; } public void setCurrentApproverName(String v) { currentApproverName = v; }
   public java.util.UUID getDelegatedUserId() { return delegatedUserId; } public void setDelegatedUserId(java.util.UUID v) { delegatedUserId = v; }
   public String getMatchedRuleText() { return matchedRuleText; } public void setMatchedRuleText(String v) { matchedRuleText = v; }
+  public Integer getApprovalConfigVersion() { return approvalConfigVersion; } public void setApprovalConfigVersion(Integer v) { approvalConfigVersion = v; }
+  public String getApprovalPlanSnapshot() { return approvalPlanSnapshot; } public void setApprovalPlanSnapshot(String v) { approvalPlanSnapshot = v; }
 }

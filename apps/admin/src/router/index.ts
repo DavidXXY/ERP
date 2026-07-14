@@ -15,10 +15,10 @@ import SelfProfileView from "@/views/self/SelfProfileView.vue";
 import SelfLeaveSubmitView from "@/views/self/SelfLeaveSubmitView.vue";
 import SelfLeaveHistoryView from "@/views/self/SelfLeaveHistoryView.vue";
 import SelfBalanceView from "@/views/self/SelfBalanceView.vue";
-import SelfApprovalTodoView from "@/views/self/SelfApprovalTodoView.vue";
 import HumanResourcesView from "@/views/hr/HumanResourcesView.vue";
 import LoginView from "@/views/system/LoginView.vue";
 import SystemHealthView from "@/views/system/SystemHealthView.vue";
+import UserManagementView from "@/views/system/UserManagementView.vue";
 import RoleManagementView from "@/views/system/RoleManagementView.vue";
 import PermissionManagementView from "@/views/system/PermissionManagementView.vue";
 import OrganizationView from "@/views/system/OrganizationView.vue";
@@ -99,7 +99,7 @@ const rootRoutes: RouteRecordRaw[] = [
   // System
   { path: "system", redirect: "/system/health" },
   { path: "system/health", name: "system-health", component: SystemHealthView, meta: { title: "\u7cfb\u7edf\u8fd0\u884c\u60c5\u51b5", permission: "system:view" } },
-  { path: "system/users", redirect: "/hr?tab=employees" },
+  { path: "system/users", name: "system-users", component: UserManagementView, meta: { title: "账号管理", permission: "system:user:view" } },
   { path: "system/organizations", name: "system-organizations", component: OrganizationView, meta: { title: "\u7ec4\u7ec7\u67b6\u6784", permission: "system:organization:view" } },
   { path: "system/roles", name: "system-roles", component: RoleManagementView, meta: { title: "\u89d2\u8272\u7ba1\u7406", permission: "system:role:view" } },
   { path: "system/permissions", name: "system-permissions", component: PermissionManagementView, meta: { title: "\u6743\u9650\u7ba1\u7406", permission: "system:permission:view" } },
@@ -111,7 +111,7 @@ const rootRoutes: RouteRecordRaw[] = [
   { path: "self/leaves", name: "self-leaves", component: SelfLeaveHistoryView, meta: { title: "\u6211\u7684\u8bf7\u5047" } },
   { path: "self/leaves/new", name: "self-leave-new", component: SelfLeaveSubmitView, meta: { title: "\u63d0\u4ea4\u8bf7\u5047" } },
   { path: "self/balances", name: "self-balances", component: SelfBalanceView, meta: { title: "\u6211\u7684\u989d\u5ea6" } },
-  { path: "self/approvals", name: "self-approvals", component: SelfApprovalTodoView, meta: { title: "\u6211\u7684\u5f85\u529e\u5ba1\u6279" } },
+  { path: "self/approvals", redirect: "/office/approvals" },
 ];
 
 const router = createRouter({

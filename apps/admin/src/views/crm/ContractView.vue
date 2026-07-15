@@ -30,7 +30,7 @@
             <span>{{ record.startDate }} 至 {{ record.endDate }}</span>
             <span class="table-subtitle">{{ record.serviceCycle || "未设置服务频次" }}</span>
           </template>
-          <template v-else-if="column.key === 'amount'"><strong>{{ formatMoney(record.amount) }}</strong></template>
+          <template v-else-if="column.key === 'amount'"><strong>{{ formatMoney(record.amount) }}</strong><span class="table-subtitle">未税 {{ formatMoney(record.netAmount ?? calcNetAmount(record.amount, record.taxRate)) }} · 税率 {{ formatTaxRate(record.taxRate) }}</span></template>
           <template v-else-if="column.key === 'status'"><a-tag :color="contractStatusColor(record.status)">{{ contractStatusLabel(record.status) }}</a-tag></template>
           <template v-else-if="column.key === 'action'">
             <span @click.stop>
@@ -50,6 +50,7 @@
       <div v-for="record in filteredContracts" :key="record.id" class="mobile-card-item" @click="router.push('/crm/contracts/' + record.id)">
         <div class="mobile-card-header"><strong>{{ record.code }}</strong><a-tag :color="contractStatusColor(record.status)">{{ contractStatusLabel(record.status) }}</a-tag></div>
         <div class="mobile-card-body"><span>{{ record.projectName || record.customerName }}</span><strong>{{ formatMoney(record.amount) }}</strong></div>
+        <div class="mobile-card-tags">未税 {{ formatMoney(record.netAmount ?? calcNetAmount(record.amount, record.taxRate)) }} · 税率 {{ formatTaxRate(record.taxRate) }}</div>
         <div class="mobile-card-footer"><span>{{ record.startDate || "" }} {{ record.endDate ? "~ " + record.endDate : "" }}</span></div>
       </div>
     </div>
@@ -85,7 +86,7 @@ const columns = [
   { title: "合同 / 客户", key: "contract", width: 230 },
   { title: "项目", key: "project", width: 280 },
   { title: "合同周期", key: "period", width: 270 },
-  { title: "金额", key: "amount", width: 140 },
+  { title: "金额", key: "amount", width: 180 },
   { title: "状态", key: "status", width: 110 },
   { title: "操作", key: "action", width: 100 }, 
 ];
@@ -111,7 +112,7 @@ async function handleDeleteContract(record: any) {
 }
 
 function handleExportCsv() {
-  const headers = ["合同编号", "客户名称", "项目名称", "合同类型", "合同金额", "开始日期", "结束日期", "状态"];
+  const headers = ["合同编号", "客户名称", "项目名称", "合同类型", "合同金额", "未税金额", "开始日期", "结束日期", "状态"];
   const rows = contracts.value.map((r: any) => contractRowToCsv(r));
   downloadCsv("客户合同.csv", headers, rows);
 }
@@ -139,5 +140,15 @@ async function loadData() {
 
 function moneyFormatter({ value }: { value: number }) {
   return formatMoney(value);
+}
+
+function formatTaxRate(value?: number) {
+  return `${Number(value ?? 13).toFixed(2).replace(/\.?0+$/, "")}%`;
+}
+
+function calcNetAmount(amount?: number, taxRate?: number) {
+  const rate = Number(taxRate ?? 13);
+  const divisor = 1 + rate / 100;
+  return divisor > 0 ? Number(amount || 0) / divisor : Number(amount || 0);
 }
 </script>

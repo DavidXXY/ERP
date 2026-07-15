@@ -1,5 +1,6 @@
 package com.company.ops.api.modules.maintenance.service;
 
+import com.company.ops.api.common.delete.DeleteGovernanceService;
 import com.company.ops.api.common.service.CodeGenerator;
 import com.company.ops.api.modules.crm.domain.Customer;
 import com.company.ops.api.modules.crm.repository.CustomerRepository;
@@ -31,6 +32,7 @@ public class MaintenanceService {
   private final CustomerRepository customerRepository;
   private final ServiceContractRepository contractRepository;
   private final CodeGenerator codeGenerator;
+  private final DeleteGovernanceService deleteGovernanceService;
 
   public MaintenanceService(
       WorkOrderRepository workOrderRepository,
@@ -38,18 +40,20 @@ public class MaintenanceService {
       WorkOrderStatusLogRepository statusLogRepository,
       CustomerRepository customerRepository,
       ServiceContractRepository contractRepository,
-      CodeGenerator codeGenerator) {
+      CodeGenerator codeGenerator,
+      DeleteGovernanceService deleteGovernanceService) {
     this.workOrderRepository = workOrderRepository;
     this.equipmentRepository = equipmentRepository;
     this.statusLogRepository = statusLogRepository;
     this.customerRepository = customerRepository;
     this.contractRepository = contractRepository;
     this.codeGenerator = codeGenerator;
+    this.deleteGovernanceService = deleteGovernanceService;
   }
 
   @Transactional(readOnly = true)
   public DashboardResponse dashboard() {
-    List<WorkOrder> orders = workOrderRepository.findAllByOrderByCreatedAtDesc();
+    List<WorkOrder> orders = deleteGovernanceService.visible("WORK_ORDER", workOrderRepository.findAllByOrderByCreatedAtDesc(), WorkOrder::getId);
     long open = countOpen(orders);
     long closed = countClosed(orders);
     long urgent = orders.stream()
@@ -70,13 +74,15 @@ public class MaintenanceService {
 
   @Transactional(readOnly = true)
   public List<WorkOrderResponse> listWorkOrders() {
-    return workOrderRepository.findAllByOrderByCreatedAtDesc().stream().map(this::toResponse).toList();
+    return deleteGovernanceService.visible("WORK_ORDER", workOrderRepository.findAllByOrderByCreatedAtDesc(), WorkOrder::getId)
+        .stream().map(this::toResponse).toList();
   }
 
   @Transactional(readOnly = true)
   public WorkOrderResponse getWorkOrder(UUID id) {
     WorkOrder o = workOrderRepository.findById(id)
         .orElseThrow(() -> new NoSuchElementException("工单不存在"));
+    if (deleteGovernanceService.isHidden("WORK_ORDER", id)) throw new NoSuchElementException("工单不存在");
     return toResponse(o);
   }
 
@@ -149,6 +155,8 @@ public class MaintenanceService {
 
   @Transactional
   public void deleteWorkOrder(UUID id) {
+    WorkOrder item = getOrder(id);
+    if (!deleteGovernanceService.allowPhysicalDelete("WORK_ORDER", id, item.getCode() + " " + item.getTitle())) return;
     workOrderRepository.deleteById(id);
   }
 

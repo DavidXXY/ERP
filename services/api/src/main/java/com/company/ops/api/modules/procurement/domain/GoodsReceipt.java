@@ -27,6 +27,9 @@ public class GoodsReceipt extends BaseEntity {
   @Column(name = "unit_price", nullable = false, precision = 14, scale = 2)
   private BigDecimal unitPrice;
 
+  @Column(name = "tax_rate", nullable = false, precision = 5, scale = 2)
+  private BigDecimal taxRate = BigDecimal.valueOf(13);
+
   @Column(nullable = false, precision = 14, scale = 2)
   private BigDecimal amount;
 
@@ -77,6 +80,14 @@ public class GoodsReceipt extends BaseEntity {
 
   public void setUnitPrice(BigDecimal unitPrice) {
     this.unitPrice = unitPrice;
+  }
+
+  public BigDecimal getTaxRate() {
+    return taxRate;
+  }
+
+  public void setTaxRate(BigDecimal taxRate) {
+    this.taxRate = taxRate;
   }
 
   public BigDecimal getAmount() {

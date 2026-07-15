@@ -48,14 +48,21 @@ export function receivableRowToCsv(r: {
 
 export function contractRowToCsv(r: {
   code?: string; customerName: string; projectName: string;
-  contractType: string; amount: number; startDate?: string;
+  contractType: string; amount: number; netAmount?: number; taxRate?: number; startDate?: string;
   endDate?: string; status: string;
 }): string[] {
   return [
     r.code || "", r.customerName, r.projectName, r.contractType,
-    String(r.amount), r.startDate || "", r.endDate || "",
+    String(r.amount), String(r.netAmount ?? calcNetAmount(r.amount, r.taxRate)),
+    r.startDate || "", r.endDate || "",
     contractStatusLabel(r.status),
   ];
+}
+
+function calcNetAmount(amount?: number, taxRate?: number) {
+  const rate = Number(taxRate ?? 13);
+  const divisor = 1 + rate / 100;
+  return divisor > 0 ? Number(amount || 0) / divisor : Number(amount || 0);
 }
 
 // Quick label helpers (inline to avoid circular imports)

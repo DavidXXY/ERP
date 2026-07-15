@@ -29,6 +29,15 @@ public class PurchaseRequest extends BaseEntity {
   @Column(nullable = false, precision = 14, scale = 2)
   private BigDecimal quantity = BigDecimal.ZERO;
 
+  @Column(name = "unit_price", nullable = false, precision = 14, scale = 2)
+  private BigDecimal unitPrice = BigDecimal.ZERO;
+
+  @Column(name = "tax_rate", nullable = false, precision = 5, scale = 2)
+  private BigDecimal taxRate = BigDecimal.valueOf(13);
+
+  @Column(name = "total_amount", nullable = false, precision = 14, scale = 2)
+  private BigDecimal totalAmount = BigDecimal.ZERO;
+
   @Column(name = "expected_date")
   private LocalDate expectedDate;
 
@@ -97,6 +106,30 @@ public class PurchaseRequest extends BaseEntity {
 
   public void setQuantity(BigDecimal quantity) {
     this.quantity = quantity;
+  }
+
+  public BigDecimal getUnitPrice() {
+    return unitPrice;
+  }
+
+  public void setUnitPrice(BigDecimal unitPrice) {
+    this.unitPrice = unitPrice;
+  }
+
+  public BigDecimal getTaxRate() {
+    return taxRate;
+  }
+
+  public void setTaxRate(BigDecimal taxRate) {
+    this.taxRate = taxRate;
+  }
+
+  public BigDecimal getTotalAmount() {
+    return totalAmount;
+  }
+
+  public void setTotalAmount(BigDecimal totalAmount) {
+    this.totalAmount = totalAmount;
   }
 
   public LocalDate getExpectedDate() {

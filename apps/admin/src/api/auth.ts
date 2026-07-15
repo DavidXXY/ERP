@@ -4,7 +4,8 @@ export type CurrentUser = {
   id: string;
   username: string;
   displayName: string;
-  roleCodes: string[];
+  roleCodes?: string[];
+  roles?: string[];
   permissions: string[];
 };
 
@@ -27,4 +28,3 @@ export function currentUserApi() {
     url: "/auth/me",
   });
 }
-

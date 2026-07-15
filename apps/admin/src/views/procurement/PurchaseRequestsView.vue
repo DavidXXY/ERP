@@ -29,7 +29,7 @@
           <template v-if="column.key === 'request'"><strong>{{ record.code }}</strong><span class="table-subtitle">{{ record.reason || record.description || '' }}</span></template>
           <template v-else-if="column.key === 'material'">{{ record.partName || record.materialName || '-' }}<span class="table-subtitle">{{ record.materialSpec || '' }}</span></template>
           <template v-else-if="column.key === 'qty'">{{ record.quantity }}<span class="table-subtitle">{{ record.unit || '' }}</span></template>
-          <template v-else-if="column.key === 'amount'"><strong>{{ record.totalAmount || record.unitPrice ? formatMoney(record.totalAmount || record.unitPrice * record.quantity) : '-' }}</strong></template>
+          <template v-else-if="column.key === 'amount'"><strong>{{ record.totalAmount || record.unitPrice ? formatMoney(record.totalAmount || record.unitPrice * record.quantity) : '-' }}</strong><span class="table-subtitle">税率 {{ formatTaxRate(record.taxRate) }}</span></template>
           <template v-else-if="column.key === 'target'">{{ record.costTargetName || '-' }}<span class="table-subtitle">{{ record.costType === 'PROJECT' ? '项目预算' : '部门费用' }}</span></template>
           <template v-else-if="column.key === 'date'">{{ record.requiredDate || record.expectedDate || '-' }}</template>
           <template v-else-if="column.key === 'status'"><a-tag :color="({DRAFT:'default',SUBMITTED:'blue',APPROVED:'green',ORDERED:'cyan',RECEIVED:'green',CANCELLED:'red'} as any)[record.status]||'default'">{{ ({DRAFT:'草稿',SUBMITTED:'待审批',APPROVED:'已通过',ORDERED:'已下单',RECEIVED:'已收货',CANCELLED:'已取消'} as any)[record.status]||record.status }}</a-tag></template>
@@ -43,7 +43,7 @@
       <a-form ref="formRef" :model="form" :rules="rules" layout="vertical">
         <a-row :gutter="16"><a-col :span="12"><a-form-item label="物料名称" name="materialName"><a-input v-model:value="form.materialName" /></a-form-item></a-col><a-col :span="12"><a-form-item label="规格型号"><a-input v-model:value="form.materialSpec" /></a-form-item></a-col></a-row>
         <a-row :gutter="16"><a-col :span="8"><a-form-item label="数量" name="quantity"><a-input-number v-model:value="form.quantity" :min="1" class="full-input" /></a-form-item></a-col><a-col :span="8"><a-form-item label="单位"><a-input v-model:value="form.unit" /></a-form-item></a-col><a-col :span="8"><a-form-item label="需求日期"><a-input v-model:value="form.requiredDate" type="date" /></a-form-item></a-col></a-row>
-        <a-row :gutter="16"><a-col :span="12"><a-form-item label="预计单价"><a-input-number v-model:value="form.unitPrice" :min="0" :precision="2" class="full-input" /></a-form-item></a-col><a-col :span="12"><a-form-item label="成本归属"><a-select v-model:value="form.costType" :options="costTypeOptions" @change="form.costTargetId=''" /></a-form-item></a-col></a-row>
+        <a-row :gutter="16"><a-col :span="8"><a-form-item label="预计单价"><a-input-number v-model:value="form.unitPrice" :min="0" :precision="2" class="full-input" /></a-form-item></a-col><a-col :span="8"><a-form-item label="税率(%)"><a-input-number v-model:value="form.taxRate" :min="0" :max="100" :precision="2" class="full-input" /></a-form-item></a-col><a-col :span="8"><a-form-item label="成本归属"><a-select v-model:value="form.costType" :options="costTypeOptions" @change="form.costTargetId=''" /></a-form-item></a-col></a-row>
         <a-form-item :label="form.costType === 'PROJECT' ? '关联项目' : '关联部门'" name="costTargetId">
           <a-select v-model:value="form.costTargetId" show-search option-filter-prop="label" :options="targetOptions" placeholder="请选择成本归属对象" />
         </a-form-item>
@@ -64,7 +64,7 @@ const auth=useAuthStore(); const router=useRouter(); const loading=ref(false); c
 const projects=ref<ProcurementCostTargetOption[]>([]); const departments=ref<ProcurementCostTargetOption[]>([]);
 const replenishments=ref<ReplenishmentSuggestion[]>([]);
 const createOpen=ref(false); const formRef=ref();
-const form=reactive({materialName:'',materialSpec:'',quantity:1,unit:'个',unitPrice:0,requiredDate:'',reason:'',costType:'PROJECT',costTargetId:''});
+const form=reactive({materialName:'',materialSpec:'',quantity:1,unit:'个',unitPrice:0,taxRate:13,requiredDate:'',reason:'',costType:'PROJECT',costTargetId:''});
 const rules={materialName:[{required:true}],quantity:[{required:true}],reason:[{required:true}],costTargetId:[{required:true,message:'请选择成本归属对象'}]};
 const costTypeOptions=[{label:'项目采购',value:'PROJECT'},{label:'部门采购',value:'DEPARTMENT'}];
 const requestColumns=[
@@ -83,12 +83,13 @@ async function loadData(){loading.value=true;try{const [result,targets,replenish
 function openCreate(){Object.assign(form,{materialName:'',materialSpec:'',quantity:1,unit:'个',unitPrice:0,requiredDate:'',reason:'',costType:'PROJECT',costTargetId:''});createOpen.value=true;}
 function openFromReplenishment(item:ReplenishmentSuggestion){Object.assign(form,{materialName:item.partName,materialSpec:item.model||'',quantity:Math.max(1,Number(item.suggestedQty||1)),unit:'个',unitPrice:0,requiredDate:'',reason:`库存补货：${item.reason}`,costType:'DEPARTMENT',costTargetId:departments.value[0]?.id||''});createOpen.value=true;}
 async function handleCreate(){await formRef.value?.validate();saving.value=true;try{await createPurchaseRequest({
-  requesterName:auth.user?.displayName||'',partName:form.materialName,quantity:form.quantity,expectedDate:form.requiredDate||undefined,
+  requesterName:auth.user?.displayName||'',partName:form.materialName,quantity:form.quantity,unitPrice:form.unitPrice,taxRate:form.taxRate,expectedDate:form.requiredDate||undefined,
   reason:`${form.reason}${form.materialSpec?'；规格：'+form.materialSpec:''}${form.unit?'；单位：'+form.unit:''}${form.unitPrice?`；预计单价：${form.unitPrice}`:''}`,
   costType:form.costType as any,projectId:form.costType==='PROJECT'?form.costTargetId:undefined,departmentId:form.costType==='DEPARTMENT'?form.costTargetId:undefined,
 } as any);createOpen.value=false;message.success('申请已创建，并进入采购审批闭环');await loadData();}catch(e:any){message.error(e.message||'创建失败');}finally{saving.value=false;}}
 async function handleSubmit(record:PurchaseRequest){try{await processPurchaseRequestApproval(record.id,{decision:'APPROVED' as any,comment:'提交审批',approverName:auth.user?.displayName||''});message.success('已提交审批');await loadData();}catch(e:any){message.error(e.message||'提交失败');}}
 function formatMoney(v:number){return new Intl.NumberFormat('zh-CN',{style:'currency',currency:'CNY',minimumFractionDigits:2}).format(v||0);}
+function formatTaxRate(v?:number){return `${Number(v??13).toFixed(2).replace(/\.?0+$/,'')}%`;}
 </script>
 <style scoped>
 .replenishment-panel{margin-bottom:14px;padding:14px;border:1px solid #e5e7eb;background:#fbfcfe}

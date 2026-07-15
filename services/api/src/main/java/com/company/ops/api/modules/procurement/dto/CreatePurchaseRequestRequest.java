@@ -16,6 +16,8 @@ public record CreatePurchaseRequestRequest(
     UUID partId,
     String partName,
     @NotNull @DecimalMin("0.01") BigDecimal quantity,
+    @DecimalMin("0") BigDecimal unitPrice,
+    @DecimalMin("0") BigDecimal taxRate,
     LocalDate expectedDate,
     @Size(max = 300) String reason,
     @NotNull ProcurementCostType costType,

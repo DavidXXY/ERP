@@ -43,7 +43,7 @@
             <span class="line-clamp-2">{{ record.serviceScope }}</span>
             <span v-if="record.inspectCycle" class="table-subtitle">{{ record.inspectCycle }}</span>
           </template>
-          <template v-else-if="column.key === 'amount'"><strong>{{ formatMoney(record.amount) }}</strong></template>
+          <template v-else-if="column.key === 'amount'"><strong>{{ formatMoney(record.amount) }}</strong><span class="table-subtitle">未税 {{ formatMoney(record.netAmount ?? calcNetAmount(record.amount, record.taxRate)) }} · 税率 {{ formatTaxRate(record.taxRate) }}</span></template>
           <template v-else-if="column.key === 'margin'">
             <a-tag :color="quoteMargin(record).rate < 15 ? 'red' : quoteMargin(record).rate < 25 ? 'orange' : 'green'">{{ quoteMargin(record).rate.toFixed(1) }}%</a-tag>
             <span class="table-subtitle">预算 {{ formatMoney(quoteMargin(record).cost) }} · 毛利 {{ formatMoney(quoteMargin(record).gross) }}</span>
@@ -122,6 +122,7 @@
       <div v-for="record in filteredQuotes" :key="record.id" class="mobile-card-item" @click="router.push('/crm/quotes/' + record.id)">
         <div class="mobile-card-header"><strong>{{ record.code }}</strong><a-tag :color="quoteStatusColor(record.status)">{{ quoteStatusLabel(record.status) }}</a-tag></div>
         <div class="mobile-card-body"><span>{{ record.customerName }}</span><strong>{{ formatMoney(record.amount) }}</strong></div>
+        <div class="mobile-card-tags">未税 {{ formatMoney(record.netAmount ?? calcNetAmount(record.amount, record.taxRate)) }} · 税率 {{ formatTaxRate(record.taxRate) }}</div>
         <div class="mobile-card-tags">{{ record.opportunityCode || "未关联商机" }}</div>
       </div>
     </div>
@@ -160,6 +161,7 @@
           <a-col :span="24"><a-form-item label="服务范围" name="serviceScope"><a-textarea v-model:value="form.serviceScope" :rows="3" /></a-form-item></a-col>
           <a-col :xs="24" :md="12"><a-form-item label="服务频次"><a-input v-model:value="form.inspectCycle" placeholder="例如：季度服务，年度检测" /></a-form-item></a-col>
           <a-col :xs="24" :md="12"><a-form-item label="报价金额" name="amount"><a-input-number v-model:value="form.amount" :min="0" class="full-input" /></a-form-item></a-col>
+          <a-col :xs="24" :md="12"><a-form-item label="税率(%)"><a-input-number v-model:value="form.taxRate" :min="0" :max="100" :precision="2" class="full-input" /></a-form-item></a-col>
           <a-col :span="24">
             <div class="quote-budget-panel">
               <div class="quote-budget-head">
@@ -452,7 +454,7 @@ function syncReceivable(index: number, field: string, value: string | number) {
 const columns = [
   { title: "报价 / 客户", key: "quote", width: 250 },
   { title: "方案内容", key: "scope", width: 320 },
-  { title: "报价金额", key: "amount", width: 140 },
+  { title: "报价金额", key: "amount", width: 180 },
   { title: "毛利校验", key: "margin", width: 150 },
   { title: "流程状态", key: "status", width: 220 },
   { title: "客户反馈", key: "customerResult", width: 260 },
@@ -551,6 +553,7 @@ function openEdit(record: QuotePlan) {
     inspectCycle: record.inspectCycle || "",
     paymentNodes: record.paymentNodes || "",
     amount: Number(record.amount),
+    taxRate: Number(record.taxRate ?? 13),
     laborBudget: Number(record.laborBudget || 0),
     materialBudget: Number(record.materialBudget || 0),
     subcontractBudget: Number(record.subcontractBudget || 0),
@@ -592,6 +595,7 @@ async function handleSaveQuote() {
         inspectCycle: form.inspectCycle,
         paymentNodes: form.paymentNodes,
         amount: form.amount,
+        taxRate: form.taxRate,
         laborBudget: form.laborBudget,
         materialBudget: form.materialBudget,
         subcontractBudget: form.subcontractBudget,
@@ -610,6 +614,7 @@ async function handleSaveQuote() {
         inspectCycle: form.inspectCycle,
         paymentNodes: form.paymentNodes,
         amount: form.amount,
+        taxRate: form.taxRate,
         laborBudget: form.laborBudget,
         materialBudget: form.materialBudget,
         subcontractBudget: form.subcontractBudget,
@@ -790,6 +795,7 @@ function initialForm() {
     inspectCycle: "",
     paymentNodes: "",
     amount: 0,
+    taxRate: 13,
     laborBudget: 0,
     materialBudget: 0,
     subcontractBudget: 0,
@@ -850,6 +856,16 @@ function formatDateTime(value?: string) {
 
 function moneyFormatter({ value }: { value: number }) {
   return formatMoney(value);
+}
+
+function formatTaxRate(value?: number) {
+  return `${Number(value ?? 13).toFixed(2).replace(/\.?0+$/, "")}%`;
+}
+
+function calcNetAmount(amount?: number, taxRate?: number) {
+  const rate = Number(taxRate ?? 13);
+  const divisor = 1 + rate / 100;
+  return divisor > 0 ? Number(amount || 0) / divisor : Number(amount || 0);
 }
 </script>
 

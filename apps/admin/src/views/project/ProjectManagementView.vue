@@ -117,6 +117,13 @@
           <template v-else-if="column.key === 'action'">
             <a-space size="small">
               <a-button type="link" size="small" @click="openDetail(record)">详情</a-button>
+              <a-popconfirm
+                v-if="auth.can('project:delete')"
+                title="确认删除该项目？相关预算、成本、采购、领料、费用和工单记录也会同步清理。"
+                @confirm="removeProject(record)"
+              >
+                <a-button danger type="link" size="small">删除</a-button>
+              </a-popconfirm>
               <a-button
                 v-if="auth.can('project:approve') && record.approvalStatus === 'PENDING'"
                 type="link"
@@ -391,7 +398,7 @@ import PlusOutlined from "@ant-design/icons-vue/PlusOutlined";
 import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
 import { useRoute } from "vue-router";
 import { listCustomers, type CustomerSummary } from "@/api/crm";
-import { listProjects, getProject, listProjectProfitability } from "@/api/project";
+import { listProjects, getProject, listProjectProfitability, deleteProject } from "@/api/project";
 import {
   type Project,
   type ProjectApprovalStatus,
@@ -617,6 +624,23 @@ async function openDetail(project: Project) {
   catch (error) { message.error(error instanceof Error ? error.message : "项目详情加载失败"); }
   finally { detailLoading.value = false; }
 }
+async function removeProject(project: Project) {
+  try {
+    await deleteProject(project.id);
+    const nextCache = { ...detailCache.value };
+    delete nextCache[project.id];
+    detailCache.value = nextCache;
+    if (detail.value?.project.id === project.id) {
+      detail.value = null;
+      detailOpen.value = false;
+    }
+    message.success("项目已删除");
+    await loadData();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "项目删除失败");
+  }
+}
+
 async function hydrateProjectDetails(force = false) {
   if (detailHydrating.value) return;
   detailHydrating.value = true;

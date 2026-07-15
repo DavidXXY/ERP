@@ -247,6 +247,9 @@ public class ProcurementService {
     purchaseRequest.setPartId(request.partId());
     purchaseRequest.setPartName(partName);
     purchaseRequest.setQuantity(request.quantity());
+    purchaseRequest.setUnitPrice(amount(request.unitPrice()));
+    purchaseRequest.setTaxRate(defaultTaxRate(request.taxRate()));
+    purchaseRequest.setTotalAmount(request.quantity().multiply(amount(request.unitPrice())));
     purchaseRequest.setExpectedDate(request.expectedDate());
     purchaseRequest.setReason(request.reason());
     purchaseRequest.setCostType(request.costType());
@@ -309,6 +312,9 @@ public class ProcurementService {
       purchaseRequest.setPartName(request.partName());
     }
     purchaseRequest.setQuantity(request.quantity());
+    purchaseRequest.setUnitPrice(amount(request.unitPrice()));
+    purchaseRequest.setTaxRate(defaultTaxRate(request.taxRate()));
+    purchaseRequest.setTotalAmount(request.quantity().multiply(amount(request.unitPrice())));
     purchaseRequest.setExpectedDate(request.expectedDate());
     purchaseRequest.setReason(request.reason());
     purchaseRequest.setCostType(request.costType());
@@ -381,6 +387,7 @@ public class ProcurementService {
     order.setOrderedQty(purchaseRequest.getQuantity());
     order.setReceivedQty(BigDecimal.ZERO);
     order.setUnitPrice(request.unitPrice());
+    order.setTaxRate(defaultTaxRate(request.taxRate() == null ? purchaseRequest.getTaxRate() : request.taxRate()));
     order.setOrderAmount(purchaseRequest.getQuantity().multiply(request.unitPrice()));
     order.setExpectedDeliveryDate(request.expectedDeliveryDate() == null
         ? purchaseRequest.getExpectedDate()
@@ -460,6 +467,7 @@ public class ProcurementService {
     receipt.setPartId(part.getId());
     receipt.setQuantity(request.quantity());
     receipt.setUnitPrice(order.getUnitPrice());
+    receipt.setTaxRate(defaultTaxRate(order.getTaxRate()));
     receipt.setAmount(receiptAmount);
     receipt.setReceivedDate(request.receivedDate());
     receipt.setDeliveryNo(request.deliveryNo());
@@ -493,6 +501,7 @@ public class ProcurementService {
     payable.setOrderId(order.getId());
     payable.setReceiptId(savedReceipt.getId());
     payable.setAmount(receiptAmount);
+    payable.setTaxRate(defaultTaxRate(order.getTaxRate()));
     payable.setPaidAmount(BigDecimal.ZERO);
     payable.setDueDate(request.payableDueDate());
     payable.setStatus(PayableStatus.PENDING);
@@ -643,6 +652,9 @@ public class ProcurementService {
         request.getPartId(),
         request.getPartName(),
         request.getQuantity(),
+        amount(request.getUnitPrice()),
+        defaultTaxRate(request.getTaxRate()),
+        amount(request.getTotalAmount()),
         request.getExpectedDate(),
         request.getReason(),
         request.getCostType(),
@@ -674,6 +686,7 @@ public class ProcurementService {
         amount(order.getOrderedQty()),
         amount(order.getReceivedQty()),
         amount(order.getUnitPrice()),
+        defaultTaxRate(order.getTaxRate()),
         amount(order.getOrderAmount()),
         order.getExpectedDeliveryDate(),
         order.getCostType(),
@@ -698,6 +711,7 @@ public class ProcurementService {
         part == null ? null : part.getName(),
         receipt.getQuantity(),
         receipt.getUnitPrice(),
+        defaultTaxRate(receipt.getTaxRate()),
         receipt.getAmount(),
         receipt.getReceivedDate(),
         receipt.getDeliveryNo(),
@@ -726,6 +740,7 @@ public class ProcurementService {
         order == null ? null : order.getCode(),
         payable.getReceiptId(),
         amount(payable.getAmount()),
+        defaultTaxRate(payable.getTaxRate()),
         amount(payable.getPaidAmount()),
         outstanding,
         payable.getDueDate(),
@@ -864,6 +879,10 @@ public class ProcurementService {
 
   private BigDecimal amount(BigDecimal value) {
     return value == null ? BigDecimal.ZERO : value;
+  }
+
+  private BigDecimal defaultTaxRate(BigDecimal value) {
+    return value == null ? BigDecimal.valueOf(13) : value;
   }
 
   private record CostTarget(String code, String name) {}

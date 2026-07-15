@@ -1,5 +1,6 @@
 package com.company.ops.api.modules.hr.service;
 
+import com.company.ops.api.common.delete.DeleteGovernanceService;
 import com.company.ops.api.common.exception.BusinessException;
 import com.company.ops.api.modules.hr.domain.EmergencyContact;
 import com.company.ops.api.modules.hr.domain.EmployeeEducation;
@@ -64,6 +65,7 @@ public class HrService {
     private final ReceivableRepository receivableRepository;
     private final LeaveBalanceRepository leaveBalanceRepository;
     private final ObjectMapper objectMapper;
+    private final DeleteGovernanceService deleteGovernanceService;
 
     public HrService(QualificationEmployeeRepository employeeRepository,
                      EmployeeEducationRepository educationRepository,
@@ -77,7 +79,8 @@ public class HrService {
                      EmployeeContractRepository employeeContractRepository,
                      ApprovalRequestRepository approvalRequestRepository,
                      WorkOrderRepository workOrderRepository,
-                     ReceivableRepository receivableRepository) {
+                     ReceivableRepository receivableRepository,
+                     DeleteGovernanceService deleteGovernanceService) {
         this.employeeRepository = employeeRepository;
         this.educationRepository = educationRepository;
         this.workExperienceRepository = workExperienceRepository;
@@ -91,6 +94,7 @@ public class HrService {
         this.approvalRequestRepository = approvalRequestRepository;
         this.workOrderRepository = workOrderRepository;
         this.receivableRepository = receivableRepository;
+        this.deleteGovernanceService = deleteGovernanceService;
     }
 
     private QualificationEmployee findEmployee(UUID id) {
@@ -102,7 +106,9 @@ public class HrService {
     @Transactional(readOnly = true)
     public List<EducationResponse> listEducations(UUID employeeId) {
         return educationRepository.findByEmployeeIdOrderByStartDateDesc(employeeId)
-            .stream().map(this::toEducationResponse).toList();
+            .stream()
+            .filter(item -> !deleteGovernanceService.isHidden("HR_EDUCATION", item.getId()))
+            .map(this::toEducationResponse).toList();
     }
 
     @Transactional
@@ -124,6 +130,8 @@ public class HrService {
 
     @Transactional
     public void deleteEducation(UUID id) {
+        var item = educationRepository.findById(id).orElseThrow(() -> new BusinessException("教育经历不存在"));
+        if (!deleteGovernanceService.allowPhysicalDelete("HR_EDUCATION", id, item.getSchoolName())) return;
         educationRepository.deleteById(id);
     }
 
@@ -142,7 +150,9 @@ public class HrService {
     @Transactional(readOnly = true)
     public List<WorkExperienceResponse> listWorkExperiences(UUID employeeId) {
         return workExperienceRepository.findByEmployeeIdOrderByStartDateDesc(employeeId)
-            .stream().map(this::toWorkExperienceResponse).toList();
+            .stream()
+            .filter(item -> !deleteGovernanceService.isHidden("HR_WORK_EXPERIENCE", item.getId()))
+            .map(this::toWorkExperienceResponse).toList();
     }
 
     @Transactional
@@ -164,6 +174,8 @@ public class HrService {
 
     @Transactional
     public void deleteWorkExperience(UUID id) {
+        var item = workExperienceRepository.findById(id).orElseThrow(() -> new BusinessException("工作经历不存在"));
+        if (!deleteGovernanceService.allowPhysicalDelete("HR_WORK_EXPERIENCE", id, item.getCompanyName())) return;
         workExperienceRepository.deleteById(id);
     }
 
@@ -183,7 +195,9 @@ public class HrService {
     @Transactional(readOnly = true)
     public List<EmergencyContactResponse> listEmergencyContacts(UUID employeeId) {
         return emergencyContactRepository.findByEmployeeId(employeeId)
-            .stream().map(this::toEmergencyContactResponse).toList();
+            .stream()
+            .filter(item -> !deleteGovernanceService.isHidden("HR_EMERGENCY_CONTACT", item.getId()))
+            .map(this::toEmergencyContactResponse).toList();
     }
 
     @Transactional
@@ -205,6 +219,8 @@ public class HrService {
 
     @Transactional
     public void deleteEmergencyContact(UUID id) {
+        var item = emergencyContactRepository.findById(id).orElseThrow(() -> new BusinessException("紧急联系人不存在"));
+        if (!deleteGovernanceService.allowPhysicalDelete("HR_EMERGENCY_CONTACT", id, item.getName())) return;
         emergencyContactRepository.deleteById(id);
     }
 

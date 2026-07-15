@@ -1,5 +1,6 @@
 package com.company.ops.api.modules.crm.service;
 
+import com.company.ops.api.common.delete.DeleteGovernanceService;
 import com.company.ops.api.common.exception.BusinessException;
 import com.company.ops.api.modules.crm.domain.Customer;
 import com.company.ops.api.modules.crm.domain.CustomerContact;
@@ -35,6 +36,7 @@ public class CustomerService {
   private final ReceivableRepository receivableRepository;
   private final FollowUpRepository followUpRepository;
   private final DataScopeService dataScopeService;
+  private final DeleteGovernanceService deleteGovernanceService;
 
   @jakarta.persistence.PersistenceContext
   private jakarta.persistence.EntityManager entityManager;
@@ -46,7 +48,8 @@ public class CustomerService {
       ServiceContractRepository contractRepository,
       ReceivableRepository receivableRepository,
       FollowUpRepository followUpRepository,
-      DataScopeService dataScopeService
+      DataScopeService dataScopeService,
+      DeleteGovernanceService deleteGovernanceService
   ) {
     this.codeGenerator = codeGenerator;
     this.customerRepository = customerRepository;
@@ -55,11 +58,12 @@ public class CustomerService {
     this.receivableRepository = receivableRepository;
     this.followUpRepository = followUpRepository;
     this.dataScopeService = dataScopeService;
+    this.deleteGovernanceService = deleteGovernanceService;
   }
 
   @Transactional(readOnly = true)
   public List<CustomerSummaryResponse> listCustomers() {
-    return customerRepository.findAllByOrderByCreatedAtDesc().stream()
+    return deleteGovernanceService.visible("CUSTOMER", customerRepository.findAllByOrderByCreatedAtDesc(), Customer::getId).stream()
         .filter(customer -> dataScopeService.canViewOwner(customer.getOwnerName()))
         .map(this::toSummary)
         .toList();
@@ -70,6 +74,7 @@ public class CustomerService {
     Customer customer = customerRepository.findById(id)
         .orElseThrow(() -> new BusinessException("客户不存在"));
     if (!dataScopeService.canViewOwner(customer.getOwnerName())) throw new BusinessException("无权查看该客户");
+    if (deleteGovernanceService.isHidden("CUSTOMER", id)) throw new BusinessException("客户不存在");
     var contracts = contractRepository.findByCustomerIdOrderByStartDateDesc(id);
     var opportunities = opportunityRepository.findByCustomerIdOrderByUpdatedAtDesc(id);
     var receivables = receivableRepository.findByCustomerIdOrderByDueDateAsc(id);
@@ -287,6 +292,10 @@ public class CustomerService {
   public void deleteCustomer(UUID id) {
     if (!customerRepository.existsById(id)) {
       throw new BusinessException("客户不存在");
+    }
+    Customer customer = customerRepository.findById(id).orElse(null);
+    if (!deleteGovernanceService.allowPhysicalDelete("CUSTOMER", id, customer == null ? id.toString() : customer.getCode() + " · " + customer.getName())) {
+      return;
     }
     // PostgreSQL enforces every cross-module FK, so delete from leaf tables upward.
     entityManager.createNativeQuery("""

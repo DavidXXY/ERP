@@ -1,5 +1,6 @@
 package com.company.ops.api.modules.project.service;
 
+import com.company.ops.api.common.delete.DeleteGovernanceService;
 import com.company.ops.api.common.exception.BusinessException;
 import com.company.ops.api.modules.crm.domain.Customer;
 import com.company.ops.api.modules.crm.domain.ServiceContract;
@@ -41,6 +42,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import static com.company.ops.api.common.util.MoneyUtils.amount;
@@ -55,6 +58,9 @@ public class ProjectService {
   private final CustomerRepository customerRepository;
   private final DataScopeService dataScopeService;
   private final ServiceContractRepository contractRepository;
+  private final DeleteGovernanceService deleteGovernanceService;
+  @PersistenceContext
+  private EntityManager entityManager;
 
   public ProjectService(
       ServiceContractRepository contractRepository,
@@ -63,7 +69,8 @@ public class ProjectService {
       ProjectCostEntryRepository costRepository,
       ProjectStageRecordRepository stageRecordRepository,
       CustomerRepository customerRepository,
-      DataScopeService dataScopeService
+      DataScopeService dataScopeService,
+      DeleteGovernanceService deleteGovernanceService
   ) {
     this.projectRepository = projectRepository;
     this.budgetRepository = budgetRepository;
@@ -72,19 +79,27 @@ public class ProjectService {
     this.customerRepository = customerRepository;
     this.dataScopeService = dataScopeService;
     this.contractRepository = contractRepository;
+    this.deleteGovernanceService = deleteGovernanceService;
   }
 
   @Transactional(readOnly = true)
   public Page<ProjectResponse> listProjects(Pageable pageable) {
     Page<Project> projectPage = projectRepository.findAllByOrderByCreatedAtDesc(pageable);
-    List<Project> visibleProjects = projectPage.getContent().stream().filter(project -> dataScopeService.canViewOwner(project.getManagerName())).toList();
+    List<Project> visibleProjects = deleteGovernanceService.visible("PROJECT", projectPage.getContent(), Project::getId).stream()
+        .filter(project -> dataScopeService.canViewOwner(project.getManagerName()))
+        .toList();
     Map<UUID, String> customerNames = loadCustomerNames(visibleProjects);
-    return projectPage.map(project -> toResponse(project, customerNames.get(project.getCustomerId()), null));
+    return new org.springframework.data.domain.PageImpl<>(
+        visibleProjects.stream().map(project -> toResponse(project, customerNames.get(project.getCustomerId()), null)).toList(),
+        pageable,
+        visibleProjects.size()
+    );
   }
 
   @Transactional(readOnly = true)
   public ProjectDetailResponse getProject(UUID id) {
     Project project = requireProject(id);
+    if (deleteGovernanceService.isHidden("PROJECT", id)) throw new BusinessException("项目不存在");
     if (!dataScopeService.canViewOwner(project.getManagerName())) throw new BusinessException("无权查看该项目");
     return toDetail(project);
   }
@@ -232,6 +247,93 @@ public class ProjectService {
     project.setActualCost(newCost);
     projectRepository.save(project);
     return toDetail(project);
+  }
+
+  @Transactional
+  public void deleteProject(UUID id) {
+    Project project = requireProject(id);
+    if (!dataScopeService.canViewOwner(project.getManagerName())) {
+      throw new BusinessException("无权删除该项目");
+    }
+    if (!deleteGovernanceService.allowPhysicalDelete("PROJECT", id, project.getCode() + " · " + project.getName())) {
+      return;
+    }
+    entityManager.createNativeQuery("""
+        DELETE FROM fin_payment_records
+        WHERE payable_id IN (
+          SELECT id FROM fin_procurement_payables
+          WHERE order_id IN (SELECT id FROM procurement_purchase_orders WHERE project_id = ?1)
+             OR receipt_id IN (SELECT id FROM procurement_goods_receipts WHERE order_id IN (SELECT id FROM procurement_purchase_orders WHERE project_id = ?1))
+        )
+        """).setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("""
+        DELETE FROM fin_payment_applications
+        WHERE payable_id IN (
+          SELECT id FROM fin_procurement_payables
+          WHERE order_id IN (SELECT id FROM procurement_purchase_orders WHERE project_id = ?1)
+             OR receipt_id IN (SELECT id FROM procurement_goods_receipts WHERE order_id IN (SELECT id FROM procurement_purchase_orders WHERE project_id = ?1))
+        )
+        """).setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("""
+        DELETE FROM fin_procurement_payables
+        WHERE order_id IN (SELECT id FROM procurement_purchase_orders WHERE project_id = ?1)
+           OR receipt_id IN (SELECT id FROM procurement_goods_receipts WHERE order_id IN (SELECT id FROM procurement_purchase_orders WHERE project_id = ?1))
+        """).setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("""
+        DELETE FROM procurement_cost_allocations
+        WHERE project_id = ?1
+           OR order_id IN (SELECT id FROM procurement_purchase_orders WHERE project_id = ?1)
+           OR receipt_id IN (SELECT id FROM procurement_goods_receipts WHERE order_id IN (SELECT id FROM procurement_purchase_orders WHERE project_id = ?1))
+        """).setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("""
+        DELETE FROM procurement_goods_receipts
+        WHERE order_id IN (SELECT id FROM procurement_purchase_orders WHERE project_id = ?1)
+        """).setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("""
+        DELETE FROM procurement_purchase_orders
+        WHERE project_id = ?1
+           OR request_id IN (SELECT id FROM procurement_purchase_requests WHERE project_id = ?1)
+        """).setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("""
+        DELETE FROM procurement_request_approval_records
+        WHERE request_id IN (SELECT id FROM procurement_purchase_requests WHERE project_id = ?1)
+        """).setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("DELETE FROM procurement_purchase_requests WHERE project_id = ?1")
+        .setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("""
+        DELETE FROM inventory_return_lines
+        WHERE return_id IN (
+          SELECT id FROM inventory_return_orders
+          WHERE project_id = ?1 OR issue_id IN (SELECT id FROM inventory_issue_orders WHERE project_id = ?1)
+        )
+        """).setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("""
+        DELETE FROM inventory_return_orders
+        WHERE project_id = ?1 OR issue_id IN (SELECT id FROM inventory_issue_orders WHERE project_id = ?1)
+        """).setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("""
+        DELETE FROM inventory_issue_lines
+        WHERE issue_id IN (SELECT id FROM inventory_issue_orders WHERE project_id = ?1)
+        """).setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("DELETE FROM inventory_issue_orders WHERE project_id = ?1")
+        .setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("""
+        DELETE FROM oa_expense_claims
+        WHERE project_id = ?1 OR work_order_id IN (SELECT id FROM work_orders WHERE project_id = ?1)
+        """).setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("""
+        DELETE FROM oa_outsource_orders
+        WHERE project_id = ?1 OR work_order_id IN (SELECT id FROM work_orders WHERE project_id = ?1)
+        """).setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("DELETE FROM work_orders WHERE project_id = ?1")
+        .setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("DELETE FROM project_budget_items WHERE project_id = ?1")
+        .setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("DELETE FROM project_cost_entries WHERE project_id = ?1")
+        .setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("DELETE FROM project_stage_records WHERE project_id = ?1")
+        .setParameter(1, id).executeUpdate();
+    projectRepository.deleteById(id);
   }
 
   private ProjectDetailResponse toDetail(Project project) {

@@ -15,6 +15,7 @@ public record ProcurementPayableResponse(
     String orderCode,
     UUID receiptId,
     BigDecimal amount,
+    BigDecimal taxRate,
     BigDecimal paidAmount,
     BigDecimal outstandingAmount,
     LocalDate dueDate,

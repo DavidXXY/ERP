@@ -31,10 +31,6 @@
         </a-button>
       </a-form>
 
-      <div class="login-help">
-        <span>开发账号：admin</span>
-        <span>初始密码：Admin@123</span>
-      </div>
     </a-card>
   </main>
 </template>
@@ -51,8 +47,8 @@ const loading = ref(false);
 const errorMessage = ref("");
 
 const formState = reactive({
-  username: "admin",
-  password: "Admin@123",
+  username: "",
+  password: "",
 });
 
 async function handleLogin() {

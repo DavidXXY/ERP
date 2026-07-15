@@ -12,10 +12,17 @@ export const useAuthStore = defineStore("auth", {
     isLoggedIn: (state) => Boolean(state.token),
   },
   actions: {
+    normalizeUser(user: CurrentUser) {
+      const roleCodes = user.roleCodes ?? user.roles ?? [];
+      return { ...user, roleCodes };
+    },
     async login(username: string, password: string) {
+      this.token = "";
+      this.user = null;
+      localStorage.removeItem(AUTH_TOKEN_KEY);
       const response = await loginApi({ username, password });
       this.token = response.token;
-      this.user = response.user;
+      this.user = this.normalizeUser(response.user);
       this.initialized = true;
       localStorage.setItem(AUTH_TOKEN_KEY, response.token);
     },
@@ -24,7 +31,7 @@ export const useAuthStore = defineStore("auth", {
         this.initialized = true;
         return;
       }
-      this.user = await currentUserApi();
+      this.user = this.normalizeUser(await currentUserApi());
       this.initialized = true;
     },
     logout() {
@@ -35,9 +42,8 @@ export const useAuthStore = defineStore("auth", {
     },
     can(permission: string) {
       const roles = this.user?.roleCodes ?? [];
-      if (roles.includes('ADMIN')) return true;
+      if (roles.includes("ADMIN")) return true;
       return this.user?.permissions?.includes(permission) ?? false;
     },
   },
 });
-

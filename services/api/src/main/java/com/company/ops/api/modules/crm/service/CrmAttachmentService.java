@@ -1,5 +1,6 @@
 package com.company.ops.api.modules.crm.service;
 
+import com.company.ops.api.common.delete.DeleteGovernanceService;
 import com.company.ops.api.common.exception.BusinessException;
 import com.company.ops.api.common.storage.FileStorageService;
 import com.company.ops.api.common.storage.FileStorageService.FilePolicy;
@@ -29,13 +30,16 @@ public class CrmAttachmentService {
 
   private final FileStorageService storageService;
   private final CrmAttachmentRepository repository;
+  private final DeleteGovernanceService deleteGovernanceService;
 
   public CrmAttachmentService(
     FileStorageService storageService,
-    CrmAttachmentRepository repository
+    CrmAttachmentRepository repository,
+    DeleteGovernanceService deleteGovernanceService
   ) {
     this.storageService = storageService;
     this.repository = repository;
+    this.deleteGovernanceService = deleteGovernanceService;
   }
 
   public record AttachmentDto(
@@ -45,12 +49,16 @@ public class CrmAttachmentService {
 
   public List<AttachmentDto> listByEntity(String entityType, UUID entityId) {
     return repository.findByEntityTypeAndEntityIdOrderByCreatedAtDesc(entityType, entityId)
-      .stream().map(this::toDto).toList();
+      .stream()
+      .filter(item -> !deleteGovernanceService.isHidden("CRM_ATTACHMENT", item.getId()))
+      .map(this::toDto).toList();
   }
 
   public List<AttachmentDto> listByEntityAndType(String entityType, UUID entityId, String attachmentType) {
     return repository.findByEntityTypeAndEntityIdAndAttachmentType(entityType, entityId, attachmentType)
-      .stream().map(this::toDto).toList();
+      .stream()
+      .filter(item -> !deleteGovernanceService.isHidden("CRM_ATTACHMENT", item.getId()))
+      .map(this::toDto).toList();
   }
 
   @Transactional
@@ -71,22 +79,26 @@ public class CrmAttachmentService {
   @Transactional
   public void delete(UUID id) {
     CrmAttachment att = repository.findById(id).orElseThrow(() -> new BusinessException("附件不存在"));
+    if (!deleteGovernanceService.allowPhysicalDelete("CRM_ATTACHMENT", id, att.getFileName())) return;
     storageService.delete(att.getFilePath());
     repository.delete(att);
   }
 
   public org.springframework.core.io.Resource load(UUID id) {
     CrmAttachment att = repository.findById(id).orElseThrow(() -> new BusinessException("附件不存在"));
+    if (deleteGovernanceService.isHidden("CRM_ATTACHMENT", id)) throw new BusinessException("附件不存在");
     return storageService.load(att.getFilePath());
   }
 
   public String temporaryUrl(UUID id) {
     CrmAttachment att = repository.findById(id).orElseThrow(() -> new BusinessException("附件不存在"));
+    if (deleteGovernanceService.isHidden("CRM_ATTACHMENT", id)) throw new BusinessException("附件不存在");
     return storageService.temporaryUrl(att.getFilePath());
   }
 
   public String getFileName(UUID id) {
     CrmAttachment att = repository.findById(id).orElseThrow(() -> new BusinessException("附件不存在"));
+    if (deleteGovernanceService.isHidden("CRM_ATTACHMENT", id)) throw new BusinessException("附件不存在");
     return att.getFileName();
   }
 

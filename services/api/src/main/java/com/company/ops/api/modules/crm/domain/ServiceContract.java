@@ -32,6 +32,9 @@ public class ServiceContract extends BaseEntity {
   @Column(nullable = false, precision = 14, scale = 2)
   private BigDecimal amount;
 
+  @Column(name = "tax_rate", nullable = false, precision = 5, scale = 2)
+  private BigDecimal taxRate = BigDecimal.valueOf(13);
+
   @Column(name = "start_date", nullable = false)
   private LocalDate startDate;
 
@@ -91,6 +94,14 @@ public class ServiceContract extends BaseEntity {
 
   public void setAmount(BigDecimal amount) {
     this.amount = amount;
+  }
+
+  public BigDecimal getTaxRate() {
+    return taxRate;
+  }
+
+  public void setTaxRate(BigDecimal taxRate) {
+    this.taxRate = taxRate;
   }
 
   public LocalDate getStartDate() {

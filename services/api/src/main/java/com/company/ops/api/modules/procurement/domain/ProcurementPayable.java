@@ -29,6 +29,9 @@ public class ProcurementPayable extends BaseEntity {
   @Column(nullable = false, precision = 14, scale = 2)
   private BigDecimal amount;
 
+  @Column(name = "tax_rate", nullable = false, precision = 5, scale = 2)
+  private BigDecimal taxRate = BigDecimal.valueOf(13);
+
   @Column(name = "paid_amount", nullable = false, precision = 14, scale = 2)
   private BigDecimal paidAmount = BigDecimal.ZERO;
 
@@ -77,6 +80,14 @@ public class ProcurementPayable extends BaseEntity {
 
   public void setAmount(BigDecimal amount) {
     this.amount = amount;
+  }
+
+  public BigDecimal getTaxRate() {
+    return taxRate;
+  }
+
+  public void setTaxRate(BigDecimal taxRate) {
+    this.taxRate = taxRate;
   }
 
   public BigDecimal getPaidAmount() {

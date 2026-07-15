@@ -124,7 +124,7 @@
         </a-sub-menu>
 
         <a-sub-menu
-          v-if="auth.can('system:view') || auth.can('system:user:view') || auth.can('system:organization:view') || auth.can('system:role:view') || auth.can('system:permission:view') || auth.can('risk:update')"
+          v-if="auth.can('system:view') || auth.can('system:user:view') || auth.can('system:organization:view') || auth.can('system:role:view') || auth.can('system:permission:view') || auth.can('system:deleted-records:manage') || auth.can('risk:update')"
           key="system"
         >
           <template #icon><SettingOutlined /></template>
@@ -136,6 +136,7 @@
           <a-menu-item v-if="auth.can('system:permission:view')" key="/system/permissions">权限管理</a-menu-item>
           <a-menu-item v-if="auth.can('system:role:view')" key="/system/approval-configs">审批人员配置</a-menu-item>
           <a-menu-item v-if="auth.can('system:role:view') || auth.can('risk:update')" key="/system/process-rules">流程规则配置</a-menu-item>
+          <a-menu-item v-if="auth.can('system:deleted-records:manage')" key="/system/deleted-records">删除回收站</a-menu-item>
         </a-sub-menu>
         <a-sub-menu key="self">
           <template #icon><UserOutlined /></template>
@@ -157,7 +158,6 @@
         </div>
         <GlobalSearch />
         <a-space class="app-header-actions">
-          <a-tag class="app-environment" color="green">开发环境</a-tag>
           <a-badge :count="unreadCount" :overflow-count="99">
             <a-button type="text" @click="router.push('/office/notifications')">
               消息

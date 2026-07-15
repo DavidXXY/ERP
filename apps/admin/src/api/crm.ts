@@ -183,14 +183,10 @@ export type QuoteCostRequest = {
   requestedAt: string;
   projectManager?: string;
   laborCost?: number;
-  laborTaxRate?: number;
   materialCost?: number;
-  materialTaxRate?: number;
   subcontractCost?: number;
-  subcontractTaxRate?: number;
   travelCost?: number;
   equipmentCost?: number;
-  equipmentTaxRate?: number;
   riskReserve?: number;
   otherCost?: number;
   totalCost?: number;
@@ -248,14 +244,10 @@ export type RequestQuoteCostPayload = {
 export type SubmitQuoteCostPayload = {
   projectManager: string;
   laborCost?: number;
-  laborTaxRate?: number;
   materialCost?: number;
-  materialTaxRate?: number;
   subcontractCost?: number;
-  subcontractTaxRate?: number;
   travelCost?: number;
   equipmentCost?: number;
-  equipmentTaxRate?: number;
   riskReserve?: number;
   otherCost?: number;
   suggestedPrice?: number;

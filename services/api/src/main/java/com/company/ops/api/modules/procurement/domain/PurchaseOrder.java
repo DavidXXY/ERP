@@ -38,6 +38,9 @@ public class PurchaseOrder extends BaseEntity {
   @Column(name = "unit_price", nullable = false, precision = 14, scale = 2)
   private BigDecimal unitPrice = BigDecimal.ZERO;
 
+  @Column(name = "tax_rate", nullable = false, precision = 5, scale = 2)
+  private BigDecimal taxRate = BigDecimal.valueOf(13);
+
   @Column(name = "order_amount", nullable = false, precision = 14, scale = 2)
   private BigDecimal orderAmount = BigDecimal.ZERO;
 
@@ -190,5 +193,13 @@ public class PurchaseOrder extends BaseEntity {
 
   public void setUnitPrice(BigDecimal unitPrice) {
     this.unitPrice = unitPrice;
+  }
+
+  public BigDecimal getTaxRate() {
+    return taxRate;
+  }
+
+  public void setTaxRate(BigDecimal taxRate) {
+    this.taxRate = taxRate;
   }
 }

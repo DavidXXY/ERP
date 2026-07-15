@@ -1,6 +1,7 @@
 package com.company.ops.api.modules.office.service;
 
 import com.company.ops.api.common.exception.BusinessException;
+import com.company.ops.api.common.delete.DeleteGovernanceService;
 import com.company.ops.api.common.storage.FileStorageService;
 import com.company.ops.api.common.storage.FileStorageService.FilePolicy;
 import com.company.ops.api.modules.maintenance.domain.WorkOrder;
@@ -72,6 +73,8 @@ import com.company.ops.api.modules.system.repository.SystemUserRepository;
 import com.company.ops.api.modules.system.service.ApprovalFlowSecurity;
 import com.company.ops.api.modules.system.service.ApprovalFlowSecurity.ApprovalContext;
 import com.company.ops.api.modules.system.service.ApprovalFlowSecurity.ApprovalPlan;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -119,6 +122,9 @@ public class OfficeService {
   private final SystemAuditLogRepository auditLogRepository;
   private final ApprovalFlowSecurity approvalFlowSecurity;
   private final FileStorageService storageService;
+  private final DeleteGovernanceService deleteGovernanceService;
+  @PersistenceContext
+  private EntityManager entityManager;
 
   public OfficeService(ApprovalRequestRepository approvalRepository, ApprovalActionRepository actionRepository, ApprovalRuntimeNodeRepository runtimeNodeRepository,
                        ExpenseClaimRepository expenseRepository, OutsourceOrderRepository outsourceRepository,
@@ -126,7 +132,8 @@ public class OfficeService {
 	                       SupplierRepository supplierRepository, CustomerRepository customerRepository,
 	                       ProjectRepository projectRepository, WorkOrderRepository workOrderRepository,
 	                       ProjectService projectService, SystemUserRepository userRepository, SystemRoleRepository roleRepository, SystemOrganizationRepository organizationRepository, LedgerService ledgerService, SystemAuditLogRepository auditLogRepository, ApprovalFlowSecurity approvalFlowSecurity,
-	                       FileStorageService storageService) {
+	                       FileStorageService storageService,
+	                       DeleteGovernanceService deleteGovernanceService) {
     this.approvalRepository = approvalRepository; this.actionRepository = actionRepository; this.runtimeNodeRepository = runtimeNodeRepository;
     this.expenseRepository = expenseRepository; this.outsourceRepository = outsourceRepository;
     this.documentRepository = documentRepository; this.notificationRepository = notificationRepository;
@@ -137,6 +144,7 @@ public class OfficeService {
 	    this.auditLogRepository = auditLogRepository;
 	    this.approvalFlowSecurity = approvalFlowSecurity;
 	    this.storageService = storageService;
+	    this.deleteGovernanceService = deleteGovernanceService;
 	  }
 
   @Transactional(readOnly = true)
@@ -270,6 +278,7 @@ public class OfficeService {
     action.setStepNo(completedApprovals + 1); actionRepository.save(action);
     if (saved.getApprovalType() == ApprovalType.EXPENSE) processExpenseSource(saved);
     if (saved.getApprovalType() == ApprovalType.OUTSOURCE) processOutsourceSource(saved);
+    if ("DELETE".equals(saved.getBusinessType())) processDeleteApproval(saved);
     notify("APPROVAL_RESULT", "审批结果：" + saved.getTitle(), request.decision() == ApprovalStatus.APPROVED ? "审批已通过" : "审批已驳回", "APPROVAL", saved.getId());
     return toApproval(saved);
   }
@@ -447,17 +456,26 @@ public class OfficeService {
   public Page<DocumentResponse> listDocuments(
       String bizType, UUID bizId, int page, int size) {
     Pageable p = PageRequest.of(page, size);
+    Page<DocumentFile> source;
     if (bizType != null && bizId != null) {
-      return documentRepository.findByBizTypeAndBizIdOrderByCreatedAtDesc(bizType, bizId, p).map(this::toDocument);
+      source = documentRepository.findByBizTypeAndBizIdOrderByCreatedAtDesc(bizType, bizId, p);
     } else if (bizType != null) {
-      return documentRepository.findByBizTypeOrderByCreatedAtDesc(bizType, p).map(this::toDocument);
+      source = documentRepository.findByBizTypeOrderByCreatedAtDesc(bizType, p);
+    } else {
+      source = documentRepository.findAllByOrderByCreatedAtDesc(p);
     }
-    return documentRepository.findAllByOrderByCreatedAtDesc(p).map(this::toDocument);
+    List<DocumentFile> visible = deleteGovernanceService.visible("OFFICE_DOCUMENT", source.getContent(), DocumentFile::getId);
+    return new org.springframework.data.domain.PageImpl<>(
+        visible.stream().map(this::toDocument).toList(),
+        p,
+        visible.size()
+    );
   }
 
   @Transactional(readOnly = true)
   public List<DocumentResponse> listDocumentsByBiz(String bizType, UUID bizId) {
     return documentRepository.findByBizTypeAndBizIdOrderByCreatedAtDesc(bizType, bizId).stream()
+        .filter(item -> !deleteGovernanceService.isHidden("OFFICE_DOCUMENT", item.getId()))
         .map(this::toDocument).toList();
   }
 
@@ -487,6 +505,7 @@ public class OfficeService {
   @Transactional
   public void deleteDocument(UUID id) {
     DocumentFile item = documentRepository.findById(id).orElseThrow(() -> new BusinessException("档案不存在"));
+    if (!deleteGovernanceService.allowPhysicalDelete("OFFICE_DOCUMENT", id, item.getFileName())) return;
     storageService.deleteInNamespace("office", item.getObjectKey());
     documentRepository.delete(item);
   }
@@ -495,9 +514,10 @@ public class OfficeService {
   public void deleteDocumentsByBiz(String bizType, UUID bizId) {
     List<DocumentFile> items = documentRepository.findByBizTypeAndBizIdOrderByCreatedAtDesc(bizType, bizId);
     for (DocumentFile item : items) {
+      if (!deleteGovernanceService.allowPhysicalDelete("OFFICE_DOCUMENT", item.getId(), item.getFileName())) continue;
       storageService.deleteInNamespace("office", item.getObjectKey());
+      documentRepository.delete(item);
     }
-    documentRepository.deleteByBizTypeAndBizId(bizType, bizId);
   }
 
   @Transactional
@@ -510,7 +530,11 @@ public class OfficeService {
   }
 
   @Transactional(readOnly = true)
-  public DocumentFile requireDocument(UUID id) { return documentRepository.findById(id).orElseThrow(() -> new BusinessException("档案不存在")); }
+  public DocumentFile requireDocument(UUID id) {
+    DocumentFile item = documentRepository.findById(id).orElseThrow(() -> new BusinessException("档案不存在"));
+    if (deleteGovernanceService.isHidden("OFFICE_DOCUMENT", id)) throw new BusinessException("档案不存在");
+    return item;
+  }
 
   public Resource loadDocument(DocumentFile item) {
     return storageService.load("office/" + item.getObjectKey());
@@ -834,6 +858,36 @@ public class OfficeService {
     outsourceRepository.findByApprovalRequestId(approval.getId()).ifPresent(item -> {
       item.setStatus(approval.getStatus() == ApprovalStatus.APPROVED ? OutsourceStatus.APPROVED : OutsourceStatus.REJECTED);
     });
+  }
+
+  private void processDeleteApproval(ApprovalRequest approval) {
+    if (approval.getStatus() == ApprovalStatus.APPROVED) {
+      entityManager.createNativeQuery("""
+          UPDATE sys_soft_delete_records
+          SET status = 'APPROVED',
+              approved_by = ?2,
+              approved_at = ?3,
+              updated_at = ?3
+          WHERE approval_id = ?1 AND status = 'PENDING'
+          """)
+          .setParameter(1, approval.getId())
+          .setParameter(2, approval.getApproverName())
+          .setParameter(3, OffsetDateTime.now())
+          .executeUpdate();
+    } else if (approval.getStatus() == ApprovalStatus.REJECTED) {
+      entityManager.createNativeQuery("""
+          UPDATE sys_soft_delete_records
+          SET status = 'RESTORED',
+              restored_by = ?2,
+              restored_at = ?3,
+              updated_at = ?3
+          WHERE approval_id = ?1 AND status = 'PENDING'
+          """)
+          .setParameter(1, approval.getId())
+          .setParameter(2, approval.getApproverName())
+          .setParameter(3, OffsetDateTime.now())
+          .executeUpdate();
+    }
   }
 
   public int getUnreadNotificationCount() {

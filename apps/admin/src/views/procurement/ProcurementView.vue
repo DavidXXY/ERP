@@ -71,6 +71,7 @@
               <template v-else-if="column.key === 'part'">
                 {{ record.partName }}
                 <span class="table-subtitle">申请数量 {{ formatQuantity(record.quantity) }}</span>
+                <span class="table-subtitle">预计 {{ formatMoney(record.totalAmount || 0) }} · 税率 {{ formatTaxRate(record.taxRate) }}</span>
               </template>
               <template v-else-if="column.key === 'costTarget'">
                 <a-tag :color="costTypeColor(record.costType)">{{ costTypeLabel(record.costType) }}</a-tag>
@@ -152,7 +153,7 @@
               </template>
               <template v-else-if="column.key === 'part'">
                 {{ record.partName || '未关联物料' }}
-                <span class="table-subtitle">单价 {{ formatMoney(record.unitPrice) }}</span>
+                <span class="table-subtitle">单价 {{ formatMoney(record.unitPrice) }} · 税率 {{ formatTaxRate(record.taxRate) }}</span>
               </template>
               <template v-else-if="column.key === 'quantity'">
                 <strong>{{ formatQuantity(record.receivedQty) }} / {{ formatQuantity(record.orderedQty) }}</strong>
@@ -219,7 +220,7 @@
               <template v-else-if="column.key === 'quantity'">
                 {{ formatQuantity(record.quantity) }} × {{ formatMoney(record.unitPrice) }}
               </template>
-              <template v-else-if="column.key === 'amount'"><strong>{{ formatMoney(record.amount) }}</strong></template>
+              <template v-else-if="column.key === 'amount'"><strong>{{ formatMoney(record.amount) }}</strong><span class="table-subtitle">税率 {{ formatTaxRate(record.taxRate) }}</span></template>
               <template v-else-if="column.key === 'costTarget'">
                 <a-tag :color="costTypeColor(record.costType)">{{ costTypeLabel(record.costType) }}</a-tag>
                 <span>{{ record.costTargetName }}</span>
@@ -275,7 +276,7 @@
               </template>
               <template v-else-if="column.key === 'amount'">
                 <strong>{{ formatMoney(record.amount) }}</strong>
-                <span class="table-subtitle">待付 {{ formatMoney(record.outstandingAmount) }}</span>
+                <span class="table-subtitle">待付 {{ formatMoney(record.outstandingAmount) }} · 税率 {{ formatTaxRate(record.taxRate) }}</span>
               </template>
               <template v-else-if="column.key === 'costTarget'">
                 <a-tag :color="costTypeColor(record.costType)">{{ costTypeLabel(record.costType) }}</a-tag>
@@ -344,6 +345,8 @@
           <a-col v-if="requestForm.costType === 'PROJECT'" :span="24"><a-form-item label="关联项目" name="projectId" :rules="[{ required: true, message: '请选择成本项目' }]"><a-select v-model:value="requestForm.projectId" :options="projectOptions" show-search option-filter-prop="label" placeholder="选择已审批且未关闭的项目" /></a-form-item></a-col>
           <a-col v-else :span="24"><a-form-item label="成本部门" name="departmentId" :rules="[{ required: true, message: '请选择成本部门' }]"><a-select v-model:value="requestForm.departmentId" :options="departmentOptions" show-search option-filter-prop="label" placeholder="选择承担采购成本的部门" /></a-form-item></a-col>
           <a-col :xs="24" :md="8"><a-form-item label="数量" name="quantity"><a-input-number v-model:value="requestForm.quantity" :min="0.01" :precision="2" class="full-input" /></a-form-item></a-col>
+          <a-col :xs="24" :md="8"><a-form-item label="预计单价"><a-input-number v-model:value="requestForm.unitPrice" :min="0" :precision="2" class="full-input" /></a-form-item></a-col>
+          <a-col :xs="24" :md="8"><a-form-item label="税率(%)"><a-input-number v-model:value="requestForm.taxRate" :min="0" :max="100" :precision="2" class="full-input" /></a-form-item></a-col>
           <a-col :xs="24" :md="16"><a-form-item label="采购原因"><a-input v-model:value="requestForm.reason" /></a-form-item></a-col>
         </a-row>
       </a-form>
@@ -368,6 +371,7 @@
           <a-col :xs="24" :md="8"><a-form-item label="预计到货"><a-input v-model:value="orderForm.expectedDeliveryDate" type="date" /></a-form-item></a-col>
           <a-col :xs="24" :md="8"><a-form-item label="采购数量"><a-input :value="selectedOrderRequest ? formatQuantity(selectedOrderRequest.quantity) : ''" disabled /></a-form-item></a-col>
           <a-col :xs="24" :md="8"><a-form-item label="含税单价" name="unitPrice"><a-input-number v-model:value="orderForm.unitPrice" :min="0.01" :precision="2" class="full-input" /></a-form-item></a-col>
+          <a-col :xs="24" :md="8"><a-form-item label="税率(%)"><a-input-number v-model:value="orderForm.taxRate" :min="0" :max="100" :precision="2" class="full-input" /></a-form-item></a-col>
           <a-col :xs="24" :md="8"><a-form-item label="订单金额"><a-input :value="formatMoney(orderAmount)" disabled /></a-form-item></a-col>
           <a-col :span="24"><a-form-item label="成本归属"><a-input :value="selectedOrderRequest ? `${costTypeLabel(selectedOrderRequest.costType)} · ${selectedOrderRequest.costTargetName}` : ''" disabled /></a-form-item></a-col>
         </a-row>
@@ -699,6 +703,8 @@ function openEditRequest(record: PurchaseRequest) {
     partId: record.partId as any,
     partName: record.partName,
     quantity: record.quantity,
+    unitPrice: record.unitPrice || 0,
+    taxRate: record.taxRate ?? 13,
     expectedDate: record.expectedDate,
     reason: record.reason || '',
     costType: record.costType,
@@ -736,7 +742,8 @@ function syncOrderRequest(requestId: string) {
   const request = purchaseRequests.value.find((item) => item.id === requestId);
   const part = parts.value.find((item) => item.id === request?.partId);
   orderForm.expectedDeliveryDate = request?.expectedDate;
-  orderForm.unitPrice = Number(part?.unitCost || 0) > 0 ? Number(part?.unitCost) : 0.01;
+  orderForm.unitPrice = Number(request?.unitPrice || 0) > 0 ? Number(request?.unitPrice) : (Number(part?.unitCost || 0) > 0 ? Number(part?.unitCost) : 0.01);
+  orderForm.taxRate = request?.taxRate ?? 13;
 }
 
 async function handleCreateSupplier() {
@@ -819,9 +826,9 @@ async function handleReceive() {
 }
 
 function initialSupplierForm(): CreateSupplierPayload { return { code: "", name: "", category: "", contactName: "", phone: "", settlementTerms: "", riskStatus: "NORMAL" }; }
-function initialRequestForm(): CreatePurchaseRequestPayload { return { code: "", requesterName: auth.user?.displayName || "", partId: undefined, partName: "", quantity: 1, expectedDate: addDays(7), reason: "", costType: "DEPARTMENT", projectId: undefined, departmentId: undefined }; }
+function initialRequestForm(): CreatePurchaseRequestPayload { return { code: "", requesterName: auth.user?.displayName || "", partId: undefined, partName: "", quantity: 1, unitPrice: 0, taxRate: 13, expectedDate: addDays(7), reason: "", costType: "DEPARTMENT", projectId: undefined, departmentId: undefined }; }
 function initialApprovalForm(): ApprovalForm { return { decision: "APPROVED", comment: "同意采购", approverName: auth.user?.displayName || "" }; }
-function initialOrderForm(): CreatePurchaseOrderPayload { return { code: "", supplierId: "", requestId: "", unitPrice: 0.01, expectedDeliveryDate: undefined }; }
+function initialOrderForm(): CreatePurchaseOrderPayload { return { code: "", supplierId: "", requestId: "", unitPrice: 0.01, taxRate: 13, expectedDeliveryDate: undefined }; }
 function initialReceiptForm(): ReceiptForm { return { quantity: 1, receivedDate: addDays(0), deliveryNo: "", receiverName: auth.user?.displayName || "", payableDueDate: addDays(30) }; }
 function addDays(days: number) { const date = new Date(); date.setDate(date.getDate() + days); return date.toISOString().slice(0, 10); }
 
@@ -831,6 +838,7 @@ function isOverdue(item: ProcurementPayable) { return item.status !== "PAID" && 
 function moneyFormatter(value: number | string) { return formatMoney(Number(value)); }
 function formatMoney(value: number) { return new Intl.NumberFormat("zh-CN", { style: "currency", currency: "CNY", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value || 0); }
 function formatQuantity(value: number) { return new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 2 }).format(value || 0); }
+function formatTaxRate(value?: number) { return `${Number(value ?? 13).toFixed(2).replace(/\.?0+$/, "")}%`; }
 function supplierRiskLabel(status: SupplierRiskStatus) { return supplierRiskOptions.find((item) => item.value === status)?.label || status; }
 function supplierRiskColor(status: SupplierRiskStatus) { return ({ NORMAL: "green", WATCHLIST: "orange", BLOCKED: "red" } as Record<SupplierRiskStatus, string>)[status]; }
 function costTypeLabel(type: ProcurementCostType) { return type === "PROJECT" ? "项目采购" : "部门采购"; }

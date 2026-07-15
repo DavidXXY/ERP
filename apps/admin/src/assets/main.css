@@ -26,7 +26,7 @@ body {
 
 .login-page {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 420px;
+  grid-template-columns: minmax(0, 1fr) 560px;
   min-height: 100vh;
   background:
     linear-gradient(135deg, rgba(31, 106, 91, 0.92), rgba(30, 64, 82, 0.94)),
@@ -70,8 +70,8 @@ body {
 
 .login-card {
   align-self: center;
-  width: calc(100% - 48px);
-  margin-right: 48px;
+  justify-self: start;
+  width: 420px;
   border-radius: 8px;
 }
 

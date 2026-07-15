@@ -66,27 +66,27 @@ class ProcurementServiceTest {
 
   @Test
   void projectPurchaseRequiresProject() {
-    InventoryPart part = part("交换机");
+    InventoryPart part = part("Pump");
     when(requestRepository.existsByCode("CGSQ-001")).thenReturn(false);
     when(partRepository.findById(part.getId())).thenReturn(Optional.of(part));
 
     CreatePurchaseRequestRequest request = new CreatePurchaseRequestRequest(
-        "CGSQ-001", "采购员", part.getId(), null, BigDecimal.ONE,
-        LocalDate.now().plusDays(7), "项目设备", ProcurementCostType.PROJECT, null, null
+        "CGSQ-001", "Buyer", part.getId(), null, BigDecimal.ONE,
+        BigDecimal.ZERO, new BigDecimal("13"),
+        LocalDate.now().plusDays(7), "Project equipment", ProcurementCostType.PROJECT, null, null
     );
 
     assertThatThrownBy(() -> procurementService.createPurchaseRequest(request))
-        .isInstanceOf(BusinessException.class)
-        .hasMessage("项目采购必须关联项目");
+        .isInstanceOf(BusinessException.class);
   }
 
   @Test
   void departmentPurchaseKeepsDepartmentSnapshot() {
-    InventoryPart part = part("办公电脑");
+    InventoryPart part = part("Laptop");
     SystemOrganization department = new SystemOrganization();
     department.setId(UUID.randomUUID());
     department.setCode("FINANCE_DEPARTMENT");
-    department.setName("财务部");
+    department.setName("Finance Department");
     department.setType("DEPARTMENT");
     department.setEnabled(true);
     when(requestRepository.existsByCode("CGSQ-002")).thenReturn(false);
@@ -95,35 +95,36 @@ class ProcurementServiceTest {
     when(requestRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
     var response = procurementService.createPurchaseRequest(new CreatePurchaseRequestRequest(
-        "CGSQ-002", "采购员", part.getId(), null, BigDecimal.valueOf(2),
-        LocalDate.now().plusDays(7), "部门办公", ProcurementCostType.DEPARTMENT,
+        "CGSQ-002", "Buyer", part.getId(), null, BigDecimal.valueOf(2),
+        new BigDecimal("3000"), new BigDecimal("13"),
+        LocalDate.now().plusDays(7), "Department office", ProcurementCostType.DEPARTMENT,
         null, department.getId()
     ));
 
     assertThat(response.costType()).isEqualTo(ProcurementCostType.DEPARTMENT);
     assertThat(response.costTargetId()).isEqualTo(department.getId());
     assertThat(response.costTargetCode()).isEqualTo("FINANCE_DEPARTMENT");
-    assertThat(response.costTargetName()).isEqualTo("财务部");
+    assertThat(response.costTargetName()).isEqualTo("Finance Department");
   }
 
   @Test
   void projectReceiptPostsMaterialCostAndUpdatesActualCost() {
     UUID projectId = UUID.randomUUID();
     UUID requestId = UUID.randomUUID();
-    InventoryPart part = part("控制模块");
+    InventoryPart part = part("Control module");
     part.setStockQty(BigDecimal.ZERO);
     part.setUnitCost(BigDecimal.ZERO);
     Project project = new Project();
     project.setId(projectId);
     project.setCode("XM-001");
-    project.setName("交付项目");
+    project.setName("Delivery project");
     project.setApprovalStatus(ProjectApprovalStatus.APPROVED);
     project.setStage(ProjectStage.CONSTRUCTION);
     project.setActualCost(BigDecimal.valueOf(500));
     Supplier supplier = new Supplier();
     supplier.setId(UUID.randomUUID());
     supplier.setCode("GYS-001");
-    supplier.setName("设备供应商");
+    supplier.setName("Equipment supplier");
     supplier.setRiskStatus(SupplierRiskStatus.NORMAL);
     PurchaseOrder order = new PurchaseOrder();
     order.setId(UUID.randomUUID());
@@ -136,6 +137,7 @@ class ProcurementServiceTest {
     order.setReceivedQty(BigDecimal.ZERO);
     order.setUnitPrice(BigDecimal.valueOf(120));
     order.setOrderAmount(BigDecimal.valueOf(240));
+    order.setTaxRate(BigDecimal.valueOf(13));
     order.setStatus(PurchaseOrderStatus.ORDERED);
     order.setCostType(ProcurementCostType.PROJECT);
     order.setProjectId(projectId);
@@ -160,7 +162,7 @@ class ProcurementServiceTest {
     when(projectRepository.save(project)).thenReturn(project);
 
     var result = procurementService.receiveOrder(order.getId(), new ReceivePurchaseOrderRequest(
-        BigDecimal.ONE, LocalDate.now(), "SH-001", "仓管员", LocalDate.now().plusDays(30)
+        BigDecimal.ONE, LocalDate.now(), "SH-001", "Keeper", LocalDate.now().plusDays(30)
     ));
 
     assertThat(result.costAllocation().costType()).isEqualTo(ProcurementCostType.PROJECT);

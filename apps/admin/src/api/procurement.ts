@@ -52,6 +52,7 @@ export type PurchaseRequest = {
   materialSpec?: string;
   unit?: string;
   unitPrice?: number;
+  taxRate?: number;
   totalAmount?: number;
   requiredDate?: string;
   description?: string;
@@ -88,6 +89,7 @@ export type PurchaseOrder = {
   orderedQty: number;
   receivedQty: number;
   unitPrice: number;
+  taxRate?: number;
   orderAmount: number;
   expectedDeliveryDate?: string;
   costType: ProcurementCostType;
@@ -127,6 +129,7 @@ export type CreatePurchaseRequestPayload = {
   materialSpec?: string;
   unit?: string;
   unitPrice?: number;
+  taxRate?: number;
   totalAmount?: number;
   requiredDate?: string;
   description?: string;
@@ -145,6 +148,7 @@ export type CreatePurchaseOrderPayload = {
   supplierId: string;
   requestId: string;
   unitPrice: number;
+  taxRate?: number;
   expectedDeliveryDate?: string;
 };
 
@@ -157,6 +161,7 @@ export type GoodsReceipt = {
   partName: string;
   quantity: number;
   unitPrice: number;
+  taxRate?: number;
   amount: number;
   receivedDate: string;
   deliveryNo: string;
@@ -178,6 +183,7 @@ export type ProcurementPayable = {
   orderCode: string;
   receiptId: string;
   amount: number;
+  taxRate?: number;
   paidAmount: number;
   outstandingAmount: number;
   dueDate: string;

@@ -1,5 +1,6 @@
 package com.company.ops.api.modules.crm.service;
 
+import com.company.ops.api.common.delete.DeleteGovernanceService;
 import com.company.ops.api.common.exception.BusinessException;
 import com.company.ops.api.common.service.CodeGenerator;
 import com.company.ops.api.modules.crm.domain.ApprovalDecision;
@@ -83,6 +84,7 @@ public class CrmOperationsService {
   private final ReceivableRepository receivableRepository;
   private final ReceivableReceiptRepository receiptRepository;
   private final LedgerService ledgerService;
+  private final DeleteGovernanceService deleteGovernanceService;
 
   @jakarta.persistence.PersistenceContext
   private jakarta.persistence.EntityManager entityManager;
@@ -100,7 +102,8 @@ public class CrmOperationsService {
       ReceivableRepository receivableRepository,
       ReceivableReceiptRepository receiptRepository,
       LedgerService ledgerService,
-                              CodeGenerator codeGenerator) {
+      DeleteGovernanceService deleteGovernanceService,
+                               CodeGenerator codeGenerator) {
     this.codeGenerator = codeGenerator;
     this.customerRepository = customerRepository;
     this.opportunityRepository = opportunityRepository;
@@ -112,11 +115,12 @@ public class CrmOperationsService {
     this.receivableRepository = receivableRepository;
     this.receiptRepository = receiptRepository;
     this.ledgerService = ledgerService;
+    this.deleteGovernanceService = deleteGovernanceService;
   }
 
   @Transactional(readOnly = true)
   public List<OpportunityResponse> listOpportunities() {
-    List<Opportunity> opportunities = opportunityRepository.findAllByOrderByUpdatedAtDesc();
+    List<Opportunity> opportunities = deleteGovernanceService.visible("OPPORTUNITY", opportunityRepository.findAllByOrderByUpdatedAtDesc(), Opportunity::getId);
     Map<UUID, Customer> customers = customerMap(opportunities.stream()
         .map(Opportunity::getCustomerId)
         .toList());
@@ -127,6 +131,7 @@ public class CrmOperationsService {
   public OpportunityResponse getOpportunity(UUID id) {
     Opportunity opportunity = opportunityRepository.findById(id)
         .orElseThrow(() -> new BusinessException("商机不存在"));
+    if (deleteGovernanceService.isHidden("OPPORTUNITY", id)) throw new BusinessException("商机不存在");
     return toOpportunity(opportunity, customerMap(nullableId(opportunity.getCustomerId())));
   }
 
@@ -174,7 +179,7 @@ public class CrmOperationsService {
 
   @Transactional(readOnly = true)
   public List<QuoteResponse> listQuotes() {
-    List<QuotePlan> quotes = quoteRepository.findAllByOrderByUpdatedAtDesc();
+    List<QuotePlan> quotes = deleteGovernanceService.visible("QUOTE", quoteRepository.findAllByOrderByUpdatedAtDesc(), QuotePlan::getId);
     Map<UUID, Customer> customers = customerMap(quotes.stream().map(QuotePlan::getCustomerId).toList());
     Map<UUID, Opportunity> opportunities = opportunityMap(quotes.stream()
         .map(QuotePlan::getOpportunityId)
@@ -186,6 +191,7 @@ public class CrmOperationsService {
   public QuoteResponse getQuote(UUID id) {
     QuotePlan quote = quoteRepository.findById(id)
         .orElseThrow(() -> new BusinessException("报价方案不存在"));
+    if (deleteGovernanceService.isHidden("QUOTE", id)) throw new BusinessException("报价不存在");
     return toQuote(
         quote,
         customerMap(nullableId(quote.getCustomerId())),
@@ -229,6 +235,7 @@ public class CrmOperationsService {
     quote.setInspectCycle(request.inspectCycle());
     quote.setPaymentNodes(request.paymentNodes());
     quote.setAmount(defaultAmount(request.amount()));
+    quote.setTaxRate(defaultTaxRate(request.taxRate()));
     applyQuoteBudget(quote, request.laborBudget(), request.materialBudget(), request.subcontractBudget(), request.travelBudget(), request.otherBudget());
     quote.setVersionNo(1);
     quote.setStatus(QuoteStatus.DRAFT);
@@ -256,6 +263,7 @@ public class CrmOperationsService {
     quote.setInspectCycle(request.inspectCycle());
     quote.setPaymentNodes(request.paymentNodes());
     quote.setAmount(defaultAmount(request.amount()));
+    quote.setTaxRate(defaultTaxRate(request.taxRate()));
     applyQuoteBudget(quote, request.laborBudget(), request.materialBudget(), request.subcontractBudget(), request.travelBudget(), request.otherBudget());
     quote.setVersionNo(Math.max(quote.getVersionNo(), 1) + 1);
     quote.setStatus(QuoteStatus.DRAFT);
@@ -375,7 +383,7 @@ public class CrmOperationsService {
 
   @Transactional(readOnly = true)
   public List<ContractResponse> listContracts() {
-    List<ServiceContract> contracts = contractRepository.findAllByOrderByEndDateAsc();
+    List<ServiceContract> contracts = deleteGovernanceService.visible("CONTRACT", contractRepository.findAllByOrderByEndDateAsc(), ServiceContract::getId);
     Map<UUID, Customer> customers = customerMap(contracts.stream()
         .map(ServiceContract::getCustomerId)
         .toList());
@@ -386,6 +394,7 @@ public class CrmOperationsService {
   public ContractResponse getContract(UUID id) {
     ServiceContract contract = contractRepository.findById(id)
         .orElseThrow(() -> new BusinessException("合同不存在"));
+    if (deleteGovernanceService.isHidden("CONTRACT", id)) throw new BusinessException("合同不存在");
     return toContract(contract, customerMap(nullableId(contract.getCustomerId())));
   }
 
@@ -499,7 +508,7 @@ public class CrmOperationsService {
 
   @Transactional(readOnly = true)
   public List<FollowUpResponse> listFollowUps() {
-    List<FollowUp> followUps = followUpRepository.findAllByOrderByFollowedAtDesc();
+    List<FollowUp> followUps = deleteGovernanceService.visible("FOLLOW_UP", followUpRepository.findAllByOrderByFollowedAtDesc(), FollowUp::getId);
     Map<UUID, Customer> customers = customerMap(followUps.stream().map(FollowUp::getCustomerId).toList());
     Map<UUID, Opportunity> opportunities = opportunityMap(followUps.stream()
         .map(FollowUp::getOpportunityId)
@@ -588,6 +597,10 @@ public class CrmOperationsService {
     if (!opportunityRepository.existsById(id)) {
       throw new BusinessException("商机不存在");
     }
+    Opportunity opportunity = opportunityRepository.findById(id).orElse(null);
+    if (!deleteGovernanceService.allowPhysicalDelete("OPPORTUNITY", id, opportunity == null ? id.toString() : opportunity.getCode())) {
+      return;
+    }
     // Cascade delete related records
     entityManager.createNativeQuery("DELETE FROM crm_follow_ups WHERE opportunity_id = ?1")
         .setParameter(1, id).executeUpdate();
@@ -606,6 +619,10 @@ public class CrmOperationsService {
     if (!quoteRepository.existsById(id)) {
       throw new BusinessException("报价方案不存在");
     }
+    QuotePlan quote = quoteRepository.findById(id).orElse(null);
+    if (!deleteGovernanceService.allowPhysicalDelete("QUOTE", id, quote == null ? id.toString() : quote.getCode())) {
+      return;
+    }
     entityManager.createNativeQuery("DELETE FROM crm_quote_revisions WHERE quote_id = ?1")
         .setParameter(1, id).executeUpdate();
     entityManager.createNativeQuery("DELETE FROM crm_quote_approval_records WHERE quote_id = ?1")
@@ -619,11 +636,21 @@ public class CrmOperationsService {
     if (!contractRepository.existsById(id)) {
       throw new BusinessException("合同不存在");
     }
+    ServiceContract contract = contractRepository.findById(id).orElse(null);
+    if (!deleteGovernanceService.allowPhysicalDelete("CONTRACT", id, contract == null ? id.toString() : contract.getCode())) {
+      return;
+    }
     // Disassociate receivables (skip if fin_receivables table does not exist)
     try {
       entityManager.createNativeQuery("UPDATE fin_receivables SET contract_id = NULL WHERE contract_id = ?1")
           .setParameter(1, id).executeUpdate();
     } catch (Exception ignored) {}
+    entityManager.createNativeQuery("UPDATE crm_quote_approval_records SET generated_contract_id = NULL WHERE generated_contract_id = ?1")
+        .setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("UPDATE project_projects SET contract_id = NULL WHERE contract_id = ?1")
+        .setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("UPDATE work_orders SET contract_id = NULL WHERE contract_id = ?1")
+        .setParameter(1, id).executeUpdate();
     // Clean up attached files
     entityManager.createNativeQuery("DELETE FROM crm_attachment WHERE entity_type = 'CONTRACT' AND entity_id = ?1")
         .setParameter(1, id).executeUpdate();
@@ -634,6 +661,9 @@ public class CrmOperationsService {
   public void deleteFollowUp(UUID id) {
     FollowUp f = followUpRepository.findById(id)
         .orElseThrow(() -> new BusinessException("跟进记录不存在"));
+    if (!deleteGovernanceService.allowPhysicalDelete("FOLLOW_UP", id, f.getSubject() == null ? id.toString() : f.getSubject())) {
+      return;
+    }
     followUpRepository.delete(f);
   }
 
@@ -681,6 +711,7 @@ public class CrmOperationsService {
         item.getInspectCycle(),
         item.getPaymentNodes(),
         item.getAmount(),
+        defaultTaxRate(item.getTaxRate()),
         defaultAmount(item.getLaborBudget()),
         defaultAmount(item.getMaterialBudget()),
         defaultAmount(item.getSubcontractBudget()),
@@ -735,6 +766,7 @@ public class CrmOperationsService {
     contract.setProjectName(request.projectName());
     contract.setContractType(request.contractType());
     contract.setAmount(defaultAmount(quote.getAmount()));
+    contract.setTaxRate(defaultTaxRate(quote.getTaxRate()));
     contract.setStartDate(request.startDate());
     contract.setEndDate(request.endDate());
     contract.setServiceCycle(request.serviceCycle());
@@ -803,6 +835,7 @@ public class CrmOperationsService {
     revision.setInspectCycle(quote.getInspectCycle());
     revision.setPaymentNodes(quote.getPaymentNodes());
     revision.setAmount(defaultAmount(quote.getAmount()));
+    revision.setTaxRate(defaultTaxRate(quote.getTaxRate()));
     revision.setLaborBudget(defaultAmount(quote.getLaborBudget()));
     revision.setMaterialBudget(defaultAmount(quote.getMaterialBudget()));
     revision.setSubcontractBudget(defaultAmount(quote.getSubcontractBudget()));
@@ -824,6 +857,7 @@ public class CrmOperationsService {
         revision.getInspectCycle(),
         revision.getPaymentNodes(),
         revision.getAmount(),
+        defaultTaxRate(revision.getTaxRate()),
         defaultAmount(revision.getLaborBudget()),
         defaultAmount(revision.getMaterialBudget()),
         defaultAmount(revision.getSubcontractBudget()),
@@ -849,6 +883,7 @@ public class CrmOperationsService {
         item.getProjectName(),
         item.getContractType(),
         item.getAmount(),
+        defaultTaxRate(item.getTaxRate()),
         item.getStartDate(),
         item.getEndDate(),
         item.getServiceCycle(),
@@ -1003,7 +1038,8 @@ public class CrmOperationsService {
   }
 
   private BigDecimal quoteBudgetAmount(QuotePlan quote) {
-    return quoteBudgetRawAmount(quote);
+    BigDecimal projectBudget = projectBudgetAmountForQuote(quote);
+    return projectBudget.compareTo(BigDecimal.ZERO) > 0 ? projectBudget : quoteBudgetRawAmount(quote);
   }
 
   private BigDecimal quoteBudgetRawAmount(QuotePlan quote) {
@@ -1050,8 +1086,31 @@ public class CrmOperationsService {
     return grossMargin.multiply(BigDecimal.valueOf(100)).divide(amount, 2, RoundingMode.HALF_UP);
   }
 
+  private BigDecimal projectBudgetAmountForQuote(QuotePlan quote) {
+    if (quote == null || quote.getId() == null) {
+      return BigDecimal.ZERO;
+    }
+    Object value = entityManager.createNativeQuery("""
+        SELECT COALESCE(SUM(item.planned_amount), 0)
+        FROM project_budget_items item
+        JOIN project_projects project ON project.id = item.project_id
+        JOIN crm_service_contracts contract ON contract.id = project.contract_id
+        WHERE contract.quote_id = ?1
+        """)
+        .setParameter(1, quote.getId())
+        .getSingleResult();
+    if (value instanceof BigDecimal amount) {
+      return amount;
+    }
+    return value == null ? BigDecimal.ZERO : new BigDecimal(value.toString());
+  }
+
   private BigDecimal defaultAmount(BigDecimal value) {
     return value == null ? BigDecimal.ZERO : value;
+  }
+
+  private BigDecimal defaultTaxRate(BigDecimal value) {
+    return value == null ? BigDecimal.valueOf(13) : value;
   }
 
 
@@ -1066,6 +1125,7 @@ public class CrmOperationsService {
     renewal.setProjectName(contract.getProjectName());
     renewal.setContractType(contract.getContractType());
     renewal.setAmount(contract.getAmount());
+    renewal.setTaxRate(defaultTaxRate(contract.getTaxRate()));
     renewal.setServiceCycle(contract.getServiceCycle());
     renewal.setStartDate(java.time.LocalDate.now());
     renewal.setEndDate(java.time.LocalDate.now().plusYears(1));
@@ -1161,6 +1221,7 @@ public class CrmOperationsService {
       if (root.has("projectName")) contract.setProjectName(root.get("projectName").asText());
       if (root.has("contractType")) contract.setContractType(root.get("contractType").asText());
       if (root.has("amount")) contract.setAmount(new java.math.BigDecimal(root.get("amount").asText()));
+      if (root.has("taxRate")) contract.setTaxRate(new java.math.BigDecimal(root.get("taxRate").asText()));
       if (root.has("startDate")) contract.setStartDate(java.time.LocalDate.parse(root.get("startDate").asText()));
       if (root.has("endDate")) contract.setEndDate(java.time.LocalDate.parse(root.get("endDate").asText()));
       if (root.has("serviceCycle")) contract.setServiceCycle(root.get("serviceCycle").asText());
@@ -1190,6 +1251,7 @@ public class CrmOperationsService {
     if (request.projectName() != null) contract.setProjectName(request.projectName());
     if (request.contractType() != null) contract.setContractType(request.contractType());
     if (request.amount() != null) contract.setAmount(request.amount());
+    if (request.taxRate() != null) contract.setTaxRate(defaultTaxRate(request.taxRate()));
     if (request.serviceCycle() != null) contract.setServiceCycle(request.serviceCycle());
     if (request.startDate() != null) contract.setStartDate(LocalDate.parse(request.startDate()));
     if (request.endDate() != null) contract.setEndDate(LocalDate.parse(request.endDate()));

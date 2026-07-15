@@ -28,6 +28,7 @@
           <a-descriptions-item label="合同金额">
             <strong>{{ formatMoney(record.amount) }}</strong>
           </a-descriptions-item>
+          <a-descriptions-item label="税率">{{ formatTaxRate(record.taxRate) }}</a-descriptions-item>
           <a-descriptions-item label="服务频次">{{ record.serviceCycle || "未设置" }}</a-descriptions-item>
           <a-descriptions-item label="关联报价">{{ record.quoteId || "未关联" }}</a-descriptions-item>
         </a-descriptions>
@@ -233,6 +234,7 @@
           <a-col :xs="24" :md="12"><a-form-item label="项目名称" name="projectName"><a-input v-model:value="editForm.projectName" /></a-form-item></a-col>
           <a-col :xs="24" :md="12"><a-form-item label="合同类型" name="contractType"><a-input v-model:value="editForm.contractType" /></a-form-item></a-col>
           <a-col :xs="24" :md="12"><a-form-item label="合同金额" name="amount"><a-input-number v-model:value="editForm.amount" :min="0" class="full-input" /></a-form-item></a-col>
+          <a-col :xs="24" :md="12"><a-form-item label="税率(%)"><a-input-number v-model:value="editForm.taxRate" :min="0" :max="100" :precision="2" class="full-input" /></a-form-item></a-col>
           <a-col :xs="24" :md="12"><a-form-item label="服务频次"><a-input v-model:value="editForm.serviceCycle" /></a-form-item></a-col>
           <a-col :xs="24" :md="12"><a-form-item label="开始日期"><a-input v-model:value="editForm.startDate" type="date" /></a-form-item></a-col>
           <a-col :xs="24" :md="12"><a-form-item label="结束日期"><a-input v-model:value="editForm.endDate" type="date" /></a-form-item></a-col>
@@ -265,7 +267,7 @@ const loading = ref(true);
 const saving = ref(false);
 const editOpen = ref(false);
 const editFormRef = ref();
-const editForm = reactive({ projectName: "", contractType: "", amount: 0, serviceCycle: "", startDate: "", endDate: "", reason: "" });
+const editForm = reactive({ projectName: "", contractType: "", amount: 0, taxRate: 13, serviceCycle: "", startDate: "", endDate: "", reason: "" });
 const changeColumns = [
   { title: "变更原因", key: "reason", width: 220 },
   { title: "状态", key: "status", width: 80 },
@@ -413,7 +415,7 @@ async function handleDeleteAttachment(attId: string) {
 
 function openEdit() {
   if (!record.value) return;
-  Object.assign(editForm, { projectName: record.value.projectName, contractType: record.value.contractType, amount: record.value.amount, serviceCycle: record.value.serviceCycle || "", startDate: record.value.startDate || "", endDate: record.value.endDate || "" });
+  Object.assign(editForm, { projectName: record.value.projectName, contractType: record.value.contractType, amount: record.value.amount, taxRate: record.value.taxRate ?? 13, serviceCycle: record.value.serviceCycle || "", startDate: record.value.startDate || "", endDate: record.value.endDate || "" });
   editOpen.value = true;
 }
 
@@ -424,7 +426,7 @@ async function handleEdit() {
   saving.value = true;
   try {
     const payload = {
-      changeData: JSON.stringify({ projectName: editForm.projectName, contractType: editForm.contractType, amount: editForm.amount, serviceCycle: editForm.serviceCycle, startDate: editForm.startDate, endDate: editForm.endDate }),
+      changeData: JSON.stringify({ projectName: editForm.projectName, contractType: editForm.contractType, amount: editForm.amount, taxRate: editForm.taxRate, serviceCycle: editForm.serviceCycle, startDate: editForm.startDate, endDate: editForm.endDate }),
       reason: editForm.reason,
       requestedBy: auth.user?.displayName || "",
     };
@@ -505,6 +507,10 @@ async function convertToProject() {
 
 function goBack() {
   router.push("/crm/contracts");
+}
+
+function formatTaxRate(value?: number) {
+  return `${Number(value ?? 13).toFixed(2).replace(/\.?0+$/, "")}%`;
 }
 </script>
 <style scoped>

@@ -13,5 +13,6 @@ public record CreatePurchaseOrderRequest(
     @NotNull UUID supplierId,
     @NotNull UUID requestId,
     @NotNull @DecimalMin("0.01") BigDecimal unitPrice,
+    @DecimalMin("0") BigDecimal taxRate,
     LocalDate expectedDeliveryDate
 ) {}

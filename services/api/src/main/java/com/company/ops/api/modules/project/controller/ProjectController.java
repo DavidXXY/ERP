@@ -17,6 +17,7 @@ import org.springframework.data.web.PageableDefault;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -86,5 +87,12 @@ public class ProjectController {
       @Valid @RequestBody CreateProjectCostRequest request
   ) {
     return ApiResponse.ok(projectService.createCost(id, request));
+  }
+
+  @DeleteMapping("/{id}")
+  @PreAuthorize("hasAuthority('project:delete')")
+  public ApiResponse<Void> deleteProject(@PathVariable UUID id) {
+    projectService.deleteProject(id);
+    return ApiResponse.ok(null);
   }
 }

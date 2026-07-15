@@ -145,3 +145,7 @@ export function advanceProjectStage(id: string, payload: { targetStage: ProjectS
 export function createProjectCost(id: string, payload: { category: ProjectCostCategory; sourceType: ProjectCostSource; sourceNo?: string; description: string; amount: number; incurredDate: string }) {
   return request<ProjectDetail>({ method: "POST", url: `/projects/${id}/costs`, data: payload });
 }
+
+export function deleteProject(id: string) {
+  return request<void>({ method: "DELETE", url: `/projects/${id}` });
+}

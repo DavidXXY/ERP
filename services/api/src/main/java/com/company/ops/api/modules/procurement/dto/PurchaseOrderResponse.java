@@ -18,6 +18,7 @@ public record PurchaseOrderResponse(
     BigDecimal orderedQty,
     BigDecimal receivedQty,
     BigDecimal unitPrice,
+    BigDecimal taxRate,
     BigDecimal orderAmount,
     LocalDate expectedDeliveryDate,
     ProcurementCostType costType,

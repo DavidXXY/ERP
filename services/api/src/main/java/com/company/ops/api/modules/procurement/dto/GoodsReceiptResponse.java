@@ -14,6 +14,7 @@ public record GoodsReceiptResponse(
     String partName,
     BigDecimal quantity,
     BigDecimal unitPrice,
+    BigDecimal taxRate,
     BigDecimal amount,
     LocalDate receivedDate,
     String deliveryNo,

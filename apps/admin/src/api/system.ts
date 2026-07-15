@@ -468,3 +468,27 @@ export function searchGlobal(q: string) {
 export function getSystemVersion() {
   return request<{ version: string; buildTime: string; appName: string }>({ method: "GET", url: "/system/version" });
 }
+
+export type DeletedRecord = {
+  id: string;
+  entityType: string;
+  entityId: string;
+  title: string;
+  status: "PENDING" | "APPROVED";
+  requestedBy?: string;
+  requestedAt?: string;
+  approvedBy?: string;
+  approvedAt?: string;
+};
+
+export function listDeletedRecords() {
+  return request<DeletedRecord[]>({ method: "GET", url: "/system/deleted-records" });
+}
+
+export function approveDeletedRecord(id: string) {
+  return request<void>({ method: "POST", url: `/system/deleted-records/${id}/approve` });
+}
+
+export function restoreDeletedRecord(id: string) {
+  return request<void>({ method: "POST", url: `/system/deleted-records/${id}/restore` });
+}

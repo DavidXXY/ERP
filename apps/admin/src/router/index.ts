@@ -105,6 +105,7 @@ const rootRoutes: RouteRecordRaw[] = [
   { path: "system/permissions", name: "system-permissions", component: PermissionManagementView, meta: { title: "\u6743\u9650\u7ba1\u7406", permission: "system:permission:view" } },
   { path: "system/approval-configs", name: "system-approval-configs", component: ApprovalConfigView, meta: { title: "审批人员配置", permission: "system:role:view" } },
   { path: "system/process-rules", name: "system-process-rules", component: () => import("@/views/system/ProcessRuleConfigView.vue"), meta: { title: "流程规则配置", permissions: ["system:role:view", "risk:update"] } },
+  { path: "system/deleted-records", name: "system-deleted-records", component: () => import("@/views/system/DeletedRecordsView.vue"), meta: { title: "删除回收站", permission: "system:deleted-records:manage" } },
   // Self-service
   { path: "self", name: "self-dashboard", component: SelfDashboardView, meta: { title: "\u6211\u7684\u5de5\u4f5c\u53f0" } },
   { path: "self/profile", name: "self-profile", component: SelfProfileView, meta: { title: "\u6211\u7684\u6863\u6848" } },

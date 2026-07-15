@@ -7,7 +7,7 @@
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'receipt'"><strong>{{ record.receiptCode || record.id?.slice(0,8) }}</strong><span class="table-subtitle">{{ record.orderCode || '' }}</span></template>
           <template v-else-if="column.key === 'supplier'">{{ record.supplierName || '-' }}</template>
-          <template v-else-if="column.key === 'amount'">{{ formatMoney(record.amount) }}</template>
+          <template v-else-if="column.key === 'amount'">{{ formatMoney(record.amount) }}<br><span class="table-subtitle">税率 {{ formatTaxRate(record.taxRate) }}</span></template>
           <template v-else-if="column.key === 'date'">{{ record.receivedAt?.slice(0,10) || '-' }}</template>
           <template v-else-if="column.key === 'status'"><a-tag color="green">已入库</a-tag></template>
         </template>
@@ -24,4 +24,5 @@ const receiptColumns=[{title:'入库单',key:'receipt',width:220},{title:'供应
 onMounted(loadData);
 async function loadData(){loading.value=true;try{receipts.value=await listGoodsReceipts();}catch(e:any){message.error(e.message||'加载失败');}finally{loading.value=false;}}
 function formatMoney(v:number){return new Intl.NumberFormat('zh-CN',{style:'currency',currency:'CNY',minimumFractionDigits:2}).format(v||0);}
+function formatTaxRate(v?:number){return `${Number(v??13).toFixed(2).replace(/\.?0+$/,'')}%`;}
 </script>

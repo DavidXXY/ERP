@@ -12,8 +12,8 @@ public record LoginResponse(
       String username,
       String displayName,
       List<String> roles,
+      List<String> roleCodes,
       List<String> permissions
   ) {
   }
 }
-

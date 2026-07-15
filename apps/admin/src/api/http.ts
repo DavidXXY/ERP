@@ -15,7 +15,9 @@ export const http = axios.create({
 
 http.interceptors.request.use((config) => {
   const token = localStorage.getItem(AUTH_TOKEN_KEY);
-  if (token) {
+  const url = config.url || "";
+  const isLoginRequest = url.includes("/auth/login");
+  if (token && !isLoginRequest) {
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;

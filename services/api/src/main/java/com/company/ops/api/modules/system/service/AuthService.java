@@ -41,8 +41,8 @@ public class AuthService {
         principal.getUsername(),
         principal.displayName(),
         principal.roleCodes(),
+        principal.roleCodes(),
         principal.permissions()
     );
   }
 }
-

@@ -1,6 +1,7 @@
 node_modules/
 dist/
 apps/admin/dist/
+.logs/
 apps/admin/vite.config.ts.timestamp-*.mjs
 services/api/target/
 .dev/

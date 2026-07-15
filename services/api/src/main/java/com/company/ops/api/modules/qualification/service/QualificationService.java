@@ -1,5 +1,6 @@
 package com.company.ops.api.modules.qualification.service;
 
+import com.company.ops.api.common.delete.DeleteGovernanceService;
 import com.company.ops.api.common.exception.BusinessException;
 import com.company.ops.api.common.service.CodeGenerator;
 import com.company.ops.api.modules.qualification.domain.CompanyQualification;
@@ -68,6 +69,7 @@ public class QualificationService {
   private final SystemUserRepository systemUserRepository;
   private final SystemOrganizationRepository organizationRepository;
   private final ObjectMapper objectMapper;
+  private final DeleteGovernanceService deleteGovernanceService;
 
   public QualificationService(QualificationEmployeeRepository employeeRepository,
                               CompanyQualificationRepository companyRepository,
@@ -77,7 +79,8 @@ public class QualificationService {
                               SystemUserRepository systemUserRepository,
                               SystemOrganizationRepository organizationRepository,
                               ObjectMapper objectMapper,
-                              CodeGenerator codeGenerator) {
+                              CodeGenerator codeGenerator,
+                              DeleteGovernanceService deleteGovernanceService) {
     this.codeGenerator = codeGenerator;
     this.employeeRepository = employeeRepository;
     this.companyRepository = companyRepository;
@@ -87,6 +90,7 @@ public class QualificationService {
     this.systemUserRepository = systemUserRepository;
     this.organizationRepository = organizationRepository;
     this.objectMapper = objectMapper;
+    this.deleteGovernanceService = deleteGovernanceService;
   }
 
   @Transactional(readOnly = true)
@@ -126,7 +130,7 @@ public class QualificationService {
 
   @Transactional(readOnly = true)
   public List<CompanyQualificationResponse> listCompanies(String keyword, String subjectCompany, String status) {
-    return companyRepository.findAllByOrderBySubjectCompanyAscNameAsc().stream()
+    return deleteGovernanceService.visible("QUAL_COMPANY", companyRepository.findAllByOrderBySubjectCompanyAscNameAsc(), CompanyQualification::getId).stream()
         .filter(item -> matchesCompany(item, keyword, subjectCompany, status)).map(this::toCompany).toList();
   }
 
@@ -147,14 +151,15 @@ public class QualificationService {
 
   @Transactional
   public void deleteCompany(UUID id) {
-    if (!companyRepository.existsById(id)) throw new BusinessException("公司资质不存在");
+    CompanyQualification item = companyRepository.findById(id).orElseThrow(() -> new BusinessException("公司资质不存在"));
+    if (!deleteGovernanceService.allowPhysicalDelete("QUAL_COMPANY", id, item.getName())) return;
     companyRepository.deleteById(id);
   }
 
   @Transactional(readOnly = true)
   public List<EmployeeResponse> listEmployees(String keyword, String employmentStatus, UUID organizationId) {
     Map<UUID, List<PersonnelCertificate>> certificates = certificatesByEmployee();
-    return employeeRepository.findAllByOrderByNameAsc().stream()
+    return deleteGovernanceService.visible("QUAL_EMPLOYEE", employeeRepository.findAllByOrderByNameAsc(), QualificationEmployee::getId).stream()
         .filter(item -> matchesEmployee(item, keyword, employmentStatus, organizationId))
         .map(item -> toEmployee(item, certificates.getOrDefault(item.getId(), List.of()))).toList();
   }
@@ -162,9 +167,10 @@ public class QualificationService {
   @Transactional(readOnly = true)
   public EmployeeDetailResponse employeeDetail(UUID id) {
     QualificationEmployee item = employeeRepository.findById(id).orElseThrow(() -> new BusinessException("人员档案不存在"));
-    List<EmployeeContractResponse> contracts = contractRepository.findByEmployeeIdOrderByStartDateDesc(id).stream()
+    if (deleteGovernanceService.isHidden("QUAL_EMPLOYEE", id)) throw new BusinessException("人员档案不存在");
+    List<EmployeeContractResponse> contracts = deleteGovernanceService.visible("QUAL_EMPLOYEE_CONTRACT", contractRepository.findByEmployeeIdOrderByStartDateDesc(id), EmployeeContract::getId).stream()
         .map(this::toEmployeeContract).toList();
-    List<PersonnelCertificate> certificates = certificateRepository.findByEmployeeIdOrderByNameAsc(id);
+    List<PersonnelCertificate> certificates = deleteGovernanceService.visible("QUAL_CERTIFICATE", certificateRepository.findByEmployeeIdOrderByNameAsc(id), PersonnelCertificate::getId);
     return new EmployeeDetailResponse(toEmployee(item, certificates), contracts,
         certificates.stream().map(this::toCertificate).toList());
   }
@@ -188,14 +194,16 @@ public class QualificationService {
 
   @Transactional
   public void deleteEmployee(UUID id) {
-    if (!employeeRepository.existsById(id)) throw new BusinessException("人员档案不存在");
+    QualificationEmployee item = employeeRepository.findById(id).orElseThrow(() -> new BusinessException("人员档案不存在"));
+    if (!deleteGovernanceService.allowPhysicalDelete("QUAL_EMPLOYEE", id, item.getName())) return;
     employeeRepository.deleteById(id);
   }
 
   @Transactional(readOnly = true)
   public List<EmployeeContractResponse> listEmployeeContracts(UUID employeeId) {
     if (!employeeRepository.existsById(employeeId)) throw new BusinessException("人员档案不存在");
-    return contractRepository.findByEmployeeIdOrderByStartDateDesc(employeeId).stream().map(this::toEmployeeContract).toList();
+    return deleteGovernanceService.visible("QUAL_EMPLOYEE_CONTRACT", contractRepository.findByEmployeeIdOrderByStartDateDesc(employeeId), EmployeeContract::getId)
+        .stream().map(this::toEmployeeContract).toList();
   }
 
   @Transactional
@@ -218,14 +226,15 @@ public class QualificationService {
 
   @Transactional
   public void deleteEmployeeContract(UUID id) {
-    if (!contractRepository.existsById(id)) throw new BusinessException("员工合同不存在");
+    EmployeeContract item = contractRepository.findById(id).orElseThrow(() -> new BusinessException("员工合同不存在"));
+    if (!deleteGovernanceService.allowPhysicalDelete("QUAL_EMPLOYEE_CONTRACT", id, item.getContractNo())) return;
     contractRepository.deleteById(id);
   }
 
   @Transactional(readOnly = true)
   public List<PersonnelCertificateResponse> listCertificates(String keyword, String specialty, String status,
                                                               Boolean companyRegistered) {
-    return certificateRepository.findAllByOrderByEmployeeNameAscNameAsc().stream()
+    return deleteGovernanceService.visible("QUAL_CERTIFICATE", certificateRepository.findAllByOrderByEmployeeNameAscNameAsc(), PersonnelCertificate::getId).stream()
         .filter(item -> matchesCertificate(item, keyword, specialty, status, companyRegistered))
         .map(this::toCertificate).toList();
   }
@@ -247,13 +256,14 @@ public class QualificationService {
 
   @Transactional
   public void deleteCertificate(UUID id) {
-    if (!certificateRepository.existsById(id)) throw new BusinessException("人员证书不存在");
+    PersonnelCertificate item = certificateRepository.findById(id).orElseThrow(() -> new BusinessException("人员证书不存在"));
+    if (!deleteGovernanceService.allowPhysicalDelete("QUAL_CERTIFICATE", id, item.getName())) return;
     certificateRepository.deleteById(id);
   }
 
   @Transactional(readOnly = true)
   public List<PerformanceResponse> listPerformances(String keyword, String subjectCompany, String projectType) {
-    return performanceRepository.findAllByOrderBySubjectCompanyAscNameAsc().stream()
+    return deleteGovernanceService.visible("QUAL_PERFORMANCE", performanceRepository.findAllByOrderBySubjectCompanyAscNameAsc(), QualificationPerformance::getId).stream()
         .filter(item -> contains(item.getName(), keyword) || contains(item.getClientName(), keyword)
             || contains(item.getContractNo(), keyword) || blank(keyword))
         .filter(item -> blank(subjectCompany) || subjectCompany.equals(item.getSubjectCompany()))
@@ -278,7 +288,8 @@ public class QualificationService {
 
   @Transactional
   public void deletePerformance(UUID id) {
-    if (!performanceRepository.existsById(id)) throw new BusinessException("项目业绩不存在");
+    QualificationPerformance item = performanceRepository.findById(id).orElseThrow(() -> new BusinessException("项目业绩不存在"));
+    if (!deleteGovernanceService.allowPhysicalDelete("QUAL_PERFORMANCE", id, item.getName())) return;
     performanceRepository.deleteById(id);
   }
 

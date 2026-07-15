@@ -43,7 +43,7 @@
             <span class="line-clamp-2">{{ record.serviceScope }}</span>
             <span v-if="record.inspectCycle" class="table-subtitle">{{ record.inspectCycle }}</span>
           </template>
-          <template v-else-if="column.key === 'amount'"><strong>{{ formatMoney(record.amount) }}</strong></template>
+          <template v-else-if="column.key === 'amount'"><strong>{{ formatMoney(record.amount) }}</strong><span class="table-subtitle">税率 {{ formatTaxRate(record.taxRate) }}</span></template>
           <template v-else-if="column.key === 'margin'">
             <a-tag :color="quoteMargin(record).rate < 15 ? 'red' : quoteMargin(record).rate < 25 ? 'orange' : 'green'">{{ quoteMargin(record).rate.toFixed(1) }}%</a-tag>
             <span class="table-subtitle">预算 {{ formatMoney(quoteMargin(record).cost) }} · 毛利 {{ formatMoney(quoteMargin(record).gross) }}</span>
@@ -160,6 +160,7 @@
           <a-col :span="24"><a-form-item label="服务范围" name="serviceScope"><a-textarea v-model:value="form.serviceScope" :rows="3" /></a-form-item></a-col>
           <a-col :xs="24" :md="12"><a-form-item label="服务频次"><a-input v-model:value="form.inspectCycle" placeholder="例如：季度服务，年度检测" /></a-form-item></a-col>
           <a-col :xs="24" :md="12"><a-form-item label="报价金额" name="amount"><a-input-number v-model:value="form.amount" :min="0" class="full-input" /></a-form-item></a-col>
+          <a-col :xs="24" :md="12"><a-form-item label="税率(%)"><a-input-number v-model:value="form.taxRate" :min="0" :max="100" :precision="2" class="full-input" /></a-form-item></a-col>
           <a-col :span="24">
             <div class="quote-budget-panel">
               <div class="quote-budget-head">
@@ -551,6 +552,7 @@ function openEdit(record: QuotePlan) {
     inspectCycle: record.inspectCycle || "",
     paymentNodes: record.paymentNodes || "",
     amount: Number(record.amount),
+    taxRate: Number(record.taxRate ?? 13),
     laborBudget: Number(record.laborBudget || 0),
     materialBudget: Number(record.materialBudget || 0),
     subcontractBudget: Number(record.subcontractBudget || 0),
@@ -592,6 +594,7 @@ async function handleSaveQuote() {
         inspectCycle: form.inspectCycle,
         paymentNodes: form.paymentNodes,
         amount: form.amount,
+        taxRate: form.taxRate,
         laborBudget: form.laborBudget,
         materialBudget: form.materialBudget,
         subcontractBudget: form.subcontractBudget,
@@ -610,6 +613,7 @@ async function handleSaveQuote() {
         inspectCycle: form.inspectCycle,
         paymentNodes: form.paymentNodes,
         amount: form.amount,
+        taxRate: form.taxRate,
         laborBudget: form.laborBudget,
         materialBudget: form.materialBudget,
         subcontractBudget: form.subcontractBudget,
@@ -790,6 +794,7 @@ function initialForm() {
     inspectCycle: "",
     paymentNodes: "",
     amount: 0,
+    taxRate: 13,
     laborBudget: 0,
     materialBudget: 0,
     subcontractBudget: 0,
@@ -850,6 +855,10 @@ function formatDateTime(value?: string) {
 
 function moneyFormatter({ value }: { value: number }) {
   return formatMoney(value);
+}
+
+function formatTaxRate(value?: number) {
+  return `${Number(value ?? 13).toFixed(2).replace(/\.?0+$/, "")}%`;
 }
 </script>
 

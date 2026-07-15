@@ -30,7 +30,7 @@
             <span>{{ record.startDate }} 至 {{ record.endDate }}</span>
             <span class="table-subtitle">{{ record.serviceCycle || "未设置服务频次" }}</span>
           </template>
-          <template v-else-if="column.key === 'amount'"><strong>{{ formatMoney(record.amount) }}</strong></template>
+          <template v-else-if="column.key === 'amount'"><strong>{{ formatMoney(record.amount) }}</strong><span class="table-subtitle">税率 {{ formatTaxRate(record.taxRate) }}</span></template>
           <template v-else-if="column.key === 'status'"><a-tag :color="contractStatusColor(record.status)">{{ contractStatusLabel(record.status) }}</a-tag></template>
           <template v-else-if="column.key === 'action'">
             <span @click.stop>
@@ -139,5 +139,9 @@ async function loadData() {
 
 function moneyFormatter({ value }: { value: number }) {
   return formatMoney(value);
+}
+
+function formatTaxRate(value?: number) {
+  return `${Number(value ?? 13).toFixed(2).replace(/\.?0+$/, "")}%`;
 }
 </script>

@@ -148,6 +148,7 @@ export type QuotePlan = {
   inspectCycle?: string;
   paymentNodes?: string;
   amount: number;
+  taxRate?: number;
   laborBudget?: number;
   materialBudget?: number;
   subcontractBudget?: number;
@@ -177,6 +178,7 @@ export type CreateQuotePayload = {
   inspectCycle?: string;
   paymentNodes?: string;
   amount: number;
+  taxRate?: number;
   laborBudget?: number;
   materialBudget?: number;
   subcontractBudget?: number;
@@ -190,6 +192,7 @@ export type UpdateQuotePayload = {
   inspectCycle?: string;
   paymentNodes?: string;
   amount: number;
+  taxRate?: number;
   laborBudget?: number;
   materialBudget?: number;
   subcontractBudget?: number;
@@ -235,6 +238,7 @@ export type QuoteRevision = {
   inspectCycle?: string;
   paymentNodes?: string;
   amount: number;
+  taxRate?: number;
   laborBudget?: number;
   materialBudget?: number;
   subcontractBudget?: number;
@@ -283,6 +287,7 @@ export type ServiceContract = {
   projectName: string;
   contractType: string;
   amount: number;
+  taxRate?: number;
   startDate: string;
   endDate: string;
   serviceCycle?: string;
@@ -570,6 +575,7 @@ export type UpdateContractPayload = {
   projectName?: string;
   contractType?: string;
   amount?: number;
+  taxRate?: number;
   startDate?: string;
   endDate?: string;
   serviceCycle?: string;

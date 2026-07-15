@@ -13,12 +13,16 @@ import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.OpportunityResponse
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.QuoteResponse;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ProcessQuoteApprovalRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ProcessQuoteCustomerResultRequest;
+import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ApproveQuoteCostRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.QuoteConversionResult;
+import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.QuoteCostRequestResponse;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.QuoteRevisionResponse;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ReceivableResponse;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.RecordReceiptRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.RegisterInvoiceRequest;
+import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.RequestQuoteCostRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.RenewalResponse;
+import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.SubmitQuoteCostRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.UpdateQuoteRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.CreateContractChangeRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ContractChangeResponse;
@@ -118,6 +122,39 @@ public class CrmOperationsController {
   @PreAuthorize("hasAuthority('crm:quote:view')")
   public ApiResponse<List<QuoteRevisionResponse>> listQuoteRevisions(@PathVariable UUID id) {
     return ApiResponse.ok(crmOperationsService.listQuoteRevisions(id));
+  }
+
+  @PostMapping("/quotes/{id}/cost-requests")
+  @PreAuthorize("hasAuthority('crm:quote:update')")
+  public ApiResponse<QuoteCostRequestResponse> requestQuoteCost(
+      @PathVariable UUID id,
+      @Valid @RequestBody RequestQuoteCostRequest request
+  ) {
+    return ApiResponse.ok(crmOperationsService.requestQuoteCost(id, request));
+  }
+
+  @GetMapping("/quotes/{id}/cost-requests")
+  @PreAuthorize("hasAuthority('crm:quote:view')")
+  public ApiResponse<List<QuoteCostRequestResponse>> listQuoteCostRequests(@PathVariable UUID id) {
+    return ApiResponse.ok(crmOperationsService.listQuoteCostRequests(id));
+  }
+
+  @PutMapping("/quote-cost-requests/{id}")
+  @PreAuthorize("hasAuthority('crm:quote:cost')")
+  public ApiResponse<QuoteCostRequestResponse> submitQuoteCost(
+      @PathVariable UUID id,
+      @Valid @RequestBody SubmitQuoteCostRequest request
+  ) {
+    return ApiResponse.ok(crmOperationsService.submitQuoteCost(id, request));
+  }
+
+  @PostMapping("/quote-cost-requests/{id}/approval")
+  @PreAuthorize("hasAuthority('crm:quote:cost')")
+  public ApiResponse<QuoteCostRequestResponse> approveQuoteCost(
+      @PathVariable UUID id,
+      @Valid @RequestBody ApproveQuoteCostRequest request
+  ) {
+    return ApiResponse.ok(crmOperationsService.approveQuoteCost(id, request));
   }
 
   @PostMapping("/quotes/{id}/submit")

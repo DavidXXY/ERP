@@ -44,6 +44,9 @@ export function opportunityStageColor(value: OpportunityStage) {
 export function quoteStatusLabel(value: QuoteStatus) {
   return {
     DRAFT: "草稿",
+    COST_REQUESTED: "已询价",
+    COSTING: "成本测算中",
+    COST_APPROVED: "成本已确认",
     PENDING_APPROVAL: "审批中",
     APPROVED: "待客户确认",
     REJECTED: "已驳回",
@@ -56,6 +59,9 @@ export function quoteStatusLabel(value: QuoteStatus) {
 export function quoteStatusColor(value: QuoteStatus) {
   return {
     DRAFT: "default",
+    COST_REQUESTED: "cyan",
+    COSTING: "orange",
+    COST_APPROVED: "green",
     PENDING_APPROVAL: "orange",
     APPROVED: "blue",
     REJECTED: "red",
@@ -133,12 +139,6 @@ export function formatMoney(value?: number) {
   }).format(value || 0);
 }
 
-/**
- * Generate a business code with the given prefix.
- * Format: PREFIX-YYYYMMDD-HHmmss
- * Used by Opportunities (SJ), Quotes (BJ), and Contracts (HT)
- * so the suffix is consistent across modules.
- */
 export function generateCode(prefix: string) {
   const now = new Date();
   const stamp = [

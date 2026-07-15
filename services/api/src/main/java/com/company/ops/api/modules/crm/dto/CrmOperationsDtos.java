@@ -6,6 +6,7 @@ import com.company.ops.api.modules.crm.domain.CustomerLevel;
 import com.company.ops.api.modules.crm.domain.FollowUpType;
 import com.company.ops.api.modules.crm.domain.OpportunityStage;
 import com.company.ops.api.modules.crm.domain.QuoteCustomerDecision;
+import com.company.ops.api.modules.crm.domain.QuoteCostStatus;
 import com.company.ops.api.modules.crm.domain.QuoteStatus;
 import com.company.ops.api.modules.crm.domain.ReceivableStatus;
 import com.company.ops.api.modules.crm.domain.RiskStatus;
@@ -131,7 +132,60 @@ public final class CrmOperationsDtos {
       String customerDecisionBy,
       OffsetDateTime customerDecidedAt,
       UUID convertedContractId,
+      QuoteCostRequestResponse costRequest,
       OffsetDateTime updatedAt
+  ) {
+  }
+
+  public record RequestQuoteCostRequest(
+      @NotBlank @Size(max = 80) String requestedBy
+  ) {
+  }
+
+  public record SubmitQuoteCostRequest(
+      @NotBlank @Size(max = 80) String projectManager,
+      @DecimalMin("0") BigDecimal laborCost,
+      @DecimalMin("0") BigDecimal materialCost,
+      @DecimalMin("0") BigDecimal subcontractCost,
+      @DecimalMin("0") BigDecimal travelCost,
+      @DecimalMin("0") BigDecimal equipmentCost,
+      @DecimalMin("0") BigDecimal riskReserve,
+      @DecimalMin("0") BigDecimal otherCost,
+      @DecimalMin("0") BigDecimal suggestedPrice,
+      @Size(max = 800) String costRemark
+  ) {
+  }
+
+  public record ApproveQuoteCostRequest(
+      @NotNull ApprovalDecision decision,
+      @NotBlank @Size(max = 80) String approverName,
+      @NotBlank @Size(max = 500) String comment
+  ) {
+  }
+
+  public record QuoteCostRequestResponse(
+      UUID id,
+      UUID quoteId,
+      UUID opportunityId,
+      UUID customerId,
+      QuoteCostStatus status,
+      String requestedBy,
+      OffsetDateTime requestedAt,
+      String projectManager,
+      BigDecimal laborCost,
+      BigDecimal materialCost,
+      BigDecimal subcontractCost,
+      BigDecimal travelCost,
+      BigDecimal equipmentCost,
+      BigDecimal riskReserve,
+      BigDecimal otherCost,
+      BigDecimal totalCost,
+      BigDecimal suggestedPrice,
+      String costRemark,
+      OffsetDateTime submittedAt,
+      String approvedBy,
+      OffsetDateTime approvedAt,
+      String approvalComment
   ) {
   }
 

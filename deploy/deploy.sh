@@ -51,7 +51,9 @@ fi
 echo ""
 echo "▸ 推送前端到 $REMOTE_HOST:$FRONTEND_DIR ……"
 ssh "$REMOTE_HOST" "mkdir -p $FRONTEND_DIR"
-rsync -ahz --delete "$FRONTEND_DIST/" "$REMOTE_HOST:$FRONTEND_DIR/"
+# Keep old hashed assets during rollout. A browser can still be running the
+# previous index bundle for a short time and may request its old dynamic chunks.
+rsync -ahz "$FRONTEND_DIST/" "$REMOTE_HOST:$FRONTEND_DIR/"
 echo "  ✅ 前端部署完成"
 
 # ── 后端推送 ──

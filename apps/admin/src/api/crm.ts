@@ -149,6 +149,7 @@ export type QuotePlan = {
   paymentNodes?: string;
   amount: number;
   taxRate?: number;
+  netAmount?: number;
   laborBudget?: number;
   materialBudget?: number;
   subcontractBudget?: number;
@@ -179,6 +180,7 @@ export type CreateQuotePayload = {
   paymentNodes?: string;
   amount: number;
   taxRate?: number;
+  netAmount?: number;
   laborBudget?: number;
   materialBudget?: number;
   subcontractBudget?: number;
@@ -288,6 +290,7 @@ export type ServiceContract = {
   contractType: string;
   amount: number;
   taxRate?: number;
+  netAmount?: number;
   startDate: string;
   endDate: string;
   serviceCycle?: string;

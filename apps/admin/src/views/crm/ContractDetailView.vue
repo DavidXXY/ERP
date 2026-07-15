@@ -28,6 +28,9 @@
           <a-descriptions-item label="合同金额">
             <strong>{{ formatMoney(record.amount) }}</strong>
           </a-descriptions-item>
+          <a-descriptions-item label="未税金额">
+            <strong>{{ formatMoney(record.netAmount ?? calcNetAmount(record.amount, record.taxRate)) }}</strong>
+          </a-descriptions-item>
           <a-descriptions-item label="税率">{{ formatTaxRate(record.taxRate) }}</a-descriptions-item>
           <a-descriptions-item label="服务频次">{{ record.serviceCycle || "未设置" }}</a-descriptions-item>
           <a-descriptions-item label="关联报价">{{ record.quoteId || "未关联" }}</a-descriptions-item>
@@ -128,6 +131,9 @@
             <a-descriptions-item label="版本">V{{ relatedQuote.versionNo }}</a-descriptions-item>
             <a-descriptions-item label="报价金额">
               <strong>{{ formatMoney(relatedQuote.amount) }}</strong>
+            </a-descriptions-item>
+            <a-descriptions-item label="未税金额">
+              <strong>{{ formatMoney(relatedQuote.netAmount ?? calcNetAmount(relatedQuote.amount, relatedQuote.taxRate)) }}</strong>
             </a-descriptions-item>
             <a-descriptions-item label="服务范围" :span="3">{{ relatedQuote.serviceScope }}</a-descriptions-item>
             <a-descriptions-item label="服务频次">{{ relatedQuote.inspectCycle || "未设置" }}</a-descriptions-item>
@@ -511,6 +517,12 @@ function goBack() {
 
 function formatTaxRate(value?: number) {
   return `${Number(value ?? 13).toFixed(2).replace(/\.?0+$/, "")}%`;
+}
+
+function calcNetAmount(amount?: number, taxRate?: number) {
+  const rate = Number(taxRate ?? 13);
+  const divisor = 1 + rate / 100;
+  return divisor > 0 ? Number(amount || 0) / divisor : Number(amount || 0);
 }
 </script>
 <style scoped>

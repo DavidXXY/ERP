@@ -712,6 +712,7 @@ public class CrmOperationsService {
         item.getPaymentNodes(),
         item.getAmount(),
         defaultTaxRate(item.getTaxRate()),
+        netAmount(item.getAmount(), item.getTaxRate()),
         defaultAmount(item.getLaborBudget()),
         defaultAmount(item.getMaterialBudget()),
         defaultAmount(item.getSubcontractBudget()),
@@ -858,6 +859,7 @@ public class CrmOperationsService {
         revision.getPaymentNodes(),
         revision.getAmount(),
         defaultTaxRate(revision.getTaxRate()),
+        netAmount(revision.getAmount(), revision.getTaxRate()),
         defaultAmount(revision.getLaborBudget()),
         defaultAmount(revision.getMaterialBudget()),
         defaultAmount(revision.getSubcontractBudget()),
@@ -884,6 +886,7 @@ public class CrmOperationsService {
         item.getContractType(),
         item.getAmount(),
         defaultTaxRate(item.getTaxRate()),
+        netAmount(item.getAmount(), item.getTaxRate()),
         item.getStartDate(),
         item.getEndDate(),
         item.getServiceCycle(),
@@ -1111,6 +1114,16 @@ public class CrmOperationsService {
 
   private BigDecimal defaultTaxRate(BigDecimal value) {
     return value == null ? BigDecimal.valueOf(13) : value;
+  }
+
+  private BigDecimal netAmount(BigDecimal amount, BigDecimal taxRate) {
+    BigDecimal grossAmount = defaultAmount(amount);
+    BigDecimal rate = defaultTaxRate(taxRate);
+    BigDecimal divisor = BigDecimal.ONE.add(rate.divide(BigDecimal.valueOf(100), 8, RoundingMode.HALF_UP));
+    if (divisor.compareTo(BigDecimal.ZERO) <= 0) {
+      return grossAmount.setScale(2, RoundingMode.HALF_UP);
+    }
+    return grossAmount.divide(divisor, 2, RoundingMode.HALF_UP);
   }
 
 

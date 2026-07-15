@@ -43,7 +43,7 @@
             <span class="line-clamp-2">{{ record.serviceScope }}</span>
             <span v-if="record.inspectCycle" class="table-subtitle">{{ record.inspectCycle }}</span>
           </template>
-          <template v-else-if="column.key === 'amount'"><strong>{{ formatMoney(record.amount) }}</strong><span class="table-subtitle">税率 {{ formatTaxRate(record.taxRate) }}</span></template>
+          <template v-else-if="column.key === 'amount'"><strong>{{ formatMoney(record.amount) }}</strong><span class="table-subtitle">未税 {{ formatMoney(record.netAmount ?? calcNetAmount(record.amount, record.taxRate)) }} · 税率 {{ formatTaxRate(record.taxRate) }}</span></template>
           <template v-else-if="column.key === 'margin'">
             <a-tag :color="quoteMargin(record).rate < 15 ? 'red' : quoteMargin(record).rate < 25 ? 'orange' : 'green'">{{ quoteMargin(record).rate.toFixed(1) }}%</a-tag>
             <span class="table-subtitle">预算 {{ formatMoney(quoteMargin(record).cost) }} · 毛利 {{ formatMoney(quoteMargin(record).gross) }}</span>
@@ -122,6 +122,7 @@
       <div v-for="record in filteredQuotes" :key="record.id" class="mobile-card-item" @click="router.push('/crm/quotes/' + record.id)">
         <div class="mobile-card-header"><strong>{{ record.code }}</strong><a-tag :color="quoteStatusColor(record.status)">{{ quoteStatusLabel(record.status) }}</a-tag></div>
         <div class="mobile-card-body"><span>{{ record.customerName }}</span><strong>{{ formatMoney(record.amount) }}</strong></div>
+        <div class="mobile-card-tags">未税 {{ formatMoney(record.netAmount ?? calcNetAmount(record.amount, record.taxRate)) }} · 税率 {{ formatTaxRate(record.taxRate) }}</div>
         <div class="mobile-card-tags">{{ record.opportunityCode || "未关联商机" }}</div>
       </div>
     </div>
@@ -453,7 +454,7 @@ function syncReceivable(index: number, field: string, value: string | number) {
 const columns = [
   { title: "报价 / 客户", key: "quote", width: 250 },
   { title: "方案内容", key: "scope", width: 320 },
-  { title: "报价金额", key: "amount", width: 140 },
+  { title: "报价金额", key: "amount", width: 180 },
   { title: "毛利校验", key: "margin", width: 150 },
   { title: "流程状态", key: "status", width: 220 },
   { title: "客户反馈", key: "customerResult", width: 260 },
@@ -859,6 +860,12 @@ function moneyFormatter({ value }: { value: number }) {
 
 function formatTaxRate(value?: number) {
   return `${Number(value ?? 13).toFixed(2).replace(/\.?0+$/, "")}%`;
+}
+
+function calcNetAmount(amount?: number, taxRate?: number) {
+  const rate = Number(taxRate ?? 13);
+  const divisor = 1 + rate / 100;
+  return divisor > 0 ? Number(amount || 0) / divisor : Number(amount || 0);
 }
 </script>
 

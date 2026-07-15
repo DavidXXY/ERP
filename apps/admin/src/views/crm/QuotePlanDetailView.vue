@@ -37,6 +37,9 @@
             <strong>{{ formatMoney(record.amount) }}</strong>
             <span class="table-subtitle">税率 {{ formatTaxRate(record.taxRate) }}</span>
           </a-descriptions-item>
+          <a-descriptions-item label="未税金额">
+            <strong>{{ formatMoney(record.netAmount ?? calcNetAmount(record.amount, record.taxRate)) }}</strong>
+          </a-descriptions-item>
           <a-descriptions-item label="服务频次">{{ record.inspectCycle || "未设置" }}</a-descriptions-item>
           <a-descriptions-item label="付款节点">{{ record.paymentNodes || "未设置" }}</a-descriptions-item>
           <a-descriptions-item label="更新">{{ formatDateTime(record.updatedAt) }}</a-descriptions-item>
@@ -49,6 +52,7 @@
         <a-card title="报价预算与毛利测算" style="margin-top: 16px">
           <a-row :gutter="[16, 16]" class="metric-row">
             <a-col :xs="12" :md="6"><a-statistic title="报价金额" :value="record.amount" :formatter="moneyFormatter" /></a-col>
+            <a-col :xs="12" :md="6"><a-statistic title="未税金额" :value="record.netAmount ?? calcNetAmount(record.amount, record.taxRate)" :formatter="moneyFormatter" /></a-col>
             <a-col :xs="12" :md="6"><a-statistic title="税率" :value="record.taxRate ?? 13" suffix="%" /></a-col>
             <a-col :xs="12" :md="6"><a-statistic title="预算成本" :value="quoteMargin.cost" :formatter="moneyFormatter" /></a-col>
             <a-col :xs="12" :md="6"><a-statistic title="预计毛利" :value="quoteMargin.gross" :formatter="moneyFormatter" :value-style="{ color: quoteMargin.gross < 0 ? '#ff4d4f' : '#52c41a' }" /></a-col>
@@ -78,6 +82,7 @@
             </a-descriptions-item>
             <a-descriptions-item label="项目名称">{{ relatedContract.projectName }}</a-descriptions-item>
             <a-descriptions-item label="合同金额"><strong>{{ formatMoney(relatedContract.amount) }}</strong></a-descriptions-item>
+            <a-descriptions-item label="未税金额"><strong>{{ formatMoney(relatedContract.netAmount ?? calcNetAmount(relatedContract.amount, relatedContract.taxRate)) }}</strong></a-descriptions-item>
             <a-descriptions-item label="税率">{{ formatTaxRate(relatedContract.taxRate) }}</a-descriptions-item>
             <a-descriptions-item label="合同周期">{{ relatedContract.startDate }} ~ {{ relatedContract.endDate }}</a-descriptions-item>
             <a-descriptions-item label="状态">
@@ -264,6 +269,12 @@ function moneyFormatter({ value }: { value: number | string }) { return formatMo
 
 function formatTaxRate(value?: number) {
   return `${Number(value ?? 13).toFixed(2).replace(/\.?0+$/, "")}%`;
+}
+
+function calcNetAmount(amount?: number, taxRate?: number) {
+  const rate = Number(taxRate ?? 13);
+  const divisor = 1 + rate / 100;
+  return divisor > 0 ? Number(amount || 0) / divisor : Number(amount || 0);
 }
 </script>
 

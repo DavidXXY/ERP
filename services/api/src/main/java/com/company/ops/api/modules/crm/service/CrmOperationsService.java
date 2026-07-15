@@ -350,10 +350,14 @@ public class CrmOperationsService {
         .orElseThrow(() -> new BusinessException("报价方案不存在"));
     cost.setProjectManager(request.projectManager());
     cost.setLaborCost(defaultAmount(request.laborCost()));
+    cost.setLaborTaxRate(defaultCostTaxRate(request.laborTaxRate(), BigDecimal.valueOf(6)));
     cost.setMaterialCost(defaultAmount(request.materialCost()));
+    cost.setMaterialTaxRate(defaultCostTaxRate(request.materialTaxRate(), BigDecimal.valueOf(13)));
     cost.setSubcontractCost(defaultAmount(request.subcontractCost()));
+    cost.setSubcontractTaxRate(defaultCostTaxRate(request.subcontractTaxRate(), BigDecimal.valueOf(6)));
     cost.setTravelCost(defaultAmount(request.travelCost()));
     cost.setEquipmentCost(defaultAmount(request.equipmentCost()));
+    cost.setEquipmentTaxRate(defaultCostTaxRate(request.equipmentTaxRate(), BigDecimal.valueOf(13)));
     cost.setRiskReserve(defaultAmount(request.riskReserve()));
     cost.setOtherCost(defaultAmount(request.otherCost()));
     cost.setSuggestedPrice(defaultAmount(request.suggestedPrice()));
@@ -961,10 +965,14 @@ public class CrmOperationsService {
         cost.getRequestedAt(),
         cost.getProjectManager(),
         defaultAmount(cost.getLaborCost()),
+        defaultCostTaxRate(cost.getLaborTaxRate(), BigDecimal.valueOf(6)),
         defaultAmount(cost.getMaterialCost()),
+        defaultCostTaxRate(cost.getMaterialTaxRate(), BigDecimal.valueOf(13)),
         defaultAmount(cost.getSubcontractCost()),
+        defaultCostTaxRate(cost.getSubcontractTaxRate(), BigDecimal.valueOf(6)),
         defaultAmount(cost.getTravelCost()),
         defaultAmount(cost.getEquipmentCost()),
+        defaultCostTaxRate(cost.getEquipmentTaxRate(), BigDecimal.valueOf(13)),
         defaultAmount(cost.getRiskReserve()),
         defaultAmount(cost.getOtherCost()),
         quoteCostTotal(cost),
@@ -1276,6 +1284,10 @@ public class CrmOperationsService {
 
   private BigDecimal defaultTaxRate(BigDecimal value) {
     return value == null ? BigDecimal.valueOf(13) : value;
+  }
+
+  private BigDecimal defaultCostTaxRate(BigDecimal value, BigDecimal defaultValue) {
+    return value == null ? defaultValue : value;
   }
 
   private BigDecimal netAmount(BigDecimal amount, BigDecimal taxRate) {

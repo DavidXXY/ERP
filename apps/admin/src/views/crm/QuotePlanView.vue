@@ -326,28 +326,57 @@
       </a-form>
     </a-modal>
 
-    <a-modal v-model:open="costSubmitOpen" title="填写项目成本" width="780px" :confirm-loading="saving" @ok="handleCostSubmit">
+    <a-modal v-model:open="costSubmitOpen" title="填写售前支持成本" width="860px" :confirm-loading="saving" @ok="handleCostSubmit">
       <a-alert
         v-if="selectedQuote"
         class="section-alert"
         type="info"
         show-icon
         :message="`${selectedQuote.code} · ${selectedQuote.customerName}`"
-        :description="`成本合计 ${formatMoney(costSubmitTotal)}，建议报价 ${formatMoney(costSubmitForm.suggestedPrice || 0)}`"
+        description="人工默认税率 6%，材料和设备默认税率 13%，差旅、风险预留和其他成本不设置税率。"
       />
       <a-form ref="costSubmitFormRef" :model="costSubmitForm" :rules="costSubmitRules" layout="vertical">
-        <a-row :gutter="12">
-          <a-col :xs="24" :md="8"><a-form-item label="项目负责人" name="projectManager"><a-input v-model:value="costSubmitForm.projectManager" /></a-form-item></a-col>
-          <a-col :xs="12" :md="8"><a-form-item label="人工成本"><a-input-number v-model:value="costSubmitForm.laborCost" :min="0" :precision="2" class="full-input" /></a-form-item></a-col>
-          <a-col :xs="12" :md="8"><a-form-item label="材料成本"><a-input-number v-model:value="costSubmitForm.materialCost" :min="0" :precision="2" class="full-input" /></a-form-item></a-col>
-          <a-col :xs="12" :md="8"><a-form-item label="外包成本"><a-input-number v-model:value="costSubmitForm.subcontractCost" :min="0" :precision="2" class="full-input" /></a-form-item></a-col>
-          <a-col :xs="12" :md="8"><a-form-item label="差旅成本"><a-input-number v-model:value="costSubmitForm.travelCost" :min="0" :precision="2" class="full-input" /></a-form-item></a-col>
-          <a-col :xs="12" :md="8"><a-form-item label="设备成本"><a-input-number v-model:value="costSubmitForm.equipmentCost" :min="0" :precision="2" class="full-input" /></a-form-item></a-col>
-          <a-col :xs="12" :md="8"><a-form-item label="风险预留"><a-input-number v-model:value="costSubmitForm.riskReserve" :min="0" :precision="2" class="full-input" /></a-form-item></a-col>
-          <a-col :xs="12" :md="8"><a-form-item label="其他成本"><a-input-number v-model:value="costSubmitForm.otherCost" :min="0" :precision="2" class="full-input" /></a-form-item></a-col>
-          <a-col :xs="12" :md="8"><a-form-item label="建议报价"><a-input-number v-model:value="costSubmitForm.suggestedPrice" :min="0" :precision="2" class="full-input" /></a-form-item></a-col>
-          <a-col :span="24"><a-form-item label="成本说明"><a-textarea v-model:value="costSubmitForm.costRemark" :rows="3" /></a-form-item></a-col>
-        </a-row>
+        <div class="cost-summary-strip">
+          <a-form-item label="项目负责人" name="projectManager" class="cost-summary-owner">
+            <a-input v-model:value="costSubmitForm.projectManager" />
+          </a-form-item>
+          <div>
+            <span>成本合计</span>
+            <strong>{{ formatMoney(costSubmitTotal) }}</strong>
+          </div>
+          <a-form-item label="建议报价" class="cost-summary-price">
+            <a-input-number v-model:value="costSubmitForm.suggestedPrice" :min="0" :precision="2" class="full-input" />
+          </a-form-item>
+        </div>
+
+        <div class="cost-entry-table">
+          <div class="cost-entry-head">
+            <span>成本类型</span>
+            <span>金额</span>
+            <span>税率</span>
+          </div>
+          <div v-for="item in costEntryRows" :key="item.amountKey" class="cost-entry-row">
+            <div>
+              <strong>{{ item.title }}</strong>
+              <span>{{ item.description }}</span>
+            </div>
+            <a-input-number v-model:value="costSubmitForm[item.amountKey]" :min="0" :precision="2" class="full-input" />
+            <a-input-number
+              v-if="item.taxKey"
+              v-model:value="costSubmitForm[item.taxKey]"
+              :min="0"
+              :max="100"
+              :precision="2"
+              addon-after="%"
+              class="full-input"
+            />
+            <a-tag v-else color="default">无税率</a-tag>
+          </div>
+        </div>
+
+        <a-form-item label="成本说明">
+          <a-textarea v-model:value="costSubmitForm.costRemark" :rows="3" placeholder="填写成本口径、供应商依据、风险说明或售前支持范围" />
+        </a-form-item>
       </a-form>
     </a-modal>
 
@@ -518,6 +547,9 @@ const contractTypeOptions = [
 const statusOptions = [
   { label: "全部状态", value: "ALL" },
   { label: "草稿", value: "DRAFT" },
+  { label: "已询价", value: "COST_REQUESTED" },
+  { label: "成本测算中", value: "COSTING" },
+  { label: "成本已确认", value: "COST_APPROVED" },
   { label: "审批中", value: "PENDING_APPROVAL" },
   { label: "待客户确认", value: "APPROVED" },
   { label: "内部驳回", value: "REJECTED" },
@@ -599,6 +631,17 @@ const formMargin = computed(() => {
   return { cost, gross, rate: amount > 0 ? gross / amount * 100 : 0 };
 });
 const costSubmitTotal = computed(() => quoteCostTotal(costSubmitForm));
+type CostAmountKey = "laborCost" | "materialCost" | "subcontractCost" | "travelCost" | "equipmentCost" | "riskReserve" | "otherCost";
+type CostTaxKey = "laborTaxRate" | "materialTaxRate" | "subcontractTaxRate" | "equipmentTaxRate";
+const costEntryRows: Array<{ title: string; description: string; amountKey: CostAmountKey; taxKey?: CostTaxKey }> = [
+  { title: "人工成本", description: "售前方案、现场踏勘、技术支持等人工投入", amountKey: "laborCost", taxKey: "laborTaxRate" },
+  { title: "材料成本", description: "项目所需材料、耗材、配件", amountKey: "materialCost", taxKey: "materialTaxRate" },
+  { title: "外包成本", description: "第三方服务、专业分包、外协支持", amountKey: "subcontractCost", taxKey: "subcontractTaxRate" },
+  { title: "差旅成本", description: "交通、住宿、现场补贴等，不设置税率", amountKey: "travelCost" },
+  { title: "设备成本", description: "设备采购、租赁、检测工具", amountKey: "equipmentCost", taxKey: "equipmentTaxRate" },
+  { title: "风险预留", description: "范围变更、不可预见费用，不设置税率", amountKey: "riskReserve" },
+  { title: "其他成本", description: "无法归类的售前支持费用，不设置税率", amountKey: "otherCost" },
+];
 
 function quoteMargin(record: Pick<QuotePlan, "amount" | "laborBudget" | "materialBudget" | "subcontractBudget" | "travelBudget" | "otherBudget" | "budgetAmount" | "grossMargin" | "grossMarginRate">) {
   const amount = Number(record.amount || 0);
@@ -1039,10 +1082,14 @@ function initialCostSubmitForm(cost?: QuoteCostRequest) {
   return {
     projectManager: cost?.projectManager || auth.user?.displayName || "",
     laborCost: Number(cost?.laborCost || 0),
+    laborTaxRate: Number(cost?.laborTaxRate ?? 6),
     materialCost: Number(cost?.materialCost || 0),
+    materialTaxRate: Number(cost?.materialTaxRate ?? 13),
     subcontractCost: Number(cost?.subcontractCost || 0),
+    subcontractTaxRate: Number(cost?.subcontractTaxRate ?? 6),
     travelCost: Number(cost?.travelCost || 0),
     equipmentCost: Number(cost?.equipmentCost || 0),
+    equipmentTaxRate: Number(cost?.equipmentTaxRate ?? 13),
     riskReserve: Number(cost?.riskReserve || 0),
     otherCost: Number(cost?.otherCost || 0),
     suggestedPrice: Number(cost?.suggestedPrice || selectedQuote.value?.amount || 0),
@@ -1154,6 +1201,78 @@ function calcNetAmount(amount?: number, taxRate?: number) {
   font-size: 12px;
 }
 
+.cost-summary-strip {
+  display: grid;
+  align-items: end;
+  grid-template-columns: minmax(180px, 1.1fr) minmax(140px, 0.8fr) minmax(160px, 0.9fr);
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 12px;
+  border: 1px solid #d9d9d9;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.cost-summary-strip > div:not(.ant-form-item) span {
+  display: block;
+  color: #667085;
+  font-size: 12px;
+}
+
+.cost-summary-strip > div:not(.ant-form-item) strong {
+  display: block;
+  margin-top: 6px;
+  color: #172033;
+  font-size: 20px;
+}
+
+.cost-summary-owner,
+.cost-summary-price {
+  margin-bottom: 0;
+}
+
+.cost-entry-table {
+  overflow: hidden;
+  margin-bottom: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.cost-entry-head,
+.cost-entry-row {
+  display: grid;
+  align-items: center;
+  grid-template-columns: minmax(240px, 1.4fr) minmax(150px, 0.8fr) minmax(130px, 0.65fr);
+  gap: 12px;
+  padding: 10px 12px;
+}
+
+.cost-entry-head {
+  color: #667085;
+  font-size: 12px;
+  font-weight: 600;
+  background: #f7f8fa;
+}
+
+.cost-entry-row + .cost-entry-row {
+  border-top: 1px solid #eef0f3;
+}
+
+.cost-entry-row strong,
+.cost-entry-row span {
+  display: block;
+}
+
+.cost-entry-row strong {
+  color: #172033;
+}
+
+.cost-entry-row span {
+  margin-top: 3px;
+  color: #667085;
+  font-size: 12px;
+}
+
 .approval-margin-card {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1218,6 +1337,16 @@ function calcNetAmount(amount?: number, taxRate?: number) {
   .quote-toolbar .ant-input-affix-wrapper,
   .quote-toolbar .ant-select {
     width: 100%;
+  }
+
+  .cost-summary-strip,
+  .cost-entry-head,
+  .cost-entry-row {
+    grid-template-columns: 1fr;
+  }
+
+  .cost-entry-head {
+    display: none;
   }
 }
 </style>

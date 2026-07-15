@@ -73,7 +73,30 @@
                 修订报价
               </a-button>
               <a-popconfirm
-                v-if="auth.can('crm:quote:submit') && record.status === 'DRAFT'"
+                v-if="auth.can('crm:quote:update') && canRequestCost(record)"
+                title="确认向项目管理发起成本询价？"
+                @confirm="openCostRequest(record)"
+              >
+                <a-button size="small" type="link">发起询价</a-button>
+              </a-popconfirm>
+              <a-button
+                v-if="auth.can('crm:quote:cost') && canSubmitCost(record)"
+                size="small"
+                type="link"
+                @click="openCostSubmit(record)"
+              >
+                填写成本
+              </a-button>
+              <a-button
+                v-if="auth.can('crm:quote:cost') && canApproveCost(record)"
+                size="small"
+                type="link"
+                @click="openCostApproval(record)"
+              >
+                成本审批
+              </a-button>
+              <a-popconfirm
+                v-if="auth.can('crm:quote:submit') && (record.status === 'DRAFT' || record.status === 'COST_APPROVED')"
                 :title="quoteSubmitTip(record)"
                 @confirm="handleSubmit(record)"
               >
@@ -289,6 +312,66 @@
       </a-form>
     </a-modal>
 
+    <a-modal v-model:open="costRequestOpen" title="发起项目询价" width="520px" :confirm-loading="saving" @ok="handleCostRequest">
+      <a-alert
+        v-if="selectedQuote"
+        class="section-alert"
+        type="info"
+        show-icon
+        :message="`${selectedQuote.code} · ${selectedQuote.customerName}`"
+        description="项目管理填写成本并审批通过后，成本会自动回写到报价预算。"
+      />
+      <a-form ref="costRequestFormRef" :model="costRequestForm" :rules="costRequestRules" layout="vertical">
+        <a-form-item label="询价发起人" name="requestedBy"><a-input v-model:value="costRequestForm.requestedBy" /></a-form-item>
+      </a-form>
+    </a-modal>
+
+    <a-modal v-model:open="costSubmitOpen" title="填写项目成本" width="780px" :confirm-loading="saving" @ok="handleCostSubmit">
+      <a-alert
+        v-if="selectedQuote"
+        class="section-alert"
+        type="info"
+        show-icon
+        :message="`${selectedQuote.code} · ${selectedQuote.customerName}`"
+        :description="`成本合计 ${formatMoney(costSubmitTotal)}，建议报价 ${formatMoney(costSubmitForm.suggestedPrice || 0)}`"
+      />
+      <a-form ref="costSubmitFormRef" :model="costSubmitForm" :rules="costSubmitRules" layout="vertical">
+        <a-row :gutter="12">
+          <a-col :xs="24" :md="8"><a-form-item label="项目负责人" name="projectManager"><a-input v-model:value="costSubmitForm.projectManager" /></a-form-item></a-col>
+          <a-col :xs="12" :md="8"><a-form-item label="人工成本"><a-input-number v-model:value="costSubmitForm.laborCost" :min="0" :precision="2" class="full-input" /></a-form-item></a-col>
+          <a-col :xs="12" :md="8"><a-form-item label="材料成本"><a-input-number v-model:value="costSubmitForm.materialCost" :min="0" :precision="2" class="full-input" /></a-form-item></a-col>
+          <a-col :xs="12" :md="8"><a-form-item label="外包成本"><a-input-number v-model:value="costSubmitForm.subcontractCost" :min="0" :precision="2" class="full-input" /></a-form-item></a-col>
+          <a-col :xs="12" :md="8"><a-form-item label="差旅成本"><a-input-number v-model:value="costSubmitForm.travelCost" :min="0" :precision="2" class="full-input" /></a-form-item></a-col>
+          <a-col :xs="12" :md="8"><a-form-item label="设备成本"><a-input-number v-model:value="costSubmitForm.equipmentCost" :min="0" :precision="2" class="full-input" /></a-form-item></a-col>
+          <a-col :xs="12" :md="8"><a-form-item label="风险预留"><a-input-number v-model:value="costSubmitForm.riskReserve" :min="0" :precision="2" class="full-input" /></a-form-item></a-col>
+          <a-col :xs="12" :md="8"><a-form-item label="其他成本"><a-input-number v-model:value="costSubmitForm.otherCost" :min="0" :precision="2" class="full-input" /></a-form-item></a-col>
+          <a-col :xs="12" :md="8"><a-form-item label="建议报价"><a-input-number v-model:value="costSubmitForm.suggestedPrice" :min="0" :precision="2" class="full-input" /></a-form-item></a-col>
+          <a-col :span="24"><a-form-item label="成本说明"><a-textarea v-model:value="costSubmitForm.costRemark" :rows="3" /></a-form-item></a-col>
+        </a-row>
+      </a-form>
+    </a-modal>
+
+    <a-modal v-model:open="costApprovalOpen" title="项目成本审批" width="620px" :confirm-loading="saving" @ok="handleCostApproval">
+      <a-alert
+        v-if="selectedCostRequest"
+        class="section-alert"
+        type="warning"
+        show-icon
+        :message="`成本合计 ${formatMoney(selectedCostRequest.totalCost || 0)} · 建议报价 ${formatMoney(selectedCostRequest.suggestedPrice || 0)}`"
+        :description="selectedCostRequest.costRemark || '项目管理未填写备注'"
+      />
+      <a-form ref="costApprovalFormRef" :model="costApprovalForm" :rules="costApprovalRules" layout="vertical">
+        <a-form-item label="审批结论" name="decision">
+          <a-radio-group v-model:value="costApprovalForm.decision" button-style="solid">
+            <a-radio-button value="APPROVED">通过</a-radio-button>
+            <a-radio-button value="REJECTED">驳回</a-radio-button>
+          </a-radio-group>
+        </a-form-item>
+        <a-form-item label="审批人" name="approverName"><a-input v-model:value="costApprovalForm.approverName" /></a-form-item>
+        <a-form-item label="审批意见" name="comment"><a-textarea v-model:value="costApprovalForm.comment" :rows="3" /></a-form-item>
+      </a-form>
+    </a-modal>
+
     <a-drawer v-model:open="revisionsOpen" width="720" title="报价版本记录">
       <div v-if="revisionQuote" class="revision-heading">
         <div>
@@ -330,11 +413,14 @@ import UploadOutlined from "@ant-design/icons-vue/UploadOutlined";
 import {
   convertQuote,
   createQuote,
+  approveQuoteCost,
   listOpportunities,
   listQuoteRevisions,
   listQuotes,
   processQuoteApproval,
   processQuoteCustomerResult,
+  requestQuoteCost,
+  submitQuoteCost,
   submitQuote,
   updateQuote,
   uploadAttachment,
@@ -344,6 +430,7 @@ import {
   type QuotePlan,
   type QuoteRevision,
   type QuoteStatus,
+  type QuoteCostRequest,
 } from "@/api/crm";
 import { useAuthStore } from "@/stores/auth";
 import { formatMoney, generateCode, quoteStatusColor, quoteStatusLabel } from "./crm-options";
@@ -362,13 +449,20 @@ const approvalOpen = ref(false);
 const customerResultOpen = ref(false);
 const conversionOpen = ref(false);
 const revisionsOpen = ref(false);
+const costRequestOpen = ref(false);
+const costSubmitOpen = ref(false);
+const costApprovalOpen = ref(false);
 const formRef = ref();
 const approvalFormRef = ref();
 const customerResultFormRef = ref();
 const conversionFormRef = ref();
+const costRequestFormRef = ref();
+const costSubmitFormRef = ref();
+const costApprovalFormRef = ref();
 const selectedQuote = ref<QuotePlan | null>(null);
 const editingQuote = ref<QuotePlan | null>(null);
 const revisionQuote = ref<QuotePlan | null>(null);
+const selectedCostRequest = ref<QuoteCostRequest | null>(null);
 const keyword = ref("");
 const statusFilter = ref<QuoteStatus | "ALL">("ALL");
 const showConverted = ref(false);
@@ -376,6 +470,9 @@ const form = reactive(initialForm());
 const approvalForm = reactive(initialApprovalForm());
 const customerResultForm = reactive(initialCustomerResultForm());
 const conversionForm = reactive(initialConversionForm());
+const costRequestForm = reactive(initialCostRequestForm());
+const costSubmitForm = reactive(initialCostSubmitForm());
+const costApprovalForm = reactive(initialCostApprovalForm());
 const conversionAttachment = ref<File | null>(null);
 
 const rules = {
@@ -393,6 +490,17 @@ const customerResultRules = {
   decision: [{ required: true, message: "请选择客户结果" }],
   comment: [{ required: true, message: "请输入结果说明" }],
   operatorName: [{ required: true, message: "请输入登记人" }],
+};
+const costRequestRules = {
+  requestedBy: [{ required: true, message: "请输入询价发起人" }],
+};
+const costSubmitRules = {
+  projectManager: [{ required: true, message: "请输入项目负责人" }],
+};
+const costApprovalRules = {
+  decision: [{ required: true, message: "请选择审批结论" }],
+  approverName: [{ required: true, message: "请输入审批人" }],
+  comment: [{ required: true, message: "请输入审批意见" }],
 };
 const conversionRules = {
   contractCode: [{ required: true, message: "请输入合同编号" }],
@@ -490,6 +598,7 @@ const formMargin = computed(() => {
   const gross = amount - cost;
   return { cost, gross, rate: amount > 0 ? gross / amount * 100 : 0 };
 });
+const costSubmitTotal = computed(() => quoteCostTotal(costSubmitForm));
 
 function quoteMargin(record: Pick<QuotePlan, "amount" | "laborBudget" | "materialBudget" | "subcontractBudget" | "travelBudget" | "otherBudget" | "budgetAmount" | "grossMargin" | "grossMarginRate">) {
   const amount = Number(record.amount || 0);
@@ -509,6 +618,16 @@ function quoteBudgetRawTotal(record: { laborBudget?: number; materialBudget?: nu
     + Number(record.subcontractBudget || 0)
     + Number(record.travelBudget || 0)
     + Number(record.otherBudget || 0);
+}
+
+function quoteCostTotal(record: { laborCost?: number; materialCost?: number; subcontractCost?: number; travelCost?: number; equipmentCost?: number; riskReserve?: number; otherCost?: number }) {
+  return Number(record.laborCost || 0)
+    + Number(record.materialCost || 0)
+    + Number(record.subcontractCost || 0)
+    + Number(record.travelCost || 0)
+    + Number(record.equipmentCost || 0)
+    + Number(record.riskReserve || 0)
+    + Number(record.otherCost || 0);
 }
 
 function applyDefaultBudget() {
@@ -583,10 +702,6 @@ async function handleSaveQuote() {
     message.warning("请填写本次修订说明");
     return;
   }
-  if (formMargin.value.cost <= 0) {
-    message.warning("请先确认项目预算");
-    return;
-  }
   saving.value = true;
   try {
     if (editingQuote.value) {
@@ -650,8 +765,100 @@ async function handleSubmit(record: QuotePlan) {
   }
 }
 
+function canRequestCost(record: QuotePlan) {
+  return record.status === "DRAFT" || record.status === "REJECTED";
+}
+
+function canSubmitCost(record: QuotePlan) {
+  return record.status === "COST_REQUESTED" && Boolean(record.costRequest?.id);
+}
+
+function canApproveCost(record: QuotePlan) {
+  return record.status === "COSTING" && record.costRequest?.status === "SUBMITTED";
+}
+
+function openCostRequest(record: QuotePlan) {
+  selectedQuote.value = record;
+  Object.assign(costRequestForm, initialCostRequestForm());
+  costRequestOpen.value = true;
+}
+
+async function handleCostRequest() {
+  await costRequestFormRef.value?.validate();
+  if (!selectedQuote.value) return;
+  saving.value = true;
+  try {
+    await requestQuoteCost(selectedQuote.value.id, { ...costRequestForm });
+    costRequestOpen.value = false;
+    message.success("已发起项目成本询价");
+    await loadData();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "发起询价失败");
+  } finally {
+    saving.value = false;
+  }
+}
+
+function openCostSubmit(record: QuotePlan) {
+  if (!record.costRequest?.id) {
+    message.warning("请先发起项目询价");
+    return;
+  }
+  selectedQuote.value = record;
+  selectedCostRequest.value = record.costRequest;
+  Object.assign(costSubmitForm, initialCostSubmitForm(record.costRequest));
+  costSubmitOpen.value = true;
+}
+
+async function handleCostSubmit() {
+  await costSubmitFormRef.value?.validate();
+  if (!selectedCostRequest.value) return;
+  if (costSubmitTotal.value <= 0) {
+    message.warning("请至少填写一项成本");
+    return;
+  }
+  saving.value = true;
+  try {
+    await submitQuoteCost(selectedCostRequest.value.id, { ...costSubmitForm });
+    costSubmitOpen.value = false;
+    message.success("项目成本已提交审批");
+    await loadData();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "成本提交失败");
+  } finally {
+    saving.value = false;
+  }
+}
+
+function openCostApproval(record: QuotePlan) {
+  if (!record.costRequest?.id) {
+    message.warning("未找到成本单");
+    return;
+  }
+  selectedQuote.value = record;
+  selectedCostRequest.value = record.costRequest;
+  Object.assign(costApprovalForm, initialCostApprovalForm());
+  costApprovalOpen.value = true;
+}
+
+async function handleCostApproval() {
+  await costApprovalFormRef.value?.validate();
+  if (!selectedCostRequest.value) return;
+  saving.value = true;
+  try {
+    await approveQuoteCost(selectedCostRequest.value.id, { ...costApprovalForm });
+    costApprovalOpen.value = false;
+    message.success(costApprovalForm.decision === "APPROVED" ? "成本已确认，销售可填写报价并提交审批" : "成本已驳回，可重新填写");
+    await loadData();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "成本审批失败");
+  } finally {
+    saving.value = false;
+  }
+}
+
 function quoteBudgetConfirmed(record: QuotePlan) {
-  return quoteBudgetRawTotal(record) > 0;
+  return record.costRequest?.status === "APPROVED" || quoteBudgetRawTotal(record) > 0;
 }
 
 function quoteSubmitTip(record: QuotePlan) {
@@ -822,6 +1029,35 @@ function initialCustomerResultForm() {
   };
 }
 
+function initialCostRequestForm() {
+  return {
+    requestedBy: auth.user?.displayName || "",
+  };
+}
+
+function initialCostSubmitForm(cost?: QuoteCostRequest) {
+  return {
+    projectManager: cost?.projectManager || auth.user?.displayName || "",
+    laborCost: Number(cost?.laborCost || 0),
+    materialCost: Number(cost?.materialCost || 0),
+    subcontractCost: Number(cost?.subcontractCost || 0),
+    travelCost: Number(cost?.travelCost || 0),
+    equipmentCost: Number(cost?.equipmentCost || 0),
+    riskReserve: Number(cost?.riskReserve || 0),
+    otherCost: Number(cost?.otherCost || 0),
+    suggestedPrice: Number(cost?.suggestedPrice || selectedQuote.value?.amount || 0),
+    costRemark: cost?.costRemark || "",
+  };
+}
+
+function initialCostApprovalForm() {
+  return {
+    decision: "APPROVED" as ApprovalDecision,
+    approverName: auth.user?.displayName || "",
+    comment: "同意项目成本测算，作为本次报价毛利核算依据。",
+  };
+}
+
 function initialConversionForm(record?: QuotePlan) {
   const today = new Date();
   const end = new Date(today);
@@ -985,3 +1221,4 @@ function calcNetAmount(amount?: number, taxRate?: number) {
   }
 }
 </style>
+

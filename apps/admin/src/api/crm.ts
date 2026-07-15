@@ -5,7 +5,8 @@ export type RiskStatus = "NORMAL" | "OVERDUE" | "RENEWAL_RISK";
 export type ContractStatus = "ACTIVE" | "RENEWAL_PENDING" | "OVERDUE_RISK" | "CLOSED";
 export type ReceivableStatus = "INVOICE_PENDING" | "PAYMENT_PENDING" | "SETTLED" | "OVERDUE";
 export type OpportunityStage = "LEAD" | "QUALIFIED" | "SOLUTION" | "QUOTATION" | "NEGOTIATION" | "WON" | "LOST";
-export type QuoteStatus = "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED" | "CUSTOMER_ACCEPTED" | "CUSTOMER_DECLINED" | "CONVERTED";
+export type QuoteStatus = "DRAFT" | "COST_REQUESTED" | "COSTING" | "COST_APPROVED" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED" | "CUSTOMER_ACCEPTED" | "CUSTOMER_DECLINED" | "CONVERTED";
+export type QuoteCostStatus = "REQUESTED" | "SUBMITTED" | "APPROVED" | "REJECTED";
 export type ApprovalDecision = "APPROVED" | "REJECTED";
 export type QuoteCustomerDecision = "ACCEPTED" | "DECLINED";
 export type FollowUpType = "VISIT" | "PHONE" | "CALLBACK" | "COMPLAINT";
@@ -168,7 +169,33 @@ export type QuotePlan = {
   customerDecisionBy?: string;
   customerDecidedAt?: string;
   convertedContractId?: string;
+  costRequest?: QuoteCostRequest;
   updatedAt: string;
+};
+
+export type QuoteCostRequest = {
+  id: string;
+  quoteId: string;
+  opportunityId?: string;
+  customerId?: string;
+  status: QuoteCostStatus;
+  requestedBy: string;
+  requestedAt: string;
+  projectManager?: string;
+  laborCost?: number;
+  materialCost?: number;
+  subcontractCost?: number;
+  travelCost?: number;
+  equipmentCost?: number;
+  riskReserve?: number;
+  otherCost?: number;
+  totalCost?: number;
+  suggestedPrice?: number;
+  costRemark?: string;
+  submittedAt?: string;
+  approvedBy?: string;
+  approvedAt?: string;
+  approvalComment?: string;
 };
 
 export type CreateQuotePayload = {
@@ -208,6 +235,29 @@ export type ProcessQuoteApprovalPayload = {
   decision: ApprovalDecision;
   comment: string;
   approverName: string;
+};
+
+export type RequestQuoteCostPayload = {
+  requestedBy: string;
+};
+
+export type SubmitQuoteCostPayload = {
+  projectManager: string;
+  laborCost?: number;
+  materialCost?: number;
+  subcontractCost?: number;
+  travelCost?: number;
+  equipmentCost?: number;
+  riskReserve?: number;
+  otherCost?: number;
+  suggestedPrice?: number;
+  costRemark?: string;
+};
+
+export type ApproveQuoteCostPayload = {
+  decision: ApprovalDecision;
+  approverName: string;
+  comment: string;
 };
 
 export type ProcessQuoteCustomerResultPayload = {
@@ -452,6 +502,22 @@ export function updateQuote(id: string, payload: UpdateQuotePayload) {
 
 export function listQuoteRevisions(id: string) {
   return request<QuoteRevision[]>({ method: "GET", url: `/crm/quotes/${id}/revisions` });
+}
+
+export function requestQuoteCost(id: string, payload: RequestQuoteCostPayload) {
+  return request<QuoteCostRequest>({ method: "POST", url: `/crm/quotes/${id}/cost-requests`, data: payload });
+}
+
+export function listQuoteCostRequests(id: string) {
+  return request<QuoteCostRequest[]>({ method: "GET", url: `/crm/quotes/${id}/cost-requests` });
+}
+
+export function submitQuoteCost(id: string, payload: SubmitQuoteCostPayload) {
+  return request<QuoteCostRequest>({ method: "PUT", url: `/crm/quote-cost-requests/${id}`, data: payload });
+}
+
+export function approveQuoteCost(id: string, payload: ApproveQuoteCostPayload) {
+  return request<QuoteCostRequest>({ method: "POST", url: `/crm/quote-cost-requests/${id}/approval`, data: payload });
 }
 
 export function submitQuote(id: string) {

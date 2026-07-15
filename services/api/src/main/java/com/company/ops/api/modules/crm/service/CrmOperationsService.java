@@ -11,6 +11,8 @@ import com.company.ops.api.modules.crm.domain.Opportunity;
 import com.company.ops.api.modules.crm.domain.ContractChangeRequest;
 import com.company.ops.api.modules.crm.domain.OpportunityStage;
 import com.company.ops.api.modules.crm.domain.QuoteCustomerDecision;
+import com.company.ops.api.modules.crm.domain.QuoteCostRequest;
+import com.company.ops.api.modules.crm.domain.QuoteCostStatus;
 import com.company.ops.api.modules.crm.domain.QuotePlan;
 import com.company.ops.api.modules.crm.domain.QuoteApprovalRecord;
 import com.company.ops.api.modules.crm.domain.QuoteRevision;
@@ -31,13 +33,17 @@ import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.OpportunityResponse
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.QuoteResponse;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ProcessQuoteApprovalRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ProcessQuoteCustomerResultRequest;
+import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ApproveQuoteCostRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.QuoteConversionResult;
+import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.QuoteCostRequestResponse;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.UpdateReceivableRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.QuoteRevisionResponse;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ReceivableResponse;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.RecordReceiptRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.RegisterInvoiceRequest;
+import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.RequestQuoteCostRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.RenewalResponse;
+import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.SubmitQuoteCostRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.UpdateQuoteRequest;
 import com.company.ops.api.modules.crm.repository.CustomerRepository;
 import com.company.ops.api.modules.crm.repository.FollowUpRepository;
@@ -51,6 +57,7 @@ import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.UpdateContractReque
 import com.company.ops.api.modules.crm.repository.OpportunityRepository;
 import com.company.ops.api.modules.crm.repository.QuotePlanRepository;
 import com.company.ops.api.modules.crm.repository.QuoteApprovalRecordRepository;
+import com.company.ops.api.modules.crm.repository.QuoteCostRequestRepository;
 import com.company.ops.api.modules.crm.repository.QuoteRevisionRepository;
 import com.company.ops.api.modules.crm.repository.ReceivableRepository;
 import com.company.ops.api.modules.crm.repository.ReceivableReceiptRepository;
@@ -78,6 +85,7 @@ public class CrmOperationsService {
   private final OpportunityRepository opportunityRepository;
   private final QuotePlanRepository quoteRepository;
   private final QuoteApprovalRecordRepository quoteApprovalRepository;
+  private final QuoteCostRequestRepository quoteCostRequestRepository;
   private final QuoteRevisionRepository quoteRevisionRepository;
   private final FollowUpRepository followUpRepository;
   private final ServiceContractRepository contractRepository;
@@ -96,6 +104,7 @@ public class CrmOperationsService {
       OpportunityRepository opportunityRepository,
       QuotePlanRepository quoteRepository,
       QuoteApprovalRecordRepository quoteApprovalRepository,
+      QuoteCostRequestRepository quoteCostRequestRepository,
       QuoteRevisionRepository quoteRevisionRepository,
       FollowUpRepository followUpRepository,
       ServiceContractRepository contractRepository,
@@ -109,6 +118,7 @@ public class CrmOperationsService {
     this.opportunityRepository = opportunityRepository;
     this.quoteRepository = quoteRepository;
     this.quoteApprovalRepository = quoteApprovalRepository;
+    this.quoteCostRequestRepository = quoteCostRequestRepository;
     this.quoteRevisionRepository = quoteRevisionRepository;
     this.followUpRepository = followUpRepository;
     this.contractRepository = contractRepository;
@@ -264,9 +274,14 @@ public class CrmOperationsService {
     quote.setPaymentNodes(request.paymentNodes());
     quote.setAmount(defaultAmount(request.amount()));
     quote.setTaxRate(defaultTaxRate(request.taxRate()));
-    applyQuoteBudget(quote, request.laborBudget(), request.materialBudget(), request.subcontractBudget(), request.travelBudget(), request.otherBudget());
+    QuoteCostRequest approvedCost = latestApprovedQuoteCost(quote.getId());
+    if (approvedCost == null) {
+      applyQuoteBudget(quote, request.laborBudget(), request.materialBudget(), request.subcontractBudget(), request.travelBudget(), request.otherBudget());
+    } else {
+      applyApprovedCostToQuote(quote, approvedCost);
+    }
     quote.setVersionNo(Math.max(quote.getVersionNo(), 1) + 1);
-    quote.setStatus(QuoteStatus.DRAFT);
+    quote.setStatus(approvedCost == null ? QuoteStatus.DRAFT : QuoteStatus.COST_APPROVED);
     clearCustomerResult(quote);
     QuotePlan saved = quoteRepository.save(quote);
     saveQuoteRevision(saved, request.revisionNote(), request.editorName());
@@ -288,10 +303,98 @@ public class CrmOperationsService {
   }
 
   @Transactional
+  public QuoteCostRequestResponse requestQuoteCost(UUID id, RequestQuoteCostRequest request) {
+    QuotePlan quote = quoteRepository.findById(id)
+        .orElseThrow(() -> new BusinessException("报价方案不存在"));
+    if (quote.getStatus() == QuoteStatus.PENDING_APPROVAL || quote.getStatus() == QuoteStatus.APPROVED
+        || quote.getStatus() == QuoteStatus.CUSTOMER_ACCEPTED || quote.getStatus() == QuoteStatus.CONVERTED) {
+      throw new BusinessException("当前报价状态不能再发起项目询价");
+    }
+    quoteCostRequestRepository.findFirstByQuoteIdOrderByCreatedAtDesc(id).ifPresent(existing -> {
+      if (existing.getStatus() == QuoteCostStatus.REQUESTED || existing.getStatus() == QuoteCostStatus.SUBMITTED) {
+        throw new BusinessException("该报价已有待处理的项目询价单");
+      }
+    });
+
+    QuoteCostRequest cost = new QuoteCostRequest();
+    cost.setQuoteId(quote.getId());
+    cost.setOpportunityId(quote.getOpportunityId());
+    cost.setCustomerId(quote.getCustomerId());
+    cost.setStatus(QuoteCostStatus.REQUESTED);
+    cost.setRequestedBy(request.requestedBy());
+    cost.setRequestedAt(OffsetDateTime.now());
+    QuoteCostRequest saved = quoteCostRequestRepository.save(cost);
+    quote.setStatus(QuoteStatus.COST_REQUESTED);
+    quoteRepository.save(quote);
+    return toQuoteCostRequest(saved);
+  }
+
+  @Transactional(readOnly = true)
+  public List<QuoteCostRequestResponse> listQuoteCostRequests(UUID id) {
+    if (!quoteRepository.existsById(id)) {
+      throw new BusinessException("报价方案不存在");
+    }
+    return quoteCostRequestRepository.findByQuoteIdOrderByCreatedAtDesc(id).stream()
+        .map(this::toQuoteCostRequest)
+        .toList();
+  }
+
+  @Transactional
+  public QuoteCostRequestResponse submitQuoteCost(UUID id, SubmitQuoteCostRequest request) {
+    QuoteCostRequest cost = quoteCostRequestRepository.findById(id)
+        .orElseThrow(() -> new BusinessException("项目询价单不存在"));
+    if (cost.getStatus() == QuoteCostStatus.APPROVED) {
+      throw new BusinessException("已审批通过的成本单不能重新填写");
+    }
+    QuotePlan quote = quoteRepository.findById(cost.getQuoteId())
+        .orElseThrow(() -> new BusinessException("报价方案不存在"));
+    cost.setProjectManager(request.projectManager());
+    cost.setLaborCost(defaultAmount(request.laborCost()));
+    cost.setMaterialCost(defaultAmount(request.materialCost()));
+    cost.setSubcontractCost(defaultAmount(request.subcontractCost()));
+    cost.setTravelCost(defaultAmount(request.travelCost()));
+    cost.setEquipmentCost(defaultAmount(request.equipmentCost()));
+    cost.setRiskReserve(defaultAmount(request.riskReserve()));
+    cost.setOtherCost(defaultAmount(request.otherCost()));
+    cost.setSuggestedPrice(defaultAmount(request.suggestedPrice()));
+    cost.setCostRemark(request.costRemark());
+    cost.setSubmittedAt(OffsetDateTime.now());
+    cost.setStatus(QuoteCostStatus.SUBMITTED);
+    quote.setStatus(QuoteStatus.COSTING);
+    quoteRepository.save(quote);
+    return toQuoteCostRequest(quoteCostRequestRepository.save(cost));
+  }
+
+  @Transactional
+  public QuoteCostRequestResponse approveQuoteCost(UUID id, ApproveQuoteCostRequest request) {
+    QuoteCostRequest cost = quoteCostRequestRepository.findById(id)
+        .orElseThrow(() -> new BusinessException("项目询价单不存在"));
+    if (cost.getStatus() != QuoteCostStatus.SUBMITTED) {
+      throw new BusinessException("只有已提交的成本单可以审批");
+    }
+    QuotePlan quote = quoteRepository.findById(cost.getQuoteId())
+        .orElseThrow(() -> new BusinessException("报价方案不存在"));
+
+    cost.setApprovedBy(request.approverName());
+    cost.setApprovedAt(OffsetDateTime.now());
+    cost.setApprovalComment(request.comment());
+    if (request.decision() == ApprovalDecision.APPROVED) {
+      cost.setStatus(QuoteCostStatus.APPROVED);
+      applyApprovedCostToQuote(quote, cost);
+      quote.setStatus(QuoteStatus.COST_APPROVED);
+    } else {
+      cost.setStatus(QuoteCostStatus.REJECTED);
+      quote.setStatus(QuoteStatus.COST_REQUESTED);
+    }
+    quoteRepository.save(quote);
+    return toQuoteCostRequest(quoteCostRequestRepository.save(cost));
+  }
+
+  @Transactional
   public QuoteResponse submitQuote(UUID id) {
     QuotePlan quote = quoteRepository.findById(id)
         .orElseThrow(() -> new BusinessException("报价方案不存在"));
-    if (quote.getStatus() != QuoteStatus.DRAFT) {
+    if (quote.getStatus() != QuoteStatus.DRAFT && quote.getStatus() != QuoteStatus.COST_APPROVED) {
       throw new BusinessException("只有草稿版本可以提交审批");
     }
     validateQuoteBudgetForSubmit(quote);
@@ -608,6 +711,8 @@ public class CrmOperationsService {
         .setParameter(1, id).executeUpdate();
     entityManager.createNativeQuery("DELETE FROM crm_quote_approval_records WHERE quote_id IN (SELECT id FROM crm_quote_plans WHERE opportunity_id = ?1)")
         .setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("DELETE FROM crm_quote_cost_requests WHERE quote_id IN (SELECT id FROM crm_quote_plans WHERE opportunity_id = ?1)")
+        .setParameter(1, id).executeUpdate();
     entityManager.createNativeQuery("DELETE FROM crm_quote_plans WHERE opportunity_id = ?1")
         .setParameter(1, id).executeUpdate();
     entityManager.createNativeQuery("DELETE FROM crm_opportunities WHERE id = ?1")
@@ -626,6 +731,8 @@ public class CrmOperationsService {
     entityManager.createNativeQuery("DELETE FROM crm_quote_revisions WHERE quote_id = ?1")
         .setParameter(1, id).executeUpdate();
     entityManager.createNativeQuery("DELETE FROM crm_quote_approval_records WHERE quote_id = ?1")
+        .setParameter(1, id).executeUpdate();
+    entityManager.createNativeQuery("DELETE FROM crm_quote_cost_requests WHERE quote_id = ?1")
         .setParameter(1, id).executeUpdate();
     entityManager.createNativeQuery("DELETE FROM crm_quote_plans WHERE id = ?1")
         .setParameter(1, id).executeUpdate();
@@ -700,6 +807,8 @@ public class CrmOperationsService {
     UUID convertedContractId = contractRepository.findByQuoteId(item.getId())
         .map(ServiceContract::getId)
         .orElse(null);
+    QuoteCostRequest latestCost = quoteCostRequestRepository.findFirstByQuoteIdOrderByCreatedAtDesc(item.getId())
+        .orElse(null);
     return new QuoteResponse(
         item.getId(),
         item.getCustomerId(),
@@ -731,6 +840,7 @@ public class CrmOperationsService {
         item.getCustomerDecisionBy(),
         item.getCustomerDecidedAt(),
         convertedContractId,
+        latestCost == null ? null : toQuoteCostRequest(latestCost),
         item.getUpdatedAt()
     );
   }
@@ -825,6 +935,46 @@ public class CrmOperationsService {
     quote.setCustomerComment(null);
     quote.setCustomerDecisionBy(null);
     quote.setCustomerDecidedAt(null);
+  }
+
+  private QuoteCostRequest latestApprovedQuoteCost(UUID quoteId) {
+    return quoteCostRequestRepository.findFirstByQuoteIdAndStatusOrderByCreatedAtDesc(quoteId, QuoteCostStatus.APPROVED)
+        .orElse(null);
+  }
+
+  private void applyApprovedCostToQuote(QuotePlan quote, QuoteCostRequest cost) {
+    quote.setLaborBudget(defaultAmount(cost.getLaborCost()));
+    quote.setMaterialBudget(defaultAmount(cost.getMaterialCost()));
+    quote.setSubcontractBudget(defaultAmount(cost.getSubcontractCost()));
+    quote.setTravelBudget(defaultAmount(cost.getTravelCost()));
+    quote.setOtherBudget(sum(List.of(cost.getEquipmentCost(), cost.getRiskReserve(), cost.getOtherCost())));
+  }
+
+  private QuoteCostRequestResponse toQuoteCostRequest(QuoteCostRequest cost) {
+    return new QuoteCostRequestResponse(
+        cost.getId(),
+        cost.getQuoteId(),
+        cost.getOpportunityId(),
+        cost.getCustomerId(),
+        cost.getStatus(),
+        cost.getRequestedBy(),
+        cost.getRequestedAt(),
+        cost.getProjectManager(),
+        defaultAmount(cost.getLaborCost()),
+        defaultAmount(cost.getMaterialCost()),
+        defaultAmount(cost.getSubcontractCost()),
+        defaultAmount(cost.getTravelCost()),
+        defaultAmount(cost.getEquipmentCost()),
+        defaultAmount(cost.getRiskReserve()),
+        defaultAmount(cost.getOtherCost()),
+        quoteCostTotal(cost),
+        defaultAmount(cost.getSuggestedPrice()),
+        cost.getCostRemark(),
+        cost.getSubmittedAt(),
+        cost.getApprovedBy(),
+        cost.getApprovedAt(),
+        cost.getApprovalComment()
+    );
   }
 
   private void saveQuoteRevision(QuotePlan quote, String revisionNote, String editorName) {
@@ -1016,6 +1166,18 @@ public class CrmOperationsService {
 
   private BigDecimal sum(List<BigDecimal> values) {
     return values.stream().map(this::defaultAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+  }
+
+  private BigDecimal quoteCostTotal(QuoteCostRequest cost) {
+    return sum(List.of(
+        cost.getLaborCost(),
+        cost.getMaterialCost(),
+        cost.getSubcontractCost(),
+        cost.getTravelCost(),
+        cost.getEquipmentCost(),
+        cost.getRiskReserve(),
+        cost.getOtherCost()
+    ));
   }
 
   private void applyQuoteBudget(

@@ -92,6 +92,7 @@
         :data-source="filteredTodos"
         :loading="loading"
         :pagination="{ pageSize: 12, showSizeChanger: true }"
+        :custom-row="todoRowProps"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'title'">
@@ -121,18 +122,64 @@
                 type="primary"
                 size="small"
                 :loading="actionLoadingKey === record.key"
-                @click="runAutomation(record)"
+                @click.stop="runAutomation(record)"
               >
                 一键生成
               </a-button>
-              <a-button type="link" size="small" @click="handleTodoAction(record)">
-                {{ record.module === "OFFICE" ? "查看/审批" : "处理" }}
+              <a-button type="link" size="small" @click.stop="openTodoDetail(record)">
+                查看详情
               </a-button>
             </a-space>
           </template>
         </template>
       </a-table>
     </a-card>
+
+    <a-drawer v-model:open="detailOpen" title="待办详情" width="680px">
+      <template v-if="selectedTodo">
+        <a-space direction="vertical" size="middle" style="width: 100%">
+          <a-descriptions bordered size="small" :column="2">
+            <a-descriptions-item label="事项" :span="2">{{ selectedTodo.title }}</a-descriptions-item>
+            <a-descriptions-item label="说明" :span="2">{{ selectedTodo.subject || "-" }}</a-descriptions-item>
+            <a-descriptions-item label="模块">
+              <a-tag>{{ selectedTodo.moduleName }}</a-tag>
+            </a-descriptions-item>
+            <a-descriptions-item label="优先级">
+              <a-tag :color="priorityColor(selectedTodo.priority)">{{ priorityLabel(selectedTodo.priority) }}</a-tag>
+            </a-descriptions-item>
+            <a-descriptions-item label="状态">
+              <a-tag :color="statusColor(selectedTodo.status)">{{ statusLabel(selectedTodo.status) }}</a-tag>
+            </a-descriptions-item>
+            <a-descriptions-item label="责任人">{{ selectedTodo.owner || "-" }}</a-descriptions-item>
+            <a-descriptions-item label="金额">{{ selectedTodo.amount ? formatCurrency(selectedTodo.amount) : "-" }}</a-descriptions-item>
+            <a-descriptions-item label="到期/时间">{{ selectedTodo.dueDate ? formatDate(selectedTodo.dueDate) : "-" }}</a-descriptions-item>
+            <a-descriptions-item label="推荐动作" :span="2">{{ selectedTodo.action }}</a-descriptions-item>
+          </a-descriptions>
+
+          <a-alert
+            v-if="selectedTodo.automation"
+            type="info"
+            show-icon
+            message="该待办支持一键生成后续业务单据"
+          />
+
+          <a-space wrap>
+            <a-button
+              v-if="selectedTodo.automation"
+              type="primary"
+              :loading="actionLoadingKey === selectedTodo.key"
+              @click="runAutomation(selectedTodo)"
+            >
+              一键生成
+            </a-button>
+            <a-button type="primary" @click="handleTodoAction(selectedTodo)">
+              {{ isOfficeApprovalTodo(selectedTodo) ? "打开审批详情" : "进入业务页面" }}
+            </a-button>
+            <a-button @click="detailOpen = false">关闭</a-button>
+          </a-space>
+        </a-space>
+      </template>
+    </a-drawer>
 
     <ApprovalCenterView ref="approvalCenterRef" embedded drawer-only @changed="loadData" />
   </div>
@@ -208,6 +255,8 @@ const loading = ref(false);
 const actionLoadingKey = ref("");
 const approvalCenterRef = ref<InstanceType<typeof ApprovalCenterView>>();
 const todos = ref<BusinessTodo[]>([]);
+const selectedTodo = ref<BusinessTodo | null>(null);
+const detailOpen = ref(false);
 const loadErrors = ref<string[]>([]);
 const keyword = ref("");
 const moduleFilter = ref("ALL");
@@ -624,15 +673,32 @@ function go(path: string) {
   router.push(path);
 }
 
+function todoRowProps(record: BusinessTodo) {
+  return {
+    onClick: () => openTodoDetail(record),
+  };
+}
+
+function openTodoDetail(record: BusinessTodo) {
+  selectedTodo.value = record;
+  detailOpen.value = true;
+}
+
+function isOfficeApprovalTodo(record: BusinessTodo) {
+  return normalizeModuleCode(record.module) === "OFFICE" && (record.route.includes("/office/approvals") || record.route.includes("tab=approvals"));
+}
+
 function handleTodoAction(record: BusinessTodo) {
-  if (record.module === "OFFICE" && (record.route.includes("/office/approvals") || record.route.includes("tab=approvals"))) {
+  if (isOfficeApprovalTodo(record)) {
     if (record.entityId) {
+      detailOpen.value = false;
       approvalCenterRef.value?.openApprovalById(record.entityId);
       return;
     }
     message.warning("缺少审批ID，无法打开详情");
     return;
   }
+  detailOpen.value = false;
   router.push(record.route);
 }
 
@@ -818,6 +884,10 @@ onMounted(loadData);
   margin-top: 4px;
   color: #6b778c;
   font-size: 12px;
+}
+
+.todo-table-card :deep(.ant-table-tbody > tr) {
+  cursor: pointer;
 }
 
 @media (max-width: 768px) {

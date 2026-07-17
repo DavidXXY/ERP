@@ -43,106 +43,103 @@
       </a-row>
     </a-card>
 
-    <a-tabs v-model:active-key="activeTab">
-      <a-tab-pane key="todos" tab="待办队列">
-        <a-row :gutter="[16, 16]">
-          <a-col :xs="24" :lg="6" v-for="card in commandCards" :key="card.key">
-            <a-card :bordered="false" class="command-card">
-              <div class="command-title">{{ card.title }}</div>
-              <div class="command-count">{{ card.count }}</div>
-              <a-typography-text type="secondary">{{ card.description }}</a-typography-text>
-            </a-card>
-          </a-col>
-        </a-row>
+    <a-row :gutter="[16, 16]">
+      <a-col :xs="24" :lg="6" v-for="card in commandCards" :key="card.key">
+        <a-card :bordered="false" class="command-card">
+          <div class="command-title">{{ card.title }}</div>
+          <div class="command-count">{{ card.count }}</div>
+          <a-typography-text type="secondary">{{ card.description }}</a-typography-text>
+        </a-card>
+      </a-col>
+    </a-row>
 
-        <a-card :bordered="false" class="todo-table-card">
-          <template #title>统一待办队列</template>
-          <template #extra>
-            <a-space wrap>
-              <a-input-search v-model:value="keyword" allow-clear placeholder="搜索客户、项目、单号、说明" style="width: 260px" />
-              <a-select v-model:value="moduleFilter" style="width: 150px">
-                <a-select-option value="ALL">全部模块</a-select-option>
-                <a-select-option v-for="item in moduleOptions" :key="item.value" :value="item.value">{{ item.label }}</a-select-option>
-              </a-select>
-              <a-select v-model:value="priorityFilter" style="width: 130px">
-                <a-select-option value="ALL">全部优先级</a-select-option>
-                <a-select-option value="HIGH">高优先</a-select-option>
-                <a-select-option value="MEDIUM">中优先</a-select-option>
-                <a-select-option value="LOW">低优先</a-select-option>
-              </a-select>
-              <a-select v-model:value="statusFilter" style="width: 130px">
-                <a-select-option value="ALL">全部状态</a-select-option>
-                <a-select-option value="OVERDUE">已超时</a-select-option>
-                <a-select-option value="OPEN">待处理</a-select-option>
-                <a-select-option value="PROCESSING">处理中</a-select-option>
-              </a-select>
+    <a-card :bordered="false" class="todo-table-card">
+      <template #title>统一待办队列</template>
+      <template #extra>
+        <a-space wrap>
+          <a-input-search v-model:value="keyword" allow-clear placeholder="搜索客户、项目、单号、说明" style="width: 260px" />
+          <a-select v-model:value="moduleFilter" style="width: 150px">
+            <a-select-option value="ALL">全部模块</a-select-option>
+            <a-select-option v-for="item in moduleOptions" :key="item.value" :value="item.value">{{ item.label }}</a-select-option>
+          </a-select>
+          <a-select v-model:value="priorityFilter" style="width: 130px">
+            <a-select-option value="ALL">全部优先级</a-select-option>
+            <a-select-option value="HIGH">高优先</a-select-option>
+            <a-select-option value="MEDIUM">中优先</a-select-option>
+            <a-select-option value="LOW">低优先</a-select-option>
+          </a-select>
+          <a-select v-model:value="statusFilter" style="width: 130px">
+            <a-select-option value="ALL">全部状态</a-select-option>
+            <a-select-option value="OVERDUE">已超时</a-select-option>
+            <a-select-option value="OPEN">待处理</a-select-option>
+            <a-select-option value="PROCESSING">处理中</a-select-option>
+          </a-select>
+        </a-space>
+      </template>
+
+      <a-alert
+        v-if="loadErrors.length"
+        type="warning"
+        show-icon
+        class="load-alert"
+        :message="`部分模块加载失败：${loadErrors.join('、')}`"
+      />
+
+      <a-table
+        row-key="key"
+        :columns="columns"
+        :data-source="filteredTodos"
+        :loading="loading"
+        :pagination="{ pageSize: 12, showSizeChanger: true }"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'title'">
+            <div class="todo-title">{{ record.title }}</div>
+            <div class="todo-subject">{{ record.subject }}</div>
+          </template>
+          <template v-else-if="column.key === 'module'">
+            <a-tag>{{ record.moduleName }}</a-tag>
+          </template>
+          <template v-else-if="column.key === 'priority'">
+            <a-tag :color="priorityColor(record.priority)">{{ priorityLabel(record.priority) }}</a-tag>
+          </template>
+          <template v-else-if="column.key === 'status'">
+            <a-tag :color="statusColor(record.status)">{{ statusLabel(record.status) }}</a-tag>
+          </template>
+          <template v-else-if="column.key === 'amount'">
+            {{ record.amount ? formatCurrency(record.amount) : "-" }}
+          </template>
+          <template v-else-if="column.key === 'dueDate'">
+            {{ record.dueDate ? formatDate(record.dueDate) : "-" }}
+          </template>
+          <template v-else-if="column.key === 'action'">
+            <a-space>
+              <span>{{ record.action }}</span>
+              <a-button
+                v-if="record.automation"
+                type="primary"
+                size="small"
+                :loading="actionLoadingKey === record.key"
+                @click="runAutomation(record)"
+              >
+                一键生成
+              </a-button>
+              <a-button type="link" size="small" @click="handleTodoAction(record)">
+                {{ record.module === "OFFICE" ? "查看/审批" : "处理" }}
+              </a-button>
             </a-space>
           </template>
+        </template>
+      </a-table>
+    </a-card>
 
-          <a-alert
-            v-if="loadErrors.length"
-            type="warning"
-            show-icon
-            class="load-alert"
-            :message="`部分模块加载失败：${loadErrors.join('、')}`"
-          />
-
-          <a-table
-            row-key="key"
-            :columns="columns"
-            :data-source="filteredTodos"
-            :loading="loading"
-            :pagination="{ pageSize: 12, showSizeChanger: true }"
-          >
-            <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'title'">
-                <div class="todo-title">{{ record.title }}</div>
-                <div class="todo-subject">{{ record.subject }}</div>
-              </template>
-              <template v-else-if="column.key === 'module'">
-                <a-tag>{{ record.moduleName }}</a-tag>
-              </template>
-              <template v-else-if="column.key === 'priority'">
-                <a-tag :color="priorityColor(record.priority)">{{ priorityLabel(record.priority) }}</a-tag>
-              </template>
-              <template v-else-if="column.key === 'status'">
-                <a-tag :color="statusColor(record.status)">{{ statusLabel(record.status) }}</a-tag>
-              </template>
-              <template v-else-if="column.key === 'amount'">
-                {{ record.amount ? formatCurrency(record.amount) : "-" }}
-              </template>
-              <template v-else-if="column.key === 'dueDate'">
-                {{ record.dueDate ? formatDate(record.dueDate) : "-" }}
-              </template>
-              <template v-else-if="column.key === 'action'">
-                <a-space>
-                  <span>{{ record.action }}</span>
-                  <a-button
-                    v-if="record.automation"
-                    type="primary"
-                    size="small"
-                    :loading="actionLoadingKey === record.key"
-                    @click="runAutomation(record)"
-                  >
-                    一键生成
-                  </a-button>
-                  <a-button type="link" size="small" @click="handleTodoAction(record)">处理</a-button>
-                </a-space>
-              </template>
-            </template>
-          </a-table>
-        </a-card>
-      </a-tab-pane>
-      <a-tab-pane key="approvals" tab="审批处理">
-        <ApprovalCenterView embedded />
-      </a-tab-pane>
-    </a-tabs>
+    <ApprovalCenterView ref="approvalCenterRef" embedded drawer-only />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { useRouter } from "vue-router";
 import { message } from "ant-design-vue";
 import { createApproval, getOfficeWorkbench } from "@/api/office";
 import { listRiskItems } from "@/api/risk";
@@ -170,6 +167,7 @@ type BusinessTodo = {
   dueDate?: string;
   route: string;
   action: string;
+  entityId?: string;
   automation?: AutomationAction;
 };
 
@@ -212,17 +210,16 @@ type AutomationAction =
     };
 
 const router = useRouter();
-const route = useRoute();
 const auth = useAuthStore();
 const loading = ref(false);
 const actionLoadingKey = ref("");
+const approvalCenterRef = ref<InstanceType<typeof ApprovalCenterView>>();
 const todos = ref<BusinessTodo[]>([]);
 const loadErrors = ref<string[]>([]);
 const keyword = ref("");
 const moduleFilter = ref("ALL");
 const priorityFilter = ref("ALL");
 const statusFilter = ref("ALL");
-const activeTab = ref(route.query.tab === "approvals" ? "approvals" : "todos");
 
 const columns = [
   { title: "事项", key: "title", width: 300 },
@@ -323,8 +320,9 @@ async function loadData() {
         owner: "当前审批人",
         amount: item.amount,
         dueDate: item.createdAt,
-        route: item.route || "/workbench/todos?tab=approvals",
+        route: item.route || "/workbench/todos",
         action: "处理审批或协同事项",
+        entityId: item.id,
       }));
       workbench.warnings.forEach((item) => next.push({
         key: `office-warning-${item.type}-${item.id}`,
@@ -651,7 +649,11 @@ function go(path: string) {
 
 function handleTodoAction(record: BusinessTodo) {
   if (record.module === "OFFICE" && (record.route.includes("/office/approvals") || record.route.includes("tab=approvals"))) {
-    activeTab.value = "approvals";
+    if (record.entityId) {
+      approvalCenterRef.value?.openApprovalById(record.entityId);
+      return;
+    }
+    message.warning("缺少审批ID，无法打开详情");
     return;
   }
   router.push(record.route);

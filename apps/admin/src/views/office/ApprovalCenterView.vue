@@ -1,6 +1,6 @@
 <template>
   <div class="page-stack">
-    <a-card>
+    <a-card v-if="!drawerOnly">
       <template #title>审批处理</template>
       <template #extra>
         <a-space>
@@ -239,7 +239,8 @@ import { addSignApproval, createApproval, getOfficeReferences, listApprovals, pr
 import { listQuotes, listContracts, listContractChanges, processQuoteApproval, approveContract, approveContractChange, rejectContractChange, type QuotePlan, type ServiceContract } from "@/api/crm";
 import { useAuthStore } from "@/stores/auth";
 
-defineProps<{ embedded?: boolean }>();
+const props = defineProps<{ embedded?: boolean; drawerOnly?: boolean }>();
+const { embedded, drawerOnly } = props;
 
 const auth = useAuthStore(); const router = useRouter(); const loading = ref(false); const saving = ref(false);
 const sourceFilter = ref("all");
@@ -438,6 +439,18 @@ function openDetail(item: any) {
   Object.assign(detailProcessForm, { decision: "APPROVED", comment: "同意", approverName: auth.user?.displayName || "" });
   detailOpen.value = true;
 }
+
+async function openApprovalById(id: string) {
+  if (!officeApprovals.value.length) await loadData();
+  const target = mergedList.value.find((item) => item._source === "office" && item.id === id);
+  if (!target) {
+    message.warning("未找到对应审批事项，可能已被处理或当前账号无权限查看");
+    return;
+  }
+  openDetail(target);
+}
+
+defineExpose({ openApprovalById, loadData });
 async function handleProcess() {
   await processFormRef.value?.validate(); if (!selectedApproval.value) return; saving.value = true;
   try { await processApproval(selectedApproval.value.id, { ...processForm }); processOpen.value = false; message.success(processForm.decision === "APPROVED" ? "审批已通过" : "审批已驳回"); await loadData(); }

@@ -31,6 +31,12 @@
           <a-descriptions-item label="合同金额">
             <strong>{{ formatMoney(record.amount) }}</strong>
           </a-descriptions-item>
+          <a-descriptions-item label="已开票金额">
+            <strong>{{ formatMoney(invoicedTotal) }}</strong>
+          </a-descriptions-item>
+          <a-descriptions-item label="已回款金额">
+            <strong>{{ formatMoney(receivedTotal) }}</strong>
+          </a-descriptions-item>
           <a-descriptions-item label="未税金额">
             <strong>{{ formatMoney(record.netAmount ?? calcNetAmount(record.amount, record.taxRate)) }}</strong>
           </a-descriptions-item>
@@ -355,6 +361,7 @@ async function loadClosureData() {
 }
 
 const receivableTotal = computed(() => contractReceivables.value.reduce((sum, item) => sum + Number(item.amount || 0), 0));
+const invoicedTotal = computed(() => contractReceivables.value.reduce((sum, item) => sum + (item.invoiceNo ? Number(item.amount || 0) : 0), 0));
 const receivedTotal = computed(() => contractReceivables.value.reduce((sum, item) => sum + Number(item.settledAmount || 0), 0));
 const outstandingTotal = computed(() => contractReceivables.value.reduce((sum, item) => sum + Number(item.outstandingAmount || 0), 0));
 const overdueReceivables = computed(() => contractReceivables.value.filter((item) => item.status === "OVERDUE"));

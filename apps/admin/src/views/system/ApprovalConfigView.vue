@@ -190,6 +190,7 @@ import { batchPreviewApprovalFlows, copyApprovalFlow, createApprovalConfig, dele
 const flowOptions = [
   { label: "报价审批", value: "QUOTE", flowName: "报价审批" },
   { label: "合同审批", value: "CONTRACT", flowName: "合同审批" },
+  { label: "合同变更/盖章件审批", value: "CONTRACT_CHANGE", flowName: "合同变更/盖章件审批" },
   { label: "采购申请审批", value: "PURCHASE", flowName: "采购申请审批" },
   { label: "项目立项审批", value: "PROJECT", flowName: "项目立项审批" },
   { label: "付款申请审批", value: "PAYMENT", flowName: "付款申请审批" },

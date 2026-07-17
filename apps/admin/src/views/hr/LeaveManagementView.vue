@@ -84,6 +84,9 @@
 
     <!-- Approve Modal -->
     <a-modal v-model:open="approveModal" :title="approveAction === true ? '审批通过' : '驳回'" :confirm-loading="saving" @ok="confirmApprove">
+      <a-card v-if="approveRecord" size="small" title="流程进度" class="section-alert">
+        <ApprovalProgressFlow :steps="leaveApprovalSteps(approveRecord)" />
+      </a-card>
       <a-form layout="vertical">
         <a-form-item label="审批意见">
           <a-textarea v-model:value="approveRemark" :rows="3" />
@@ -103,6 +106,7 @@ import {
   listAllLeaves, createLeave, approveLeave,
   type LeaveRecord, type LeavePayload,
 } from "@/api/hr";
+import ApprovalProgressFlow, { type ApprovalProgressStep } from "@/components/ApprovalProgressFlow.vue";
 
 const auth = useAuthStore();
 const canManage = computed(() => auth.can("qualification:employee:manage"));
@@ -167,6 +171,19 @@ function statusColor(s: string) {
 }
 function statusLabel(s: string) {
   return ({ PENDING: "待审批", APPROVED: "已通过", REJECTED: "已驳回" } as Record<string, string>)[s] || s;
+}
+function leaveApprovalSteps(item: LeaveRecord): ApprovalProgressStep[] {
+  return [
+    { key: "start", personName: item.employeeName || "申请人", title: "发起申请", time: item.startDate, note: `${typeLabel(item.leaveType)} · ${item.totalDays} 天`, state: "done" },
+    {
+      key: "approval",
+      personName: item.approvedBy || "当前审批人",
+      title: item.status === "PENDING" ? "待审批" : item.status === "REJECTED" ? "已驳回" : "已同意",
+      time: item.approvedAt,
+      note: item.status === "PENDING" ? item.reason || "等待请假审批" : item.approvalRemark || statusLabel(item.status),
+      state: item.status === "PENDING" ? "pending" : item.status === "REJECTED" ? "rejected" : "done",
+    },
+  ];
 }
 
 // Create form

@@ -136,19 +136,7 @@
     <a-modal v-model:open="approvalOpen" title="付款申请审批进展" :footer="canApproveSelected ? undefined : null" :confirm-loading="saving" @ok="handleApproval">
       <a-alert v-if="selectedApplication" class="section-alert" type="info" :message="`${selectedApplication.code} · ${selectedApplication.supplierName} · ${formatMoney(selectedApplication.requestedAmount)}`" />
       <a-card v-if="selectedApplication" size="small" title="流程进展" class="section-alert">
-        <a-timeline>
-          <a-timeline-item color="green">
-            发起申请 · {{ selectedApplication.applicantName || "-" }}
-            <span class="table-subtitle">{{ selectedApplication.requestedDate || "-" }} · {{ selectedApplication.purpose || "-" }}</span>
-          </a-timeline-item>
-          <a-timeline-item :color="selectedApplication.status === 'PENDING_APPROVAL' ? 'orange' : selectedApplication.status === 'REJECTED' ? 'red' : 'green'">
-            审批阶段 · {{ selectedApplication.approverName || "待审批人处理" }}
-            <span class="table-subtitle">{{ selectedApplication.status === 'PENDING_APPROVAL' ? '未审批' : `${statusLabel(selectedApplication.status)} · ${selectedApplication.approvalComment || '-'}` }}</span>
-          </a-timeline-item>
-          <a-timeline-item :color="selectedApplication.status === 'PAID' ? 'green' : 'gray'">
-            付款完成 · {{ selectedApplication.paymentCode || "未付款" }}
-          </a-timeline-item>
-        </a-timeline>
+        <ApprovalProgressFlow :steps="paymentApprovalSteps(selectedApplication)" />
       </a-card>
       <a-form v-if="canApproveSelected" ref="approvalFormRef" :model="approvalForm" :rules="approvalRules" layout="vertical">
         <a-form-item label="审批结论" name="decision">
@@ -197,6 +185,7 @@ import {
 } from "@/api/finance";
 import { useAuthStore } from "@/stores/auth";
 import { downloadCsv } from "@/utils/csv";
+import ApprovalProgressFlow, { type ApprovalProgressStep } from "@/components/ApprovalProgressFlow.vue";
 
 type ApprovalDecision = "APPROVED" | "REJECTED";
 
@@ -398,6 +387,21 @@ function today() { const value = new Date(); return `${value.getFullYear()}-${St
 function generateCode(prefix: string) { const value = new Date(); return `${prefix}-${today().replaceAll("-", "")}-${String(value.getHours()).padStart(2, "0")}${String(value.getMinutes()).padStart(2, "0")}${String(value.getSeconds()).padStart(2, "0")}${String(value.getMilliseconds()).padStart(3, "0")}`; }
 function formatMoney(value: number) { return new Intl.NumberFormat("zh-CN", { style: "currency", currency: "CNY", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value || 0); }
 function moneyFormatter(value: number | string) { return formatMoney(Number(value)); }
+function paymentApprovalSteps(item: PaymentApplication): ApprovalProgressStep[] {
+  const approved = item.status === "APPROVED" || item.status === "PAID";
+  return [
+    { key: "start", personName: item.applicantName || "发起人", title: "发起申请", time: item.requestedDate, note: item.purpose, state: "done" },
+    {
+      key: "approval",
+      personName: item.approverName || "当前审批人",
+      title: item.status === "PENDING_APPROVAL" ? "待审批" : item.status === "REJECTED" ? "已驳回" : "已同意",
+      time: item.approvedAt,
+      note: item.status === "PENDING_APPROVAL" ? "等待付款审批" : item.approvalComment || statusLabel(item.status),
+      state: item.status === "PENDING_APPROVAL" ? "pending" : item.status === "REJECTED" ? "rejected" : "done",
+    },
+    { key: "paid", personName: item.paymentCode || "付款经办", title: item.status === "PAID" ? "已付款" : "待付款", note: approved ? item.paymentCode || "等待付款执行" : "审批通过后执行", state: item.status === "PAID" ? "done" : "waiting" },
+  ];
+}
 </script>
 
 <style scoped>

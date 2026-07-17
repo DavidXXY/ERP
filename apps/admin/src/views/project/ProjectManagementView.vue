@@ -499,19 +499,7 @@
             </a-descriptions-item>
           </a-descriptions>
           <a-card title="审批进展" size="small" style="margin-top: 12px">
-            <a-timeline>
-              <a-timeline-item color="green">
-                发起项目 · {{ detail.project.customerName || "-" }}
-                <span class="table-subtitle">{{ detail.project.contractCode || detail.project.name }}</span>
-              </a-timeline-item>
-              <a-timeline-item :color="detail.project.approvalStatus === 'PENDING' ? 'orange' : detail.project.approvalStatus === 'REJECTED' ? 'red' : 'green'">
-                项目审批 / 负责人分配 · {{ detail.project.approverName || "待审批人处理" }}
-                <span class="table-subtitle">{{ detail.project.approvalStatus === 'PENDING' ? '未审批' : detail.project.approvalComment || approvalLabel(detail.project.approvalStatus) }}</span>
-              </a-timeline-item>
-              <a-timeline-item :color="detail.project.approvalStatus === 'APPROVED' ? 'green' : 'gray'">
-                项目执行 · {{ detail.project.approvalStatus === 'APPROVED' ? stageLabel(detail.project.stage) : "未开始" }}
-              </a-timeline-item>
-            </a-timeline>
+            <ApprovalProgressFlow :steps="projectApprovalSteps(detail.project)" />
           </a-card>
 
           <a-row :gutter="[16, 16]" class="drawer-metrics">
@@ -636,6 +624,7 @@ type ProjectProfitability,
 } from "@/api/project";
 import { createPurchaseRequest } from "@/api/procurement";
 import type { ApprovalDecision, QuoteCostRequest, QuotePlan } from "@/api/crm";
+import ApprovalProgressFlow, { type ApprovalProgressStep } from "@/components/ApprovalProgressFlow.vue";
 import { useAuthStore } from "@/stores/auth";
 import ProjectModals from "./ProjectModals.vue";
 import BusinessTraceTimeline from "@/components/business/BusinessTraceTimeline.vue";
@@ -1062,6 +1051,20 @@ function stageLabel(stage: ProjectStage) {
 function stageColor(stage: ProjectStage) { return ({ INITIATED: "blue", BIDDING: "cyan", ENTRY: "geekblue", CONSTRUCTION: "orange", COMMISSIONING: "purple", INITIAL_ACCEPTANCE: "gold", FINAL_ACCEPTANCE: "green", WARRANTY: "lime", CLOSED: "default" } as Record<ProjectStage, string>)[stage]; }
 function approvalLabel(status: ProjectApprovalStatus) { return ({ PENDING: "待分配", APPROVED: "已分配", REJECTED: "已退回" } as Record<ProjectApprovalStatus, string>)[status]; }
 function approvalColor(status: ProjectApprovalStatus) { return ({ PENDING: "orange", APPROVED: "green", REJECTED: "red" } as Record<ProjectApprovalStatus, string>)[status]; }
+function projectApprovalSteps(project: Project): ApprovalProgressStep[] {
+  return [
+    { key: "start", personName: project.customerName || "发起人", title: "发起项目", note: project.contractCode || project.name, state: "done" },
+    {
+      key: "approval",
+      personName: project.approverName || "当前审批人",
+      title: project.approvalStatus === "PENDING" ? "待审批" : project.approvalStatus === "REJECTED" ? "已驳回" : "已同意",
+      time: project.approvedAt,
+      note: project.approvalStatus === "PENDING" ? "等待项目审批/负责人分配" : project.approvalComment || approvalLabel(project.approvalStatus),
+      state: project.approvalStatus === "PENDING" ? "pending" : project.approvalStatus === "REJECTED" ? "rejected" : "done",
+    },
+    { key: "execute", personName: project.managerName || "项目负责人", title: project.approvalStatus === "APPROVED" ? "已进入执行" : "待执行", note: project.approvalStatus === "APPROVED" ? stageLabel(project.stage) : "审批通过后开始执行", state: project.approvalStatus === "APPROVED" ? "done" : "waiting" },
+  ];
+}
 function projectTypeLabel(type: ProjectType) { return projectTypeOptions.find((item) => item.value === type)?.label || type; }
 function categoryLabel(category: ProjectCostCategory) { return categoryOptions.find((item) => item.value === category)?.label || category; }
 function sourceLabel(source: ProjectCostSource) { return sourceOptions.find((item) => item.value === source)?.label || source; }

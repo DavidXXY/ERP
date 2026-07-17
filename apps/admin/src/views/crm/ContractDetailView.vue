@@ -51,23 +51,7 @@
         </a-card>
 
         <a-card title="审批进展" style="margin-top: 16px">
-          <a-timeline>
-            <a-timeline-item color="green">
-              发起合同 · {{ record.customerName || "-" }}
-              <span class="table-subtitle">金额：{{ formatMoney(record.amount) }} · 类型：{{ record.contractType || "-" }}</span>
-            </a-timeline-item>
-            <a-timeline-item :color="record.status === 'PENDING_APPROVAL' ? 'orange' : 'green'">
-              合同审批 · {{ record.status === 'PENDING_APPROVAL' ? "待审批人处理" : "已通过" }}
-              <span class="table-subtitle">{{ record.status === 'PENDING_APPROVAL' ? "未审批" : "合同已进入盖章阶段" }}</span>
-            </a-timeline-item>
-            <a-timeline-item :color="record.status === 'SEAL_APPROVAL' ? 'orange' : record.status === 'ACTIVE' ? 'green' : 'gray'">
-              盖章件审批 · {{ pendingSignedDocApproval?.requestedBy || (record.status === 'ACTIVE' ? "已完成" : "未提交") }}
-              <span class="table-subtitle">{{ record.status === 'SEAL_APPROVAL' ? "待审批人处理" : record.status === 'ACTIVE' ? "已审批通过" : "未审批" }}</span>
-            </a-timeline-item>
-            <a-timeline-item :color="record.status === 'ACTIVE' ? 'green' : 'gray'">
-              合同生效 / 项目承接 · {{ relatedProject?.code || "未承接" }}
-            </a-timeline-item>
-          </a-timeline>
+          <ApprovalProgressFlow :steps="contractApprovalSteps(record)" />
         </a-card>
 
         <a-card title="合同闭环工作台" class="closure-card" style="margin-top: 16px">
@@ -262,25 +246,13 @@
                 {{ item.status === 'APPROVED' ? '已通过' : item.status === 'REJECTED' ? '已驳回' : '待审批' }}
               </a-tag>
             </div>
-            <a-timeline>
-              <a-timeline-item color="blue">
-                <template #label>{{ item.requestedAt?.slice(0,10) || "-" }}</template>
-                <strong>提交变更申请</strong>
-                <p style="margin:2px 0 0;color:#8c8c8c;font-size:12px">申请人：{{ item.requestedBy || "-" }}</p>
-              </a-timeline-item>
-              <a-timeline-item :color="item.status === 'APPROVED' ? 'green' : item.status === 'REJECTED' ? 'red' : 'orange'">
-                <template #label>{{ item.approvedAt?.slice(0,10) || "待处理" }}</template>
-                <strong v-if="item.status === 'PENDING'">等待审批</strong>
-                <strong v-else>{{ item.status === 'APPROVED' ? '审批通过' : '审批驳回' }}</strong>
-                <p v-if="item.approvedBy" style="margin:2px 0 0;color:#8c8c8c;font-size:12px">审批人：{{ item.approvedBy }}</p>
-                <div v-if="item.status === 'PENDING'" style="margin-top:8px">
-                  <a-space>
-                    <a-button size="small" type="primary" @click="handleApproveChange(item.id)">通过</a-button>
-                    <a-button size="small" danger @click="handleRejectChange(item.id)">驳回</a-button>
-                  </a-space>
-                </div>
-              </a-timeline-item>
-            </a-timeline>
+            <ApprovalProgressFlow :steps="contractChangeApprovalSteps(item)" />
+            <div v-if="item.status === 'PENDING'" style="margin-top:8px">
+              <a-space>
+                <a-button size="small" type="primary" @click="handleApproveChange(item.id)">通过</a-button>
+                <a-button size="small" danger @click="handleRejectChange(item.id)">驳回</a-button>
+              </a-space>
+            </div>
           </div>
         </div>
       </a-tab-pane>
@@ -312,6 +284,7 @@ import { listProjects, type Project } from "@/api/project";
 import { getContract, getOpportunity, getQuote, uploadAttachment, deleteAttachment, listAttachments, openAttachment, downloadAttachment, createContractChange, approveContractChange, rejectContractChange, listContractChanges, listReceivables, approveContract, submitSignedDocumentApproval, type Opportunity, type QuotePlan, type ServiceContract, type CrmAttachment, type ContractChangeResponse, type Receivable } from "@/api/crm";
 import { contractStatusColor, contractStatusLabel, formatMoney, opportunityStageColor, opportunityStageLabel, quoteStatusColor, quoteStatusLabel } from "./crm-options";
 import BusinessTraceTimeline from "@/components/business/BusinessTraceTimeline.vue";
+import ApprovalProgressFlow, { type ApprovalProgressStep } from "@/components/ApprovalProgressFlow.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -447,6 +420,44 @@ const canApproveContract = computed(() => record.value?.status === "PENDING_APPR
 const canUploadSignedDoc = computed(() => record.value?.status === "PENDING_SEAL" && auth.can("crm:contract:update"));
 const canSubmitSignedApproval = computed(() => record.value?.status === "PENDING_SEAL" && signedAttachments.value.length > 0 && auth.can("crm:contract:update"));
 const canApproveSignedDoc = computed(() => record.value?.status === "SEAL_APPROVAL" && Boolean(pendingSignedDocApproval.value) && auth.can("crm:contract:update"));
+
+function contractApprovalSteps(item: ServiceContract): ApprovalProgressStep[] {
+  const contractApproved = ["PENDING_SEAL", "SEAL_APPROVAL", "ACTIVE", "RENEWAL_PENDING", "OVERDUE_RISK", "CLOSED"].includes(item.status);
+  const sealRejected = pendingSignedDocApproval.value?.status === "REJECTED";
+  return [
+    { key: "start", personName: item.salesOwnerName || item.customerName || "发起人", title: "发起合同", note: `${item.contractType || "-"} · ${formatMoney(item.amount)}`, state: "done" },
+    {
+      key: "contract",
+      personName: contractApproved ? "合同审批人" : "当前审批人",
+      title: item.status === "PENDING_APPROVAL" ? "待审批" : "已同意",
+      note: item.status === "PENDING_APPROVAL" ? "等待合同审批" : "合同已进入盖章阶段",
+      state: item.status === "PENDING_APPROVAL" ? "pending" : "done",
+    },
+    {
+      key: "seal",
+      personName: pendingSignedDocApproval.value?.approvedBy || pendingSignedDocApproval.value?.requestedBy || (item.status === "ACTIVE" ? "盖章审批人" : "当前审批人"),
+      title: item.status === "SEAL_APPROVAL" ? "待审批" : sealRejected ? "已驳回" : item.status === "ACTIVE" ? "已同意" : "待提交",
+      time: pendingSignedDocApproval.value?.approvedAt || pendingSignedDocApproval.value?.createdAt,
+      note: item.status === "SEAL_APPROVAL" ? "等待盖章件审批" : pendingSignedDocApproval.value?.approvalComment || (item.status === "ACTIVE" ? "双方盖章件已审批" : "上传盖章件后审批"),
+      state: item.status === "SEAL_APPROVAL" ? "pending" : sealRejected ? "rejected" : item.status === "ACTIVE" ? "done" : "waiting",
+    },
+    { key: "project", personName: relatedProject.value?.code || "项目承接", title: item.status === "ACTIVE" ? "已承接" : "待承接", note: relatedProject.value?.name || "盖章通过后自动承接项目", state: item.status === "ACTIVE" ? "done" : "waiting" },
+  ];
+}
+
+function contractChangeApprovalSteps(item: ContractChangeResponse): ApprovalProgressStep[] {
+  return [
+    { key: "start", personName: item.requestedBy || "发起人", title: "发起申请", time: item.requestedAt || item.createdAt, note: item.reason, state: "done" },
+    {
+      key: "approval",
+      personName: item.approvedBy || "当前审批人",
+      title: item.status === "PENDING" ? "待审批" : item.status === "REJECTED" ? "已驳回" : "已同意",
+      time: item.approvedAt,
+      note: item.status === "PENDING" ? "等待合同变更审批" : item.approvalComment || item.reason,
+      state: item.status === "PENDING" ? "pending" : item.status === "REJECTED" ? "rejected" : "done",
+    },
+  ];
+}
 
 async function loadAttachments() {
   try {

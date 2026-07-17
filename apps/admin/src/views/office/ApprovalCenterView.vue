@@ -135,13 +135,7 @@
           </a-descriptions>
 
           <a-card size="small" title="审批流节点">
-            <a-timeline v-if="detailApproval.nodes?.length">
-              <a-timeline-item v-for="node in detailApproval.nodes" :key="node.id" :color="nodeColor(node.nodeStatus)">
-                第{{ node.stepNo }}步 · {{ node.assigneeName || "-" }} · {{ nodeStatusLabel(node.nodeStatus) }}
-                <span class="table-subtitle">{{ node.conditionText || "" }}</span>
-                <span v-if="node.approverName" class="table-subtitle">处理人：{{ node.approverName }} · {{ node.approvalComment || "" }}</span>
-              </a-timeline-item>
-            </a-timeline>
+            <ApprovalProgressFlow v-if="detailApproval.nodes?.length" :steps="officeApprovalProgressSteps(detailApproval)" />
             <a-empty v-else description="暂无审批节点" />
           </a-card>
 
@@ -238,6 +232,7 @@ import PlusOutlined from "@ant-design/icons-vue/PlusOutlined"; import ReloadOutl
 import { addSignApproval, createApproval, getOfficeReferences, listApprovals, processApproval, returnApproval, transferApproval, withdrawApproval, type Approval, type ApprovalRuntimeNode, type ApprovalStatus, type ApprovalType, type Expense, type ExpenseStatus, type ExpenseType } from "@/api/office";
 import { listQuotes, listContracts, listContractChanges, processQuoteApproval, approveContract, approveContractChange, rejectContractChange, type QuotePlan, type ServiceContract } from "@/api/crm";
 import { useAuthStore } from "@/stores/auth";
+import ApprovalProgressFlow, { type ApprovalProgressStep } from "@/components/ApprovalProgressFlow.vue";
 
 const props = defineProps<{ embedded?: boolean; drawerOnly?: boolean }>();
 const { embedded, drawerOnly } = props;
@@ -652,6 +647,22 @@ function approvalAgeLabel(record: any) {
 }
 function runtimeNodeSummary(nodes: ApprovalRuntimeNode[]) {
   return nodes.map(node => `第${node.stepNo}步 ${node.assigneeName || "-"} ${node.nodeStatus}${node.dueAt ? " 截止" + node.dueAt.slice(0, 16).replace("T", " ") : ""}`).join(" / ");
+}
+function officeApprovalProgressSteps(item: Approval): ApprovalProgressStep[] {
+  const steps: ApprovalProgressStep[] = [
+    { key: "start", personName: item.applicantName || "发起人", title: "发起申请", time: item.createdAt, note: item.title || item.content, state: "done" },
+  ];
+  (item.nodes || []).forEach((node) => {
+    steps.push({
+      key: node.id,
+      personName: node.approverName || node.assigneeName || "当前审批人",
+      title: node.nodeStatus === "APPROVED" ? "已同意" : node.nodeStatus === "REJECTED" ? "已驳回" : node.nodeStatus === "SKIPPED" ? "已跳过" : "待审批",
+      time: node.completedAt || node.dueAt,
+      note: node.approvalComment || node.conditionText || node.sourceValue,
+      state: node.nodeStatus === "APPROVED" ? "done" : node.nodeStatus === "REJECTED" ? "rejected" : node.nodeStatus === "SKIPPED" ? "skipped" : "pending",
+    });
+  });
+  return steps;
 }
 function nodeStatusLabel(v: string) { return ({ PENDING: "待处理", APPROVED: "已通过", REJECTED: "已驳回", SKIPPED: "已跳过" } as Record<string, string>)[v] || v; }
 function nodeColor(v: string) { return ({ PENDING: "blue", APPROVED: "green", REJECTED: "red", SKIPPED: "gray" } as Record<string, string>)[v] || "blue"; }

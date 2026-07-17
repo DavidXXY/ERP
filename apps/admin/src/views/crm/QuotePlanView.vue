@@ -251,6 +251,9 @@
           <strong>{{ selectedQuoteMargin.rate.toFixed(1) }}%</strong>
         </div>
       </div>
+      <a-card v-if="selectedQuote" size="small" title="流程进度" class="section-alert">
+        <ApprovalProgressFlow :steps="quoteApprovalSteps(selectedQuote)" />
+      </a-card>
       <a-form ref="approvalFormRef" :model="approvalForm" :rules="approvalRules" layout="vertical">
         <a-form-item label="审批结论" name="decision">
           <a-radio-group v-model:value="approvalForm.decision" button-style="solid">
@@ -372,6 +375,9 @@
         :message="`成本合计 ${formatMoney(selectedCostRequest.totalCost || 0)} · 建议报价 ${formatMoney(selectedCostRequest.suggestedPrice || 0)}`"
         :description="selectedCostRequest.costRemark || '成本负责人未填写备注'"
       />
+      <a-card v-if="selectedCostRequest" size="small" title="流程进度" class="section-alert">
+        <ApprovalProgressFlow :steps="quoteCostApprovalSteps(selectedCostRequest)" />
+      </a-card>
       <a-form ref="costApprovalFormRef" :model="costApprovalForm" :rules="costApprovalRules" layout="vertical">
         <a-form-item label="审批结论" name="decision">
           <a-radio-group v-model:value="costApprovalForm.decision" button-style="solid">
@@ -448,6 +454,7 @@ import { useAuthStore } from "@/stores/auth";
 import { formatMoney, generateCode, quoteStatusColor, quoteStatusLabel } from "./crm-options";
 import { deleteQuote } from "@/api/crm";
 import { listUsersApi, type UserResponse } from "@/api/system";
+import ApprovalProgressFlow, { type ApprovalProgressStep } from "@/components/ApprovalProgressFlow.vue";
 
 const auth = useAuthStore();
 const route = useRoute();
@@ -963,6 +970,36 @@ function quoteSubmitTip(record: QuotePlan) {
     return `当前毛利率 ${margin.rate.toFixed(1)}%，低于 15%，将作为审批重点提醒。确认提交？`;
   }
   return "当前版本将进入内部审批，确认提交？";
+}
+
+function quoteApprovalSteps(item: QuotePlan): ApprovalProgressStep[] {
+  const internalDone = ["APPROVED", "CUSTOMER_ACCEPTED", "CUSTOMER_DECLINED", "CONVERTED"].includes(item.status);
+  return [
+    { key: "start", personName: (item as any).editorName || item.customerName || "发起人", title: "发起报价", time: item.updatedAt, note: `${item.code || "-"} · ${formatMoney(item.amount)}`, state: "done" },
+    {
+      key: "approval",
+      personName: item.lastApproverName || "当前审批人",
+      title: item.status === "PENDING_APPROVAL" ? "待审批" : item.status === "REJECTED" ? "已驳回" : internalDone ? "已同意" : "待提交",
+      time: item.lastApprovalAt,
+      note: item.status === "PENDING_APPROVAL" ? "等待报价审批" : item.lastApprovalComment || quoteStatusLabel(item.status),
+      state: item.status === "PENDING_APPROVAL" ? "pending" : item.status === "REJECTED" ? "rejected" : internalDone ? "done" : "waiting",
+    },
+  ];
+}
+
+function quoteCostApprovalSteps(item: QuoteCostRequest): ApprovalProgressStep[] {
+  return [
+    { key: "request", personName: item.requestedBy || "发起人", title: "发起成本核算", time: item.requestedAt, note: selectedQuote.value?.code || selectedQuote.value?.customerName, state: "done" },
+    { key: "submit", personName: item.projectManager || "成本负责人", title: item.status === "REQUESTED" ? "待填写" : "已提交", time: item.submittedAt, note: item.costRemark || "成本测算", state: item.status === "REQUESTED" ? "pending" : "done" },
+    {
+      key: "approval",
+      personName: item.approvedBy || "当前审批人",
+      title: item.status === "APPROVED" ? "已同意" : item.status === "REJECTED" ? "已驳回" : "待审批",
+      time: item.approvedAt,
+      note: item.status === "SUBMITTED" ? "等待售前成本审批" : item.approvalComment || "审批后销售可提交报价",
+      state: item.status === "APPROVED" ? "done" : item.status === "REJECTED" ? "rejected" : "pending",
+    },
+  ];
 }
 
 function openApproval(record: QuotePlan) {

@@ -28,6 +28,9 @@
           <template v-else-if="column.key === 'status'"><a-tag :color="statusColor(record.status)">{{ statusLabel(record.status) }}</a-tag></template>
           <template v-else-if="column.key === 'reason'">{{ record.reason || '-' }}</template>
         </template>
+        <template #expandedRowRender="{ record }">
+          <ApprovalProgressFlow :steps="leaveApprovalSteps(record)" />
+        </template>
       </a-table>
     </a-card>
   </div>
@@ -38,6 +41,7 @@ import { computed, onMounted, ref } from "vue";
 import { PlusOutlined } from "@ant-design/icons-vue";
 import { getSelfLeaves, type LeaveRecord } from "@/api/hr";
 import { message } from "ant-design-vue";
+import ApprovalProgressFlow, { type ApprovalProgressStep } from "@/components/ApprovalProgressFlow.vue";
 
 const loading = ref(false);
 const data = ref<LeaveRecord[]>([]);
@@ -50,6 +54,19 @@ function typeColor(t: string) { const c: Record<string,string> = {ANNUAL:"blue",
 function typeLabel(t: string) { const l: Record<string,string> = {ANNUAL:"年假",SICK:"病假",PERSONAL:"事假",MARRIAGE:"婚假",MATERNITY:"产假",COMPENSATORY:"调休",OTHER:"其他"}; return l[t]||t; }
 function statusColor(s: string) { return ({PENDING:"orange",APPROVED:"green",REJECTED:"red"})[s]||"default"; }
 function statusLabel(s: string) { return ({PENDING:"待审批",APPROVED:"已通过",REJECTED:"已驳回"})[s]||s; }
+function leaveApprovalSteps(item: LeaveRecord): ApprovalProgressStep[] {
+  return [
+    { key: "start", personName: item.employeeName || "我", title: "发起申请", time: item.startDate, note: `${typeLabel(item.leaveType)} · ${item.totalDays} 天`, state: "done" },
+    {
+      key: "approval",
+      personName: item.approvedBy || "当前审批人",
+      title: item.status === "PENDING" ? "待审批" : item.status === "REJECTED" ? "已驳回" : "已同意",
+      time: item.approvedAt,
+      note: item.status === "PENDING" ? item.reason || "等待请假审批" : item.approvalRemark || statusLabel(item.status),
+      state: item.status === "PENDING" ? "pending" : item.status === "REJECTED" ? "rejected" : "done",
+    },
+  ];
+}
 
 const columns = [
   { title: "类型", key: "leaveType", width: 80 },

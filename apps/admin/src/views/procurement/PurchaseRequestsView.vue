@@ -41,19 +41,7 @@
     <a-modal v-model:open="approvalOpen" title="采购申请审批进展" :footer="canApproveSelected ? undefined : null" :confirm-loading="saving" @ok="handleApproval">
       <a-alert v-if="selectedRequest" class="section-alert" type="info" :message="`${selectedRequest.code || '-'} · ${selectedRequest.partName || selectedRequest.materialName || '-'} · ${formatMoney(selectedRequest.totalAmount || Number(selectedRequest.unitPrice || 0) * Number(selectedRequest.quantity || 0))}`" />
       <a-card v-if="selectedRequest" size="small" title="流程进展" class="section-alert">
-        <a-timeline>
-          <a-timeline-item color="green">
-            发起申请 · {{ selectedRequest.requesterName || selectedRequest.applicantName || "-" }}
-            <span class="table-subtitle">{{ selectedRequest.reason || selectedRequest.description || "-" }}</span>
-          </a-timeline-item>
-          <a-timeline-item :color="selectedRequest.approvalStatus === 'PENDING' ? 'orange' : selectedRequest.approvalStatus === 'REJECTED' ? 'red' : 'green'">
-            审批阶段 · {{ selectedRequest.lastApproverName || "待审批人处理" }}
-            <span class="table-subtitle">{{ selectedRequest.approvalStatus === 'PENDING' ? '未审批' : `${approvalStatusLabel(selectedRequest.approvalStatus)} · ${selectedRequest.lastApprovalComment || '-'}` }}</span>
-          </a-timeline-item>
-          <a-timeline-item :color="selectedRequest.status === 'ORDERED' || selectedRequest.status === 'RECEIVED' ? 'green' : 'gray'">
-            采购执行 · {{ selectedRequest.status === 'ORDERED' || selectedRequest.status === 'RECEIVED' ? statusLabel(selectedRequest.status) : "未执行" }}
-          </a-timeline-item>
-        </a-timeline>
+        <ApprovalProgressFlow :steps="purchaseApprovalSteps(selectedRequest)" />
       </a-card>
       <a-form v-if="canApproveSelected" ref="approvalFormRef" :model="approvalForm" layout="vertical">
         <a-form-item label="审批结论"><a-radio-group v-model:value="approvalForm.decision" button-style="solid"><a-radio-button value="APPROVED">通过</a-radio-button><a-radio-button value="REJECTED">驳回</a-radio-button></a-radio-group></a-form-item>
@@ -68,6 +56,7 @@ import { computed, onMounted, reactive, ref } from "vue"; import { useRouter } f
 import { message } from "ant-design-vue"; import PlusOutlined from "@ant-design/icons-vue/PlusOutlined"; import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
 import { createPurchaseRequest, listProcurementCostTargets, listPurchaseRequests, processPurchaseRequestApproval, type ApprovalStatus, type ProcurementCostTargetOption, type PurchaseRequest, type PurchaseRequestStatus } from "@/api/procurement";
 import { useAuthStore } from "@/stores/auth";
+import ApprovalProgressFlow, { type ApprovalProgressStep } from "@/components/ApprovalProgressFlow.vue";
 const auth=useAuthStore(); const router=useRouter(); const loading=ref(false); const saving=ref(false); const requests=ref<PurchaseRequest[]>([]);
 const projects=ref<ProcurementCostTargetOption[]>([]); const departments=ref<ProcurementCostTargetOption[]>([]);
 const createOpen=ref(false); const approvalOpen=ref(false); const formRef=ref(); const approvalFormRef=ref(); const selectedRequest=ref<PurchaseRequest|null>(null);
@@ -102,4 +91,12 @@ function formatMoney(v:number){return new Intl.NumberFormat('zh-CN',{style:'curr
 function formatTaxRate(v?:number){return `${Number(v??13).toFixed(2).replace(/\.?0+$/,'')}%`;}
 function statusLabel(status:PurchaseRequestStatus){return ({DRAFT:'草稿',SUBMITTED:'待审批',APPROVED:'已通过',ORDERED:'已下单',RECEIVED:'已收货',CANCELLED:'已取消'} as Record<PurchaseRequestStatus,string>)[status]||status;}
 function approvalStatusLabel(status:ApprovalStatus){return ({PENDING:'待审批',APPROVED:'已通过',REJECTED:'已驳回'} as Record<ApprovalStatus,string>)[status]||status;}
+function purchaseApprovalSteps(item:PurchaseRequest):ApprovalProgressStep[]{
+  const executed=item.status==='ORDERED'||item.status==='RECEIVED';
+  return [
+    {key:'start',personName:item.requesterName||item.applicantName||'发起人',title:'发起申请',time:item.expectedDate||item.requiredDate,note:item.reason||item.description,state:'done'},
+    {key:'approval',personName:item.lastApproverName||'当前审批人',title:item.approvalStatus==='PENDING'?'待审批':item.approvalStatus==='REJECTED'?'已驳回':'已同意',time:item.lastApprovalAt,note:item.approvalStatus==='PENDING'?'等待采购审批':item.lastApprovalComment||approvalStatusLabel(item.approvalStatus),state:item.approvalStatus==='PENDING'?'pending':item.approvalStatus==='REJECTED'?'rejected':'done'},
+    {key:'execute',personName:executed?statusLabel(item.status):'采购执行',title:executed?'已执行':'待执行',note:item.approvalStatus==='APPROVED'?'审批通过后进入采购执行':'审批通过后执行',state:executed?'done':'waiting'},
+  ];
+}
 </script>

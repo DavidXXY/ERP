@@ -38,7 +38,7 @@ const rootRoutes: RouteRecordRaw[] = [
   { path: "crm/quotes", name: "crm-quotes", component: () => import("@/views/crm/QuotePlanView.vue"), meta: { title: "\u62a5\u4ef7\u65b9\u6848", permission: "crm:quote:view" } },
   { path: "crm/quotes/:id", name: "crm-quote-detail", component: () => import("@/views/crm/QuotePlanDetailView.vue"), meta: { title: "\u62a5\u4ef7\u8be6\u60c5", permission: "crm:quote:view" } },
   { path: "crm/contracts", name: "crm-contracts", component: () => import("@/views/crm/ContractView.vue"), meta: { title: "\u5ba2\u6237\u5408\u540c", permission: "crm:contract:view" } },
-  { path: "crm/contracts/:id", name: "crm-contract-detail", component: () => import("@/views/crm/ContractDetailView.vue"), meta: { title: "\u5408\u540c\u8be6\u60c5", permission: "crm:contract:view" } },
+  { path: "crm/contracts/:id", name: "crm-contract-detail", component: () => import("@/views/crm/ContractDetailView.vue"), meta: { title: "\u5408\u540c\u8be6\u60c5", permissions: ["crm:contract:view", "finance:receivable:view"] } },
   { path: "crm/follow-ups", name: "crm-follow-ups", component: () => import("@/views/crm/FollowUpView.vue"), meta: { title: "\u8ddf\u8fdb\u56de\u8bbf", permission: "crm:followup:view" } },
   { path: "crm/renewals", name: "crm-renewals", component: () => import("@/views/crm/RenewalView.vue"), meta: { title: "\u7eed\u7ea6\u7ba1\u7406", permission: "crm:renewal:view" } },
   { path: "crm/receivables", name: "crm-receivables", component: () => import("@/views/crm/ReceivableView.vue"), meta: { title: "\u5408\u540c\u5e94\u6536", permission: "crm:receivable:view" } },
@@ -59,6 +59,7 @@ const rootRoutes: RouteRecordRaw[] = [
   { path: "projects/budget", name: "projects-budget", component: ProjectManagementView, meta: { title: "\u9884\u7b97\u6267\u884c", permission: "project:view" } },
   { path: "projects/costs", name: "projects-costs", component: ProjectManagementView, meta: { title: "\u6210\u672c\u660e\u7ec6", permission: "project:view" } },
   { path: "projects/stages", name: "projects-stages", component: ProjectManagementView, meta: { title: "\u9636\u6bb5\u5386\u7a0b", permission: "project:view" } },
+  { path: "projects/presales-support", name: "projects-presales-support", component: ProjectManagementView, meta: { title: "售前支持", permission: "project:view" } },
   // Inventory
   { path: "inventory", redirect: "/inventory/parts" },
   { path: "inventory/parts", name: "inventory-parts", component: () => import("@/views/inventory/PartsLedgerView.vue"), meta: { title: "\u5e93\u5b58\u53f0\u8d26", permission: "inventory:view" } },
@@ -82,8 +83,8 @@ const rootRoutes: RouteRecordRaw[] = [
   { path: "qualification/tender", name: "qualification-tender", component: () => import("@/views/qualification/QualificationCenterView.vue"), meta: { title: "\u6295\u6807\u67e5\u8be2", permission: "qualification:tender:view" } },
   { path: "qualification/warnings", name: "qualification-warnings", component: () => import("@/views/qualification/QualificationCenterView.vue"), meta: { title: "\u8d44\u8d28\u9884\u8b66", permission: "qualification:warning:view" } },
   // Office
-  { path: "office", redirect: "/office/approvals" },
-  { path: "office/approvals", name: "office-approvals", component: () => import("@/views/office/ApprovalCenterView.vue"), meta: { title: "\u5ba1\u6279\u4e2d\u5fc3", permission: "office:approval:view" } },
+  { path: "office", redirect: "/workbench/todos" },
+  { path: "office/approvals", redirect: "/workbench/todos?tab=approvals" },
   { path: "office/expenses", name: "office-expenses", component: () => import("@/views/office/ExpenseView.vue"), meta: { title: "\u8d39\u7528\u62a5\u9500", permission: "office:expense:view" } },
   { path: "office/outsourcing", name: "office-outsourcing", component: () => import("@/views/office/OutsourceView.vue"), meta: { title: "\u5916\u5305\u670d\u52a1", permission: "office:outsource:view" } },
   { path: "office/documents", name: "office-documents", component: () => import("@/views/office/DocumentArchiveView.vue"), meta: { title: "\u7535\u5b50\u6863\u6848", permission: "office:document:view" } },
@@ -112,7 +113,7 @@ const rootRoutes: RouteRecordRaw[] = [
   { path: "self/leaves", name: "self-leaves", component: SelfLeaveHistoryView, meta: { title: "\u6211\u7684\u8bf7\u5047" } },
   { path: "self/leaves/new", name: "self-leave-new", component: SelfLeaveSubmitView, meta: { title: "\u63d0\u4ea4\u8bf7\u5047" } },
   { path: "self/balances", name: "self-balances", component: SelfBalanceView, meta: { title: "\u6211\u7684\u989d\u5ea6" } },
-  { path: "self/approvals", redirect: "/office/approvals" },
+  { path: "self/approvals", redirect: "/workbench/todos?tab=approvals" },
 ];
 
 const router = createRouter({

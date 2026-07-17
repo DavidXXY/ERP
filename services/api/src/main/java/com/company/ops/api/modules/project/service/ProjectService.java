@@ -14,6 +14,7 @@ import com.company.ops.api.modules.project.domain.ProjectCostEntry;
 import com.company.ops.api.modules.project.domain.ProjectStage;
 import com.company.ops.api.modules.project.domain.ProjectStageRecord;
 import com.company.ops.api.modules.project.dto.AdvanceProjectStageRequest;
+import com.company.ops.api.modules.project.dto.AssignProjectManagerRequest;
 import com.company.ops.api.modules.project.dto.CreateProjectCostRequest;
 import com.company.ops.api.modules.project.dto.CreateProjectRequest;
 import com.company.ops.api.modules.project.dto.ProcessProjectApprovalRequest;
@@ -144,7 +145,7 @@ public class ProjectService {
     project.setContractAmount(request.contractAmount());
     project.setPlannedStartDate(request.plannedStartDate());
     project.setPlannedEndDate(request.plannedEndDate());
-    project.setStage(ProjectStage.INITIATED);
+    project.setStage(ProjectStage.ENTRY);
     project.setApprovalStatus(ProjectApprovalStatus.PENDING);
     project.setBudgetAmount(budgetAmount);
     project.setActualCost(BigDecimal.ZERO);
@@ -165,10 +166,27 @@ public class ProjectService {
   }
 
   @Transactional
+  public ProjectDetailResponse assignManager(UUID id, AssignProjectManagerRequest request) {
+    Project project = requireProject(id);
+    if (project.getApprovalStatus() == ProjectApprovalStatus.REJECTED) {
+      throw new BusinessException("已驳回项目不能分配项目经理");
+    }
+    project.setManagerName(request.managerName());
+    project.setApprovalStatus(ProjectApprovalStatus.APPROVED);
+    project.setApprovalComment(request.comment());
+    project.setApproverName(request.operatorName());
+    project.setApprovedAt(OffsetDateTime.now());
+    if (project.getStage() == ProjectStage.INITIATED || project.getStage() == ProjectStage.BIDDING) {
+      project.setStage(ProjectStage.ENTRY);
+    }
+    return toDetail(projectRepository.save(project));
+  }
+
+  @Transactional
   public ProjectDetailResponse processApproval(UUID id, ProcessProjectApprovalRequest request) {
     Project project = requireProject(id);
     if (project.getApprovalStatus() != ProjectApprovalStatus.PENDING) {
-      throw new BusinessException("该项目立项已处理");
+      throw new BusinessException("该项目经理分配已处理");
     }
     if (request.decision() == ProjectApprovalStatus.PENDING) {
       throw new BusinessException("请选择通过或驳回");
@@ -191,26 +209,21 @@ public class ProjectService {
     if (request.targetStage() != expected) {
       throw new BusinessException("项目阶段必须按顺序推进，下一阶段应为" + expected.name());
     }
-    if (request.progress() < project.getProgress()) {
-      throw new BusinessException("项目进度不能回退");
-    }
     if (request.targetStage() == ProjectStage.WARRANTY && project.getWarrantyEndDate() == null) {
       throw new BusinessException("进入质保阶段前必须填写质保截止日期");
     }
-    if (request.targetStage() == ProjectStage.CLOSED && request.progress() != 100) {
-      throw new BusinessException("关闭项目时进度必须为100%");
-    }
 
     ProjectStage fromStage = project.getStage();
+    int progress = progressForStage(request.targetStage());
     project.setStage(request.targetStage());
-    project.setProgress(request.progress());
+    project.setProgress(progress);
     projectRepository.save(project);
 
     ProjectStageRecord record = new ProjectStageRecord();
     record.setProjectId(project.getId());
     record.setFromStage(fromStage);
     record.setToStage(request.targetStage());
-    record.setProgress(request.progress());
+    record.setProgress(progress);
     record.setComment(request.comment());
     record.setOperatorName(request.operatorName());
     record.setChangedAt(OffsetDateTime.now());
@@ -439,9 +452,9 @@ public class ProjectService {
     } else if (grossMargin.compareTo(BigDecimal.ZERO) < 0) {
       riskLevel = "HIGH";
       riskMessage = "项目已亏损";
-    } else if (budgetUsageRate.compareTo(BigDecimal.valueOf(85)) >= 0 && project.getProgress() < 85) {
+    } else if (budgetUsageRate.compareTo(BigDecimal.valueOf(85)) >= 0) {
       riskLevel = "MEDIUM";
-      riskMessage = "预算消耗快于项目进度";
+      riskMessage = "预算使用率较高";
     }
     return new ProjectProfitabilityResponse(
         project.getId(), project.getCode(), project.getName(), customerName, project.getStage(), project.getApprovalStatus(),
@@ -456,8 +469,19 @@ public class ProjectService {
 
   private void requireApproved(Project project) {
     if (project.getApprovalStatus() != ProjectApprovalStatus.APPROVED) {
-      throw new BusinessException("项目立项审批通过后才能执行");
+      throw new BusinessException("项目经理分配后才能执行");
     }
+  }
+
+  private int progressForStage(ProjectStage stage) {
+    return switch (stage) {
+      case INITIATED, BIDDING, ENTRY -> 0;
+      case CONSTRUCTION -> 20;
+      case COMMISSIONING -> 45;
+      case INITIAL_ACCEPTANCE -> 65;
+      case FINAL_ACCEPTANCE -> 85;
+      case WARRANTY, CLOSED -> 100;
+    };
   }
 
   private void validateBudgetItems(List<ProjectBudgetItemRequest> items) {

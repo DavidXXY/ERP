@@ -38,11 +38,6 @@
           <span>业务待办中心</span>
         </a-menu-item>
 
-        <a-menu-item v-if="auth.can('office:approval:view')" key="/office/approvals">
-          <template #icon><FileDoneOutlined /></template>
-          <span>审批中心</span>
-        </a-menu-item>
-
         <a-sub-menu
           v-if="canAccessCrm"
           key="crm"
@@ -75,6 +70,7 @@
           <template #icon><ProjectOutlined /></template>
           <template #title>项目管理</template>
           <a-menu-item key="/projects/list">项目列表</a-menu-item>
+          <a-menu-item key="/projects/presales-support">售前支持</a-menu-item>
           <a-menu-item key="/projects/budget">预算执行</a-menu-item>
           <a-menu-item key="/projects/costs">成本明细</a-menu-item>
           <a-menu-item key="/projects/stages">阶段履历</a-menu-item>
@@ -174,7 +170,7 @@
                   <template #icon><UserOutlined /></template>个人设置
                 </a-menu-item>
                 <a-menu-item key="roles" disabled>
-                  {{ auth.user?.roleCodes.join(" / ") || "未加载角色" }}
+                  {{ (auth.user?.roleCodes ?? []).join(" / ") || "未加载角色" }}
                 </a-menu-item>
                 <a-menu-divider />
                 <a-menu-item key="logout" @click="handleLogout">退出登录</a-menu-item>

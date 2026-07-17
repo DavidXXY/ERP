@@ -233,6 +233,13 @@ export function listUsersApi(page: number, size: number = 20) {
   });
 }
 
+export function listUserOptionsApi() {
+  return request<UserResponse[]>({
+    method: "GET",
+    url: "/users/options",
+  });
+}
+
 export function getUserApi(id: string) {
   return request<UserResponse>({
     method: "GET",

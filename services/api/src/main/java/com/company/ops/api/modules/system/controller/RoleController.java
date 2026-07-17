@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/roles")
+@RequestMapping({"/api/roles", "/api/system/roles"})
 public class RoleController {
 
   private final RoleService roleService;

@@ -7,7 +7,10 @@
           <a-button @click="loadData">刷新</a-button>
           <a-button @click="printPage">打印</a-button>
           <a-button type="primary" @click="openEdit">合同变更</a-button>
-          <a-button v-if="record && auth.can('project:create')" type="primary" @click="convertToProject">转项目</a-button>
+          <a-button v-if="canApproveContract" type="primary" @click="handleApproveContract">合同审批通过</a-button>
+          <a-button v-if="canSubmitSignedApproval" type="primary" @click="handleSubmitSignedApproval">提交盖章件审批</a-button>
+          <a-button v-if="canApproveSignedDoc" type="primary" @click="handleApproveSignedDocument">盖章件审批通过</a-button>
+          <a-button v-if="canApproveSignedDoc" danger @click="handleRejectSignedDocument">盖章件审批驳回</a-button>
         </a-space>
       </template>
 
@@ -45,6 +48,10 @@
               <a-statistic title="结束日期" :value="record.endDate" />
             </a-col>
           </a-row>
+        </a-card>
+
+        <a-card title="审批进展" style="margin-top: 16px">
+          <ApprovalProgressFlow :steps="contractApprovalSteps(record)" />
         </a-card>
 
         <a-card title="合同闭环工作台" class="closure-card" style="margin-top: 16px">
@@ -113,17 +120,42 @@
           class="section-alert"
           type="success"
           show-icon
-          message="合同已生效，可承接为项目"
-          description="转项目后会带入客户、合同金额、计划周期，并按默认成本结构拆分预算，后续采购、领料和成本会进入项目利润闭环。"
+          message="合同已生效，项目已进入自动承接流程"
+          description="双方盖章件审批通过后，系统会自动创建项目并带入客户、合同金额、计划周期和报价成本预算。"
         />
         <a-alert
           v-else
           class="section-alert"
           type="warning"
           show-icon
-          message="建议合同生效后再转项目"
-          description="未生效合同仍可创建项目草稿，但项目审批和预算执行应以最终合同为准。"
-        />
+          :message="record.status === 'PENDING_APPROVAL' ? '合同待审批' : record.status === 'PENDING_SEAL' ? '合同已审批，待上传双方盖章件' : record.status === 'SEAL_APPROVAL' ? '双方盖章件审批中' : '合同未生效'"
+          description="项目会在双方盖章件审批通过后自动生成，未完成盖章审批前不会进入项目管理执行。"
+        >
+          <template #action>
+            <a-space>
+              <a-button v-if="canApproveContract" type="primary" size="small" @click="handleApproveContract">
+                合同审批通过
+              </a-button>
+              <a-upload
+                v-if="canUploadSignedDoc"
+                :before-upload="(f: File) => handleUpload('SIGNED_DOC', f)"
+                :show-upload-list="false"
+                accept=".jpg,.jpeg,.png,.pdf"
+              >
+                <a-button type="primary" size="small">上传双方盖章件</a-button>
+              </a-upload>
+              <a-button v-if="record.status === 'SEAL_APPROVAL'" size="small" @click="contractTabKey = 'signed'">
+                查看盖章件
+              </a-button>
+              <a-button v-if="canApproveSignedDoc" type="primary" size="small" @click="handleApproveSignedDocument">
+                盖章件审批通过
+              </a-button>
+              <a-button v-if="canApproveSignedDoc" danger size="small" @click="handleRejectSignedDocument">
+                驳回
+              </a-button>
+            </a-space>
+          </template>
+        </a-alert>
 
         <a-card v-if="relatedQuote" title="关联报价" style="margin-top: 16px">
           <a-descriptions bordered :column="{ xs: 1, sm: 2, md: 3 }">
@@ -137,7 +169,7 @@
             </a-descriptions-item>
             <a-descriptions-item label="服务范围" :span="3">{{ relatedQuote.serviceScope }}</a-descriptions-item>
             <a-descriptions-item label="服务频次">{{ relatedQuote.inspectCycle || "未设置" }}</a-descriptions-item>
-            <a-descriptions-item label="付款节点">{{ relatedQuote.paymentNodes || "未设置" }}</a-descriptions-item>
+            <a-descriptions-item label="付款方式/节点">{{ relatedQuote.paymentNodes || "未设置" }}</a-descriptions-item>
             <a-descriptions-item label="状态">
               <a-tag :color="quoteStatusColor(relatedQuote.status)">{{ quoteStatusLabel(relatedQuote.status) }}</a-tag>
             </a-descriptions-item>
@@ -166,7 +198,7 @@
       <a-empty v-else description="未找到合同" />
     </a-card>
 
-    <a-tabs default-active-key="approval" style="margin-top: 16px">
+    <a-tabs v-model:activeKey="contractTabKey" style="margin-top: 16px">
       <a-tab-pane key="approval" tab="审批件">
         <template #extra>
           <a-upload :before-upload="(f: File) => handleUpload('APPROVAL_DOC', f)" :show-upload-list="false" accept=".jpg,.jpeg,.png,.pdf,.doc,.docx">
@@ -177,8 +209,9 @@
         <a-list v-else :data-source="approvalAttachments" size="small">
           <template #renderItem="{ item }">
             <a-list-item>
-              <a :href="getAttachmentDownloadUrl(item.id)" target="_blank">{{ item.fileName }}</a>
+              <a-button type="link" size="small" @click="handleOpenAttachment(item)">{{ item.fileName }}</a-button>
               <span>{{ (item.fileSize / 1024).toFixed(1) + " KB" }}</span>
+              <a-button type="link" size="small" @click="handleDownloadAttachment(item)">下载</a-button>
               <a-button type="link" danger size="small" @click="handleDeleteAttachment(item.id)">删除</a-button>
             </a-list-item>
           </template>
@@ -186,16 +219,18 @@
       </a-tab-pane>
       <a-tab-pane key="signed" tab="双方盖章件">
         <template #extra>
-          <a-upload :before-upload="(f: File) => handleUpload('SIGNED_DOC', f)" :show-upload-list="false" accept=".jpg,.jpeg,.png,.pdf">
-            <a-button size="small" type="primary">上传盖章件</a-button>
+          <a-upload v-if="canUploadSignedDoc" :before-upload="(f: File) => handleUpload('SIGNED_DOC', f)" :show-upload-list="false" accept=".jpg,.jpeg,.png,.pdf">
+            <a-button size="small" type="primary">上传双方盖章件</a-button>
           </a-upload>
+          <a-tag v-else color="default">{{ record?.status === "PENDING_APPROVAL" ? "合同审批通过后开放" : "当前状态不可上传" }}</a-tag>
         </template>
         <a-empty v-if="signedAttachments.length === 0" description="暂无盖章件" />
         <a-list v-else :data-source="signedAttachments" size="small">
           <template #renderItem="{ item }">
             <a-list-item>
-              <a :href="getAttachmentDownloadUrl(item.id)" target="_blank">{{ item.fileName }}</a>
+              <a-button type="link" size="small" @click="handleOpenAttachment(item)">{{ item.fileName }}</a-button>
               <span>{{ (item.fileSize / 1024).toFixed(1) + " KB" }}</span>
+              <a-button type="link" size="small" @click="handleDownloadAttachment(item)">下载</a-button>
               <a-button type="link" danger size="small" @click="handleDeleteAttachment(item.id)">删除</a-button>
             </a-list-item>
           </template>
@@ -211,25 +246,13 @@
                 {{ item.status === 'APPROVED' ? '已通过' : item.status === 'REJECTED' ? '已驳回' : '待审批' }}
               </a-tag>
             </div>
-            <a-timeline>
-              <a-timeline-item color="blue">
-                <template #label>{{ item.requestedAt?.slice(0,10) || "-" }}</template>
-                <strong>提交变更申请</strong>
-                <p style="margin:2px 0 0;color:#8c8c8c;font-size:12px">申请人：{{ item.requestedBy || "-" }}</p>
-              </a-timeline-item>
-              <a-timeline-item :color="item.status === 'APPROVED' ? 'green' : item.status === 'REJECTED' ? 'red' : 'orange'">
-                <template #label>{{ item.approvedAt?.slice(0,10) || "待处理" }}</template>
-                <strong v-if="item.status === 'PENDING'">等待审批</strong>
-                <strong v-else>{{ item.status === 'APPROVED' ? '审批通过' : '审批驳回' }}</strong>
-                <p v-if="item.approvedBy" style="margin:2px 0 0;color:#8c8c8c;font-size:12px">审批人：{{ item.approvedBy }}</p>
-                <div v-if="item.status === 'PENDING'" style="margin-top:8px">
-                  <a-space>
-                    <a-button size="small" type="primary" @click="handleApproveChange(item.id)">通过</a-button>
-                    <a-button size="small" danger @click="handleRejectChange(item.id)">驳回</a-button>
-                  </a-space>
-                </div>
-              </a-timeline-item>
-            </a-timeline>
+            <ApprovalProgressFlow :steps="contractChangeApprovalSteps(item)" />
+            <div v-if="item.status === 'PENDING'" style="margin-top:8px">
+              <a-space>
+                <a-button size="small" type="primary" @click="handleApproveChange(item.id)">通过</a-button>
+                <a-button size="small" danger @click="handleRejectChange(item.id)">驳回</a-button>
+              </a-space>
+            </div>
           </div>
         </div>
       </a-tab-pane>
@@ -253,14 +276,15 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
-import { Modal, message } from "ant-design-vue";
+import { message } from "ant-design-vue";
 import { useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
 const auth = useAuthStore();
-import { createProject, listProjects, type Project } from "@/api/project";
-import { getContract, getOpportunity, getQuote, uploadAttachment, deleteAttachment, listAttachments, getAttachmentDownloadUrl, createContractChange, approveContractChange, rejectContractChange, listContractChanges, listReceivables, type Opportunity, type QuotePlan, type ServiceContract, type CrmAttachment, type ContractChangeResponse, type Receivable } from "@/api/crm";
+import { listProjects, type Project } from "@/api/project";
+import { getContract, getOpportunity, getQuote, uploadAttachment, deleteAttachment, listAttachments, openAttachment, downloadAttachment, createContractChange, approveContractChange, rejectContractChange, listContractChanges, listReceivables, approveContract, submitSignedDocumentApproval, type Opportunity, type QuotePlan, type ServiceContract, type CrmAttachment, type ContractChangeResponse, type Receivable } from "@/api/crm";
 import { contractStatusColor, contractStatusLabel, formatMoney, opportunityStageColor, opportunityStageLabel, quoteStatusColor, quoteStatusLabel } from "./crm-options";
 import BusinessTraceTimeline from "@/components/business/BusinessTraceTimeline.vue";
+import ApprovalProgressFlow, { type ApprovalProgressStep } from "@/components/ApprovalProgressFlow.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -272,6 +296,7 @@ const contractReceivables = ref<Receivable[]>([]);
 const loading = ref(true);
 const saving = ref(false);
 const editOpen = ref(false);
+const contractTabKey = ref(route.query.tab === "signed" ? "signed" : "approval");
 const editFormRef = ref();
 const editForm = reactive({ projectName: "", contractType: "", amount: 0, taxRate: 13, serviceCycle: "", startDate: "", endDate: "", reason: "" });
 const changeColumns = [
@@ -382,15 +407,57 @@ const closureActions = computed(() => {
   if (daysToEnd.value <= 30) {
     rows.push({ key: "renewal", level: "medium", title: "合同临近到期", description: daysToEnd.value >= 0 ? `距到期 ${daysToEnd.value} 天，建议提前进入续约评估。` : `已到期 ${Math.abs(daysToEnd.value)} 天，建议关闭或续约。`, route: "/crm/renewals" });
   }
-  if (rows.length === 0) {
-    rows.push({ key: "review", level: "low", title: "建议定期复盘利润", description: "合同执行稳定，可在项目关闭后沉淀采购、人工、外包、回款和毛利复盘。", route: "/projects/budget" });
-  }
   return rows;
 });
 
 const attachments = ref<CrmAttachment[]>([]);
 const approvalAttachments = computed(() => attachments.value.filter((a) => a.attachmentType === "APPROVAL_DOC" || !a.attachmentType));
 const signedAttachments = computed(() => attachments.value.filter((a) => a.attachmentType === "SIGNED_DOC"));
+const pendingSignedDocApproval = computed(() => changeList.value.find((item) =>
+  item.status === "PENDING" && (item.changeData || "").includes("SIGNED_DOC_APPROVAL")
+) || null);
+const canApproveContract = computed(() => record.value?.status === "PENDING_APPROVAL" && approvalAttachments.value.length > 0 && auth.can("crm:contract:update"));
+const canUploadSignedDoc = computed(() => record.value?.status === "PENDING_SEAL" && auth.can("crm:contract:update"));
+const canSubmitSignedApproval = computed(() => record.value?.status === "PENDING_SEAL" && signedAttachments.value.length > 0 && auth.can("crm:contract:update"));
+const canApproveSignedDoc = computed(() => record.value?.status === "SEAL_APPROVAL" && Boolean(pendingSignedDocApproval.value) && auth.can("crm:contract:update"));
+
+function contractApprovalSteps(item: ServiceContract): ApprovalProgressStep[] {
+  const contractApproved = ["PENDING_SEAL", "SEAL_APPROVAL", "ACTIVE", "RENEWAL_PENDING", "OVERDUE_RISK", "CLOSED"].includes(item.status);
+  const sealRejected = pendingSignedDocApproval.value?.status === "REJECTED";
+  return [
+    { key: "start", personName: item.salesOwnerName || item.customerName || "发起人", title: "发起合同", note: `${item.contractType || "-"} · ${formatMoney(item.amount)}`, state: "done" },
+    {
+      key: "contract",
+      personName: contractApproved ? "合同审批人" : "当前审批人",
+      title: item.status === "PENDING_APPROVAL" ? "待审批" : "已同意",
+      note: item.status === "PENDING_APPROVAL" ? "等待合同审批" : "合同已进入盖章阶段",
+      state: item.status === "PENDING_APPROVAL" ? "pending" : "done",
+    },
+    {
+      key: "seal",
+      personName: pendingSignedDocApproval.value?.approvedBy || pendingSignedDocApproval.value?.requestedBy || (item.status === "ACTIVE" ? "盖章审批人" : "当前审批人"),
+      title: item.status === "SEAL_APPROVAL" ? "待审批" : sealRejected ? "已驳回" : item.status === "ACTIVE" ? "已同意" : "待提交",
+      time: pendingSignedDocApproval.value?.approvedAt || pendingSignedDocApproval.value?.createdAt,
+      note: item.status === "SEAL_APPROVAL" ? "等待盖章件审批" : pendingSignedDocApproval.value?.approvalComment || (item.status === "ACTIVE" ? "双方盖章件已审批" : "上传盖章件后审批"),
+      state: item.status === "SEAL_APPROVAL" ? "pending" : sealRejected ? "rejected" : item.status === "ACTIVE" ? "done" : "waiting",
+    },
+    { key: "project", personName: relatedProject.value?.code || "项目承接", title: item.status === "ACTIVE" ? "已承接" : "待承接", note: relatedProject.value?.name || "盖章通过后自动承接项目", state: item.status === "ACTIVE" ? "done" : "waiting" },
+  ];
+}
+
+function contractChangeApprovalSteps(item: ContractChangeResponse): ApprovalProgressStep[] {
+  return [
+    { key: "start", personName: item.requestedBy || "发起人", title: "发起申请", time: item.requestedAt || item.createdAt, note: item.reason, state: "done" },
+    {
+      key: "approval",
+      personName: item.approvedBy || "当前审批人",
+      title: item.status === "PENDING" ? "待审批" : item.status === "REJECTED" ? "已驳回" : "已同意",
+      time: item.approvedAt,
+      note: item.status === "PENDING" ? "等待合同变更审批" : item.approvalComment || item.reason,
+      state: item.status === "PENDING" ? "pending" : item.status === "REJECTED" ? "rejected" : "done",
+    },
+  ];
+}
 
 async function loadAttachments() {
   try {
@@ -416,6 +483,64 @@ async function handleDeleteAttachment(attId: string) {
     await loadAttachments();
   } catch (error) {
     message.error(error instanceof Error ? error.message : "删除失败");
+  }
+}
+
+async function handleOpenAttachment(item: CrmAttachment) {
+  try {
+    await openAttachment(item);
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "附件打开失败");
+  }
+}
+
+async function handleDownloadAttachment(item: CrmAttachment) {
+  try {
+    await downloadAttachment(item);
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "附件下载失败");
+  }
+}
+
+async function handleApproveContract() {
+  try {
+    await approveContract(id, { operatorName: auth.user?.displayName || "", comment: "" });
+    message.success("合同审批已通过，请上传双方盖章件");
+    await Promise.all([loadData(), loadAttachments(), loadChanges()]);
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "合同审批失败");
+  }
+}
+
+async function handleSubmitSignedApproval() {
+  try {
+    await submitSignedDocumentApproval(id, { operatorName: auth.user?.displayName || "", comment: "双方盖章件审批" });
+    message.success("双方盖章件已提交审批");
+    await Promise.all([loadData(), loadChanges()]);
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "提交盖章件审批失败");
+  }
+}
+
+async function handleApproveSignedDocument() {
+  if (!pendingSignedDocApproval.value) return;
+  try {
+    await approveContractChange(pendingSignedDocApproval.value.id, { operatorName: auth.user?.displayName || "", comment: "双方盖章件审批通过" });
+    message.success("盖章件审批已通过，合同已生效并自动转项目");
+    await Promise.all([loadData(), loadAttachments(), loadChanges()]);
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "盖章件审批失败");
+  }
+}
+
+async function handleRejectSignedDocument() {
+  if (!pendingSignedDocApproval.value) return;
+  try {
+    await rejectContractChange(pendingSignedDocApproval.value.id, { operatorName: auth.user?.displayName || "", comment: "双方盖章件审批驳回" });
+    message.success("盖章件审批已驳回，请重新上传或提交");
+    await Promise.all([loadData(), loadAttachments(), loadChanges()]);
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "盖章件驳回失败");
   }
 }
 
@@ -475,41 +600,6 @@ async function handleRejectChange(changeId: string) {
 }
 
 function printPage() { window.print(); }
-async function convertToProject() {
-  if (!record.value) return;
-  Modal.confirm({
-    title: "确认将合同承接为项目？",
-    content: "系统会按合同金额生成默认预算：人工20%、材料45%、外包20%、差旅5%、其他10%。后续可在项目详情中调整成本归集。",
-    okText: "生成项目",
-    cancelText: "取消",
-    async onOk() {
-      if (!record.value) return;
-      try {
-        const amount = Number(record.value.amount || 0);
-        await createProject({
-      customerId: record.value.customerId,
-      name: record.value.projectName + "项目",
-      projectType: "RENOVATION",
-      managerName: auth.user?.displayName || "",
-      siteAddress: `${record.value.customerName || record.value.projectName}项目现场`,
-      contractAmount: record.value.amount,
-      plannedStartDate: record.value.startDate,
-      plannedEndDate: record.value.endDate,
-          budgetItems: [
-            { category: "LABOR", plannedAmount: Math.round(amount * 0.2 * 100) / 100, remark: "合同转项目默认人工预算" },
-            { category: "MATERIAL", plannedAmount: Math.round(amount * 0.45 * 100) / 100, remark: "合同转项目默认材料预算" },
-            { category: "SUBCONTRACT", plannedAmount: Math.round(amount * 0.2 * 100) / 100, remark: "合同转项目默认外包预算" },
-            { category: "TRAVEL", plannedAmount: Math.round(amount * 0.05 * 100) / 100, remark: "合同转项目默认差旅预算" },
-            { category: "OTHER", plannedAmount: Math.round(amount * 0.1 * 100) / 100, remark: "合同转项目默认其他预算" },
-          ],
-      contractId: record.value.id,
-    });
-        message.success("项目已创建，并进入项目预算与成本闭环");
-        router.push("/projects/list");
-      } catch (error) { message.error(error instanceof Error ? error.message : "项目创建失败"); }
-    },
-  });
-}
 
 function goBack() {
   router.push("/crm/contracts");

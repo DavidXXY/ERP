@@ -97,6 +97,7 @@
                 <template #icon><AuditOutlined /></template>
                 审批
               </a-button>
+              <a-button v-else type="link" size="small" @click="openApproval(record)">流程</a-button>
               <a-button v-if="auth.can('finance:payment:execute') && record.status === 'APPROVED'" type="link" size="small" @click="openPayment(record)">
                 <template #icon><PayCircleOutlined /></template>
                 执行付款
@@ -132,9 +133,12 @@
       </a-table>
     </a-card>
 
-    <a-modal v-model:open="approvalOpen" title="审批付款申请" :confirm-loading="saving" @ok="handleApproval">
+    <a-modal v-model:open="approvalOpen" title="付款申请审批进展" :footer="canApproveSelected ? undefined : null" :confirm-loading="saving" @ok="handleApproval">
       <a-alert v-if="selectedApplication" class="section-alert" type="info" :message="`${selectedApplication.code} · ${selectedApplication.supplierName} · ${formatMoney(selectedApplication.requestedAmount)}`" />
-      <a-form ref="approvalFormRef" :model="approvalForm" :rules="approvalRules" layout="vertical">
+      <a-card v-if="selectedApplication" size="small" title="流程进展" class="section-alert">
+        <ApprovalProgressFlow :steps="paymentApprovalSteps(selectedApplication)" />
+      </a-card>
+      <a-form v-if="canApproveSelected" ref="approvalFormRef" :model="approvalForm" :rules="approvalRules" layout="vertical">
         <a-form-item label="审批结论" name="decision">
           <a-radio-group v-model:value="approvalForm.decision" button-style="solid">
             <a-radio-button value="APPROVED">通过</a-radio-button>
@@ -181,6 +185,7 @@ import {
 } from "@/api/finance";
 import { useAuthStore } from "@/stores/auth";
 import { downloadCsv } from "@/utils/csv";
+import ApprovalProgressFlow, { type ApprovalProgressStep } from "@/components/ApprovalProgressFlow.vue";
 
 type ApprovalDecision = "APPROVED" | "REJECTED";
 
@@ -244,6 +249,7 @@ const duplicateBankReference = computed(() => {
   if (!reference) return false;
   return payments.value.some((item) => item.bankReference === reference);
 });
+const canApproveSelected = computed(() => !!selectedApplication.value && selectedApplication.value.status === "PENDING_APPROVAL" && auth.can("finance:payment:approve"));
 const workbenchCards = computed(() => [
   {
     key: "approval",
@@ -381,6 +387,21 @@ function today() { const value = new Date(); return `${value.getFullYear()}-${St
 function generateCode(prefix: string) { const value = new Date(); return `${prefix}-${today().replaceAll("-", "")}-${String(value.getHours()).padStart(2, "0")}${String(value.getMinutes()).padStart(2, "0")}${String(value.getSeconds()).padStart(2, "0")}${String(value.getMilliseconds()).padStart(3, "0")}`; }
 function formatMoney(value: number) { return new Intl.NumberFormat("zh-CN", { style: "currency", currency: "CNY", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value || 0); }
 function moneyFormatter(value: number | string) { return formatMoney(Number(value)); }
+function paymentApprovalSteps(item: PaymentApplication): ApprovalProgressStep[] {
+  const approved = item.status === "APPROVED" || item.status === "PAID";
+  return [
+    { key: "start", personName: item.applicantName || "发起人", title: "发起申请", time: item.requestedDate, note: item.purpose, state: "done" },
+    {
+      key: "approval",
+      personName: item.approverName || "当前审批人",
+      title: item.status === "PENDING_APPROVAL" ? "待审批" : item.status === "REJECTED" ? "已驳回" : "已同意",
+      time: item.approvedAt,
+      note: item.status === "PENDING_APPROVAL" ? "等待付款审批" : item.approvalComment || statusLabel(item.status),
+      state: item.status === "PENDING_APPROVAL" ? "pending" : item.status === "REJECTED" ? "rejected" : "done",
+    },
+    { key: "paid", personName: item.paymentCode || "付款经办", title: item.status === "PAID" ? "已付款" : "待付款", note: approved ? item.paymentCode || "等待付款执行" : "审批通过后执行", state: item.status === "PAID" ? "done" : "waiting" },
+  ];
+}
 </script>
 
 <style scoped>

@@ -33,14 +33,14 @@ public class CrmAttachmentController {
   }
 
   @GetMapping
-  @PreAuthorize("hasAnyAuthority('crm:contract:view', 'crm:quote:view', 'crm:opportunity:view', 'crm:customer:view')")
+  @PreAuthorize("hasAnyAuthority('crm:contract:view', 'crm:quote:view', 'crm:opportunity:view', 'crm:customer:view', 'finance:receivable:view')")
   public ApiResponse<List<AttachmentDto>> list(
       @RequestParam String entityType, @RequestParam UUID entityId) {
     return ApiResponse.ok(service.listByEntity(entityType, entityId));
   }
 
   @GetMapping("/by-type")
-  @PreAuthorize("hasAnyAuthority('crm:contract:view', 'crm:quote:view', 'crm:opportunity:view', 'crm:customer:view')")
+  @PreAuthorize("hasAnyAuthority('crm:contract:view', 'crm:quote:view', 'crm:opportunity:view', 'crm:customer:view', 'finance:receivable:view')")
   public ApiResponse<List<AttachmentDto>> listByType(
       @RequestParam String entityType, @RequestParam UUID entityId,
       @RequestParam(required = false) String attachmentType) {
@@ -62,7 +62,7 @@ public class CrmAttachmentController {
   }
 
   @GetMapping("/{id}/download")
-  @PreAuthorize("hasAnyAuthority('crm:contract:view', 'crm:quote:view', 'crm:opportunity:view', 'crm:customer:view')")
+  @PreAuthorize("hasAnyAuthority('crm:contract:view', 'crm:quote:view', 'crm:opportunity:view', 'crm:customer:view', 'finance:receivable:view')")
   public void download(@PathVariable UUID id, HttpServletResponse response) {
     try {
       String fileName = service.getFileName(id);
@@ -79,7 +79,7 @@ public class CrmAttachmentController {
   }
 
   @GetMapping("/{id}/temporary-url")
-  @PreAuthorize("hasAnyAuthority('crm:contract:view', 'crm:quote:view', 'crm:opportunity:view', 'crm:customer:view')")
+  @PreAuthorize("hasAnyAuthority('crm:contract:view', 'crm:quote:view', 'crm:opportunity:view', 'crm:customer:view', 'finance:receivable:view')")
   public ApiResponse<String> temporaryUrl(@PathVariable UUID id) {
     String url = service.temporaryUrl(id);
     return ApiResponse.ok(url == null ? "" : url);

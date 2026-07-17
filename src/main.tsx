@@ -251,7 +251,7 @@ type QuotePlan = {
   cycle: string;
   paymentNodes: string;
   owner: string;
-  status: "草稿" | "审批中" | "已通过";
+  status: "草稿" | "成本已核对，可以报价" | "审批中" | "已通过";
 };
 
 type FollowUpActivity = {
@@ -994,7 +994,7 @@ const initialQuotes: QuotePlan[] = [
     cycle: "月度巡检 + 年度检测",
     paymentNodes: "合同签订30% / 检测完成50% / 报告归档20%",
     owner: "客户经理C",
-    status: "草稿",
+    status: "成本已核对，可以报价",
   },
   {
     id: "BJ-202606-041",
@@ -1536,6 +1536,31 @@ function App() {
   };
 
   const advanceLead = (lead: CrmLead) => {
+    if (lead.stage === "方案报价") {
+      const quoteId = lead.id.replace(/^XS-/, "BJ-");
+      setQuotes((current) =>
+        current.some((item) => item.id === quoteId)
+          ? current
+          : [
+              {
+                id: quoteId,
+                customer: lead.customer,
+                type: lead.need,
+                amount: lead.value,
+                scope: lead.need,
+                cycle: "待成本负责人核对",
+                paymentNodes: "待确认",
+                owner: lead.owner,
+                status: "草稿",
+              },
+              ...current,
+            ],
+      );
+      setActiveModule("crm");
+      setActiveCrmTab("quotes");
+      pushEvent("新增报价", `${lead.customer} 已生成报价草稿，并发起售前成本核算`, "info");
+      return;
+    }
     const stages: CrmLead["stage"][] = [
       "初访",
       "需求确认",
@@ -1573,7 +1598,7 @@ function App() {
   };
 
   const submitQuoteApproval = (quote: QuotePlan) => {
-    if (quote.status !== "草稿") {
+    if (quote.status !== "成本已核对，可以报价") {
       pushEvent("报价无需重复提交", `${quote.id} 当前为${quote.status}`, "neutral");
       return;
     }
@@ -2393,7 +2418,7 @@ function App() {
                   disabled={lead.stage === "赢单"}
                 >
                   <RefreshCw size={15} />
-                  <span>推进</span>
+                  <span>{lead.stage === "方案报价" ? "报价" : "推进"}</span>
                 </button>
               </div>
             </article>
@@ -2436,10 +2461,10 @@ function App() {
                 className="mini-action"
                 type="button"
                 onClick={() => submitQuoteApproval(quote)}
-                disabled={quote.status !== "草稿"}
+                disabled={quote.status !== "成本已核对，可以报价"}
               >
                 <Send size={15} />
-                <span>提交</span>
+                <span>报价</span>
               </button>
             </article>
           ))}
@@ -4126,6 +4151,7 @@ function customerRiskTone(status: CustomerProfile["risk"]): Tone {
 
 function quoteTone(status: QuotePlan["status"]): Tone {
   if (status === "已通过") return "good";
+  if (status === "成本已核对，可以报价") return "good";
   if (status === "审批中") return "info";
   return "warn";
 }

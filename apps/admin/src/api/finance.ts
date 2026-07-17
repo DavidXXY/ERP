@@ -1,5 +1,5 @@
 import { request } from "./http";
-import type { Receivable } from "./crm";
+import type { ContractStatus, Receivable, ReceivableStatus } from "./crm";
 
 export type FinanceOverview = {
   receivableAmount: number;
@@ -71,12 +71,49 @@ export type PaymentRecord = {
   payerName: string;
 };
 
+export type FinanceReceivableDetail = {
+  receivable: Receivable;
+  customerInvoice: {
+    customerId: string;
+    customerCode?: string;
+    customerName?: string;
+    ownerName?: string;
+    invoiceTitle?: string;
+    taxNo?: string;
+    bankName?: string;
+    bankAccount?: string;
+    registeredAddress?: string;
+    registeredPhone?: string;
+    paymentHabit?: string;
+  };
+  contract?: {
+    id: string;
+    quoteId?: string;
+    code?: string;
+    projectName: string;
+    contractType: string;
+    amount: number;
+    taxRate: number;
+    netAmount: number;
+    startDate: string;
+    endDate: string;
+    serviceCycle?: string;
+    status: ContractStatus;
+    receivableStatus: ReceivableStatus;
+    createdAt?: string;
+  };
+};
+
 export function getFinanceOverview() {
   return request<FinanceOverview>({ method: "GET", url: "/finance/overview" });
 }
 
 export function listFinanceReceivables() {
   return request<Receivable[]>({ method: "GET", url: "/finance/receivables" });
+}
+
+export function getFinanceReceivableDetail(id: string) {
+  return request<FinanceReceivableDetail>({ method: "GET", url: `/finance/receivables/${id}` });
 }
 
 export function registerFinanceInvoice(id: string, payload: { invoiceNo: string; invoiceDate: string }) {

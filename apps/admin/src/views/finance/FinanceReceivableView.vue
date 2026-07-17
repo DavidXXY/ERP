@@ -52,10 +52,20 @@
       </a-space>
       <a-table :columns="columns" :data-source="filteredItems" :loading="loading" :pagination="{ pageSize: 8 }" :row-key="(item: Receivable) => item.id" :scroll="{ x: 1320 }">
         <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'receivable'"><strong>{{ record.code }}</strong><span class="table-subtitle">{{ record.customerName }}</span></template>
+          <template v-if="column.key === 'receivable'">
+            <a-button type="link" class="cell-link" @click="openDetail(record)">{{ record.code }}</a-button>
+            <span class="table-subtitle">{{ record.customerName }}</span>
+          </template>
           <template v-else-if="column.key === 'contract'">{{ record.contractCode || '-' }}</template>
           <template v-else-if="column.key === 'amount'"><strong>{{ formatMoney(record.amount) }}</strong><span class="table-subtitle">已收 {{ formatMoney(record.settledAmount) }} · 待收 {{ formatMoney(record.outstandingAmount) }}</span></template>
-          <template v-else-if="column.key === 'invoice'">{{ record.invoiceNo || '未开票' }}<span v-if="record.invoiceDate" class="table-subtitle">{{ record.invoiceDate }}</span></template>
+          <template v-else-if="column.key === 'invoice'">
+            {{ record.invoiceNo || (record.invoiceRequested ? '待财务开票' : '未申请开票') }}
+            <span v-if="record.invoiceDate" class="table-subtitle">{{ record.invoiceDate }}</span>
+            <span v-else-if="record.invoiceRequested" class="table-subtitle">
+              {{ record.invoiceRequestedBy || '业务侧' }} · {{ formatDateTime(record.invoiceRequestedAt) }}
+            </span>
+            <span v-if="record.invoiceRequestRemark" class="table-subtitle">{{ record.invoiceRequestRemark }}</span>
+          </template>
           <template v-else-if="column.key === 'aging'">
             <a-tag :color="priorityColor(record)">{{ priorityLabel(record) }}</a-tag>
             <span class="table-subtitle">{{ agingLabel(record) }}</span>
@@ -63,13 +73,84 @@
           <template v-else-if="column.key === 'status'"><a-tag :color="statusColor(record.status)">{{ statusLabel(record.status) }}</a-tag></template>
           <template v-else-if="column.key === 'action'">
             <a-space size="small">
-              <a-button v-if="auth.can('finance:receivable:invoice') && !record.invoiceNo && record.status !== 'SETTLED'" type="link" size="small" @click="openInvoice(record)">登记开票</a-button>
+              <a-button type="link" size="small" @click="openDetail(record)">详情</a-button>
+              <a-button v-if="auth.can('finance:receivable:invoice') && record.invoiceRequested && !record.invoiceNo && record.status !== 'SETTLED'" type="link" size="small" @click="openInvoice(record)">处理开票</a-button>
+              <a-tag v-else-if="!record.invoiceNo && record.status !== 'SETTLED'" color="default">待申请</a-tag>
               <a-button v-if="auth.can('finance:receivable:collect') && record.invoiceNo && record.status !== 'SETTLED'" type="link" size="small" @click="openReceipt(record)">登记回款</a-button>
             </a-space>
           </template>
         </template>
       </a-table>
     </a-card>
+
+    <a-modal v-model:open="detailOpen" title="应收详情" width="860px" :footer="null">
+      <a-spin :spinning="detailLoading">
+        <template v-if="detail">
+          <div class="detail-header">
+            <div>
+              <strong>{{ detail.receivable.code }}</strong>
+              <span>{{ detail.receivable.customerName }}</span>
+            </div>
+            <a-space>
+              <a-button
+                v-if="auth.can('finance:receivable:invoice') && detail.receivable.invoiceRequested && !detail.receivable.invoiceNo && detail.receivable.status !== 'SETTLED'"
+                type="primary"
+                @click="openInvoice(detail.receivable)"
+              >
+                处理开票
+              </a-button>
+              <a-button
+                v-if="auth.can('finance:receivable:collect') && detail.receivable.invoiceNo && detail.receivable.status !== 'SETTLED'"
+                type="primary"
+                @click="openReceipt(detail.receivable)"
+              >
+                登记回款
+              </a-button>
+            </a-space>
+          </div>
+
+          <a-descriptions bordered size="small" title="应收信息" :column="2" class="detail-section">
+            <a-descriptions-item label="应收金额">{{ formatMoney(detail.receivable.amount) }}</a-descriptions-item>
+            <a-descriptions-item label="待收金额">{{ formatMoney(detail.receivable.outstandingAmount) }}</a-descriptions-item>
+            <a-descriptions-item label="已收金额">{{ formatMoney(detail.receivable.settledAmount) }}</a-descriptions-item>
+            <a-descriptions-item label="到期日">{{ detail.receivable.dueDate }}</a-descriptions-item>
+            <a-descriptions-item label="状态"><a-tag :color="statusColor(detail.receivable.status)">{{ statusLabel(detail.receivable.status) }}</a-tag></a-descriptions-item>
+            <a-descriptions-item label="开票状态">{{ detail.receivable.invoiceNo || (detail.receivable.invoiceRequested ? '待财务开票' : '未申请开票') }}</a-descriptions-item>
+            <a-descriptions-item v-if="detail.receivable.invoiceRequested" label="申请信息" :span="2">
+              {{ detail.receivable.invoiceRequestedBy || '业务侧' }} · {{ formatDateTime(detail.receivable.invoiceRequestedAt) }}
+              <span v-if="detail.receivable.invoiceRequestRemark"> · {{ detail.receivable.invoiceRequestRemark }}</span>
+            </a-descriptions-item>
+          </a-descriptions>
+
+          <a-descriptions bordered size="small" title="企业开票信息" :column="2" class="detail-section">
+            <a-descriptions-item label="开票抬头">{{ valueOrDash(detail.customerInvoice.invoiceTitle || detail.customerInvoice.customerName) }}</a-descriptions-item>
+            <a-descriptions-item label="税号">{{ valueOrDash(detail.customerInvoice.taxNo) }}</a-descriptions-item>
+            <a-descriptions-item label="开户行">{{ valueOrDash(detail.customerInvoice.bankName) }}</a-descriptions-item>
+            <a-descriptions-item label="银行账号">{{ valueOrDash(detail.customerInvoice.bankAccount) }}</a-descriptions-item>
+            <a-descriptions-item label="注册地址">{{ valueOrDash(detail.customerInvoice.registeredAddress) }}</a-descriptions-item>
+            <a-descriptions-item label="注册电话">{{ valueOrDash(detail.customerInvoice.registeredPhone) }}</a-descriptions-item>
+            <a-descriptions-item label="客户负责人">{{ valueOrDash(detail.customerInvoice.ownerName) }}</a-descriptions-item>
+            <a-descriptions-item label="付款习惯">{{ valueOrDash(detail.customerInvoice.paymentHabit) }}</a-descriptions-item>
+          </a-descriptions>
+
+          <a-descriptions v-if="detail.contract" bordered size="small" title="合同信息" :column="2" class="detail-section">
+            <a-descriptions-item label="合同编号">
+              <a-button type="link" class="cell-link" @click="goContractDetail(detail.contract.id)">
+                {{ valueOrDash(detail.contract.code) }}
+              </a-button>
+            </a-descriptions-item>
+            <a-descriptions-item label="项目名称">{{ detail.contract.projectName }}</a-descriptions-item>
+            <a-descriptions-item label="合同类型">{{ detail.contract.contractType }}</a-descriptions-item>
+            <a-descriptions-item label="合同状态">{{ contractStatusLabel(detail.contract.status) }}</a-descriptions-item>
+            <a-descriptions-item label="合同金额">{{ formatMoney(detail.contract.amount) }}</a-descriptions-item>
+            <a-descriptions-item label="不含税金额">{{ formatMoney(detail.contract.netAmount) }} · 税率 {{ detail.contract.taxRate }}%</a-descriptions-item>
+            <a-descriptions-item label="合同周期">{{ detail.contract.startDate }} 至 {{ detail.contract.endDate }}</a-descriptions-item>
+            <a-descriptions-item label="服务频次">{{ valueOrDash(detail.contract.serviceCycle) }}</a-descriptions-item>
+          </a-descriptions>
+          <a-empty v-else description="未关联合同" />
+        </template>
+      </a-spin>
+    </a-modal>
 
     <a-modal v-model:open="invoiceOpen" title="登记开票" :confirm-loading="saving" @ok="handleInvoice">
       <a-alert v-if="selectedItem" class="section-alert" type="info" :message="`${selectedItem.code} · ${selectedItem.customerName} · ${formatMoney(selectedItem.amount)}`" />
@@ -102,18 +183,29 @@
 import { computed, onMounted, reactive, ref } from "vue";
 import { message } from "ant-design-vue";
 import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
+import { useRouter } from "vue-router";
 import type { Receivable, ReceivableStatus } from "@/api/crm";
-import { listFinanceReceivables, recordFinanceReceipt, registerFinanceInvoice } from "@/api/finance";
+import {
+  getFinanceReceivableDetail,
+  listFinanceReceivables,
+  recordFinanceReceipt,
+  registerFinanceInvoice,
+  type FinanceReceivableDetail,
+} from "@/api/finance";
 import { useAuthStore } from "@/stores/auth";
 import { downloadCsv } from "@/utils/csv";
 
 const auth = useAuthStore();
+const router = useRouter();
 const items = ref<Receivable[]>([]);
 const loading = ref(false);
 const saving = ref(false);
+const detailOpen = ref(false);
+const detailLoading = ref(false);
 const invoiceOpen = ref(false);
 const receiptOpen = ref(false);
 const selectedItem = ref<Receivable | null>(null);
+const detail = ref<FinanceReceivableDetail | null>(null);
 const keyword = ref("");
 const statusFilter = ref<ReceivableStatus>();
 const priorityFilter = ref<string>();
@@ -132,7 +224,7 @@ const columns = [
   { title: "应收单 / 客户", key: "receivable", width: 240 }, { title: "合同编号", key: "contract", width: 170 },
   { title: "来源单号", dataIndex: "sourceNo", width: 170 }, { title: "应收 / 回款", key: "amount", width: 260 },
   { title: "开票信息", key: "invoice", width: 180 }, { title: "账龄 / 优先级", key: "aging", width: 150 }, { title: "到期日", dataIndex: "dueDate", width: 120 },
-  { title: "状态", key: "status", width: 110 }, { title: "操作", key: "action", width: 170, fixed: "right" },
+  { title: "状态", key: "status", width: 110 }, { title: "操作", key: "action", width: 220, fixed: "right" },
 ];
 const invoiceRules = { invoiceNo: [{ required: true, message: "请输入发票号码" }], invoiceDate: [{ required: true }] };
 const receiptRules = { amount: [{ required: true, message: "请输入回款金额" }], receivedDate: [{ required: true }], referenceNo: [{ required: true, message: "请输入银行流水号" }], recorderName: [{ required: true, message: "请输入登记人" }] };
@@ -174,7 +266,7 @@ function exportReceivables() {
     item.amount,
     item.settledAmount,
     item.outstandingAmount,
-    item.invoiceNo || "",
+    item.invoiceNo || (item.invoiceRequested ? "待财务开票" : ""),
     item.dueDate,
     statusLabel(item.status),
     agingLabel(item),
@@ -182,15 +274,38 @@ function exportReceivables() {
   ]);
   downloadCsv(`finance-receivables-${today()}.csv`, headers, rows);
 }
+async function openDetail(item: Receivable) {
+  selectedItem.value = item;
+  detailOpen.value = true;
+  detailLoading.value = true;
+  try {
+    detail.value = await getFinanceReceivableDetail(item.id);
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "应收详情加载失败");
+  } finally {
+    detailLoading.value = false;
+  }
+}
 function openInvoice(item: Receivable) { selectedItem.value = item; Object.assign(invoiceForm, { invoiceNo: "", invoiceDate: today() }); invoiceOpen.value = true; }
 function openReceipt(item: Receivable) { selectedItem.value = item; Object.assign(receiptForm, { amount: item.outstandingAmount, receivedDate: today(), referenceNo: "", recorderName: auth.user?.displayName || "" }); receiptOpen.value = true; }
+function goContractDetail(contractId: string) {
+  detailOpen.value = false;
+  router.push("/crm/contracts/" + contractId);
+}
 function setReceiptRatio(ratio: number) {
   const amount = Number(selectedItem.value?.outstandingAmount || 0);
   receiptForm.amount = Math.max(0.01, Math.round(amount * ratio * 100) / 100);
 }
-async function handleInvoice() { await invoiceFormRef.value?.validate(); if (!selectedItem.value) return; saving.value = true; try { await registerFinanceInvoice(selectedItem.value.id, { ...invoiceForm }); invoiceOpen.value = false; message.success("开票信息已登记"); await loadData(); } catch (error) { message.error(error instanceof Error ? error.message : "开票登记失败"); } finally { saving.value = false; } }
-async function handleReceipt() { await receiptFormRef.value?.validate(); if (!selectedItem.value) return; saving.value = true; try { const result = await recordFinanceReceipt(selectedItem.value.id, { ...receiptForm }); receiptOpen.value = false; message.success(result.status === "SETTLED" ? "应收已全部核销" : "部分回款已登记"); await loadData(); } catch (error) { message.error(error instanceof Error ? error.message : "回款登记失败"); } finally { saving.value = false; } }
+async function handleInvoice() { await invoiceFormRef.value?.validate(); if (!selectedItem.value) return; saving.value = true; try { const result = await registerFinanceInvoice(selectedItem.value.id, { ...invoiceForm }); invoiceOpen.value = false; message.success("开票信息已登记"); await loadData(); await refreshDetail(result.id); } catch (error) { message.error(error instanceof Error ? error.message : "开票登记失败"); } finally { saving.value = false; } }
+async function handleReceipt() { await receiptFormRef.value?.validate(); if (!selectedItem.value) return; saving.value = true; try { const result = await recordFinanceReceipt(selectedItem.value.id, { ...receiptForm }); receiptOpen.value = false; message.success(result.status === "SETTLED" ? "应收已全部核销" : "部分回款已登记"); await loadData(); await refreshDetail(result.id); } catch (error) { message.error(error instanceof Error ? error.message : "回款登记失败"); } finally { saving.value = false; } }
+async function refreshDetail(id: string) {
+  if (!detailOpen.value) return;
+  detail.value = await getFinanceReceivableDetail(id);
+  selectedItem.value = detail.value.receivable;
+}
 function today() { const value = new Date(); return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`; }
+function formatDateTime(value?: string) { return value ? new Date(value).toLocaleString("zh-CN", { hour12: false }) : "-"; }
+function valueOrDash(value?: string) { return value && value.trim() ? value : "-"; }
 function inAgingRange(item: Receivable, min: number, max: number) {
   const overdue = overdueDays(item);
   if (min === 0 && max === 0) return overdue === 0;
@@ -218,6 +333,7 @@ function agingLabel(item: Receivable) {
 }
 function statusLabel(status: ReceivableStatus) { return ({ INVOICE_PENDING: "待开票", PAYMENT_PENDING: "待回款", SETTLED: "已核销", OVERDUE: "逾期" } as Record<ReceivableStatus, string>)[status]; }
 function statusColor(status: ReceivableStatus) { return ({ INVOICE_PENDING: "orange", PAYMENT_PENDING: "blue", SETTLED: "green", OVERDUE: "red" } as Record<ReceivableStatus, string>)[status]; }
+function contractStatusLabel(status: string) { return ({ PENDING_APPROVAL: "待合同审批", PENDING_SEAL: "待双方盖章", SEAL_APPROVAL: "盖章件审批中", ACTIVE: "履约中", RENEWAL_PENDING: "续约待跟进", OVERDUE_RISK: "逾期风险", CLOSED: "已关闭" } as Record<string, string>)[status] || status; }
 function formatMoney(value: number) { return new Intl.NumberFormat("zh-CN", { style: "currency", currency: "CNY", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value || 0); }
 function moneyFormatter(value: number | string) { return formatMoney(Number(value)); }
 </script>
@@ -293,6 +409,39 @@ function moneyFormatter(value: number | string) { return formatMoney(Number(valu
   display: flex;
   gap: 8px;
   margin-bottom: 12px;
+}
+
+.cell-link {
+  height: auto;
+  padding: 0;
+  font-weight: 600;
+}
+
+.detail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.detail-header strong,
+.detail-header span {
+  display: block;
+}
+
+.detail-header strong {
+  color: #101828;
+  font-size: 16px;
+}
+
+.detail-header span {
+  margin-top: 4px;
+  color: #667085;
+}
+
+.detail-section {
+  margin-bottom: 16px;
 }
 
 @media (max-width: 1100px) {

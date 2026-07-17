@@ -23,6 +23,7 @@ public interface SystemUserRepository extends JpaRepository<SystemUser, UUID> {
 
   List<SystemUser> findByOrganization_IdIn(Set<UUID> organizationIds);
   List<SystemUser> findByDisplayNameAndEnabledTrue(String displayName);
+  List<SystemUser> findByEnabledTrueOrderByDisplayNameAsc();
 
   long countByOrganization_Id(UUID organizationId);
 

@@ -52,6 +52,13 @@ public class UserService {
   }
 
   @Transactional(readOnly = true)
+  public List<UserResponse> listEnabledUserOptions() {
+    return userRepository.findByEnabledTrueOrderByDisplayNameAsc().stream()
+        .map(this::toUserResponseWithDetails)
+        .toList();
+  }
+
+  @Transactional(readOnly = true)
   public UserResponse getUser(UUID id) {
     SystemUser user = userRepository.findDetailById(id).orElseThrow();
     return toUserResponseWithDetails(user);

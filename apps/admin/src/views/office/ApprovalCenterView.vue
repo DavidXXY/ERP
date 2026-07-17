@@ -1,10 +1,10 @@
 <template>
   <div class="page-stack">
-    <a-card>
-      <template #title>审批中心</template>
+    <a-card v-if="!drawerOnly">
+      <template #title>审批处理</template>
       <template #extra>
         <a-space>
-          <a-button @click="goBack">返回办公室</a-button>
+          <a-button v-if="!embedded" @click="goBack">返回办公室</a-button>
           <a-button :loading="loading" @click="loadData"><template #icon><ReloadOutlined /></template>刷新</a-button>
         </a-space>
       </template>
@@ -14,6 +14,7 @@
           <a-radio-button value="all">全部 ({{ mergedList.length }})</a-radio-button>
           <a-radio-button value="office">办公室 ({{ officeCount }})</a-radio-button>
           <a-radio-button value="quote">报价审批 ({{ quoteCount }})</a-radio-button>
+          <a-radio-button value="contract">合同审批 ({{ contractCount }})</a-radio-button>
           <a-radio-button value="change">合同变更 ({{ changeCount }})</a-radio-button>
         </a-radio-group>
         <a-select v-model:value="slaFilter" allow-clear placeholder="处理时效" :options="slaOptions" style="width: 150px" />
@@ -29,34 +30,6 @@
         </button>
       </section>
 
-      <a-row :gutter="[16, 16]" style="margin-bottom:16px">
-        <a-col :xs="24" :lg="12">
-          <a-card size="small" title="办公室待办">
-            <template #extra><a-tag color="orange">{{ workbench?.pendingTodoCount || 0 }} 项</a-tag></template>
-            <a-table size="small" :data-source="workbenchTodos" :columns="todoColumns" :pagination="false" :row-key="(r:any)=>`${r.type}-${r.id}`">
-              <template #bodyCell="{column,record}">
-                <template v-if="column.key==='title'"><a-button type="link" class="table-link" @click="goWorkbenchRoute(record.route)">{{ record.title }}</a-button><span class="table-subtitle">{{ record.subtitle }}</span></template>
-                <template v-else-if="column.key==='amount'">{{ formatMoney(record.amount) }}</template>
-                <template v-else-if="column.key==='priority'"><a-tag :color="priorityColor(record.priority)">{{ priorityLabel(record.priority) }}</a-tag></template>
-              </template>
-              <template #emptyText>暂无办公室待办</template>
-            </a-table>
-          </a-card>
-        </a-col>
-        <a-col :xs="24" :lg="12">
-          <a-card size="small" title="风险预警">
-            <template #extra><a-tag :color="(workbench?.highSeverityWarningCount || 0)>0?'red':'green'">{{ workbench?.highSeverityWarningCount || 0 }} 高风险</a-tag></template>
-            <a-table size="small" :data-source="workbenchWarnings" :columns="warningColumns" :pagination="false" :row-key="(r:any)=>`${r.type}-${r.id}`">
-              <template #bodyCell="{column,record}">
-                <template v-if="column.key==='title'"><a-button type="link" class="table-link" @click="goWorkbenchRoute(record.route)">{{ record.title }}</a-button><span class="table-subtitle">{{ record.content }}</span></template>
-                <template v-else-if="column.key==='severity'"><a-tag :color="severityColor(record.severity)">{{ severityLabel(record.severity) }}</a-tag></template>
-              </template>
-              <template #emptyText>暂无风险预警</template>
-            </a-table>
-          </a-card>
-        </a-col>
-      </a-row>
-
       <a-table :columns="mergedColumns" :data-source="filteredList" :loading="loading" :pagination="{pageSize:10}" :row-key="(r:any)=>r._key" :scroll="{x:1350}">
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'source'">
@@ -67,6 +40,11 @@
           <template v-else-if="column.key === 'approval'">
             <strong>{{ record.code }}</strong>
             <span class="table-subtitle">{{ record.title || record.customerName || record.desc }}</span>
+          </template>
+          <template v-else-if="column.key === 'detail'">
+            <div class="approval-detail-list">
+              <span v-for="line in approvalDetailLines(record)" :key="line">{{ line }}</span>
+            </div>
           </template>
           <template v-else-if="column.key === 'type'">{{ record._type }}</template>
           <template v-else-if="column.key === 'applicant'">{{ record.applicantName || record.requestedBy || '-' }}</template>
@@ -86,6 +64,7 @@
           <template v-else-if="column.key === 'date'">{{ record.date?.slice(0, 10) || '-' }}<span class="table-subtitle">{{ approvalAgeLabel(record) }}</span></template>
           <template v-else-if="column.key === 'action'">
             <template v-if="record._source === 'office' && record.status === 'PENDING' && auth.can('office:approval:process')">
+              <a-button type="link" size="small" @click="openDetail(record)">查看</a-button>
               <a-button type="link" size="small" @click="openProcess(record)">处理审批</a-button>
               <a-button type="link" size="small" @click="handleReturn(record)">退回</a-button>
               <a-button type="link" size="small" @click="openRuntime(record, 'transfer')">转交</a-button>
@@ -94,9 +73,18 @@
                 <a-button v-if="auth.can('office:approval:create')" type="link" size="small" danger>撤回</a-button>
               </a-popconfirm>
             </template>
+            <template v-else-if="record._source === 'office'">
+              <a-button type="link" size="small" @click="openDetail(record)">查看</a-button>
+            </template>
             <template v-else-if="record._source === 'quote'">
               <a-button type="link" size="small" @click="router.push('/crm/quotes/' + record._entityId)">查看报价</a-button>
               <a-button v-if="auth.can('crm:quote:approve')" type="link" size="small" @click="openCrmProcess(record)">审批处理</a-button>
+            </template>
+            <template v-else-if="record._source === 'contract'">
+              <a-button type="link" size="small" @click="router.push('/crm/contracts/' + record._contractId)">查看合同</a-button>
+              <a-popconfirm title="确认合同审批通过？" @confirm="handleContractApproval(record)">
+                <a-button v-if="auth.can('crm:contract:update')" type="link" size="small">通过</a-button>
+              </a-popconfirm>
             </template>
             <template v-else-if="record._source === 'change'">
               <a-button type="link" size="small" @click="router.push('/crm/contracts/' + record._contractId)">查看合同</a-button>
@@ -113,6 +101,68 @@
         </template>
       </a-table>
     </a-card>
+
+    <a-drawer v-model:open="detailOpen" title="审批详情" width="760px">
+      <template v-if="detailApproval">
+        <a-space direction="vertical" class="detail-stack" size="middle">
+          <a-descriptions bordered size="small" :column="2" title="审批单信息">
+            <a-descriptions-item label="审批编号">{{ detailApproval.code }}</a-descriptions-item>
+            <a-descriptions-item label="审批类型">{{ approvalTypeLabel(detailApproval.approvalType) }}</a-descriptions-item>
+            <a-descriptions-item label="标题" :span="2">{{ detailApproval.title }}</a-descriptions-item>
+            <a-descriptions-item label="来源单号">{{ detailApproval.sourceNo || "-" }}</a-descriptions-item>
+            <a-descriptions-item label="金额">{{ formatMoney(detailApproval.amount) }}</a-descriptions-item>
+            <a-descriptions-item label="申请人">{{ detailApproval.applicantName || "-" }}</a-descriptions-item>
+            <a-descriptions-item label="状态"><a-tag :color="approvalStatusColor(detailApproval.status)">{{ approvalStatusLabel(detailApproval.status) }}</a-tag></a-descriptions-item>
+            <a-descriptions-item label="部门/业务">{{ detailApproval.departmentName || "-" }} / {{ detailApproval.businessType || "-" }}</a-descriptions-item>
+            <a-descriptions-item label="项目编码">{{ detailApproval.projectCode || "-" }}</a-descriptions-item>
+            <a-descriptions-item label="申请内容" :span="2">{{ detailApproval.content || "-" }}</a-descriptions-item>
+          </a-descriptions>
+
+          <a-descriptions v-if="isExpenseApproval(detailApproval)" bordered size="small" :column="2" title="报销单完整内容">
+            <a-descriptions-item label="报销单号">{{ expenseDetail(detailApproval)?.code || detailApproval.sourceNo || "-" }}</a-descriptions-item>
+            <a-descriptions-item label="报销人">{{ expenseDetail(detailApproval)?.claimantName || detailApproval.applicantName || "-" }}</a-descriptions-item>
+            <a-descriptions-item label="费用类型">{{ expenseDetail(detailApproval) ? expenseTypeLabel(expenseDetail(detailApproval)!.expenseType as ExpenseType) : approvalBusinessTypeLabel(detailApproval.businessType) }}</a-descriptions-item>
+            <a-descriptions-item label="发生日期">{{ expenseDetail(detailApproval)?.expenseDate || "-" }}</a-descriptions-item>
+            <a-descriptions-item label="绑定项目">{{ expenseDetail(detailApproval)?.projectCode || "-" }}</a-descriptions-item>
+            <a-descriptions-item label="绑定工单">{{ expenseDetail(detailApproval)?.workOrderCode || "-" }}</a-descriptions-item>
+            <a-descriptions-item label="报销金额">{{ formatMoney(Number(expenseDetail(detailApproval)?.amount ?? detailApproval.amount)) }}</a-descriptions-item>
+            <a-descriptions-item label="报销状态">{{ expenseDetail(detailApproval)?.status ? expenseStatusLabel(expenseDetail(detailApproval)!.status as ExpenseStatus) : "-" }}</a-descriptions-item>
+            <a-descriptions-item label="费用说明" :span="2">{{ expenseDetail(detailApproval)?.description || detailApproval.content || "-" }}</a-descriptions-item>
+          </a-descriptions>
+
+          <a-descriptions v-else-if="detailApproval.sourceDetail" bordered size="small" :column="2" title="业务单据内容">
+            <a-descriptions-item v-for="line in sourceDetailLines(detailApproval)" :key="line.label" :label="line.label" :span="line.span || 1">{{ line.value }}</a-descriptions-item>
+          </a-descriptions>
+
+          <a-card size="small" title="审批流节点">
+            <ApprovalProgressFlow v-if="detailApproval.nodes?.length" :steps="officeApprovalProgressSteps(detailApproval)" />
+            <a-empty v-else description="暂无审批节点" />
+          </a-card>
+
+          <a-card size="small" title="处理记录">
+            <a-timeline v-if="detailApproval.actions?.length">
+              <a-timeline-item v-for="action in detailApproval.actions" :key="action.id" :color="approvalActionColor(action.decision)">
+                {{ approvalStatusLabel(action.decision) }} · {{ action.operatorName || "-" }}
+                <span class="table-subtitle">{{ action.comment || "-" }} · {{ action.createdAt?.slice(0, 16).replace("T", " ") }}</span>
+              </a-timeline-item>
+            </a-timeline>
+            <a-empty v-else description="暂无处理记录" />
+          </a-card>
+
+          <a-card v-if="detailApproval.status === 'PENDING' && auth.can('office:approval:process')" size="small" title="审批处理">
+            <a-form ref="detailProcessFormRef" :model="detailProcessForm" :rules="processRules" layout="vertical">
+              <a-form-item label="审批结论" name="decision"><a-radio-group v-model:value="detailProcessForm.decision" button-style="solid"><a-radio-button value="APPROVED">通过</a-radio-button><a-radio-button value="REJECTED">驳回</a-radio-button></a-radio-group></a-form-item>
+              <a-form-item label="审批意见" name="comment"><a-textarea v-model:value="detailProcessForm.comment" :rows="3" /></a-form-item>
+              <a-form-item label="审批人" name="approverName"><a-input v-model:value="detailProcessForm.approverName" /></a-form-item>
+              <a-space>
+                <a-button type="primary" :loading="saving" @click="handleDetailProcess">提交审批</a-button>
+                <a-button @click="openProcess(detailApproval)">弹窗处理</a-button>
+              </a-space>
+            </a-form>
+          </a-card>
+        </a-space>
+      </template>
+    </a-drawer>
 
     <!-- Office approval create modal -->
     <a-modal v-model:open="approvalCreateOpen" title="发起通用审批" width="680px" :confirm-loading="saving" @ok="handleApprovalCreate">
@@ -131,8 +181,16 @@
     </a-modal>
 
     <!-- Office approval process modal -->
-    <a-modal v-model:open="processOpen" title="处理审批" :confirm-loading="saving" @ok="handleProcess">
-      <a-alert v-if="selectedApproval" class="section-alert" type="info" :message="`${selectedApproval.code} · ${selectedApproval.title} · ${formatMoney(selectedApproval.amount)}`" />
+    <a-modal v-model:open="processOpen" title="处理审批" width="720px" :confirm-loading="saving" @ok="handleProcess">
+      <a-alert v-if="selectedApproval" class="section-alert" type="info" :message="`${selectedApproval.code} · ${selectedApproval.title} · ${formatMoney(selectedApproval.amount)}`" :description="selectedApproval.content || '未填写申请内容'" />
+      <a-descriptions v-if="selectedApproval" size="small" bordered :column="2" class="approval-context">
+        <a-descriptions-item label="审批类型">{{ approvalTypeLabel(selectedApproval.approvalType) }}</a-descriptions-item>
+        <a-descriptions-item label="来源单号">{{ selectedApproval.sourceNo || "-" }}</a-descriptions-item>
+        <a-descriptions-item label="申请人">{{ selectedApproval.applicantName }}</a-descriptions-item>
+        <a-descriptions-item label="部门/业务">{{ selectedApproval.departmentName || "-" }} / {{ selectedApproval.businessType || "-" }}</a-descriptions-item>
+        <a-descriptions-item label="项目编码">{{ selectedApproval.projectCode || "-" }}</a-descriptions-item>
+        <a-descriptions-item label="客户等级">{{ selectedApproval.customerLevel || "-" }}</a-descriptions-item>
+      </a-descriptions>
       <a-form ref="processFormRef" :model="processForm" :rules="processRules" layout="vertical">
         <a-form-item label="审批结论" name="decision"><a-radio-group v-model:value="processForm.decision" button-style="solid"><a-radio-button value="APPROVED">通过</a-radio-button><a-radio-button value="REJECTED">驳回</a-radio-button></a-radio-group></a-form-item>
         <a-form-item label="审批意见" name="comment"><a-textarea v-model:value="processForm.comment" :rows="3" /></a-form-item>
@@ -148,8 +206,15 @@
     </a-modal>
 
     <!-- CRM quote approval modal -->
-    <a-modal v-model:open="crmProcessOpen" title="报价审批" :confirm-loading="saving" @ok="handleCrmProcess">
-      <a-alert v-if="selectedCrmApproval" class="section-alert" type="info" :message="`${selectedCrmApproval.code} · ${selectedCrmApproval.customerName} · ${formatMoney(selectedCrmApproval.amount)}`" />
+    <a-modal v-model:open="crmProcessOpen" title="报价审批" width="760px" :confirm-loading="saving" @ok="handleCrmProcess">
+      <a-alert v-if="selectedCrmApproval" class="section-alert" type="info" :message="`${selectedCrmApproval.code} · ${selectedCrmApproval.customerName} · ${formatMoney(selectedCrmApproval.amount)}`" :description="selectedCrmApproval.desc || '未填写服务范围'" />
+      <a-descriptions v-if="selectedCrmApproval" size="small" bordered :column="2" class="approval-context">
+        <a-descriptions-item label="客户">{{ selectedCrmApproval.customerName || "-" }}</a-descriptions-item>
+        <a-descriptions-item label="报价金额">{{ formatMoney(selectedCrmApproval.amount) }}</a-descriptions-item>
+        <a-descriptions-item label="付款方式/节点" :span="2">{{ selectedCrmApproval.paymentNodes || "-" }}</a-descriptions-item>
+        <a-descriptions-item label="成本预算">{{ selectedCrmApproval.budgetAmount != null ? formatMoney(selectedCrmApproval.budgetAmount) : "-" }}</a-descriptions-item>
+        <a-descriptions-item label="毛利率">{{ selectedCrmApproval.grossMarginRate != null ? `${(Number(selectedCrmApproval.grossMarginRate) * 100).toFixed(1)}%` : "-" }}</a-descriptions-item>
+      </a-descriptions>
       <a-form ref="crmProcessFormRef" :model="crmProcessForm" :rules="crmProcessRules" layout="vertical">
         <a-form-item label="审批结论" name="decision"><a-radio-group v-model:value="crmProcessForm.decision" button-style="solid"><a-radio-button value="APPROVED">通过</a-radio-button><a-radio-button value="REJECTED">驳回</a-radio-button></a-radio-group></a-form-item>
         <a-form-item label="审批意见" name="comment"><a-textarea v-model:value="crmProcessForm.comment" :rows="3" /></a-form-item>
@@ -164,9 +229,14 @@ import { computed, onMounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 import { message } from "ant-design-vue";
 import PlusOutlined from "@ant-design/icons-vue/PlusOutlined"; import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
-import { addSignApproval, createApproval, getOfficeReferences, getOfficeWorkbench, listApprovals, processApproval, returnApproval, transferApproval, withdrawApproval, type Approval, type ApprovalRuntimeNode, type ApprovalStatus, type ApprovalType, type Workbench } from "@/api/office";
-import { listQuotes, listContracts, listContractChanges, processQuoteApproval, approveContractChange, rejectContractChange, type QuotePlan } from "@/api/crm";
+import { addSignApproval, createApproval, getOfficeReferences, listApprovals, processApproval, returnApproval, transferApproval, withdrawApproval, type Approval, type ApprovalRuntimeNode, type ApprovalStatus, type ApprovalType, type Expense, type ExpenseStatus, type ExpenseType } from "@/api/office";
+import { listQuotes, listContracts, listContractChanges, processQuoteApproval, approveContract, approveContractChange, rejectContractChange, type QuotePlan, type ServiceContract } from "@/api/crm";
 import { useAuthStore } from "@/stores/auth";
+import ApprovalProgressFlow, { type ApprovalProgressStep } from "@/components/ApprovalProgressFlow.vue";
+
+const props = defineProps<{ embedded?: boolean; drawerOnly?: boolean }>();
+const { embedded, drawerOnly } = props;
+const emit = defineEmits<{ changed: [] }>();
 
 const auth = useAuthStore(); const router = useRouter(); const loading = ref(false); const saving = ref(false);
 const sourceFilter = ref("all");
@@ -175,21 +245,23 @@ const riskFilter = ref<string>();
 
 // Office approval data
 const officeApprovals = ref<Approval[]>([]);
-const workbench = ref<Workbench | null>(null);
 const users = ref<Array<{ id: string; displayName: string; enabled: boolean }>>([]);
 // CRM approval data
 const pendingQuotes = ref<QuotePlan[]>([]);
+const pendingContracts = ref<ServiceContract[]>([]);
 const pendingChanges = ref<any[]>([]);
 
 // Modals
-const approvalCreateOpen = ref(false); const processOpen = ref(false); const crmProcessOpen = ref(false); const runtimeOpen = ref(false);
-const approvalCreateFormRef = ref(); const processFormRef = ref(); const crmProcessFormRef = ref(); const runtimeFormRef = ref();
+const approvalCreateOpen = ref(false); const processOpen = ref(false); const crmProcessOpen = ref(false); const runtimeOpen = ref(false); const detailOpen = ref(false);
+const approvalCreateFormRef = ref(); const processFormRef = ref(); const crmProcessFormRef = ref(); const runtimeFormRef = ref(); const detailProcessFormRef = ref();
 const selectedApproval = ref<Approval | null>(null);
 const selectedCrmApproval = ref<any>(null);
+const detailApproval = ref<any | null>(null);
 const runtimeAction = ref<"transfer" | "addSign">("transfer");
 
 const approvalCreateForm = reactive({ code: "", approvalType: "OTHER" as ApprovalType, title: "", sourceNo: "", amount: 0, applicantName: "", content: "", departmentName: "", businessType: "", projectCode: "", supplierRisk: "", customerLevel: "" });
 const processForm = reactive({ decision: "APPROVED" as "APPROVED" | "REJECTED", comment: "同意", approverName: "" });
+const detailProcessForm = reactive({ decision: "APPROVED" as "APPROVED" | "REJECTED", comment: "同意", approverName: "" });
 const runtimeForm = reactive({ targetUserId: "", comment: "", operatorName: "" });
 const crmProcessForm = reactive({ decision: "APPROVED" as "APPROVED" | "REJECTED", comment: "同意", approverName: "" });
 const crmProcessRules = { decision: [{ required: true }], comment: [{ required: true }], approverName: [{ required: true }] };
@@ -207,9 +279,12 @@ const mergedList = computed(() => {
       _key: "office-" + a.id, _source: "office", _entityId: a.id,
       _type: "通用审批", _statusLabel: approvalStatusLabel(a.status),
       _statusColor: approvalStatusColor(a.status),
-      id: a.id, code: a.code, title: a.title, amount: a.amount,
+      id: a.id, code: a.code, title: a.title, amount: a.amount, content: a.content,
+      approvalType: a.approvalType, sourceNo: a.sourceNo,
       applicantName: a.applicantName, status: a.status, date: a.createdAt,
+      departmentName: a.departmentName, businessType: a.businessType, projectCode: a.projectCode, customerLevel: a.customerLevel,
       approverName: a.approverName, approvalComment: a.approvalComment,
+      sourceDetail: a.sourceDetail,
       currentApproverName: a.currentApproverName, matchedRuleText: a.matchedRuleText,
       approvalConfigVersion: a.approvalConfigVersion, nodes: a.nodes || [],
       _slaLevel: slaLevel(a.createdAt, a.status === "PENDING"),
@@ -222,12 +297,28 @@ const mergedList = computed(() => {
       _key: "quote-" + q.id, _source: "quote", _entityId: q.id,
       _type: "报价审批", _statusLabel: "待审批",
       _statusColor: "orange",
-      id: q.id, code: q.code, title: q.customerName, desc: q.serviceScope?.slice(0, 40),
+      id: q.id, code: q.code, title: q.customerName, desc: q.serviceScope,
       amount: q.amount, customerName: q.customerName, status: q.status, date: q.updatedAt,
+      paymentNodes: q.paymentNodes, budgetAmount: q.budgetAmount, grossMarginRate: q.grossMarginRate,
       applicantName: (q as any).editorName, approverName: q.lastApproverName,
       approvalComment: q.lastApprovalComment,
       _slaLevel: slaLevel(q.updatedAt, true),
       _riskLevel: approvalRiskLevel(q.amount, q.updatedAt, true),
+    });
+  });
+  // Contract approvals
+  pendingContracts.value.forEach((c) => {
+    items.push({
+      _key: "contract-" + c.id, _source: "contract", _entityId: c.id,
+      _contractId: c.id,
+      _type: "合同审批", _statusLabel: "待审批",
+      _statusColor: "orange",
+      id: c.id, code: c.code || "-", title: c.projectName,
+      desc: `${c.customerName || "-"} · ${c.contractType || "-"}`,
+      amount: c.amount, customerName: c.customerName, status: c.status, date: c.startDate,
+      contractType: c.contractType, startDate: c.startDate, endDate: c.endDate, serviceCycle: c.serviceCycle,
+      _slaLevel: slaLevel(c.startDate, true),
+      _riskLevel: approvalRiskLevel(c.amount, c.startDate, true),
     });
   });
   // Contract changes
@@ -238,7 +329,7 @@ const mergedList = computed(() => {
       _type: "合同变更", _statusLabel: "待审批",
       _statusColor: "orange",
       id: c.id, code: c.contractCode || "-", title: c.reason,
-      desc: c.changeData, amount: 0, date: c.requestedAt,
+      desc: changeSummary(c), amount: changeAmount(c), changeData: c.changeData, date: c.requestedAt,
       applicantName: c.requestedBy, status: c.status,
       _slaLevel: slaLevel(c.requestedAt, true),
       _riskLevel: approvalRiskLevel(0, c.requestedAt, true),
@@ -257,9 +348,8 @@ const filteredList = computed(() => {
 });
 const officeCount = computed(() => mergedList.value.filter((i) => i._source === "office").length);
 const quoteCount = computed(() => mergedList.value.filter((i) => i._source === "quote").length);
+const contractCount = computed(() => mergedList.value.filter((i) => i._source === "contract").length);
 const changeCount = computed(() => mergedList.value.filter((i) => i._source === "change").length);
-const workbenchTodos = computed(() => (workbench.value?.todos || []).slice(0, 5));
-const workbenchWarnings = computed(() => (workbench.value?.warnings || []).slice(0, 5));
 const pendingCount = computed(() => mergedList.value.filter((item) => isPendingApproval(item)).length);
 const overdueCount = computed(() => mergedList.value.filter((item) => item._slaLevel === "OVERDUE").length);
 const dueSoonCount = computed(() => mergedList.value.filter((item) => item._slaLevel === "DUE_SOON").length);
@@ -285,6 +375,7 @@ const riskOptions = [
 const mergedColumns = [
   { title: "来源", key: "source", width: 100 },
   { title: "编号 / 说明", key: "approval", width: 240 },
+  { title: "审批信息", key: "detail", width: 360 },
   { title: "类型", key: "type", width: 100 },
   { title: "申请人", key: "applicant", width: 120 },
   { title: "金额", key: "amount", width: 130 },
@@ -293,32 +384,24 @@ const mergedColumns = [
   { title: "时间", key: "date", width: 120 },
   { title: "操作", key: "action", width: 220, fixed: "right" as const },
 ];
-const todoColumns = [
-  { title: "事项", key: "title" }, { title: "金额", key: "amount", width: 120 }, { title: "优先级", key: "priority", width: 90 },
-];
-const warningColumns = [
-  { title: "预警", key: "title" }, { title: "等级", key: "severity", width: 90 },
-];
-
 onMounted(loadData);
 
 async function loadData() {
   loading.value = true;
   try {
     const promises: Promise<any>[] = [
-      getOfficeWorkbench(),
       getOfficeReferences(),
       listApprovals(),
       listQuotes(),
       listContracts(),
     ];
     const results = await Promise.all(promises);
-    workbench.value = results[0];
-    users.value = results[1].users;
-    officeApprovals.value = results[2];
-    const allQuotes = results[3];
-    const allContracts = results[4];
+    users.value = results[0].users;
+    officeApprovals.value = results[1];
+    const allQuotes = results[2];
+    const allContracts = results[3];
     pendingQuotes.value = allQuotes.filter((q: QuotePlan) => q.status === "PENDING_APPROVAL");
+    pendingContracts.value = allContracts.filter((c: ServiceContract) => c.status === "PENDING_APPROVAL");
     // Fetch contract changes
     try {
       const contracts = allContracts;
@@ -336,7 +419,6 @@ async function loadData() {
 }
 
 function goBack() { router.push("/office"); }
-function goWorkbenchRoute(route: string) { if (route) router.push(route); }
 function openApprovalCreate() {
   Object.assign(approvalCreateForm, { code: generateCode("SP"), approvalType: "OTHER" as ApprovalType, title: "", sourceNo: "", amount: 0, applicantName: auth.user?.displayName || "", content: "", departmentName: "", businessType: "", projectCode: "", supplierRisk: "", customerLevel: "" });
   approvalCreateOpen.value = true;
@@ -348,10 +430,38 @@ async function handleApprovalCreate() {
   finally { saving.value = false; }
 }
 function openProcess(item: any) { selectedApproval.value = item; Object.assign(processForm, { decision: "APPROVED", comment: "同意", approverName: auth.user?.displayName || "" }); processOpen.value = true; }
+function openDetail(item: any) {
+  detailApproval.value = item;
+  Object.assign(detailProcessForm, { decision: "APPROVED", comment: "同意", approverName: auth.user?.displayName || "" });
+  detailOpen.value = true;
+}
+
+async function openApprovalById(id: string) {
+  if (!officeApprovals.value.length) await loadData();
+  const target = mergedList.value.find((item) => item._source === "office" && item.id === id);
+  if (!target) {
+    message.warning("未找到对应审批事项，可能已被处理或当前账号无权限查看");
+    return;
+  }
+  openDetail(target);
+}
+
+defineExpose({ openApprovalById, loadData });
 async function handleProcess() {
   await processFormRef.value?.validate(); if (!selectedApproval.value) return; saving.value = true;
-  try { await processApproval(selectedApproval.value.id, { ...processForm }); processOpen.value = false; message.success(processForm.decision === "APPROVED" ? "审批已通过" : "审批已驳回"); await loadData(); }
+  try { await processApproval(selectedApproval.value.id, { ...processForm }); processOpen.value = false; message.success(processForm.decision === "APPROVED" ? "审批已通过" : "审批已驳回"); await loadData(); emit("changed"); }
   catch (error) { message.error(error instanceof Error ? error.message : "审批处理失败"); }
+  finally { saving.value = false; }
+}
+async function handleDetailProcess() {
+  await detailProcessFormRef.value?.validate(); if (!detailApproval.value) return; saving.value = true;
+  try {
+    await processApproval(detailApproval.value.id, { ...detailProcessForm });
+    detailOpen.value = false;
+    message.success(detailProcessForm.decision === "APPROVED" ? "审批已通过" : "审批已驳回");
+    await loadData();
+    emit("changed");
+  } catch (error) { message.error(error instanceof Error ? error.message : "审批处理失败"); }
   finally { saving.value = false; }
 }
 function openRuntime(item: any, action: "transfer" | "addSign") {
@@ -388,6 +498,14 @@ async function handleCrmProcess() {
   catch (error) { message.error(error instanceof Error ? error.message : "审批处理失败"); }
   finally { saving.value = false; }
 }
+async function handleContractApproval(item: any) {
+  saving.value = true;
+  try {
+    await approveContract(item._contractId, { operatorName: auth.user?.displayName || "", comment: "合同审批通过" });
+    message.success("合同审批已通过"); await loadData();
+  } catch (error) { message.error(error instanceof Error ? error.message : "合同审批失败"); }
+  finally { saving.value = false; }
+}
 async function handleCrmChangeAction(item: any, decision: string) {
   saving.value = true;
   try {
@@ -396,6 +514,103 @@ async function handleCrmChangeAction(item: any, decision: string) {
     message.success(decision === "APPROVED" ? "变更已通过" : "变更已驳回"); await loadData();
   } catch (error) { message.error(error instanceof Error ? error.message : "操作失败"); }
   finally { saving.value = false; }
+}
+
+function approvalDetailLines(record: any) {
+  if (record._source === "office") {
+    return [
+      `类型：${approvalTypeLabel(record.approvalType) || record._type}`,
+      `内容：${record.content || "未填写"}`,
+      record.sourceNo ? `来源单号：${record.sourceNo}` : "",
+      record.departmentName || record.businessType ? `组织/业务：${record.departmentName || "-"} / ${record.businessType || "-"}` : "",
+    ].filter(Boolean);
+  }
+  if (record._source === "quote") {
+    return [
+      `客户：${record.customerName || "-"}`,
+      `服务范围：${record.desc || "-"}`,
+      `付款方式：${record.paymentNodes || "-"}`,
+      `预算/毛利率：${record.budgetAmount != null ? formatMoney(record.budgetAmount) : "-"} / ${record.grossMarginRate != null ? `${(Number(record.grossMarginRate) * 100).toFixed(1)}%` : "-"}`,
+    ];
+  }
+  if (record._source === "contract") {
+    return [
+      `客户：${record.customerName || "-"}`,
+      `合同类型：${record.contractType || "-"}`,
+      `周期：${record.startDate || "-"} 至 ${record.endDate || "-"}`,
+      `服务周期：${record.serviceCycle || "-"}`,
+    ];
+  }
+  if (record._source === "change") {
+    return [
+      `合同：${record.code || "-"}`,
+      `变更类型：${changeTypeLabel(record)}`,
+      `变更内容：${changeSummary(record)}`,
+      `申请原因：${record.title || "-"}`,
+    ];
+  }
+  return ["-"];
+}
+
+function isExpenseApproval(record: any) {
+  return record.approvalType === "EXPENSE";
+}
+
+function expenseDetail(record: any) {
+  return record.sourceDetail as Expense | null | undefined;
+}
+
+function approvalBusinessTypeLabel(value?: string) {
+  if (!value) return "-";
+  return ({ TRAVEL: "差旅", TRANSPORT: "交通", ACCOMMODATION: "住宿", TOOL: "工具采购", OTHER: "其他" } as Record<string, string>)[value] || value;
+}
+
+function sourceDetailLines(record: any) {
+  const detail = record.sourceDetail || {};
+  return Object.entries(detail)
+    .filter(([, value]) => value !== null && value !== undefined && value !== "")
+    .map(([key, value]) => ({ label: sourceDetailLabel(key), value: String(value), span: key === "description" || key === "acceptanceNote" ? 2 : 1 }));
+}
+
+function sourceDetailLabel(key: string) {
+  return ({
+    code: "单号", claimantName: "申请人", supplierName: "服务商", projectCode: "项目", workOrderCode: "工单",
+    serviceType: "服务类型", amount: "金额", plannedDate: "计划日期", status: "状态", description: "说明", acceptanceNote: "验收说明",
+  } as Record<string, string>)[key] || key;
+}
+
+function parseChangeData(record: any) {
+  try { return record.changeData ? JSON.parse(record.changeData) : {}; }
+  catch { return {}; }
+}
+
+function changeTypeLabel(record: any) {
+  const data = parseChangeData(record);
+  if (data.type === "SIGNED_DOC_APPROVAL") return "双方盖章件审批";
+  if (data.type === "RECEIVABLE_UPDATE") return "应收计划变更";
+  return "合同信息变更";
+}
+
+function changeSummary(record: any) {
+  const data = parseChangeData(record);
+  if (data.type === "SIGNED_DOC_APPROVAL") return "审批双方盖章件，通过后合同生效并自动创建项目";
+  if (data.type === "RECEIVABLE_UPDATE") {
+    return [
+      data.amount != null ? `金额改为 ${formatMoney(Number(data.amount))}` : "",
+      data.dueDate ? `到期日改为 ${data.dueDate}` : "",
+      data.sourceNo ? `来源单号改为 ${data.sourceNo}` : "",
+    ].filter(Boolean).join("；") || "应收计划信息变更";
+  }
+  const labels: Record<string, string> = { projectName: "项目名称", contractType: "合同类型", amount: "合同金额", taxRate: "税率", startDate: "开始日期", endDate: "结束日期", serviceCycle: "服务周期" };
+  return Object.entries(data)
+    .filter(([key]) => key !== "type")
+    .map(([key, value]) => `${labels[key] || key}：${key === "amount" ? formatMoney(Number(value)) : value}`)
+    .join("；") || record.changeData || "-";
+}
+
+function changeAmount(record: any) {
+  const data = parseChangeData(record);
+  return data.amount != null ? Number(data.amount) : 0;
 }
 
 function generateCode(prefix: string) {
@@ -433,13 +648,30 @@ function approvalAgeLabel(record: any) {
 function runtimeNodeSummary(nodes: ApprovalRuntimeNode[]) {
   return nodes.map(node => `第${node.stepNo}步 ${node.assigneeName || "-"} ${node.nodeStatus}${node.dueAt ? " 截止" + node.dueAt.slice(0, 16).replace("T", " ") : ""}`).join(" / ");
 }
+function officeApprovalProgressSteps(item: Approval): ApprovalProgressStep[] {
+  const steps: ApprovalProgressStep[] = [
+    { key: "start", personName: item.applicantName || "发起人", title: "发起申请", time: item.createdAt, note: item.title || item.content, state: "done" },
+  ];
+  (item.nodes || []).forEach((node) => {
+    steps.push({
+      key: node.id,
+      personName: node.approverName || node.assigneeName || "当前审批人",
+      title: node.nodeStatus === "APPROVED" ? "已同意" : node.nodeStatus === "REJECTED" ? "已驳回" : node.nodeStatus === "SKIPPED" ? "已跳过" : "待审批",
+      time: node.completedAt || node.dueAt,
+      note: node.approvalComment || node.conditionText || node.sourceValue,
+      state: node.nodeStatus === "APPROVED" ? "done" : node.nodeStatus === "REJECTED" ? "rejected" : node.nodeStatus === "SKIPPED" ? "skipped" : "pending",
+    });
+  });
+  return steps;
+}
+function nodeStatusLabel(v: string) { return ({ PENDING: "待处理", APPROVED: "已通过", REJECTED: "已驳回", SKIPPED: "已跳过" } as Record<string, string>)[v] || v; }
+function nodeColor(v: string) { return ({ PENDING: "blue", APPROVED: "green", REJECTED: "red", SKIPPED: "gray" } as Record<string, string>)[v] || "blue"; }
+function approvalActionColor(v: ApprovalStatus) { return v === "APPROVED" ? "green" : v === "REJECTED" ? "red" : "blue"; }
 function approvalTypeLabel(v: ApprovalType) { return ({ QUOTE: "报价", CONTRACT: "合同", PURCHASE: "采购", OUTSOURCE: "外包", EXPENSE: "报销", PAYMENT: "付款", SEAL: "用章", LEAVE: "请假", TRAVEL: "出差", OTHER: "其他" } as Record<ApprovalType, string>)[v]; }
 function approvalStatusLabel(v: ApprovalStatus) { return ({ PENDING: "待审批", APPROVED: "已通过", REJECTED: "已驳回" } as Record<ApprovalStatus, string>)[v]; }
 function approvalStatusColor(v: ApprovalStatus) { return ({ PENDING: "orange", APPROVED: "green", REJECTED: "red" } as Record<ApprovalStatus, string>)[v]; }
-function priorityLabel(v: string) { return ({ HIGH: "高", MEDIUM: "中", LOW: "低" } as Record<string, string>)[v] || v; }
-function priorityColor(v: string) { return ({ HIGH: "red", MEDIUM: "orange", LOW: "green" } as Record<string, string>)[v] || "default"; }
-function severityLabel(v: string) { return ({ HIGH: "高", MEDIUM: "中", LOW: "低" } as Record<string, string>)[v] || v; }
-function severityColor(v: string) { return ({ HIGH: "red", MEDIUM: "orange", LOW: "green" } as Record<string, string>)[v] || "default"; }
+function expenseTypeLabel(v: ExpenseType) { return ({ TRAVEL: "差旅", TRANSPORT: "交通", ACCOMMODATION: "住宿", TOOL: "工具采购", OTHER: "其他" } as Record<ExpenseType, string>)[v]; }
+function expenseStatusLabel(v: ExpenseStatus) { return ({ PENDING_APPROVAL: "待审批", APPROVED: "已通过", REJECTED: "已驳回", PAID: "已付款" } as Record<ExpenseStatus, string>)[v]; }
 function formatMoney(v: number) { return new Intl.NumberFormat("zh-CN", { style: "currency", currency: "CNY", minimumFractionDigits: 2 }).format(v || 0); }
 </script>
 
@@ -474,6 +706,26 @@ function formatMoney(v: number) { return new Intl.NumberFormat("zh-CN", { style:
 .health-card strong {
   color: #101828;
   font-size: 20px;
+}
+
+.approval-detail-list {
+  display: grid;
+  gap: 3px;
+  color: #475467;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.approval-detail-list span {
+  overflow-wrap: anywhere;
+}
+
+.approval-context {
+  margin: 12px 0 16px;
+}
+
+.detail-stack {
+  width: 100%;
 }
 
 .text-danger {

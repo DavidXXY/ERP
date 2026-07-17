@@ -24,6 +24,7 @@ public class CodeGenerator {
     Map.entry("PURCHASE_REQUEST", "CG"),
     Map.entry("PURCHASE_ORDER", "CGDD"),
     Map.entry("RECEIPT", "RKD"),
+    Map.entry("RECEIVABLE", "YS"),
     Map.entry("PAYABLE", "FY"),
     Map.entry("PAYMENT_APPLICATION", "FKSQ"),
     Map.entry("PAYMENT_RECORD", "FKLS"),

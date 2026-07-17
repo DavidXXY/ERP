@@ -56,6 +56,7 @@ public final class OfficeDtos {
                                  String supplierRisk, String customerLevel, String approvalMode, Integer currentStep,
                                  Integer totalSteps, String currentApproverName, String matchedRuleText,
                                  Integer approvalConfigVersion, String approvalPlanSnapshot,
+                                 Object sourceDetail,
                                  List<ApprovalRuntimeNodeResponse> nodes,
                                  List<ApprovalActionResponse> actions) {}
   public record CreateExpenseRequest(// auto-gen
@@ -92,7 +93,7 @@ public final class OfficeDtos {
   public record OfficeReferenceResponse(List<SupplierOption> suppliers, List<ProjectOption> projects,
                                         List<WorkOrderOption> workOrders, List<UserOption> users) {}
   public record TodoItemResponse(String type, UUID id, String title, String subtitle, BigDecimal amount,
-                                 String priority, String route, OffsetDateTime createdAt) {}
+                                 String priority, String route, OffsetDateTime createdAt, String status) {}
   public record WarningItemResponse(String type, UUID id, String title, String content, String severity,
                                     String route, OffsetDateTime createdAt) {}
   public record WorkbenchResponse(List<TodoItemResponse> todos, List<WarningItemResponse> warnings,

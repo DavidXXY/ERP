@@ -5,10 +5,11 @@
         <div>
           <a-typography-title :level="3">业务待办中心</a-typography-title>
           <a-typography-text type="secondary">
-            汇总审批、风险、CRM、采购、库存、项目和资金事项，形成跨模块可执行队列。
+            统一处理业务待办和审批事项；消息中心只保留通知阅读。
           </a-typography-text>
         </div>
         <a-space>
+          <a-button @click="go('/office/notifications')">消息中心</a-button>
           <a-button @click="resetFilters">重置筛选</a-button>
           <a-button type="primary" :loading="loading" @click="loadData">刷新待办</a-button>
         </a-space>
@@ -72,6 +73,7 @@
             <a-select-option value="OVERDUE">已超时</a-select-option>
             <a-select-option value="OPEN">待处理</a-select-option>
             <a-select-option value="PROCESSING">处理中</a-select-option>
+            <a-select-option value="DONE">已处理</a-select-option>
           </a-select>
         </a-space>
       </template>
@@ -90,6 +92,7 @@
         :data-source="filteredTodos"
         :loading="loading"
         :pagination="{ pageSize: 12, showSizeChanger: true }"
+        :custom-row="todoRowProps"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'title'">
@@ -119,16 +122,66 @@
                 type="primary"
                 size="small"
                 :loading="actionLoadingKey === record.key"
-                @click="runAutomation(record)"
+                @click.stop="runAutomation(record)"
               >
                 一键生成
               </a-button>
-              <a-button type="link" size="small" @click="go(record.route)">处理</a-button>
+              <a-button type="link" size="small" @click.stop="openTodoDetail(record)">
+                查看详情
+              </a-button>
             </a-space>
           </template>
         </template>
       </a-table>
     </a-card>
+
+    <a-drawer v-model:open="detailOpen" title="待办详情" width="680px">
+      <template v-if="selectedTodo">
+        <a-space direction="vertical" size="middle" style="width: 100%">
+          <a-descriptions bordered size="small" :column="2">
+            <a-descriptions-item label="事项" :span="2">{{ selectedTodo.title }}</a-descriptions-item>
+            <a-descriptions-item label="说明" :span="2">{{ selectedTodo.subject || "-" }}</a-descriptions-item>
+            <a-descriptions-item label="模块">
+              <a-tag>{{ selectedTodo.moduleName }}</a-tag>
+            </a-descriptions-item>
+            <a-descriptions-item label="优先级">
+              <a-tag :color="priorityColor(selectedTodo.priority)">{{ priorityLabel(selectedTodo.priority) }}</a-tag>
+            </a-descriptions-item>
+            <a-descriptions-item label="状态">
+              <a-tag :color="statusColor(selectedTodo.status)">{{ statusLabel(selectedTodo.status) }}</a-tag>
+            </a-descriptions-item>
+            <a-descriptions-item label="责任人">{{ selectedTodo.owner || "-" }}</a-descriptions-item>
+            <a-descriptions-item label="金额">{{ selectedTodo.amount ? formatCurrency(selectedTodo.amount) : "-" }}</a-descriptions-item>
+            <a-descriptions-item label="到期/时间">{{ selectedTodo.dueDate ? formatDate(selectedTodo.dueDate) : "-" }}</a-descriptions-item>
+            <a-descriptions-item label="推荐动作" :span="2">{{ selectedTodo.action }}</a-descriptions-item>
+          </a-descriptions>
+
+          <a-alert
+            v-if="selectedTodo.automation"
+            type="info"
+            show-icon
+            message="该待办支持一键生成后续业务单据"
+          />
+
+          <a-space wrap>
+            <a-button
+              v-if="selectedTodo.automation"
+              type="primary"
+              :loading="actionLoadingKey === selectedTodo.key"
+              @click="runAutomation(selectedTodo)"
+            >
+              一键生成
+            </a-button>
+            <a-button type="primary" @click="handleTodoAction(selectedTodo)">
+              {{ isOfficeApprovalTodo(selectedTodo) ? "打开审批详情" : "进入业务页面" }}
+            </a-button>
+            <a-button @click="detailOpen = false">关闭</a-button>
+          </a-space>
+        </a-space>
+      </template>
+    </a-drawer>
+
+    <ApprovalCenterView ref="approvalCenterRef" embedded drawer-only @changed="loadData" />
   </div>
 </template>
 
@@ -140,13 +193,13 @@ import { createApproval, getOfficeWorkbench } from "@/api/office";
 import { listRiskItems } from "@/api/risk";
 import { createFollowUp, listContracts, listOpportunities, listQuotes } from "@/api/crm";
 import { listFinancePayables, listFinanceReceivables, listPaymentApplications } from "@/api/finance";
-import { createPurchaseRequest, listProcurementCostTargets, listProcurementMatching, listPurchaseRequests } from "@/api/procurement";
-import { listReplenishmentSuggestions } from "@/api/inventory";
+import { listProcurementMatching, listPurchaseRequests } from "@/api/procurement";
 import { createProject, listProjectProfitability } from "@/api/project";
 import { useAuthStore } from "@/stores/auth";
+import ApprovalCenterView from "@/views/office/ApprovalCenterView.vue";
 
 type Priority = "HIGH" | "MEDIUM" | "LOW";
-type TodoStatus = "OPEN" | "PROCESSING" | "OVERDUE";
+type TodoStatus = "OPEN" | "PROCESSING" | "OVERDUE" | "DONE";
 
 type BusinessTodo = {
   key: string;
@@ -161,6 +214,7 @@ type BusinessTodo = {
   dueDate?: string;
   route: string;
   action: string;
+  entityId?: string;
   automation?: AutomationAction;
 };
 
@@ -175,13 +229,6 @@ type AutomationAction =
       subject: string;
       content: string;
       nextAction?: string;
-    }
-  | {
-      type: "CREATE_PURCHASE_REQUEST";
-      partId: string;
-      partName: string;
-      quantity: number;
-      reason: string;
     }
   | {
       type: "CREATE_PROJECT_DRAFT";
@@ -206,7 +253,10 @@ const router = useRouter();
 const auth = useAuthStore();
 const loading = ref(false);
 const actionLoadingKey = ref("");
+const approvalCenterRef = ref<InstanceType<typeof ApprovalCenterView>>();
 const todos = ref<BusinessTodo[]>([]);
+const selectedTodo = ref<BusinessTodo | null>(null);
+const detailOpen = ref(false);
 const loadErrors = ref<string[]>([]);
 const keyword = ref("");
 const moduleFilter = ref("ALL");
@@ -226,14 +276,17 @@ const columns = [
 
 const moduleOptions = computed(() => {
   const map = new Map<string, string>();
-  todos.value.forEach((item) => map.set(item.module, item.moduleName));
+  todos.value.forEach((item) => {
+    const value = normalizeModuleCode(item.module);
+    if (!map.has(value)) map.set(value, item.moduleName);
+  });
   return Array.from(map.entries()).map(([value, label]) => ({ value, label }));
 });
 
 const filteredTodos = computed(() => {
   const text = keyword.value.trim().toLowerCase();
   return todos.value.filter((item) => {
-    if (moduleFilter.value !== "ALL" && item.module !== moduleFilter.value) return false;
+    if (moduleFilter.value !== "ALL" && normalizeModuleCode(item.module) !== moduleFilter.value) return false;
     if (priorityFilter.value !== "ALL" && item.priority !== priorityFilter.value) return false;
     if (statusFilter.value !== "ALL" && item.status !== statusFilter.value) return false;
     if (!text) return true;
@@ -242,6 +295,10 @@ const filteredTodos = computed(() => {
       .some((value) => String(value).toLowerCase().includes(text));
   });
 });
+
+function normalizeModuleCode(value?: string) {
+  return (value || "").trim().toUpperCase();
+}
 
 const highCount = computed(() => filteredTodos.value.filter((item) => item.priority === "HIGH").length);
 const overdueCount = computed(() => filteredTodos.value.filter((item) => item.status === "OVERDUE").length);
@@ -308,12 +365,13 @@ async function loadData() {
         title: item.title,
         subject: item.subtitle,
         priority: normalizePriority(item.priority),
-        status: isOverdue(item.createdAt, 2) ? "OVERDUE" : "OPEN",
+        status: item.status === "APPROVED" || item.status === "REJECTED" ? "DONE" : isOverdue(item.createdAt, 2) ? "OVERDUE" : "OPEN",
         owner: "当前审批人",
         amount: item.amount,
         dueDate: item.createdAt,
-        route: item.route || "/office/approvals",
-        action: "处理审批或协同事项",
+        route: item.route || "/workbench/todos",
+        action: item.status === "APPROVED" || item.status === "REJECTED" ? "查看已处理审批" : "处理审批或协同事项",
+        entityId: item.id,
       }));
       workbench.warnings.forEach((item) => next.push({
         key: `office-warning-${item.type}-${item.id}`,
@@ -524,29 +582,6 @@ async function loadData() {
           action: item.riskMessage || "核对订单、入库、应付和付款差异",
         }));
     }),
-    collect("库存", async () => {
-      const replenishments = await listReplenishmentSuggestions();
-      replenishments.forEach((item) => next.push({
-        key: `inventory-replenishment-${item.partId}`,
-        module: "INVENTORY",
-        moduleName: "库存管理",
-        title: "库存补货建议",
-        subject: `${item.partName} · 当前${item.stockQty} / 安全${item.safetyQty}`,
-        priority: normalizePriority(item.priority),
-        status: "OPEN",
-        owner: "仓储/采购",
-        amount: item.suggestedQty,
-        route: "/procurement/requests",
-        action: "生成采购申请并联动库存计划",
-        automation: {
-          type: "CREATE_PURCHASE_REQUEST",
-          partId: item.partId,
-          partName: item.partName,
-          quantity: item.suggestedQty,
-          reason: item.reason,
-        },
-      }));
-    }),
     collect("项目管理", async () => {
       const projects = await listProjectProfitability();
       projects
@@ -595,7 +630,7 @@ function dedupe(items: BusinessTodo[]) {
 }
 
 function sortTodos(a: BusinessTodo, b: BusinessTodo) {
-  const statusRank = { OVERDUE: 0, OPEN: 1, PROCESSING: 2 };
+  const statusRank = { OVERDUE: 0, OPEN: 1, PROCESSING: 2, DONE: 3 };
   const priorityRank = { HIGH: 0, MEDIUM: 1, LOW: 2 };
   return statusRank[a.status] - statusRank[b.status]
     || priorityRank[a.priority] - priorityRank[b.priority]
@@ -638,6 +673,35 @@ function go(path: string) {
   router.push(path);
 }
 
+function todoRowProps(record: BusinessTodo) {
+  return {
+    onClick: () => openTodoDetail(record),
+  };
+}
+
+function openTodoDetail(record: BusinessTodo) {
+  selectedTodo.value = record;
+  detailOpen.value = true;
+}
+
+function isOfficeApprovalTodo(record: BusinessTodo) {
+  return normalizeModuleCode(record.module) === "OFFICE" && (record.route.includes("/office/approvals") || record.route.includes("tab=approvals"));
+}
+
+function handleTodoAction(record: BusinessTodo) {
+  if (isOfficeApprovalTodo(record)) {
+    if (record.entityId) {
+      detailOpen.value = false;
+      approvalCenterRef.value?.openApprovalById(record.entityId);
+      return;
+    }
+    message.warning("缺少审批ID，无法打开详情");
+    return;
+  }
+  detailOpen.value = false;
+  router.push(record.route);
+}
+
 async function runAutomation(record: BusinessTodo) {
   if (!record.automation) return;
   actionLoadingKey.value = record.key;
@@ -660,27 +724,6 @@ async function runAutomation(record: BusinessTodo) {
         ownerName: record.automation.ownerName || currentUser,
       });
       message.success("已生成跟进/催收记录");
-    } else if (record.automation.type === "CREATE_PURCHASE_REQUEST") {
-      const targets = await listProcurementCostTargets();
-      const department = targets.departments[0];
-      const project = targets.projects[0];
-      if (!department && !project) {
-        message.warning("缺少采购成本归集对象，请先维护部门或项目后再生成采购申请");
-        router.push("/procurement/requests");
-        return;
-      }
-      await createPurchaseRequest({
-        partId: record.automation.partId,
-        partName: record.automation.partName,
-        quantity: record.automation.quantity,
-        expectedDate: addDaysText(7),
-        reason: `库存补货建议：${record.automation.reason}`,
-        requesterName: currentUser,
-        costType: department ? "DEPARTMENT" : "PROJECT",
-        departmentId: department?.id,
-        projectId: department ? undefined : project?.id,
-      });
-      message.success("已生成采购申请");
     } else if (record.automation.type === "CREATE_PROJECT_DRAFT") {
       const amount = record.automation.contractAmount;
       await createProject({
@@ -729,12 +772,6 @@ function todayText() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function addDaysText(days: number) {
-  const date = new Date();
-  date.setDate(date.getDate() + days);
-  return date.toISOString().slice(0, 10);
-}
-
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("zh-CN", { style: "currency", currency: "CNY", maximumFractionDigits: 0 }).format(value);
 }
@@ -752,11 +789,11 @@ function priorityLabel(value: Priority) {
 }
 
 function statusColor(value: TodoStatus) {
-  return value === "OVERDUE" ? "red" : value === "PROCESSING" ? "blue" : "gold";
+  return value === "OVERDUE" ? "red" : value === "PROCESSING" ? "blue" : value === "DONE" ? "green" : "gold";
 }
 
 function statusLabel(value: TodoStatus) {
-  return { OVERDUE: "已超时", PROCESSING: "处理中", OPEN: "待处理" }[value];
+  return { OVERDUE: "已超时", PROCESSING: "处理中", OPEN: "待处理", DONE: "已处理" }[value];
 }
 
 onMounted(loadData);
@@ -847,6 +884,10 @@ onMounted(loadData);
   margin-top: 4px;
   color: #6b778c;
   font-size: 12px;
+}
+
+.todo-table-card :deep(.ant-table-tbody > tr) {
+  cursor: pointer;
 }
 
 @media (max-width: 768px) {

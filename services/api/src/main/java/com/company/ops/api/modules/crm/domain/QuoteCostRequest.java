@@ -45,8 +45,14 @@ public class QuoteCostRequest extends BaseEntity {
   @Column(name = "subcontract_cost", nullable = false, precision = 14, scale = 2)
   private BigDecimal subcontractCost = BigDecimal.ZERO;
 
+  @Column(name = "subcontract_tax_rate", nullable = false, precision = 5, scale = 2)
+  private BigDecimal subcontractTaxRate = BigDecimal.valueOf(13);
+
   @Column(name = "travel_cost", nullable = false, precision = 14, scale = 2)
   private BigDecimal travelCost = BigDecimal.ZERO;
+
+  @Column(name = "travel_tax_rate", nullable = false, precision = 5, scale = 2)
+  private BigDecimal travelTaxRate = BigDecimal.ZERO;
 
   @Column(name = "equipment_cost", nullable = false, precision = 14, scale = 2)
   private BigDecimal equipmentCost = BigDecimal.ZERO;
@@ -54,8 +60,14 @@ public class QuoteCostRequest extends BaseEntity {
   @Column(name = "risk_reserve", nullable = false, precision = 14, scale = 2)
   private BigDecimal riskReserve = BigDecimal.ZERO;
 
+  @Column(name = "risk_reserve_tax_rate", nullable = false, precision = 5, scale = 2)
+  private BigDecimal riskReserveTaxRate = BigDecimal.ZERO;
+
   @Column(name = "other_cost", nullable = false, precision = 14, scale = 2)
   private BigDecimal otherCost = BigDecimal.ZERO;
+
+  @Column(name = "other_tax_rate", nullable = false, precision = 5, scale = 2)
+  private BigDecimal otherTaxRate = BigDecimal.valueOf(13);
 
   @Column(name = "suggested_price", precision = 14, scale = 2)
   private BigDecimal suggestedPrice;
@@ -163,6 +175,14 @@ public class QuoteCostRequest extends BaseEntity {
     this.travelCost = travelCost;
   }
 
+  public BigDecimal getTravelTaxRate() {
+    return travelTaxRate;
+  }
+
+  public void setTravelTaxRate(BigDecimal travelTaxRate) {
+    this.travelTaxRate = travelTaxRate;
+  }
+
   public BigDecimal getEquipmentCost() {
     return equipmentCost;
   }
@@ -179,12 +199,28 @@ public class QuoteCostRequest extends BaseEntity {
     this.riskReserve = riskReserve;
   }
 
+  public BigDecimal getRiskReserveTaxRate() {
+    return riskReserveTaxRate;
+  }
+
+  public void setRiskReserveTaxRate(BigDecimal riskReserveTaxRate) {
+    this.riskReserveTaxRate = riskReserveTaxRate;
+  }
+
   public BigDecimal getOtherCost() {
     return otherCost;
   }
 
   public void setOtherCost(BigDecimal otherCost) {
     this.otherCost = otherCost;
+  }
+
+  public BigDecimal getOtherTaxRate() {
+    return otherTaxRate;
+  }
+
+  public void setOtherTaxRate(BigDecimal otherTaxRate) {
+    this.otherTaxRate = otherTaxRate;
   }
 
   public BigDecimal getSuggestedPrice() {

@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/organizations")
+@RequestMapping({"/api/organizations", "/api/system/organizations"})
 public class OrganizationController {
 
   private final OrganizationService organizationService;

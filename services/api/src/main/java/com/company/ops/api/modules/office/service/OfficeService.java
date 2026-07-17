@@ -187,22 +187,23 @@ public class OfficeService {
   public WorkbenchResponse workbench() {
     List<TodoItemResponse> todos = new ArrayList<>();
     approvalRepository.findAllByOrderByCreatedAtDesc().stream()
-        .filter(item -> item.getStatus() == ApprovalStatus.PENDING)
         .forEach(item -> todos.add(new TodoItemResponse(
             "APPROVAL", item.getId(), item.getTitle(), item.getApprovalType().name() + " · " + item.getApplicantName(),
-            amount(item.getAmount()), "HIGH", "/office/approvals", item.getCreatedAt()
+            amount(item.getAmount()), item.getStatus() == ApprovalStatus.PENDING ? "HIGH" : "LOW", "/office/approvals", item.getCreatedAt(), item.getStatus().name()
         )));
     expenseRepository.findAllByOrderByExpenseDateDescCreatedAtDesc().stream()
         .filter(item -> item.getStatus() == ExpenseStatus.PENDING_APPROVAL)
+        .filter(item -> item.getApprovalRequestId() == null)
         .forEach(item -> todos.add(new TodoItemResponse(
             "EXPENSE", item.getId(), "费用报销待审批 " + item.getCode(), item.getClaimantName() + " · " + item.getDescription(),
-            amount(item.getAmount()), "MEDIUM", "/office/expenses", item.getCreatedAt()
+            amount(item.getAmount()), "MEDIUM", "/office/expenses", item.getCreatedAt(), item.getStatus().name()
         )));
     outsourceRepository.findAllByOrderByPlannedDateDescCreatedAtDesc().stream()
         .filter(item -> item.getStatus() == OutsourceStatus.PENDING_APPROVAL)
+        .filter(item -> item.getApprovalRequestId() == null)
         .forEach(item -> todos.add(new TodoItemResponse(
             "OUTSOURCE", item.getId(), "外包服务待审批 " + item.getCode(), item.getServiceType() + " · " + item.getDescription(),
-            amount(item.getAmount()), "MEDIUM", "/office/outsourcing", item.getCreatedAt()
+            amount(item.getAmount()), "MEDIUM", "/office/outsourcing", item.getCreatedAt(), item.getStatus().name()
         )));
 
     LocalDate today = LocalDate.now();
@@ -219,16 +220,10 @@ public class OfficeService {
         .forEach(item -> warnings.add(new WarningItemResponse(
             "OUTSOURCE_OVERDUE", item.getId(), "外包服务逾期", item.getCode() + " 计划日期 " + item.getPlannedDate(), "MEDIUM", "/office/outsourcing", item.getCreatedAt()
         )));
-    notificationRepository.findAllByOrderByCreatedAtDesc().stream()
-        .filter(item -> !item.isRead())
-        .limit(20)
-        .forEach(item -> warnings.add(new WarningItemResponse(
-            item.getType(), item.getId(), item.getTitle(), item.getContent(), "LOW", "/office/notifications", item.getCreatedAt()
-        )));
     return new WorkbenchResponse(
         todos.stream().sorted((a, b) -> b.createdAt().compareTo(a.createdAt())).toList(),
         warnings.stream().sorted((a, b) -> b.createdAt().compareTo(a.createdAt())).toList(),
-        todos.size(),
+        todos.stream().filter(item -> !"APPROVED".equals(item.status()) && !"REJECTED".equals(item.status())).count(),
         warnings.stream().filter(item -> "HIGH".equals(item.severity())).count()
     );
   }
@@ -959,7 +954,30 @@ public class OfficeService {
     SystemNotification item = new SystemNotification(); item.setType(type); item.setTitle(title); item.setContent(content);
     item.setRelatedType(relatedType); item.setRelatedId(relatedId); item.setRead(false); notificationRepository.save(item);
   }
-  private ApprovalResponse toApproval(ApprovalRequest item) { return new ApprovalResponse(item.getId(), item.getCode(), item.getApprovalType(), item.getTitle(), item.getSourceNo(), amount(item.getAmount()), item.getStatus(), item.getApplicantName(), item.getContent(), item.getApproverName(), item.getApprovalComment(), item.getProcessedAt(), item.getCreatedAt(), item.getDepartmentName(), item.getBusinessType(), item.getProjectCode(), item.getSupplierRisk(), item.getCustomerLevel(), item.getApprovalMode(), item.getCurrentStep(), item.getTotalSteps(), item.getCurrentApproverName(), item.getMatchedRuleText(), item.getApprovalConfigVersion(), item.getApprovalPlanSnapshot(), runtimeNodeRepository.findByApprovalIdOrderByStepNoAscCreatedAtAsc(item.getId()).stream().map(this::toRuntimeNode).toList(), actionRepository.findByApprovalIdOrderByCreatedAtAsc(item.getId()).stream().map(action -> new ApprovalActionResponse(action.getId(), action.getDecision(), action.getOperatorName(), action.getComment(), action.getActionType(), action.getStepNo(), action.getCreatedAt())).toList()); }
+  private ApprovalResponse toApproval(ApprovalRequest item) { return new ApprovalResponse(item.getId(), item.getCode(), item.getApprovalType(), item.getTitle(), item.getSourceNo(), amount(item.getAmount()), item.getStatus(), item.getApplicantName(), item.getContent(), item.getApproverName(), item.getApprovalComment(), item.getProcessedAt(), item.getCreatedAt(), item.getDepartmentName(), item.getBusinessType(), item.getProjectCode(), item.getSupplierRisk(), item.getCustomerLevel(), item.getApprovalMode(), item.getCurrentStep(), item.getTotalSteps(), item.getCurrentApproverName(), item.getMatchedRuleText(), item.getApprovalConfigVersion(), item.getApprovalPlanSnapshot(), approvalSourceDetail(item), runtimeNodeRepository.findByApprovalIdOrderByStepNoAscCreatedAtAsc(item.getId()).stream().map(this::toRuntimeNode).toList(), actionRepository.findByApprovalIdOrderByCreatedAtAsc(item.getId()).stream().map(action -> new ApprovalActionResponse(action.getId(), action.getDecision(), action.getOperatorName(), action.getComment(), action.getActionType(), action.getStepNo(), action.getCreatedAt())).toList()); }
+  private Object approvalSourceDetail(ApprovalRequest item) {
+    if (item.getApprovalType() == ApprovalType.EXPENSE) {
+      return expenseRepository.findByApprovalRequestId(item.getId())
+          .or(() -> item.getSourceNo() == null ? java.util.Optional.empty() : expenseRepository.findByCode(item.getSourceNo()))
+          .map(expense -> toExpense(
+              expense,
+              expense.getProjectId() == null ? null : projectRepository.findById(expense.getProjectId()).orElse(null),
+              expense.getWorkOrderId() == null ? null : workOrderRepository.findById(expense.getWorkOrderId()).orElse(null)
+          ))
+          .orElse(null);
+    }
+    if (item.getApprovalType() == ApprovalType.OUTSOURCE) {
+      return outsourceRepository.findByApprovalRequestId(item.getId())
+          .map(order -> toOutsource(
+              order,
+              supplierRepository.findById(order.getSupplierId()).orElse(null),
+              order.getProjectId() == null ? null : projectRepository.findById(order.getProjectId()).orElse(null),
+              order.getWorkOrderId() == null ? null : workOrderRepository.findById(order.getWorkOrderId()).orElse(null)
+          ))
+          .orElse(null);
+    }
+    return null;
+  }
   private ApprovalRuntimeNodeResponse toRuntimeNode(ApprovalRuntimeNode item) { return new ApprovalRuntimeNodeResponse(item.getId(), item.getStepNo(), item.getNodeStatus(), item.getApprovalMode(), item.getStepPolicy(), item.getAssigneeType(), item.getAssigneeId(), item.getAssigneeName(), item.getSourceType(), item.getSourceValue(), item.getConditionText(), item.getSlaHours(), item.getDueAt(), item.getRemindedAt(), item.getEscalatedAt(), item.getCompletedAt(), item.getApproverName(), item.getApprovalComment()); }
   private ExpenseResponse toExpense(ExpenseClaim item, Project project, WorkOrder order) { return new ExpenseResponse(item.getId(), item.getCode(), item.getClaimantId(), item.getClaimantName(), item.getProjectId(), project == null ? null : project.getCode(), item.getWorkOrderId(), order == null ? null : order.getCode(), item.getExpenseType(), item.getAmount(), item.getExpenseDate(), item.getDescription(), item.getStatus(), item.getApprovalRequestId()); }
   private OutsourceResponse toOutsource(OutsourceOrder item, Supplier supplier, Project project, WorkOrder order) { return new OutsourceResponse(item.getId(), item.getCode(), item.getSupplierId(), supplier == null ? null : supplier.getName(), item.getProjectId(), project == null ? null : project.getCode(), item.getWorkOrderId(), order == null ? null : order.getCode(), item.getServiceType(), item.getDescription(), item.getAmount(), item.getPlannedDate(), item.getStatus(), item.getApprovalRequestId(), item.getAcceptanceNote()); }

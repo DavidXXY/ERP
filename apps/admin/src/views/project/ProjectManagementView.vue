@@ -76,7 +76,7 @@
         <a-input-search v-model:value="keyword" allow-clear placeholder="搜索项目、客户、负责人" style="width: 260px" />
         <a-select v-model:value="approvalFilter" :options="approvalFilterOptions" style="width: 140px" />
         <a-select v-model:value="stageFilter" :options="stageFilterOptions" style="width: 140px" />
-        <a-tag color="orange">待审批 {{ pendingApprovalCount }}</a-tag>
+        <a-tag color="orange">待分配 {{ pendingApprovalCount }}</a-tag>
       </a-space>
 
       <a-table
@@ -85,7 +85,7 @@
         :loading="loading"
         :pagination="{ pageSize: 8 }"
         :row-key="(record: Project) => record.id"
-        :scroll="{ x: 1420 }"
+        :scroll="{ x: 1490 }"
         size="middle"
       >
         <template #bodyCell="{ column, record }">
@@ -95,11 +95,12 @@
           </template>
           <template v-else-if="column.key === 'owner'">
             {{ projectTypeLabel(record.projectType) }}
-            <span class="table-subtitle">负责人 {{ record.managerName }}</span>
+          </template>
+          <template v-else-if="column.key === 'manager'">
+            <strong>{{ record.managerName || "待分配" }}</strong>
           </template>
           <template v-else-if="column.key === 'stage'">
             <a-tag :color="stageColor(record.stage)">{{ stageLabel(record.stage) }}</a-tag>
-            <a-progress :percent="record.progress" size="small" :show-info="false" />
           </template>
           <template v-else-if="column.key === 'approval'">
             <a-tag :color="approvalColor(record.approvalStatus)">{{ approvalLabel(record.approvalStatus) }}</a-tag>
@@ -130,7 +131,7 @@
                 size="small"
                 @click="openApproval(record)"
               >
-                审批
+                分配
               </a-button>
             </a-space>
           </template>
@@ -189,6 +190,75 @@
         </a-table>
       </template>
 
+      <template v-else-if="pageMode === 'presales'">
+        <section class="project-workbench">
+          <div class="workbench-title">
+            <div>
+              <h3>售前支持</h3>
+              <p>销售发起售前支持后，由项目管理填写成本并完成审批；通过后报价板块才可以继续报价。</p>
+            </div>
+            <a-button :loading="loading" @click="loadPreSalesSupport">刷新售前支持</a-button>
+          </div>
+          <div class="project-summary-grid">
+            <button class="summary-card" type="button">
+              <span>待填写成本</span>
+              <strong>{{ preSalesRows.filter((item) => item.status === "COST_REQUESTED").length }}</strong>
+              <em>项目管理待处理</em>
+            </button>
+            <button class="summary-card" type="button">
+              <span>待审批</span>
+              <strong>{{ preSalesRows.filter((item) => item.status === "COSTING").length }}</strong>
+              <em>成本负责人已提交</em>
+            </button>
+            <button class="summary-card" type="button">
+              <span>已核对</span>
+              <strong>{{ preSalesRows.filter((item) => item.status === "COST_APPROVED").length }}</strong>
+              <em>销售可继续报价</em>
+            </button>
+          </div>
+        </section>
+        <a-table
+          :columns="preSalesColumns"
+          :data-source="preSalesRows"
+          :loading="loading"
+          :pagination="{ pageSize: 10 }"
+          :row-key="(record: QuotePlan) => record.id"
+          :scroll="{ x: 1280 }"
+          size="middle"
+        >
+          <template #bodyCell="{ column, record }">
+            <template v-if="column.key === 'quote'">
+              <strong>{{ record.code }}</strong>
+              <span class="table-subtitle">{{ record.customerName }} · {{ record.opportunityCode || "未关联商机" }}</span>
+            </template>
+            <template v-else-if="column.key === 'scope'">
+              <span class="line-clamp-2">{{ record.serviceScope }}</span>
+              <span class="table-subtitle">{{ record.inspectCycle || "未填写服务周期" }}</span>
+            </template>
+            <template v-else-if="column.key === 'amount'">
+              <strong>{{ formatMoney(record.amount) }}</strong>
+              <span class="table-subtitle">未税 {{ formatMoney(record.netAmount || calcNetAmount(record.amount, record.taxRate)) }}</span>
+            </template>
+            <template v-else-if="column.key === 'cost'">
+              <strong>{{ formatMoney(record.costRequest?.netTotalCost || record.budgetAmount || preSalesCostNetTotal(record.costRequest || {})) }}</strong>
+              <span class="table-subtitle">含税 {{ formatMoney(record.costRequest?.totalCost || preSalesCostTotal(record.costRequest || {})) }}</span>
+              <span class="table-subtitle">{{ record.costRequest?.projectManager || "未填写成本负责人" }}</span>
+            </template>
+            <template v-else-if="column.key === 'status'">
+              <a-tag :color="preSalesStatusColor(record.status)">{{ preSalesStatusLabel(record.status) }}</a-tag>
+            </template>
+            <template v-else-if="column.key === 'action'">
+              <a-space size="small">
+                <a-button v-if="auth.can('project:cost:create') && record.status === 'COST_REQUESTED'" type="link" size="small" @click="openPreSalesCost(record)">填写成本</a-button>
+                <a-button v-if="auth.can('project:approve') && record.status === 'COSTING'" type="link" size="small" @click="openPreSalesApproval(record)">成本审批</a-button>
+                <a-tag v-if="record.status === 'COST_APPROVED'" color="green">销售可报价</a-tag>
+              </a-space>
+            </template>
+          </template>
+          <template #emptyText>暂无售前支持请求</template>
+        </a-table>
+      </template>
+
       <template v-else-if="pageMode === 'costs'">
         <section class="project-workbench">
           <div class="workbench-title">
@@ -233,7 +303,7 @@
           <div class="workbench-title">
             <div>
               <h3>阶段履历</h3>
-              <p>按项目阶段查看推进分布和历史变更，关注长期停留与关闭进度。</p>
+              <p>按项目阶段查看推进分布和历史变更，关注长期停留与关闭情况。</p>
             </div>
             <a-button :loading="detailHydrating" @click="hydrateProjectDetails(true)">刷新履历</a-button>
           </div>
@@ -270,7 +340,6 @@
               <a-tag :color="stageColor(record.fromStage)">{{ stageLabel(record.fromStage) }}</a-tag>
               →
               <a-tag :color="stageColor(record.toStage)">{{ stageLabel(record.toStage) }}</a-tag>
-              <span class="table-subtitle">进度 {{ record.progress }}%</span>
             </template>
             <template v-else-if="column.key === 'operator'">{{ record.operatorName }}<span class="table-subtitle">{{ formatDateTime(record.changedAt) }}</span></template>
           </template>
@@ -278,6 +347,108 @@
         </a-table>
       </template>
     </a-card>
+
+    <a-modal v-model:open="preSalesCostOpen" title="填写售前支持成本" width="860px" :confirm-loading="saving" @ok="handlePreSalesCost">
+      <a-alert
+        v-if="selectedPreSales"
+        class="section-alert"
+        type="info"
+        show-icon
+        :message="`${selectedPreSales.code} · ${selectedPreSales.customerName}`"
+        :description="`含税成本 ${formatMoney(preSalesCostTotal(preSalesCostForm))}，未税成本 ${formatMoney(preSalesCostNetTotal(preSalesCostForm))}，建议报价 ${formatMoney(preSalesCostForm.suggestedPrice || 0)}`"
+      />
+      <a-form :model="preSalesCostForm" layout="vertical">
+        <a-row :gutter="16">
+          <a-col :xs="24" :md="12">
+            <a-form-item label="成本负责人" required>
+              <a-select
+                v-model:value="preSalesCostForm.projectManager"
+                show-search
+                allow-clear
+                option-filter-prop="label"
+                placeholder="选择成本负责人"
+                :options="visibleUserOptions"
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :xs="24" :md="12"><a-form-item label="建议报价"><a-input-number v-model:value="preSalesCostForm.suggestedPrice" :min="0" :precision="2" class="full-input" /></a-form-item></a-col>
+          <a-col :span="24">
+            <div class="presales-cost-table">
+              <div class="presales-cost-head">
+                <span>成本项</span>
+                <span>含税价</span>
+                <span>不含税价</span>
+                <span>税率</span>
+              </div>
+              <div class="presales-cost-row">
+                <strong>人工</strong>
+                <a-input-number v-model:value="preSalesCostForm.laborCost" :min="0" :precision="2" class="full-input" />
+                <em>{{ formatMoney(calcNetAmount(preSalesCostForm.laborCost, preSalesCostForm.laborTaxRate)) }}</em>
+                <a-input-number v-model:value="preSalesCostForm.laborTaxRate" :min="0" :max="100" :precision="2" class="full-input" />
+              </div>
+              <div class="presales-cost-row">
+                <strong>材料</strong>
+                <a-input-number v-model:value="preSalesCostForm.materialCost" :min="0" :precision="2" class="full-input" />
+                <em>{{ formatMoney(calcNetAmount(preSalesCostForm.materialCost, preSalesCostForm.materialTaxRate)) }}</em>
+                <a-input-number v-model:value="preSalesCostForm.materialTaxRate" :min="0" :max="100" :precision="2" class="full-input" />
+              </div>
+              <div class="presales-cost-row">
+                <strong>外包</strong>
+                <a-input-number v-model:value="preSalesCostForm.subcontractCost" :min="0" :precision="2" class="full-input" />
+                <em>{{ formatMoney(calcNetAmount(preSalesCostForm.subcontractCost, preSalesCostForm.subcontractTaxRate)) }}</em>
+                <a-input-number v-model:value="preSalesCostForm.subcontractTaxRate" :min="0" :max="100" :precision="2" class="full-input" />
+              </div>
+              <div class="presales-cost-row">
+                <strong>差旅</strong>
+                <a-input-number v-model:value="preSalesCostForm.travelCost" :min="0" :precision="2" class="full-input" />
+                <em>{{ formatMoney(calcNetAmount(preSalesCostForm.travelCost, 0)) }}</em>
+                <span class="tax-static">无税率</span>
+              </div>
+              <div class="presales-cost-row">
+                <strong>设备</strong>
+                <a-input-number v-model:value="preSalesCostForm.equipmentCost" :min="0" :precision="2" class="full-input" />
+                <em>{{ formatMoney(calcNetAmount(preSalesCostForm.equipmentCost, preSalesCostForm.equipmentTaxRate)) }}</em>
+                <a-input-number v-model:value="preSalesCostForm.equipmentTaxRate" :min="0" :max="100" :precision="2" class="full-input" />
+              </div>
+              <div class="presales-cost-row">
+                <strong>风险金</strong>
+                <a-input-number v-model:value="preSalesCostForm.riskReserve" :min="0" :precision="2" class="full-input" />
+                <em>{{ formatMoney(calcNetAmount(preSalesCostForm.riskReserve, 0)) }}</em>
+                <span class="tax-static">无税率</span>
+              </div>
+              <div class="presales-cost-row">
+                <strong>其他</strong>
+                <a-input-number v-model:value="preSalesCostForm.otherCost" :min="0" :precision="2" class="full-input" />
+                <em>{{ formatMoney(calcNetAmount(preSalesCostForm.otherCost, preSalesCostForm.otherTaxRate)) }}</em>
+                <a-input-number v-model:value="preSalesCostForm.otherTaxRate" :min="0" :max="100" :precision="2" class="full-input" />
+              </div>
+            </div>
+          </a-col>
+          <a-col :span="24"><a-form-item label="成本说明"><a-textarea v-model:value="preSalesCostForm.costRemark" :rows="3" /></a-form-item></a-col>
+        </a-row>
+      </a-form>
+    </a-modal>
+
+    <a-modal v-model:open="preSalesApprovalOpen" title="售前支持成本审批" width="620px" :confirm-loading="saving" @ok="handlePreSalesApproval">
+      <a-alert
+        v-if="selectedPreSales?.costRequest"
+        class="section-alert"
+        show-icon
+        type="info"
+        :message="`成本合计 ${formatMoney(selectedPreSales.costRequest.totalCost || 0)} · 建议报价 ${formatMoney(selectedPreSales.costRequest.suggestedPrice || 0)}`"
+        :description="selectedPreSales.costRequest.costRemark || '成本负责人未填写备注'"
+      />
+      <a-form :model="preSalesApprovalForm" layout="vertical">
+        <a-form-item label="审批结论">
+          <a-radio-group v-model:value="preSalesApprovalForm.decision" button-style="solid">
+            <a-radio-button value="APPROVED">通过</a-radio-button>
+            <a-radio-button value="REJECTED">驳回</a-radio-button>
+          </a-radio-group>
+        </a-form-item>
+        <a-form-item label="审批人" required><a-input v-model:value="preSalesApprovalForm.approverName" /></a-form-item>
+        <a-form-item label="审批意见" required><a-textarea v-model:value="preSalesApprovalForm.comment" :rows="3" /></a-form-item>
+      </a-form>
+    </a-modal>
 
     <a-drawer v-model:open="detailOpen" :width="920" :destroy-on-close="false">
       <template #title>
@@ -291,10 +462,10 @@
       <template #extra>
         <a-space v-if="detail">
           <a-button
-            v-if="auth.can('project:approve') && detail.project.approvalStatus === 'PENDING'"
+            v-if="auth.can('project:approve') && canAssignManager(detail.project)"
             @click="openApproval(detail.project)"
           >
-            立项审批
+            {{ detail.project.approvalStatus === "PENDING" ? "分配项目经理" : "变更负责人" }}
           </a-button>
           <a-button
             v-if="auth.can('project:cost:create') && canExecute(detail.project)"
@@ -323,10 +494,13 @@
             <a-descriptions-item label="质保截止">{{ detail.project.warrantyEndDate || '-' }}</a-descriptions-item>
             <a-descriptions-item label="合同金额">{{ formatMoney(detail.project.contractAmount) }}</a-descriptions-item>
             <a-descriptions-item label="当前毛利">{{ formatMoney(detail.project.grossMargin) }}</a-descriptions-item>
-            <a-descriptions-item v-if="detail.project.approvalComment" label="审批记录" :span="2">
+            <a-descriptions-item v-if="detail.project.approvalComment" label="分配记录" :span="2">
               {{ detail.project.approverName }} · {{ detail.project.approvalComment }}
             </a-descriptions-item>
           </a-descriptions>
+          <a-card title="审批进展" size="small" style="margin-top: 12px">
+            <ApprovalProgressFlow :steps="projectApprovalSteps(detail.project)" />
+          </a-card>
 
           <a-row :gutter="[16, 16]" class="drawer-metrics">
             <a-col :span="8"><a-statistic title="预算成本" :value="detail.project.budgetAmount" :formatter="moneyFormatter" /></a-col>
@@ -336,6 +510,17 @@
 
           <a-tabs>
             <a-tab-pane key="budget" tab="预算执行">
+              <div v-if="materialBudgetItem" class="project-inline-actions">
+                <a-alert
+                  type="info"
+                  show-icon
+                  :message="`物料预算 ${formatMoney(materialBudgetItem.plannedAmount)}，剩余 ${formatMoney(materialBudgetItem.variance)}`"
+                  description="项目物料采购申请会自动归集到当前项目预算。"
+                />
+                <a-button v-if="auth.can('procurement:purchase:create')" type="primary" @click="openProjectPurchaseRequest">
+                  发起采购申请
+                </a-button>
+              </div>
               <a-table :columns="budgetColumns" :data-source="detail.budgetItems" :pagination="false" :row-key="(item: ProjectBudgetItem) => item.id" size="small">
                 <template #bodyCell="{ column, record }">
                   <template v-if="column.key === 'category'">{{ categoryLabel(record.category) }}</template>
@@ -358,7 +543,7 @@
             <a-tab-pane key="stages" :tab="`阶段履历 (${detail.stageRecords.length})`">
               <a-table :columns="stageRecordColumns" :data-source="detail.stageRecords" :pagination="{ pageSize: 6 }" :row-key="(item: ProjectStageRecord) => item.id" size="small">
                 <template #bodyCell="{ column, record }">
-                  <template v-if="column.key === 'change'">{{ stageLabel(record.fromStage) }} → {{ stageLabel(record.toStage) }}<span class="table-subtitle">进度 {{ record.progress }}%</span></template>
+                  <template v-if="column.key === 'change'">{{ stageLabel(record.fromStage) }} → {{ stageLabel(record.toStage) }}</template>
                   <template v-else-if="column.key === 'operator'">{{ record.operatorName }}<span class="table-subtitle">{{ formatDateTime(record.changedAt) }}</span></template>
                 </template>
                 <template #emptyText>项目尚未推进阶段</template>
@@ -372,6 +557,29 @@
       </a-spin>
     </a-drawer>
 
+    <a-modal v-model:open="projectPurchaseOpen" title="项目物料采购申请" width="720px" :confirm-loading="savingPurchase" @ok="handleProjectPurchaseRequest">
+      <a-alert
+        v-if="detail"
+        class="section-alert"
+        type="info"
+        show-icon
+        :message="`${detail.project.code} · ${detail.project.name}`"
+        :description="materialBudgetItem ? `物料预算 ${formatMoney(materialBudgetItem.plannedAmount)}，当前剩余 ${formatMoney(materialBudgetItem.variance)}。` : '当前项目无物料预算。'"
+      />
+      <a-form ref="projectPurchaseFormRef" :model="projectPurchaseForm" :rules="projectPurchaseRules" layout="vertical">
+        <a-row :gutter="16">
+          <a-col :xs="24" :md="12"><a-form-item label="物料名称" name="materialName"><a-input v-model:value="projectPurchaseForm.materialName" /></a-form-item></a-col>
+          <a-col :xs="24" :md="12"><a-form-item label="规格型号"><a-input v-model:value="projectPurchaseForm.materialSpec" /></a-form-item></a-col>
+          <a-col :xs="12" :md="6"><a-form-item label="数量" name="quantity"><a-input-number v-model:value="projectPurchaseForm.quantity" :min="1" :precision="2" class="full-input" /></a-form-item></a-col>
+          <a-col :xs="12" :md="6"><a-form-item label="单位"><a-input v-model:value="projectPurchaseForm.unit" /></a-form-item></a-col>
+          <a-col :xs="12" :md="6"><a-form-item label="预计单价"><a-input-number v-model:value="projectPurchaseForm.unitPrice" :min="0" :precision="2" class="full-input" /></a-form-item></a-col>
+          <a-col :xs="12" :md="6"><a-form-item label="税率(%)"><a-input-number v-model:value="projectPurchaseForm.taxRate" :min="0" :max="100" :precision="2" class="full-input" /></a-form-item></a-col>
+          <a-col :xs="24" :md="12"><a-form-item label="需求日期"><a-input v-model:value="projectPurchaseForm.requiredDate" type="date" /></a-form-item></a-col>
+          <a-col :span="24"><a-form-item label="申请原因" name="reason"><a-textarea v-model:value="projectPurchaseForm.reason" :rows="3" /></a-form-item></a-col>
+        </a-row>
+      </a-form>
+    </a-modal>
+
         <ProjectModals
       v-model:create-open="createOpen"
       v-model:approval-open="approvalOpen"
@@ -382,6 +590,7 @@
       :category-options="categoryOptions"
       :project-type-options="projectTypeOptions"
       :source-options="sourceOptions"
+      :user-options="visibleUserOptions"
       :detail="detail"
       :active-project="activeProject"
       :next-stage="nextStage"
@@ -398,7 +607,8 @@ import PlusOutlined from "@ant-design/icons-vue/PlusOutlined";
 import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
 import { useRoute } from "vue-router";
 import { listCustomers, type CustomerSummary } from "@/api/crm";
-import { listProjects, getProject, listProjectProfitability, deleteProject } from "@/api/project";
+import { listProjects, getProject, listProjectProfitability, deleteProject, listPreSalesSupport, submitPreSalesCost, approvePreSalesCost } from "@/api/project";
+import { listUsersApi, type UserResponse } from "@/api/system";
 import {
   type Project,
   type ProjectApprovalStatus,
@@ -412,6 +622,9 @@ import {
   type ProjectType,
 type ProjectProfitability,
 } from "@/api/project";
+import { createPurchaseRequest } from "@/api/procurement";
+import type { ApprovalDecision, QuoteCostRequest, QuotePlan } from "@/api/crm";
+import ApprovalProgressFlow, { type ApprovalProgressStep } from "@/components/ApprovalProgressFlow.vue";
 import { useAuthStore } from "@/stores/auth";
 import ProjectModals from "./ProjectModals.vue";
 import BusinessTraceTimeline from "@/components/business/BusinessTraceTimeline.vue";
@@ -424,6 +637,7 @@ const profitabilityRows = ref<ProjectProfitability[]>([]);
 const detailCache = ref<Record<string, ProjectDetail>>({});
 const pageMeta = ref({ totalElements: 0, totalPages: 0, number: 0, size: 999 });
 const customers = ref<CustomerSummary[]>([]);
+const visibleUsers = ref<UserResponse[]>([]);
 const detail = ref<ProjectDetail | null>(null);
 const activeProject = ref<Project | null>(null);
 const loading = ref(false);
@@ -435,18 +649,32 @@ const detailOpen = ref(false);
 const approvalOpen = ref(false);
 const stageOpen = ref(false);
 const costOpen = ref(false);
+const projectPurchaseOpen = ref(false);
+const savingPurchase = ref(false);
+const projectPurchaseFormRef = ref();
+const preSalesCostOpen = ref(false);
+const preSalesApprovalOpen = ref(false);
 const errorMessage = ref("");
 const keyword = ref("");
 const approvalFilter = ref("ALL");
 const stageFilter = ref("ALL");
-type PageMode = "list" | "budget" | "costs" | "stages";
+type PageMode = "list" | "budget" | "costs" | "stages" | "presales";
 type ProjectBudgetRow = { project: Project; riskLevel: string; riskMessage: string; usageRate: number };
 type FlatCostEntry = ProjectCostEntry & { project: Project };
 type FlatStageRecord = ProjectStageRecord & { project: Project };
+const preSalesRows = ref<QuotePlan[]>([]);
+const selectedPreSales = ref<QuotePlan | null>(null);
+const preSalesCostForm = reactive(initialPreSalesCostForm());
+const preSalesApprovalForm = reactive(initialPreSalesApprovalForm());
+const projectPurchaseForm = reactive(initialProjectPurchaseForm());
+const projectPurchaseRules = {
+  materialName: [{ required: true, message: "请输入物料名称" }],
+  quantity: [{ required: true, message: "请输入数量" }],
+  reason: [{ required: true, message: "请输入申请原因" }],
+};
 
 const stageOptions: Array<{ label: string; value: ProjectStage }> = [
-  { label: "立项", value: "INITIATED" }, { label: "投标", value: "BIDDING" },
-  { label: "进场", value: "ENTRY" }, { label: "施工", value: "CONSTRUCTION" },
+  { label: "入场", value: "ENTRY" }, { label: "施工", value: "CONSTRUCTION" },
   { label: "调试", value: "COMMISSIONING" }, { label: "初验", value: "INITIAL_ACCEPTANCE" },
   { label: "终验", value: "FINAL_ACCEPTANCE" }, { label: "质保", value: "WARRANTY" },
   { label: "关闭", value: "CLOSED" },
@@ -467,20 +695,22 @@ const sourceOptions = [
   { label: "费用报销", value: "EXPENSE" }, { label: "外包结算", value: "SUBCONTRACT" },
 ];
 const approvalFilterOptions = [
-  { label: "全部审批", value: "ALL" }, { label: "待审批", value: "PENDING" },
-  { label: "已通过", value: "APPROVED" }, { label: "已驳回", value: "REJECTED" },
+  { label: "全部分配状态", value: "ALL" }, { label: "待分配", value: "PENDING" },
+  { label: "已分配", value: "APPROVED" }, { label: "已退回", value: "REJECTED" },
 ];
 const stageFilterOptions = computed(() => [{ label: "全部阶段", value: "ALL" }, ...stageOptions]);
 const pageMode = computed<PageMode>(() => {
+  if (route.path.endsWith("/presales-support")) return "presales";
   if (route.path.endsWith("/budget")) return "budget";
   if (route.path.endsWith("/costs")) return "costs";
   if (route.path.endsWith("/stages")) return "stages";
   return "list";
 });
-const pageTitle = computed(() => ({ list: "项目列表", budget: "预算执行", costs: "成本明细", stages: "阶段履历" } as Record<PageMode, string>)[pageMode.value]);
+const pageTitle = computed(() => ({ list: "项目列表", budget: "预算执行", costs: "成本明细", stages: "阶段履历", presales: "售前支持" } as Record<PageMode, string>)[pageMode.value]);
 const columns = [
-  { title: "项目 / 客户", key: "name", width: 280 }, { title: "类型 / 负责人", key: "owner", width: 190 },
-  { title: "阶段 / 进度", key: "stage", width: 170 }, { title: "立项审批", key: "approval", width: 220 },
+  { title: "项目 / 客户", key: "name", width: 280 }, { title: "项目类型", key: "owner", width: 130 },
+  { title: "项目负责人", key: "manager", width: 130 },
+  { title: "阶段", key: "stage", width: 150 }, { title: "项目经理分配", key: "approval", width: 220 },
   { title: "合同金额", key: "contract", width: 140 }, { title: "预算 / 实际", key: "cost", width: 180 },
   { title: "毛利 / 余额", key: "gross", width: 180 }, { title: "操作", key: "action", width: 130, fixed: "right" },
 ];
@@ -516,6 +746,14 @@ const flatStageColumns = [
   { title: "项目", key: "project", width: 240 }, { title: "阶段变化", key: "change", width: 260 },
   { title: "节点说明", dataIndex: "comment" }, { title: "操作记录", key: "operator", width: 220 },
 ];
+const preSalesColumns = [
+  { title: "报价 / 客户", key: "quote", width: 260 },
+  { title: "售前需求", key: "scope", width: 330 },
+  { title: "报价金额", key: "amount", width: 150 },
+  { title: "成本核算", key: "cost", width: 220 },
+  { title: "状态", key: "status", width: 160 },
+  { title: "操作", key: "action", width: 190, fixed: "right" as const },
+];
 
 const filteredProjects = computed(() => projects.value.filter((item) => {
   const search = keyword.value.trim().toLowerCase();
@@ -526,6 +764,15 @@ const customerOptions = computed(() => customers.value.map((item) => ({
   label: `${item.name} (${item.code})`,
   value: item.id,
 })));
+const visibleUserOptions = computed(() => {
+  const options = visibleUsers.value
+    .filter((item) => item.enabled)
+    .map((item) => ({ label: `${item.displayName} · ${item.username}`, value: item.displayName }));
+  const selected = preSalesCostForm.projectManager;
+  return selected && !options.some((item) => item.value === selected)
+    ? [{ label: selected, value: selected }, ...options]
+    : options;
+});
 const totalContract = computed(() => projects.value.reduce((sum, item) => sum + Number(item.contractAmount || 0), 0));
 const totalBudget = computed(() => projects.value.reduce((sum, item) => sum + Number(item.budgetAmount || 0), 0));
 const totalActualCost = computed(() => projects.value.reduce((sum, item) => sum + Number(item.actualCost || 0), 0));
@@ -537,7 +784,9 @@ const profitabilityHighlights = computed(() => [...profitabilityRows.value]
   .slice(0, 5));
 const nextStage = computed<ProjectStage | null>(() => {
   if (!detail.value || detail.value.project.stage === "CLOSED") return null;
-  return stageOptions[stageOptions.findIndex((item) => item.value === detail.value?.project.stage) + 1]?.value || null;
+  const currentIndex = stageOptions.findIndex((item) => item.value === detail.value?.project.stage);
+  const normalizedIndex = currentIndex >= 0 ? currentIndex : 0;
+  return stageOptions[normalizedIndex + 1]?.value || null;
 });
 const profitabilityMap = computed(() => new Map(profitabilityRows.value.map((item) => [item.projectId, item])));
 const budgetExecutionRows = computed<ProjectBudgetRow[]>(() => filteredProjects.value.map((project) => {
@@ -549,6 +798,7 @@ const budgetExecutionRows = computed<ProjectBudgetRow[]>(() => filteredProjects.
     usageRate: project.budgetAmount > 0 ? Math.round((Number(project.actualCost || 0) / Number(project.budgetAmount || 1)) * 100) : 0,
   };
 }).sort((a, b) => b.usageRate - a.usageRate));
+const materialBudgetItem = computed(() => detail.value?.budgetItems.find((item) => item.category === "MATERIAL" && Number(item.plannedAmount || 0) > 0) || null);
 const detailRows = computed(() => Object.values(detailCache.value));
 const flatCostEntries = computed<FlatCostEntry[]>(() => detailRows.value
   .flatMap((row) => row.costEntries.map((item) => ({ ...item, project: row.project })))
@@ -587,8 +837,7 @@ const profitReviewCards = computed(() => {
   ];
 });
 const stageGateRules = [
-  { stage: "BIDDING" as ProjectStage, rule: "投标前校验客户、预算估算和报价毛利", owner: "销售/项目" },
-  { stage: "ENTRY" as ProjectStage, rule: "进场前校验合同生效、项目审批和预算科目", owner: "项目经理" },
+  { stage: "ENTRY" as ProjectStage, rule: "入场前确认合同已生效、项目经理已分配、预算科目已带入", owner: "项目管理负责人" },
   { stage: "CONSTRUCTION" as ProjectStage, rule: "施工前确认采购计划、库存物料和安全资料", owner: "项目/采购" },
   { stage: "INITIAL_ACCEPTANCE" as ProjectStage, rule: "初验前确认成本归集、变更单和验收资料", owner: "项目经理" },
   { stage: "CLOSED" as ProjectStage, rule: "关闭前确认应收回款、成本完整和利润复盘", owner: "财务/项目" },
@@ -596,24 +845,154 @@ const stageGateRules = [
 
 onMounted(loadData);
 watch(() => route.path, () => {
+  if (pageMode.value === "presales") loadPreSalesSupport();
   if (pageMode.value === "costs" || pageMode.value === "stages") hydrateProjectDetails();
 });
 
 async function loadData() {
   loading.value = true; errorMessage.value = "";
-  try { const [projectPage, customerRows, profitability] = await Promise.all([listProjects(0, 999), listCustomers(), listProjectProfitability()]);
+  try { const [projectPage, customerRows, profitability, preSales] = await Promise.all([listProjects(0, 999), listCustomers(), listProjectProfitability(), pageMode.value === "presales" ? listPreSalesSupport() : Promise.resolve([])]);
       projects.value = projectPage.content;
       pageMeta.value = { totalElements: projectPage.totalElements, totalPages: projectPage.totalPages, number: projectPage.number, size: projectPage.size };
       customers.value = customerRows;
       profitabilityRows.value = profitability;
+      preSalesRows.value = preSales;
+      await loadVisibleUsers();
       if (pageMode.value === "costs" || pageMode.value === "stages") await hydrateProjectDetails(); }
   catch (error) { errorMessage.value = error instanceof Error ? error.message : "项目数据加载失败"; }
   finally { loading.value = false; }
 }
+
+async function loadPreSalesSupport() {
+  loading.value = true;
+  try {
+    preSalesRows.value = await listPreSalesSupport();
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : "售前支持加载失败";
+  } finally {
+    loading.value = false;
+  }
+}
 function openCreate() { createOpen.value = true; }
-function openApproval(project: Project) { activeProject.value = project; approvalOpen.value = true; }
+function openApproval(project: Project) {
+  activeProject.value = project;
+  if (!visibleUsers.value.length) void loadVisibleUsers();
+  approvalOpen.value = true;
+}
 function openStage() { if (!detail.value || !nextStage.value) return; stageOpen.value = true; }
 function openCost() { costOpen.value = true; }
+
+function openProjectPurchaseRequest() {
+  if (!detail.value || !materialBudgetItem.value) return;
+  Object.assign(projectPurchaseForm, initialProjectPurchaseForm());
+  projectPurchaseOpen.value = true;
+}
+
+async function handleProjectPurchaseRequest() {
+  if (!detail.value) return;
+  await projectPurchaseFormRef.value?.validate();
+  savingPurchase.value = true;
+  try {
+    await createPurchaseRequest({
+      requesterName: auth.user?.displayName || "",
+      materialName: projectPurchaseForm.materialName,
+      materialSpec: projectPurchaseForm.materialSpec || undefined,
+      partName: projectPurchaseForm.materialName,
+      quantity: projectPurchaseForm.quantity,
+      unitPrice: projectPurchaseForm.unitPrice,
+      taxRate: projectPurchaseForm.taxRate,
+      requiredDate: projectPurchaseForm.requiredDate || undefined,
+      expectedDate: projectPurchaseForm.requiredDate || undefined,
+      reason: projectPurchaseForm.reason,
+      description: projectPurchaseForm.reason,
+      costType: "PROJECT",
+      projectId: detail.value.project.id,
+    });
+    projectPurchaseOpen.value = false;
+    message.success("项目采购申请已提交审批");
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "采购申请提交失败");
+  } finally {
+    savingPurchase.value = false;
+  }
+}
+
+function openPreSalesCost(record: QuotePlan) {
+  selectedPreSales.value = record;
+  Object.assign(preSalesCostForm, initialPreSalesCostForm(record.costRequest));
+  if (!visibleUsers.value.length) void loadVisibleUsers();
+  preSalesCostOpen.value = true;
+}
+
+function openPreSalesApproval(record: QuotePlan) {
+  selectedPreSales.value = record;
+  Object.assign(preSalesApprovalForm, initialPreSalesApprovalForm());
+  preSalesApprovalOpen.value = true;
+}
+
+async function handlePreSalesCost() {
+  if (!selectedPreSales.value?.costRequest?.id) {
+    message.warning("未找到售前支持单");
+    return;
+  }
+  const total = preSalesCostTotal(preSalesCostForm);
+  if (!preSalesCostForm.projectManager.trim()) {
+    message.warning("请输入成本负责人");
+    return;
+  }
+  if (total <= 0) {
+    message.warning("请至少填写一项成本");
+    return;
+  }
+  saving.value = true;
+  try {
+    await submitPreSalesCost(selectedPreSales.value.costRequest.id, { ...preSalesCostForm, travelTaxRate: 0, riskReserveTaxRate: 0 });
+    preSalesCostOpen.value = false;
+    message.success("售前成本已提交审批");
+    await loadPreSalesSupport();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "售前成本提交失败");
+  } finally {
+    saving.value = false;
+  }
+}
+
+async function loadVisibleUsers() {
+  try {
+    const page = await listUsersApi(0, 999);
+    visibleUsers.value = page.content;
+  } catch {
+    visibleUsers.value = [{
+      id: "current",
+      username: auth.user?.username || auth.user?.displayName || "current",
+      displayName: auth.user?.displayName || "当前用户",
+      enabled: true,
+      roles: [],
+    }];
+  }
+}
+
+async function handlePreSalesApproval() {
+  if (!selectedPreSales.value?.costRequest?.id) {
+    message.warning("未找到售前支持单");
+    return;
+  }
+  if (!preSalesApprovalForm.approverName.trim() || !preSalesApprovalForm.comment.trim()) {
+    message.warning("请填写审批人和审批意见");
+    return;
+  }
+  saving.value = true;
+  try {
+    await approvePreSalesCost(selectedPreSales.value.costRequest.id, { ...preSalesApprovalForm });
+    preSalesApprovalOpen.value = false;
+    message.success(preSalesApprovalForm.decision === "APPROVED" ? "售前成本已通过，销售报价可继续" : "售前成本已驳回");
+    await loadPreSalesSupport();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "售前成本审批失败");
+  } finally {
+    saving.value = false;
+  }
+}
 
 async function openDetail(project: Project) {
   detailOpen.value = true; detailLoading.value = true;
@@ -664,20 +1043,113 @@ function openProfitabilityProject(projectId: string) {
 
 function canExecute(project: Project) { return project.approvalStatus === "APPROVED" && project.stage !== "CLOSED"; }
 function canAdvance(project: Project) { return canExecute(project) && project.stage !== "CLOSED"; }
-function stageLabel(stage: ProjectStage) { return stageOptions.find((item) => item.value === stage)?.label || stage; }
+function canAssignManager(project: Project) { return auth.can("project:approve") && (project.approvalStatus === "PENDING" || project.approvalStatus === "APPROVED"); }
+function stageLabel(stage: ProjectStage) {
+  if (stage === "INITIATED" || stage === "BIDDING") return "入场";
+  return stageOptions.find((item) => item.value === stage)?.label || stage;
+}
 function stageColor(stage: ProjectStage) { return ({ INITIATED: "blue", BIDDING: "cyan", ENTRY: "geekblue", CONSTRUCTION: "orange", COMMISSIONING: "purple", INITIAL_ACCEPTANCE: "gold", FINAL_ACCEPTANCE: "green", WARRANTY: "lime", CLOSED: "default" } as Record<ProjectStage, string>)[stage]; }
-function approvalLabel(status: ProjectApprovalStatus) { return ({ PENDING: "待审批", APPROVED: "已通过", REJECTED: "已驳回" } as Record<ProjectApprovalStatus, string>)[status]; }
+function approvalLabel(status: ProjectApprovalStatus) { return ({ PENDING: "待分配", APPROVED: "已分配", REJECTED: "已退回" } as Record<ProjectApprovalStatus, string>)[status]; }
 function approvalColor(status: ProjectApprovalStatus) { return ({ PENDING: "orange", APPROVED: "green", REJECTED: "red" } as Record<ProjectApprovalStatus, string>)[status]; }
+function projectApprovalSteps(project: Project): ApprovalProgressStep[] {
+  return [
+    { key: "start", personName: project.customerName || "发起人", title: "发起项目", note: project.contractCode || project.name, state: "done" },
+    {
+      key: "approval",
+      personName: project.approverName || "当前审批人",
+      title: project.approvalStatus === "PENDING" ? "待审批" : project.approvalStatus === "REJECTED" ? "已驳回" : "已同意",
+      time: project.approvedAt,
+      note: project.approvalStatus === "PENDING" ? "等待项目审批/负责人分配" : project.approvalComment || approvalLabel(project.approvalStatus),
+      state: project.approvalStatus === "PENDING" ? "pending" : project.approvalStatus === "REJECTED" ? "rejected" : "done",
+    },
+    { key: "execute", personName: project.managerName || "项目负责人", title: project.approvalStatus === "APPROVED" ? "已进入执行" : "待执行", note: project.approvalStatus === "APPROVED" ? stageLabel(project.stage) : "审批通过后开始执行", state: project.approvalStatus === "APPROVED" ? "done" : "waiting" },
+  ];
+}
 function projectTypeLabel(type: ProjectType) { return projectTypeOptions.find((item) => item.value === type)?.label || type; }
 function categoryLabel(category: ProjectCostCategory) { return categoryOptions.find((item) => item.value === category)?.label || category; }
 function sourceLabel(source: ProjectCostSource) { return sourceOptions.find((item) => item.value === source)?.label || source; }
+function preSalesStatusLabel(status: string) { return ({ COST_REQUESTED: "待填写成本", COSTING: "待成本审批", COST_APPROVED: "成本已核对" } as Record<string, string>)[status] || status; }
+function preSalesStatusColor(status: string) { return ({ COST_REQUESTED: "cyan", COSTING: "orange", COST_APPROVED: "green" } as Record<string, string>)[status] || "default"; }
+function preSalesCostTotal(record: { laborCost?: number; materialCost?: number; subcontractCost?: number; travelCost?: number; equipmentCost?: number; riskReserve?: number; otherCost?: number }) {
+  return Number(record.laborCost || 0)
+    + Number(record.materialCost || 0)
+    + Number(record.subcontractCost || 0)
+    + Number(record.travelCost || 0)
+    + Number(record.equipmentCost || 0)
+    + Number(record.riskReserve || 0)
+    + Number(record.otherCost || 0);
+}
+function preSalesCostNetTotal(record: {
+  laborCost?: number; laborTaxRate?: number; materialCost?: number; materialTaxRate?: number;
+  subcontractCost?: number; subcontractTaxRate?: number; travelCost?: number; travelTaxRate?: number;
+  equipmentCost?: number; equipmentTaxRate?: number; riskReserve?: number; riskReserveTaxRate?: number;
+  otherCost?: number; otherTaxRate?: number;
+}) {
+  return calcNetAmount(record.laborCost, record.laborTaxRate)
+    + calcNetAmount(record.materialCost, record.materialTaxRate)
+    + calcNetAmount(record.subcontractCost, record.subcontractTaxRate)
+    + calcNetAmount(record.travelCost, 0)
+    + calcNetAmount(record.equipmentCost, record.equipmentTaxRate)
+    + calcNetAmount(record.riskReserve, 0)
+    + calcNetAmount(record.otherCost, record.otherTaxRate);
+}
+function initialPreSalesCostForm(cost?: QuoteCostRequest) {
+  return {
+    projectManager: cost?.projectManager || auth.user?.displayName || "",
+    laborCost: Number(cost?.laborCost || 0),
+    laborTaxRate: Number(cost?.laborTaxRate ?? 6),
+    materialCost: Number(cost?.materialCost || 0),
+    materialTaxRate: Number(cost?.materialTaxRate ?? 13),
+    subcontractCost: Number(cost?.subcontractCost || 0),
+    subcontractTaxRate: Number(cost?.subcontractTaxRate ?? 13),
+    travelCost: Number(cost?.travelCost || 0),
+    travelTaxRate: 0,
+    equipmentCost: Number(cost?.equipmentCost || 0),
+    equipmentTaxRate: Number(cost?.equipmentTaxRate ?? 13),
+    riskReserve: Number(cost?.riskReserve || 0),
+    riskReserveTaxRate: 0,
+    otherCost: Number(cost?.otherCost || 0),
+    otherTaxRate: Number(cost?.otherTaxRate ?? 13),
+    suggestedPrice: Number(cost?.suggestedPrice || selectedPreSales.value?.amount || 0),
+    costRemark: cost?.costRemark || "",
+  };
+}
+function initialPreSalesApprovalForm() {
+  return {
+    decision: "APPROVED" as ApprovalDecision,
+    approverName: auth.user?.displayName || "",
+    comment: "同意售前成本测算，作为报价毛利核算依据。",
+  };
+}
+function initialProjectPurchaseForm() {
+  return {
+    materialName: "",
+    materialSpec: "",
+    quantity: 1,
+    unit: "个",
+    unitPrice: 0,
+    taxRate: 13,
+    requiredDate: dateAfter(7),
+    reason: "",
+  };
+}
 function riskRank(level: string) { return ({ HIGH: 3, MEDIUM: 2, LOW: 1 } as Record<string, number>)[level] || 0; }
 function riskLabel(level: string) { return ({ HIGH: "高风险", MEDIUM: "关注", LOW: "正常" } as Record<string, string>)[level] || level; }
 function riskColor(level: string) { return ({ HIGH: "red", MEDIUM: "orange", LOW: "green" } as Record<string, string>)[level] || "default"; }
 function formatMoney(value: number) { return new Intl.NumberFormat("zh-CN", { style: "currency", currency: "CNY", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value || 0); }
 function moneyFormatter(value: number | string) { return formatMoney(Number(value)); }
+function calcNetAmount(amount?: number, taxRate?: number) {
+  const rate = Number(taxRate ?? 13);
+  const divisor = 1 + rate / 100;
+  return divisor > 0 ? Number(amount || 0) / divisor : Number(amount || 0);
+}
 function formatPercent(value: number) { return `${Number(value || 0).toFixed(1)}%`; }
 function formatDateTime(value: string) { return value ? new Intl.DateTimeFormat("zh-CN", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "-"; }
+function dateAfter(days: number) {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date.toISOString().slice(0, 10);
+}
 </script>
 
 <style scoped>
@@ -745,6 +1217,61 @@ function formatDateTime(value: string) { return value ? new Intl.DateTimeFormat(
   font-style: normal;
   white-space: nowrap;
 }
+.presales-cost-table {
+  display: grid;
+  gap: 0;
+  overflow: hidden;
+  margin-bottom: 16px;
+  border: 1px solid #eef2f7;
+  border-radius: 8px;
+  background: #fff;
+}
+.presales-cost-head,
+.presales-cost-row {
+  display: grid;
+  grid-template-columns: 110px minmax(150px, 1fr) minmax(150px, 1fr) 120px;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+}
+.presales-cost-head {
+  background: #f8fafc;
+  color: #667085;
+  font-size: 12px;
+  font-weight: 600;
+}
+.presales-cost-row {
+  border-top: 1px solid #eef2f7;
+}
+.presales-cost-row strong {
+  color: #101828;
+  font-size: 13px;
+  font-weight: 600;
+}
+.presales-cost-row em {
+  color: #344054;
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 600;
+}
+.tax-static {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 11px;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  background: #f5f5f5;
+  color: #667085;
+  font-size: 13px;
+}
+.project-inline-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
 .summary-card,
 .stage-card {
   display: grid;
@@ -794,6 +1321,19 @@ function formatDateTime(value: string) { return value ? new Intl.DateTimeFormat(
   }
   .stage-gate-row {
     grid-template-columns: 1fr;
+  }
+  .project-inline-actions {
+    grid-template-columns: 1fr;
+  }
+  .presales-cost-head {
+    display: none;
+  }
+  .presales-cost-row {
+    grid-template-columns: 80px minmax(0, 1fr);
+  }
+  .presales-cost-row :nth-child(3),
+  .presales-cost-row :nth-child(4) {
+    grid-column: 2;
   }
 }
 </style>

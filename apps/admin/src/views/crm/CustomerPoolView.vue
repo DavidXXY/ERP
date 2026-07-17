@@ -43,7 +43,7 @@
           :pagination="{ pageSize: 10, showSizeChanger: false }"
           :row-key="(record: CustomerSummary) => record.id"
           :custom-row="customerRow"
-          :scroll="{ x: 930 }"
+          :scroll="{ x: 1040 }"
         >
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'name'">
@@ -51,10 +51,11 @@
                 <span class="customer-avatar" aria-hidden="true">{{ customerInitial(record.name) }}</span>
                 <div>
                   <a-button type="link" class="table-link" @click.stop="selectCustomer(record.id)">{{ record.name }}</a-button>
-                  <span class="table-subtitle">{{ record.code }} · {{ record.ownerName }}</span>
+                  <span class="table-subtitle">{{ record.code }}</span>
                 </div>
               </div>
             </template>
+            <template v-else-if="column.key === 'owner'"><strong>{{ record.ownerName || '未分配' }}</strong></template>
             <template v-else-if="column.key === 'level'"><a-tag :color="levelColor(record.level)">{{ levelLabel(record.level) }}</a-tag><span class="table-subtitle">{{ record.industry }}</span></template>
             <template v-else-if="column.key === 'contact'"><strong class="customer-cell-primary">{{ record.primaryContact || '未登记联系人' }}</strong><span class="table-subtitle">共 {{ record.contactCount }} 位联系人</span></template>
             <template v-else-if="column.key === 'site'"><strong>{{ record.siteCount }}</strong> 个</template>
@@ -114,6 +115,7 @@
           </template>
           <template v-else>
             <a-button v-if="auth.can('crm:followup:create')" @click="createFollowUpForCustomer"><template #icon><PlusOutlined /></template>新增跟进</a-button>
+            <a-button v-if="auth.can('crm:customer:update')" @click="openTransferOwner"><template #icon><SwapOutlined /></template>转交负责人</a-button>
             <a-button v-if="auth.can('crm:customer:update')" type="primary" @click="openEdit(selectedDetail.id)"><template #icon><EditOutlined /></template>编辑档案</a-button>
           </template>
         </a-space>
@@ -208,7 +210,7 @@
               <a-col :xs="24" :md="12"><a-form-item label="客户名称" name="name"><a-input v-model:value="formState.name" /></a-form-item></a-col>
               <a-col :xs="24" :md="12"><a-form-item label="行业" name="industry"><a-input v-model:value="formState.industry" /></a-form-item></a-col>
               <a-col :xs="24" :md="8"><a-form-item label="客户等级" name="level"><a-select v-model:value="formState.level" :options="levelOptions" /></a-form-item></a-col>
-              <a-col :xs="24" :md="8"><a-form-item label="负责人" name="ownerName"><a-input v-model:value="formState.ownerName" /></a-form-item></a-col>
+              <a-col :xs="24" :md="8"><a-form-item label="负责人" name="ownerName"><a-select v-model:value="formState.ownerName" :options="userOptions" show-search option-filter-prop="label" placeholder="选择负责人" /></a-form-item></a-col>
               <a-col :xs="24" :md="8"><a-form-item label="风险状态"><a-select v-model:value="formState.riskStatus" :options="riskOptions" /></a-form-item></a-col>
               <a-col :xs="24" :md="12"><a-form-item label="付款习惯"><a-input v-model:value="formState.paymentHabit" /></a-form-item></a-col>
               <a-col :xs="24" :md="12"><a-form-item label="风险说明"><a-textarea v-model:value="formState.riskNote" :rows="2" /></a-form-item></a-col>
@@ -266,7 +268,7 @@
               <a-col :xs="24" :md="16"><a-form-item label="客户名称" name="name"><a-input v-model:value="formState.name" /></a-form-item></a-col>
               <a-col :xs="24" :md="8"><a-form-item label="行业" name="industry"><a-input v-model:value="formState.industry" /></a-form-item></a-col>
               <a-col :xs="24" :md="8"><a-form-item label="客户等级" name="level"><a-select v-model:value="formState.level" :options="levelOptions" /></a-form-item></a-col>
-              <a-col :xs="24" :md="8"><a-form-item label="负责人" name="ownerName"><a-input v-model:value="formState.ownerName" /></a-form-item></a-col>
+              <a-col :xs="24" :md="8"><a-form-item label="负责人" name="ownerName"><a-select v-model:value="formState.ownerName" :options="userOptions" show-search option-filter-prop="label" placeholder="选择负责人" /></a-form-item></a-col>
               <a-col :xs="24" :md="12"><a-form-item label="付款习惯"><a-input v-model:value="formState.paymentHabit" placeholder="例如：月结30天、验收后付款" /></a-form-item></a-col>
               <a-col :xs="24" :md="12"><a-form-item label="风险状态"><a-select v-model:value="formState.riskStatus" :options="riskOptions" /></a-form-item></a-col>
               <a-col :span="24"><a-form-item label="风险说明"><a-textarea v-model:value="formState.riskNote" :rows="3" /></a-form-item></a-col>
@@ -308,6 +310,15 @@
         </a-tabs>
       </a-form>
     </a-modal>
+
+    <a-modal v-model:open="transferOpen" title="转交客户负责人" width="460px" :confirm-loading="saving" @ok="handleTransferOwner">
+      <a-alert v-if="selectedDetail" class="customer-transfer-alert" type="info" show-icon :message="`${selectedDetail.name} · 当前负责人 ${selectedDetail.ownerName}`" />
+      <a-form layout="vertical">
+        <a-form-item label="新负责人" required>
+          <a-select v-model:value="transferOwnerName" :options="userOptions" show-search option-filter-prop="label" placeholder="选择组织人员" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
@@ -322,12 +333,14 @@ import PlusOutlined from "@ant-design/icons-vue/PlusOutlined";
 import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
 import RightOutlined from "@ant-design/icons-vue/RightOutlined";
 import SearchOutlined from "@ant-design/icons-vue/SearchOutlined"
+import SwapOutlined from "@ant-design/icons-vue/SwapOutlined";
 import DownloadOutlined from "@ant-design/icons-vue/DownloadOutlined";
 import {
   createCustomer,
   getCustomer,
   listCustomers,
   deleteCustomer,
+  transferCustomerOwner,
   updateCustomer,
   type CustomerDetail,
   type CustomerLevel,
@@ -335,6 +348,7 @@ import {
   type RiskStatus,
   type UpdateCustomerPayload,
 } from "@/api/crm";
+import { listUserOptionsApi, type UserResponse } from "@/api/system";
 import { useAuthStore } from "@/stores/auth";
 import { downloadCsv, customerRowToCsv } from "./crm-export";
 import {
@@ -380,11 +394,14 @@ const route = useRoute();
 const router = useRouter();
 const customers = ref<CustomerSummary[]>([]);
 const selectedDetail = ref<CustomerDetail | null>(null);
+const users = ref<UserResponse[]>([]);
 const loading = ref(false);
 const detailLoading = ref(false);
 const saving = ref(false);
 const detailOpen = ref(false);
 const formOpen = ref(false);
+const transferOpen = ref(false);
+const transferOwnerName = ref("");
 const editingCustomerId = ref("");
 const editing = ref(false);
 const detailTab = ref("profile");
@@ -397,10 +414,20 @@ const formState = reactive<CustomerFormState>(initialForm());
 const levelOptions = [{ label: "战略客户", value: "STRATEGIC" }, { label: "重点客户", value: "KEY" }, { label: "普通客户", value: "NORMAL" }];
 const riskOptions = [{ label: "正常", value: "NORMAL" }, { label: "逾期", value: "OVERDUE" }, { label: "续约风险", value: "RENEWAL_RISK" }];
 const rules = { code: [], name: [{ required: true, message: "请输入客户名称" }], industry: [{ required: true, message: "请输入行业" }], ownerName: [{ required: true, message: "请输入负责人" }] };
-const columns = [{ title: "客户", key: "name", width: 210 }, { title: "客户编码", dataIndex: "code", width: 160 }, { title: "等级 / 行业", key: "level", width: 120 }, { title: "主要联系人", key: "contact", width: 180 }, { title: "项目地址", key: "site", width: 90 }, { title: "付款习惯", key: "payment", width: 160 }, { title: "风险", key: "risk", width: 90 }, { title: "操作", key: "action", width: 80, fixed: "right" }];
+const columns = [{ title: "客户", key: "name", width: 210 }, { title: "客户编码", dataIndex: "code", width: 150 }, { title: "负责人", key: "owner", width: 110 }, { title: "等级 / 行业", key: "level", width: 120 }, { title: "主要联系人", key: "contact", width: 180 }, { title: "项目地址", key: "site", width: 90 }, { title: "付款习惯", key: "payment", width: 160 }, { title: "风险", key: "risk", width: 90 }, { title: "操作", key: "action", width: 80, fixed: "right" }];
 const opportunityColumns = [{ title: "商机", key: "opportunity", width: 150 }, { title: "需求", dataIndex: "needSummary", width: 280 }, { title: "阶段", key: "stage", width: 130 }, { title: "预计金额", key: "amount", width: 130 }, { title: "下一步动作", key: "nextAction", width: 220 }, { title: "负责人", dataIndex: "ownerName", width: 110 }];
 const contractColumns = [{ title: "合同", key: "contract", width: 260 }, { title: "期限", key: "period", width: 220 }, { title: "服务周期", dataIndex: "serviceCycle", width: 150 }, { title: "金额", key: "amount", width: 130 }, { title: "状态", key: "status", width: 100 }];
 const receivableColumns = [{ title: "应收单", key: "receivable", width: 190 }, { title: "应收 / 已收", key: "amount", width: 250 }, { title: "到期日", dataIndex: "dueDate", width: 120 }, { title: "开票信息", key: "invoice", width: 170 }, { title: "状态", key: "status", width: 100 }];
+const userOptions = computed(() => {
+  const options = users.value
+    .filter((item) => item.enabled)
+    .map((item) => ({ label: `${item.displayName} · ${item.username}`, value: item.displayName }));
+  const selectedNames = [formState.ownerName, transferOwnerName.value].filter(Boolean);
+  selectedNames.forEach((name) => {
+    if (!options.some((item) => item.value === name)) options.unshift({ label: name, value: name });
+  });
+  return options;
+});
 
 const filteredCustomers = computed(() => {
   const term = filters.keyword.trim().toLowerCase();
@@ -422,7 +449,12 @@ async function loadCustomers() {
   loading.value = true;
   errorMessage.value = "";
   try {
-    customers.value = await listCustomers();
+    const [customerRows, userPage] = await Promise.all([
+      listCustomers(),
+      listUserOptionsApi().catch(() => [] as UserResponse[]),
+    ]);
+    customers.value = customerRows;
+    users.value = userPage;
     const queryCustomerId = typeof route.query.customer === "string" ? route.query.customer : undefined;
     if (queryCustomerId && customers.value.some(customer => customer.id === queryCustomerId)) await selectCustomer(queryCustomerId, false);
   } catch (error) { errorMessage.value = error instanceof Error ? error.message : "客户列表加载失败"; }
@@ -449,6 +481,12 @@ function handleExportCsv() {
 
 function customerRow(record: CustomerSummary) { return { onClick: () => selectCustomer(record.id) }; }
 function customerInitial(name: string) { return name.trim().slice(0, 1) || "客"; }
+
+function openTransferOwner() {
+  if (!selectedDetail.value) return;
+  transferOwnerName.value = selectedDetail.value.ownerName || "";
+  transferOpen.value = true;
+}
 
 function openCreate() {
   editingCustomerId.value = "";
@@ -478,6 +516,31 @@ async function openEdit(id: string) {
     resetForm(formFromDetail(detail));
   } catch (error) { message.error(error instanceof Error ? error.message : "客户档案加载失败"); }
   finally { detailLoading.value = false; }
+}
+
+async function handleTransferOwner() {
+  if (!selectedDetail.value) return;
+  if (!transferOwnerName.value) {
+    message.error("请选择新负责人");
+    return;
+  }
+  if (transferOwnerName.value === selectedDetail.value.ownerName) {
+    message.warning("新负责人和当前负责人相同");
+    return;
+  }
+  saving.value = true;
+  try {
+    await transferCustomerOwner(selectedDetail.value.id, transferOwnerName.value);
+    message.success("客户负责人已转交");
+    transferOpen.value = false;
+    detailOpen.value = false;
+    selectedDetail.value = null;
+    await loadCustomers();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "客户转交失败");
+  } finally {
+    saving.value = false;
+  }
 }
 
 function cancelEdit() {

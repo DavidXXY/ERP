@@ -122,7 +122,7 @@
           </a-col>
           <a-col :xs="24" :md="12">
             <a-form-item label="负责人" name="ownerName">
-              <a-input v-model:value="followUpForm.ownerName" />
+              <a-select v-model:value="followUpForm.ownerName" :options="userOptions" show-search option-filter-prop="label" placeholder="选择负责人" />
             </a-form-item>
           </a-col>
           <a-col :xs="24" :md="12">
@@ -156,6 +156,7 @@ import { computed, onMounted, reactive, ref } from "vue";
 import { message } from "ant-design-vue";
 import { useRoute, useRouter } from "vue-router";
 import { createFollowUp, getOpportunity, listFollowUps, listQuotes, type FollowUp, type FollowUpType, type Opportunity } from "@/api/crm";
+import { listUsersApi, type UserResponse } from "@/api/system";
 import { useAuthStore } from "@/stores/auth";
 import { followUpTypeColor, followUpTypeLabel, followUpTypeOptions, formatMoney, opportunityStageColor, opportunityStageLabel, quoteStatusColor, quoteStatusLabel } from "./crm-options";
 
@@ -164,6 +165,7 @@ const route = useRoute();
 const router = useRouter();
 const record = ref<Opportunity | null>(null);
 const relatedQuote = ref<any>(null);
+const users = ref<UserResponse[]>([]);
 const loading = ref(true);
 const timelineMode = ref("advance");
 const id = route.params.id as string;
@@ -180,8 +182,18 @@ const followUpRules = {
   subject: [{ required: true, message: "请输入主题" }],
   content: [{ required: true, message: "请输入沟通内容" }],
   followedAt: [{ required: true, message: "请选择发生时间" }],
-  ownerName: [{ required: true, message: "请输入负责人" }],
+  ownerName: [{ required: true, message: "请选择负责人" }],
 };
+
+const userOptions = computed(() => {
+  const options = users.value
+    .filter((item) => item.enabled)
+    .map((item) => ({ label: `${item.displayName} · ${item.username}`, value: item.displayName }));
+  const selected = followUpForm.ownerName;
+  return selected && !options.some((item) => item.value === selected)
+    ? [{ label: selected, value: selected }, ...options]
+    : options;
+});
 
 const lostFollowUp = computed(() => followUps.value.find((item) => item.subject.startsWith("商机推进至「丢单」")));
 
@@ -234,9 +246,14 @@ onMounted(loadData);
 async function loadData() {
   loading.value = true;
   try {
-    const [opp, allFollowUps] = await Promise.all([getOpportunity(id), listFollowUps()]);
+    const [opp, allFollowUps, userPage] = await Promise.all([
+      getOpportunity(id),
+      listFollowUps(),
+      listUsersApi(0, 999).catch(() => ({ content: [] as UserResponse[] })),
+    ]);
     record.value = opp;
     followUps.value = allFollowUps.filter((item) => item.opportunityId === id);
+    users.value = userPage.content;
     // Load related quote
     try {
       const allQuotes = await listQuotes();

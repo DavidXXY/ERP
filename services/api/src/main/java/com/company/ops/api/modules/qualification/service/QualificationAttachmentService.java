@@ -31,7 +31,7 @@ public class QualificationAttachmentService {
     try {
       var stored = storageService.store(file, "qualification", POLICY);
       return new Attachment(UUID.randomUUID().toString(), stored.originalName(), stored.contentType(), stored.sizeBytes(),
-          "/qualification-files/" + stored.objectKey(), OffsetDateTime.now().toString(), operatorName);
+          "/api/qualification-files/" + stored.objectKey(), OffsetDateTime.now().toString(), operatorName);
     } catch (BusinessException exception) {
       throw exception;
     } catch (RuntimeException exception) {

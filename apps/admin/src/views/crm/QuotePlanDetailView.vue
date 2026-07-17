@@ -6,6 +6,7 @@
           <a-button @click="goBack">返回列表</a-button>
           <a-button @click="loadData">刷新</a-button>
           <a-button v-if="record" @click="handlePrintQuote">打印报价单</a-button>
+          <a-button v-if="record" type="primary" @click="openApproval">审批进展</a-button>
         </a-space>
       </template>
 
@@ -41,12 +42,16 @@
             <strong>{{ formatMoney(record.netAmount ?? calcNetAmount(record.amount, record.taxRate)) }}</strong>
           </a-descriptions-item>
           <a-descriptions-item label="服务频次">{{ record.inspectCycle || "未设置" }}</a-descriptions-item>
-          <a-descriptions-item label="付款节点">{{ record.paymentNodes || "未设置" }}</a-descriptions-item>
+          <a-descriptions-item label="付款方式/节点">{{ record.paymentNodes || "未设置" }}</a-descriptions-item>
           <a-descriptions-item label="更新">{{ formatDateTime(record.updatedAt) }}</a-descriptions-item>
         </a-descriptions>
 
         <a-card title="服务范围" style="margin-top: 16px">
           <p style="margin: 0; white-space: pre-wrap">{{ record.serviceScope }}</p>
+        </a-card>
+
+        <a-card title="审批进展" style="margin-top: 16px">
+          <ApprovalProgressFlow :steps="quoteApprovalSteps(record)" />
         </a-card>
 
         <a-card title="报价预算与毛利测算" style="margin-top: 16px">
@@ -116,24 +121,42 @@
 
       <a-empty v-else description="未找到报价方案" />
     </a-card>
+    <a-modal v-model:open="approvalOpen" title="报价审批进展" :footer="canApproveQuote ? undefined : null" :confirm-loading="saving" @ok="handleApproval">
+      <a-card v-if="record" size="small" title="流程阶段" class="section-alert">
+        <ApprovalProgressFlow :steps="quoteApprovalSteps(record)" />
+      </a-card>
+      <a-form v-if="canApproveQuote" ref="approvalFormRef" :model="approvalForm" layout="vertical">
+        <a-form-item label="审批结论"><a-radio-group v-model:value="approvalForm.decision" button-style="solid"><a-radio-button value="APPROVED">通过</a-radio-button><a-radio-button value="REJECTED">驳回</a-radio-button></a-radio-group></a-form-item>
+        <a-form-item label="审批意见"><a-textarea v-model:value="approvalForm.comment" :rows="3" /></a-form-item>
+        <a-form-item label="审批人"><a-input v-model:value="approvalForm.approverName" /></a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
 import { message } from "ant-design-vue";
 import { useRoute, useRouter } from "vue-router";
-import { getQuote, listContracts, listReceivables, type QuotePlan, type ServiceContract, type Receivable } from "@/api/crm";
+import { getQuote, listContracts, listReceivables, processQuoteApproval, type ApprovalDecision, type QuotePlan, type ServiceContract, type Receivable } from "@/api/crm";
 import { formatMoney, quoteStatusColor, quoteStatusLabel, contractStatusColor, contractStatusLabel, receivableStatusColor, receivableStatusLabel } from "./crm-options";
+import { useAuthStore } from "@/stores/auth";
+import ApprovalProgressFlow, { type ApprovalProgressStep } from "@/components/ApprovalProgressFlow.vue";
 
 const route = useRoute();
 const router = useRouter();
+const auth = useAuthStore();
 const record = ref<QuotePlan | null>(null);
 const relatedContract = ref<ServiceContract | null>(null);
 const relatedReceivables = ref<Receivable[]>([]);
 const loading = ref(true);
 const loadingContract = ref(false);
+const saving = ref(false);
+const approvalOpen = ref(false);
+const approvalFormRef = ref();
+const approvalForm = reactive<{ decision: ApprovalDecision; comment: string; approverName: string }>({ decision: "APPROVED", comment: "同意报价", approverName: "" });
 const id = route.params.id as string;
+const canApproveQuote = computed(() => record.value?.status === "PENDING_APPROVAL" && auth.can("crm:quote:approve"));
 
 const receivableMiniColumns = [
   { title: "应收编号", dataIndex: "code", width: 180 },
@@ -150,7 +173,7 @@ const budgetColumns = [
 
 const quoteMargin = computed(() => {
   if (!record.value) return { cost: 0, gross: 0, rate: 0 };
-  const amount = Number(record.value.amount || 0);
+  const amount = Number(record.value.netAmount ?? calcNetAmount(record.value.amount, record.value.taxRate));
   const cost = Number(record.value.budgetAmount ?? budgetRows.value.reduce((sum, item) => sum + item.amount, 0));
   const gross = Number(record.value.grossMargin ?? (amount - cost));
   const rate = Number(record.value.grossMarginRate ?? (amount > 0 ? gross / amount * 100 : 0));
@@ -260,12 +283,54 @@ async function loadData() {
 }
 
 function handlePrintQuote() { window.print(); }
+function openApproval() {
+  Object.assign(approvalForm, { decision: "APPROVED", comment: "同意报价", approverName: auth.user?.displayName || "" });
+  approvalOpen.value = true;
+}
+async function handleApproval() {
+  if (!record.value) return;
+  saving.value = true;
+  try {
+    await processQuoteApproval(record.value.id, { ...approvalForm });
+    approvalOpen.value = false;
+    message.success(approvalForm.decision === "APPROVED" ? "报价审批已通过" : "报价已驳回");
+    await loadData();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "审批处理失败");
+  } finally {
+    saving.value = false;
+  }
+}
 function goBack() { router.push("/crm/quotes"); }
 function formatDateTime(value?: string) {
   if (!value) return "";
   return new Date(value).toLocaleString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 function moneyFormatter({ value }: { value: number | string }) { return formatMoney(Number(value)); }
+
+function quoteApprovalSteps(item: QuotePlan): ApprovalProgressStep[] {
+  const internalDone = ["APPROVED", "CUSTOMER_ACCEPTED", "CUSTOMER_DECLINED", "CONVERTED"].includes(item.status);
+  return [
+    { key: "start", personName: item.customerName || "发起人", title: "发起报价", time: item.updatedAt, note: `${item.code || "-"} · ${formatMoney(item.amount)}`, state: "done" },
+    {
+      key: "approval",
+      personName: item.lastApproverName || "当前审批人",
+      title: item.status === "PENDING_APPROVAL" ? "待审批" : item.status === "REJECTED" ? "已驳回" : internalDone ? "已同意" : "待提交",
+      time: item.lastApprovalAt,
+      note: item.status === "PENDING_APPROVAL" ? "等待报价审批" : item.lastApprovalComment || quoteStatusLabel(item.status),
+      state: item.status === "PENDING_APPROVAL" ? "pending" : item.status === "REJECTED" ? "rejected" : internalDone ? "done" : "waiting",
+    },
+    {
+      key: "customer",
+      personName: item.customerDecisionBy || item.customerName || "客户确认",
+      title: item.customerDecision === "ACCEPTED" ? "已确认" : item.customerDecision === "DECLINED" ? "已拒绝" : "待确认",
+      time: item.customerDecidedAt,
+      note: item.customerComment || (internalDone ? "等待客户确认" : "审批通过后确认"),
+      state: item.customerDecision === "ACCEPTED" ? "done" : item.customerDecision === "DECLINED" ? "rejected" : "waiting",
+    },
+    { key: "contract", personName: relatedContract.value?.code || "合同生成", title: item.convertedContractId ? "已生成" : "待生成", note: relatedContract.value?.projectName || "客户确认后生成合同", state: item.convertedContractId ? "done" : "waiting" },
+  ];
+}
 
 function formatTaxRate(value?: number) {
   return `${Number(value ?? 13).toFixed(2).replace(/\.?0+$/, "")}%`;

@@ -7,6 +7,7 @@ import com.company.ops.api.common.storage.FileStorageService.FilePolicy;
 import com.company.ops.api.modules.crm.domain.CrmAttachment;
 import com.company.ops.api.modules.crm.repository.CrmAttachmentRepository;
 import jakarta.transaction.Transactional;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -73,6 +74,7 @@ public class CrmAttachmentService {
     attachment.setFileSize(stored.sizeBytes());
     attachment.setMimeType(stored.contentType());
     attachment.setUploadedBy(uploadedBy);
+    attachment.setUploadedAt(OffsetDateTime.now());
     return toDto(repository.save(attachment));
   }
 
@@ -111,7 +113,7 @@ public class CrmAttachmentService {
     return new AttachmentDto(
       a.getId(), a.getEntityType(), a.getEntityId(), a.getAttachmentType(),
       a.getFileName(), a.getFileSize() != null ? a.getFileSize() : 0L, a.getMimeType(),
-      a.getCreatedAt() != null ? a.getCreatedAt().toString() : "",
+      a.getUploadedAt() != null ? a.getUploadedAt().toString() : a.getCreatedAt() != null ? a.getCreatedAt().toString() : "",
       a.getUploadedBy()
     );
   }

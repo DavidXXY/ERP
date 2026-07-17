@@ -4,6 +4,7 @@ import com.company.ops.api.common.domain.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
@@ -34,6 +35,9 @@ public class CrmAttachment extends BaseEntity {
   @Column(name = "uploaded_by", nullable = false, length = 80)
   private String uploadedBy;
 
+  @Column(name = "uploaded_at", nullable = false)
+  private OffsetDateTime uploadedAt;
+
   public String getEntityType() { return entityType; }
   public void setEntityType(String v) { this.entityType = v; }
   public UUID getEntityId() { return entityId; }
@@ -50,4 +54,6 @@ public class CrmAttachment extends BaseEntity {
   public void setMimeType(String v) { this.mimeType = v; }
   public String getUploadedBy() { return uploadedBy; }
   public void setUploadedBy(String v) { this.uploadedBy = v; }
+  public OffsetDateTime getUploadedAt() { return uploadedAt; }
+  public void setUploadedAt(OffsetDateTime v) { this.uploadedAt = v; }
 }

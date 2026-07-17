@@ -2,14 +2,22 @@ package com.company.ops.api.modules.finance.service;
 
 import com.company.ops.api.common.exception.BusinessException;
 import com.company.ops.api.common.service.CodeGenerator;
+import com.company.ops.api.modules.crm.domain.Customer;
 import com.company.ops.api.modules.crm.domain.Receivable;
 import com.company.ops.api.modules.crm.domain.ReceivableStatus;
+import com.company.ops.api.modules.crm.domain.ServiceContract;
+import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ReceivableResponse;
+import com.company.ops.api.modules.crm.repository.CustomerRepository;
 import com.company.ops.api.modules.crm.repository.ReceivableRepository;
+import com.company.ops.api.modules.crm.repository.ServiceContractRepository;
 import com.company.ops.api.modules.finance.domain.PaymentApplication;
 import com.company.ops.api.modules.finance.domain.PaymentApplicationStatus;
 import com.company.ops.api.modules.finance.domain.PaymentRecord;
 import com.company.ops.api.modules.finance.dto.CreatePaymentApplicationRequest;
 import com.company.ops.api.modules.finance.dto.ExecutePaymentRequest;
+import com.company.ops.api.modules.finance.dto.FinanceReceivableDetailResponse;
+import com.company.ops.api.modules.finance.dto.FinanceReceivableDetailResponse.ContractInfo;
+import com.company.ops.api.modules.finance.dto.FinanceReceivableDetailResponse.CustomerInvoiceInfo;
 import com.company.ops.api.modules.finance.dto.FinanceOverviewResponse;
 import com.company.ops.api.modules.finance.dto.FinancePayableResponse;
 import com.company.ops.api.modules.finance.dto.PaymentApplicationResponse;
@@ -27,6 +35,7 @@ import com.company.ops.api.modules.procurement.repository.ProcurementPayableRepo
 import com.company.ops.api.modules.procurement.repository.PurchaseOrderRepository;
 import com.company.ops.api.modules.procurement.repository.SupplierRepository;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.EnumSet;
@@ -49,6 +58,8 @@ public class FinanceService {
 
   private CodeGenerator codeGenerator;
   private final ReceivableRepository receivableRepository;
+  private final CustomerRepository customerRepository;
+  private final ServiceContractRepository contractRepository;
   private final ProcurementPayableRepository payableRepository;
   private final SupplierRepository supplierRepository;
   private final PurchaseOrderRepository orderRepository;
@@ -57,6 +68,8 @@ public class FinanceService {
   private final LedgerService ledgerService;
 
   public FinanceService(ReceivableRepository receivableRepository,
+      CustomerRepository customerRepository,
+      ServiceContractRepository contractRepository,
       ProcurementPayableRepository payableRepository,
       SupplierRepository supplierRepository,
       PurchaseOrderRepository orderRepository,
@@ -66,6 +79,8 @@ public class FinanceService {
                               CodeGenerator codeGenerator) {
     this.codeGenerator = codeGenerator;
     this.receivableRepository = receivableRepository;
+    this.customerRepository = customerRepository;
+    this.contractRepository = contractRepository;
     this.payableRepository = payableRepository;
     this.supplierRepository = supplierRepository;
     this.orderRepository = orderRepository;
@@ -128,6 +143,23 @@ public class FinanceService {
         orders.get(item.getOrderId()),
         reserved.getOrDefault(item.getId(), BigDecimal.ZERO)
     )).toList();
+  }
+
+  @Transactional(readOnly = true)
+  public FinanceReceivableDetailResponse getReceivableDetail(UUID id) {
+    Receivable receivable = receivableRepository.findById(id)
+        .orElseThrow(() -> new BusinessException("应收单不存在"));
+    Customer customer = receivable.getCustomerId() == null
+        ? null
+        : customerRepository.findById(receivable.getCustomerId()).orElse(null);
+    ServiceContract contract = receivable.getContractId() == null
+        ? null
+        : contractRepository.findById(receivable.getContractId()).orElse(null);
+    return new FinanceReceivableDetailResponse(
+        toReceivableResponse(receivable, customer, contract),
+        toCustomerInvoiceInfo(receivable, customer),
+        toContractInfo(receivable, contract)
+    );
   }
 
   @Transactional(readOnly = true)
@@ -271,6 +303,84 @@ public class FinanceService {
     return applicationRepository.findByPayableIdAndStatusIn(payableId, RESERVED_STATUSES).stream()
         .map(PaymentApplication::getRequestedAmount)
         .reduce(BigDecimal.ZERO, BigDecimal::add);
+  }
+
+  private ReceivableResponse toReceivableResponse(Receivable receivable, Customer customer, ServiceContract contract) {
+    return new ReceivableResponse(
+        receivable.getId(),
+        receivable.getCustomerId(),
+        customer == null ? null : customer.getName(),
+        receivable.getContractId(),
+        contract == null ? receivable.getSourceNo() : contract.getCode(),
+        receivable.getCode(),
+        receivable.getSourceNo(),
+        amount(receivable.getAmount()),
+        receivable.getDueDate(),
+        receivable.getInvoiceNo(),
+        receivable.getInvoiceDate(),
+        receivable.isInvoiceRequested(),
+        receivable.getInvoiceRequestedBy(),
+        receivable.getInvoiceRequestedAt(),
+        receivable.getInvoiceRequestRemark(),
+        amount(receivable.getSettledAmount()),
+        outstandingAmount(receivable),
+        receivable.getStatus()
+    );
+  }
+
+  private CustomerInvoiceInfo toCustomerInvoiceInfo(Receivable receivable, Customer customer) {
+    return new CustomerInvoiceInfo(
+        receivable.getCustomerId(),
+        customer == null ? null : customer.getCode(),
+        customer == null ? null : customer.getName(),
+        customer == null ? null : customer.getOwnerName(),
+        customer == null ? null : customer.getInvoiceTitle(),
+        customer == null ? null : customer.getTaxNo(),
+        customer == null ? null : customer.getBankName(),
+        customer == null ? null : customer.getBankAccount(),
+        customer == null ? null : customer.getRegisteredAddress(),
+        customer == null ? null : customer.getRegisteredPhone(),
+        customer == null ? null : customer.getPaymentHabit()
+    );
+  }
+
+  private ContractInfo toContractInfo(Receivable receivable, ServiceContract contract) {
+    if (contract == null) {
+      return null;
+    }
+    return new ContractInfo(
+        contract.getId(),
+        contract.getQuoteId(),
+        contract.getCode(),
+        contract.getProjectName(),
+        contract.getContractType(),
+        amount(contract.getAmount()),
+        defaultTaxRate(contract.getTaxRate()),
+        netAmount(contract.getAmount(), contract.getTaxRate()),
+        contract.getStartDate(),
+        contract.getEndDate(),
+        contract.getServiceCycle(),
+        contract.getStatus(),
+        receivable.getStatus(),
+        contract.getCreatedAt()
+    );
+  }
+
+  private BigDecimal outstandingAmount(Receivable receivable) {
+    return amount(receivable.getAmount()).subtract(amount(receivable.getSettledAmount()));
+  }
+
+  private BigDecimal defaultTaxRate(BigDecimal taxRate) {
+    return taxRate == null ? BigDecimal.valueOf(13) : taxRate;
+  }
+
+  private BigDecimal netAmount(BigDecimal grossAmount, BigDecimal taxRate) {
+    BigDecimal rate = defaultTaxRate(taxRate);
+    return amount(grossAmount).divide(
+        BigDecimal.ONE.add(rate.divide(BigDecimal.valueOf(100), 6, RoundingMode.HALF_UP)),
+        2,
+        RoundingMode.HALF_UP
+    );
   }
 
   private FinancePayableResponse toPayableResponse(

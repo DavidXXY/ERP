@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/qualification-files")
+@RequestMapping({"/qualification-files", "/api/qualification-files"})
 public class QualificationAttachmentController {
   private final QualificationAttachmentService attachmentService;
 

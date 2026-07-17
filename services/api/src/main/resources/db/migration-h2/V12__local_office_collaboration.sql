@@ -78,7 +78,7 @@ create index if not exists idx_operation_audit_created on operation_audits (crea
 
 merge into sys_permissions (id, tenant_id, code, name, module, created_at, updated_at) key (tenant_id, code) values
 ('00000000-0000-4000-8000-000000002901','default','office:view','OA协同查看','office',current_timestamp,current_timestamp),
-('00000000-0000-4000-8000-000000002902','default','office:approval:view','审批中心查看','office',current_timestamp,current_timestamp),
+('00000000-0000-4000-8000-000000002902','default','office:approval:view','业务待办审批查看','office',current_timestamp,current_timestamp),
 ('00000000-0000-4000-8000-000000002903','default','office:approval:create','审批申请新增','office',current_timestamp,current_timestamp),
 ('00000000-0000-4000-8000-000000002904','default','office:approval:process','审批处理','office',current_timestamp,current_timestamp),
 ('00000000-0000-4000-8000-000000002905','default','office:expense:view','费用报销查看','office',current_timestamp,current_timestamp),

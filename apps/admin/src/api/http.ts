@@ -27,7 +27,9 @@ http.interceptors.response.use(
   (response) => response,
   (error) => {
     const status = error.response?.status;
-    if (status === 401) {
+    const url = error.config?.url || "";
+    const isCurrentUserRequest = url.includes("/auth/me");
+    if (status === 401 || (status === 400 && isCurrentUserRequest)) {
       localStorage.removeItem(AUTH_TOKEN_KEY);
       if (window.location.pathname !== "/login") {
         window.location.href = "/login";

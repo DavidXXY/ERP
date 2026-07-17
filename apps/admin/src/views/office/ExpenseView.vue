@@ -11,9 +11,13 @@
           <template v-else-if="column.key === 'type'">{{ expenseTypeLabel(record.expenseType) }}</template>
           <template v-else-if="column.key === 'amount'"><strong>{{ formatMoney(record.amount) }}</strong></template>
           <template v-else-if="column.key === 'status'"><a-tag :color="expenseStatusColor(record.status)">{{ expenseStatusLabel(record.status) }}</a-tag></template>
+          <template v-else-if="column.key === 'action'">
+            <a-button v-if="record.approvalRequestId" type="link" size="small" @click="openApproval(record)">查看/审批</a-button>
+          </template>
         </template>
       </a-table>
     </a-card>
+    <ApprovalCenterView ref="approvalCenterRef" embedded drawer-only @changed="loadData" />
     <a-modal v-model:open="expenseOpen" title="新增费用报销" width="720px" :confirm-loading="saving" @ok="handleExpense">
       <a-form ref="expenseFormRef" :model="expenseForm" :rules="expenseRules" layout="vertical">
         <a-row :gutter="16"><a-col :span="12"><a-form-item label="报销人" name="claimantId"><a-select v-model:value="expenseForm.claimantId" show-search option-filter-prop="label" :options="userOptions" @change="onClaimantChange" /></a-form-item></a-col><a-col :span="12"><a-form-item label="费用类型" name="expenseType"><a-select v-model:value="expenseForm.expenseType" :options="expenseTypeOptions" /></a-form-item></a-col></a-row>
@@ -31,11 +35,13 @@ import { message } from "ant-design-vue";
 import PlusOutlined from "@ant-design/icons-vue/PlusOutlined"; import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
 import { createExpense, getOfficeReferences, listExpenses, type Expense, type ExpenseStatus, type ExpenseType } from "@/api/office";
 import { useAuthStore } from "@/stores/auth";
+import ApprovalCenterView from "@/views/office/ApprovalCenterView.vue";
 const auth=useAuthStore(); const router=useRouter(); const loading=ref(false); const saving=ref(false);
 const expenses=ref<Expense[]>([]); const references=reactive({users:[],projects:[],workOrders:[]} as any);
+const approvalCenterRef=ref<InstanceType<typeof ApprovalCenterView>>();
 const expenseOpen=ref(false); const expenseFormRef=ref();
 const expenseForm=reactive({code:'',claimantId:undefined as string|undefined,claimantName:'',projectId:undefined as string|undefined,workOrderId:undefined as string|undefined,expenseType:'TRAVEL' as ExpenseType,amount:0,expenseDate:today(),description:''});
-const expenseColumns=[{title:'报销单',key:'expense',width:280},{title:'报销人',dataIndex:'claimantName',width:130},{title:'类型',key:'type',width:110},{title:'绑定业务',key:'binding',width:180},{title:'发生日期',dataIndex:'expenseDate',width:120},{title:'金额',key:'amount',width:140},{title:'状态',key:'status',width:130}];
+const expenseColumns=[{title:'报销单',key:'expense',width:280},{title:'报销人',dataIndex:'claimantName',width:130},{title:'类型',key:'type',width:110},{title:'绑定业务',key:'binding',width:180},{title:'发生日期',dataIndex:'expenseDate',width:120},{title:'金额',key:'amount',width:140},{title:'状态',key:'status',width:130},{title:'审批',key:'action',width:120,fixed:'right' as const}];
 const expenseRules={claimantId:[{required:true}],expenseType:[{required:true}],amount:[{required:true}],expenseDate:[{required:true}],description:[{required:true}]};
 const userOptions=computed(()=>references.users.filter((i:any)=>i.enabled).map((i:any)=>({label:i.displayName,value:i.id})));
 const projectOptions=computed(()=>references.projects.map((i:any)=>({label:i.code+' · '+i.name,value:i.id})));
@@ -47,6 +53,7 @@ function goBack(){router.push('/office');}
 function openExpense(){Object.assign(expenseForm,{code:generateCode('BX'),claimantId:auth.user?.id,claimantName:auth.user?.displayName||'',projectId:undefined,workOrderId:undefined,expenseType:'TRAVEL',amount:0,expenseDate:today(),description:''});expenseOpen.value=true;}
 function onClaimantChange(id:string){expenseForm.claimantName=references.users.find((i:any)=>i.id===id)?.displayName||'';}
 async function handleExpense(){await expenseFormRef.value?.validate();saving.value=true;try{await createExpense({...expenseForm});expenseOpen.value=false;message.success('报销单已提交审批');await loadData();}catch(error){message.error(error instanceof Error?error.message:'报销提交失败');}finally{saving.value=false;}}
+function openApproval(record:Expense){approvalCenterRef.value?.openApprovalById(record.approvalRequestId);}
 function generateCode(prefix:string){const d=new Date();return prefix+'-'+d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0')+'-'+String(d.getHours()).padStart(2,'0')+String(d.getMinutes()).padStart(2,'0');}
 function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function expenseTypeLabel(v:ExpenseType){return({TRAVEL:'差旅',TRANSPORT:'交通',ACCOMMODATION:'住宿',TOOL:'工具采购',OTHER:'其他'} as Record<ExpenseType,string>)[v];}

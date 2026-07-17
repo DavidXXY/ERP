@@ -30,7 +30,9 @@ import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.CreateQuoteRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.CustomerProfileResponse;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.FollowUpResponse;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.OpportunityResponse;
+import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ApplyInvoiceRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.QuoteResponse;
+import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ReceivablePlanRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ProcessQuoteApprovalRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ProcessQuoteCustomerResultRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ApproveQuoteCostRequest;
@@ -46,6 +48,7 @@ import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.RenewalResponse;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.SubmitQuoteCostRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.UpdateQuoteRequest;
 import com.company.ops.api.modules.crm.repository.CustomerRepository;
+import com.company.ops.api.modules.crm.repository.CrmAttachmentRepository;
 import com.company.ops.api.modules.crm.repository.FollowUpRepository;
 import com.company.ops.api.modules.crm.repository.ContractChangeRequestRepository;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ContractChangeResponse;
@@ -64,6 +67,12 @@ import com.company.ops.api.modules.crm.repository.ReceivableReceiptRepository;
 import com.company.ops.api.modules.crm.repository.ServiceContractRepository;
 import com.company.ops.api.modules.ledger.dto.LedgerDtos.PostingLine;
 import com.company.ops.api.modules.ledger.service.LedgerService;
+import com.company.ops.api.modules.project.domain.ProjectCostCategory;
+import com.company.ops.api.modules.project.domain.ProjectType;
+import com.company.ops.api.modules.project.dto.CreateProjectRequest;
+import com.company.ops.api.modules.project.dto.ProjectBudgetItemRequest;
+import com.company.ops.api.modules.project.repository.ProjectRepository;
+import com.company.ops.api.modules.project.service.ProjectService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
@@ -79,6 +88,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class CrmOperationsService {
+  private static final String SIGNED_DOC_APPROVAL_TYPE = "SIGNED_DOC_APPROVAL";
+  private static final String RECEIVABLE_UPDATE_APPROVAL_TYPE = "RECEIVABLE_UPDATE";
 
   private CodeGenerator codeGenerator;
   private final CustomerRepository customerRepository;
@@ -93,6 +104,9 @@ public class CrmOperationsService {
   private final ReceivableReceiptRepository receiptRepository;
   private final LedgerService ledgerService;
   private final DeleteGovernanceService deleteGovernanceService;
+  private final ProjectService projectService;
+  private final ProjectRepository projectRepository;
+  private final CrmAttachmentRepository attachmentRepository;
 
   @jakarta.persistence.PersistenceContext
   private jakarta.persistence.EntityManager entityManager;
@@ -112,6 +126,9 @@ public class CrmOperationsService {
       ReceivableReceiptRepository receiptRepository,
       LedgerService ledgerService,
       DeleteGovernanceService deleteGovernanceService,
+      ProjectService projectService,
+      ProjectRepository projectRepository,
+      CrmAttachmentRepository attachmentRepository,
                                CodeGenerator codeGenerator) {
     this.codeGenerator = codeGenerator;
     this.customerRepository = customerRepository;
@@ -126,6 +143,9 @@ public class CrmOperationsService {
     this.receiptRepository = receiptRepository;
     this.ledgerService = ledgerService;
     this.deleteGovernanceService = deleteGovernanceService;
+    this.projectService = projectService;
+    this.projectRepository = projectRepository;
+    this.attachmentRepository = attachmentRepository;
   }
 
   @Transactional(readOnly = true)
@@ -237,6 +257,10 @@ public class CrmOperationsService {
     UUID customerId = request.customerId() == null && opportunity != null
         ? opportunity.getCustomerId()
         : request.customerId();
+    if (customerId == null) {
+      throw new BusinessException("新增报价必须关联客户，才能发起售前成本核算");
+    }
+    validateCustomer(customerId);
     QuotePlan quote = new QuotePlan();
     quote.setCustomerId(customerId);
     quote.setOpportunityId(request.opportunityId());
@@ -274,14 +298,26 @@ public class CrmOperationsService {
     quote.setPaymentNodes(request.paymentNodes());
     quote.setAmount(defaultAmount(request.amount()));
     quote.setTaxRate(defaultTaxRate(request.taxRate()));
-    QuoteCostRequest approvedCost = latestApprovedQuoteCost(quote.getId());
-    if (approvedCost == null) {
+    QuoteCostRequest latestCost = quoteCostRequestRepository.findFirstByQuoteIdOrderByCreatedAtDesc(quote.getId())
+        .orElse(null);
+    QuoteCostRequest approvedCost = latestCost != null && latestCost.getStatus() == QuoteCostStatus.APPROVED ? latestCost : null;
+    boolean costBudgetLocked = latestCost != null
+        && (latestCost.getStatus() == QuoteCostStatus.SUBMITTED
+            || latestCost.getStatus() == QuoteCostStatus.APPROVED
+            || quoteCostTotal(latestCost).compareTo(BigDecimal.ZERO) > 0);
+    if (!costBudgetLocked) {
       applyQuoteBudget(quote, request.laborBudget(), request.materialBudget(), request.subcontractBudget(), request.travelBudget(), request.otherBudget());
-    } else {
+    } else if (approvedCost != null) {
       applyApprovedCostToQuote(quote, approvedCost);
     }
     quote.setVersionNo(Math.max(quote.getVersionNo(), 1) + 1);
-    quote.setStatus(approvedCost == null ? QuoteStatus.DRAFT : QuoteStatus.COST_APPROVED);
+    if (approvedCost != null) {
+      quote.setStatus(QuoteStatus.COST_APPROVED);
+    } else if (costBudgetLocked) {
+      quote.setStatus(QuoteStatus.COSTING);
+    } else {
+      quote.setStatus(QuoteStatus.DRAFT);
+    }
     clearCustomerResult(quote);
     QuotePlan saved = quoteRepository.save(quote);
     saveQuoteRevision(saved, request.revisionNote(), request.editorName());
@@ -308,11 +344,11 @@ public class CrmOperationsService {
         .orElseThrow(() -> new BusinessException("报价方案不存在"));
     if (quote.getStatus() == QuoteStatus.PENDING_APPROVAL || quote.getStatus() == QuoteStatus.APPROVED
         || quote.getStatus() == QuoteStatus.CUSTOMER_ACCEPTED || quote.getStatus() == QuoteStatus.CONVERTED) {
-      throw new BusinessException("当前报价状态不能再发起项目询价");
+      throw new BusinessException("当前报价状态不能再发起售前成本核算");
     }
     quoteCostRequestRepository.findFirstByQuoteIdOrderByCreatedAtDesc(id).ifPresent(existing -> {
       if (existing.getStatus() == QuoteCostStatus.REQUESTED || existing.getStatus() == QuoteCostStatus.SUBMITTED) {
-        throw new BusinessException("该报价已有待处理的项目询价单");
+        throw new BusinessException("该报价已有待处理的售前成本核算单");
       }
     });
 
@@ -342,20 +378,27 @@ public class CrmOperationsService {
   @Transactional
   public QuoteCostRequestResponse submitQuoteCost(UUID id, SubmitQuoteCostRequest request) {
     QuoteCostRequest cost = quoteCostRequestRepository.findById(id)
-        .orElseThrow(() -> new BusinessException("项目询价单不存在"));
+        .orElseThrow(() -> new BusinessException("售前成本核算单不存在"));
     if (cost.getStatus() == QuoteCostStatus.APPROVED) {
-      throw new BusinessException("已审批通过的成本单不能重新填写");
+      throw new BusinessException("已审批通过的售前成本核算单不能重新填写");
     }
     QuotePlan quote = quoteRepository.findById(cost.getQuoteId())
         .orElseThrow(() -> new BusinessException("报价方案不存在"));
     cost.setProjectManager(request.projectManager());
     cost.setLaborCost(defaultAmount(request.laborCost()));
+    cost.setLaborTaxRate(defaultLaborTaxRate(request.laborTaxRate()));
     cost.setMaterialCost(defaultAmount(request.materialCost()));
+    cost.setMaterialTaxRate(defaultTaxRate(request.materialTaxRate()));
     cost.setSubcontractCost(defaultAmount(request.subcontractCost()));
+    cost.setSubcontractTaxRate(defaultTaxRate(request.subcontractTaxRate()));
     cost.setTravelCost(defaultAmount(request.travelCost()));
+    cost.setTravelTaxRate(BigDecimal.ZERO);
     cost.setEquipmentCost(defaultAmount(request.equipmentCost()));
+    cost.setEquipmentTaxRate(defaultTaxRate(request.equipmentTaxRate()));
     cost.setRiskReserve(defaultAmount(request.riskReserve()));
+    cost.setRiskReserveTaxRate(BigDecimal.ZERO);
     cost.setOtherCost(defaultAmount(request.otherCost()));
+    cost.setOtherTaxRate(defaultTaxRate(request.otherTaxRate()));
     cost.setSuggestedPrice(defaultAmount(request.suggestedPrice()));
     cost.setCostRemark(request.costRemark());
     cost.setSubmittedAt(OffsetDateTime.now());
@@ -368,9 +411,9 @@ public class CrmOperationsService {
   @Transactional
   public QuoteCostRequestResponse approveQuoteCost(UUID id, ApproveQuoteCostRequest request) {
     QuoteCostRequest cost = quoteCostRequestRepository.findById(id)
-        .orElseThrow(() -> new BusinessException("项目询价单不存在"));
+        .orElseThrow(() -> new BusinessException("售前成本核算单不存在"));
     if (cost.getStatus() != QuoteCostStatus.SUBMITTED) {
-      throw new BusinessException("只有已提交的成本单可以审批");
+      throw new BusinessException("只有已提交的售前成本核算单可以审批");
     }
     QuotePlan quote = quoteRepository.findById(cost.getQuoteId())
         .orElseThrow(() -> new BusinessException("报价方案不存在"));
@@ -394,9 +437,10 @@ public class CrmOperationsService {
   public QuoteResponse submitQuote(UUID id) {
     QuotePlan quote = quoteRepository.findById(id)
         .orElseThrow(() -> new BusinessException("报价方案不存在"));
-    if (quote.getStatus() != QuoteStatus.DRAFT && quote.getStatus() != QuoteStatus.COST_APPROVED) {
-      throw new BusinessException("只有草稿版本可以提交审批");
+    if (quote.getStatus() != QuoteStatus.COST_APPROVED) {
+      throw new BusinessException("售前成本已核对并审批通过后，才可以提交报价审批");
     }
+    requireText(quote.getPaymentNodes(), "请输入付款方式/节点");
     validateQuoteBudgetForSubmit(quote);
     quote.setStatus(QuoteStatus.PENDING_APPROVAL);
     QuotePlan saved = quoteRepository.save(quote);
@@ -446,6 +490,7 @@ public class CrmOperationsService {
     if (quote.getStatus() != QuoteStatus.APPROVED) {
       throw new BusinessException("只有内部审批通过的报价可以登记客户结果");
     }
+    requireText(quote.getPaymentNodes(), "请输入付款方式/节点");
     quote.setCustomerDecision(request.decision());
     quote.setCustomerComment(request.comment());
     quote.setCustomerDecisionBy(request.operatorName());
@@ -468,9 +513,10 @@ public class CrmOperationsService {
     if (quote.getStatus() != QuoteStatus.CUSTOMER_ACCEPTED) {
       throw new BusinessException("只有客户已接受的报价可以转为合同");
     }
+    requireText(quote.getPaymentNodes(), "请输入付款方式/节点");
 
     ServiceContract contract = createContractFromAcceptedQuote(quote, request);
-    Receivable receivable = createFirstReceivable(quote, contract, request);
+    List<Receivable> receivables = createReceivables(quote, contract, request);
     markOpportunityWon(quote, contract);
     quote.setStatus(QuoteStatus.CONVERTED);
     quoteRepository.save(quote);
@@ -480,7 +526,7 @@ public class CrmOperationsService {
     return new QuoteConversionResult(
         toQuote(quote, customers, opportunities),
         toContract(contract, customers),
-        receivable == null ? null : toReceivable(receivable, customers, Map.of(contract.getId(), contract))
+        receivables.stream().map(item -> toReceivable(item, customers, Map.of(contract.getId(), contract))).toList()
     );
   }
 
@@ -514,6 +560,27 @@ public class CrmOperationsService {
   }
 
   @Transactional
+  public ReceivableResponse applyInvoice(UUID id, ApplyInvoiceRequest request) {
+    Receivable receivable = receivableRepository.findById(id)
+        .orElseThrow(() -> new BusinessException("应收单不存在"));
+    if (receivable.getStatus() == ReceivableStatus.SETTLED) {
+      throw new BusinessException("已核销应收不能申请开票");
+    }
+    if (hasText(receivable.getInvoiceNo())) {
+      throw new BusinessException("该应收已登记发票");
+    }
+    if (receivable.isInvoiceRequested()) {
+      throw new BusinessException("该应收已提交开票申请，请勿重复提交");
+    }
+    receivable.setInvoiceRequested(true);
+    receivable.setInvoiceRequestedBy(request.applicantName());
+    receivable.setInvoiceRequestedAt(OffsetDateTime.now());
+    receivable.setInvoiceRequestRemark(request.remark());
+    Receivable saved = receivableRepository.save(receivable);
+    return mapReceivable(saved);
+  }
+
+  @Transactional
   public ReceivableResponse registerInvoice(UUID id, RegisterInvoiceRequest request) {
     Receivable receivable = receivableRepository.findById(id)
         .orElseThrow(() -> new BusinessException("应收单不存在"));
@@ -522,6 +589,9 @@ public class CrmOperationsService {
     }
     if (receivable.getInvoiceNo() != null && !receivable.getInvoiceNo().isBlank()) {
       throw new BusinessException("该应收已登记发票");
+    }
+    if (!receivable.isInvoiceRequested()) {
+      throw new BusinessException("请先由业务侧发起开票申请");
     }
     receivable.setInvoiceNo(request.invoiceNo());
     receivable.setInvoiceDate(request.invoiceDate());
@@ -857,6 +927,7 @@ public class CrmOperationsService {
         : (quote.getCode() != null ? deriveCode(quote.getCode(), "HT") : codeGenerator.generate("CONTRACT"));
     requireText(request.projectName(), "请输入合同项目名称");
     requireText(request.contractType(), "请选择合同类型");
+    requireText(quote.getPaymentNodes(), "请输入付款方式/节点");
     if (request.startDate() == null || request.endDate() == null) {
       throw new BusinessException("请输入合同起止日期");
     }
@@ -881,40 +952,136 @@ public class CrmOperationsService {
     contract.setStartDate(request.startDate());
     contract.setEndDate(request.endDate());
     contract.setServiceCycle(request.serviceCycle());
-    contract.setStatus(ContractStatus.ACTIVE);
+    contract.setStatus(ContractStatus.PENDING_APPROVAL);
     return contractRepository.save(contract);
   }
 
-  private Receivable createFirstReceivable(
+  private List<Receivable> createReceivables(
       QuotePlan quote,
       ServiceContract contract,
       ConvertQuoteRequest request
   ) {
-    BigDecimal amount = defaultAmount(request.firstReceivableAmount());
-    if (amount.compareTo(BigDecimal.ZERO) <= 0) {
-      return null;
+    List<ReceivablePlanRequest> plans = request.receivables() == null ? List.of() : request.receivables();
+    if (plans.isEmpty() && request.firstReceivableAmount() != null) {
+      plans = List.of(new ReceivablePlanRequest(request.receivableCode(), request.firstReceivableAmount(), request.firstReceivableDueDate()));
     }
-    String receivableCode = request.receivableCode() != null ? request.receivableCode() : codeGenerator.generate("RECEIVABLE");
-    if (request.firstReceivableDueDate() == null) {
-      throw new BusinessException("请输入首期应收到期日");
+    if (plans.isEmpty()) {
+      throw new BusinessException("请至少填写一条应收计划");
     }
-    if (amount.compareTo(defaultAmount(quote.getAmount())) > 0) {
-      throw new BusinessException("首期应收不能超过合同总额");
+    BigDecimal total = plans.stream().map(item -> defaultAmount(item.amount())).reduce(BigDecimal.ZERO, BigDecimal::add);
+    if (total.compareTo(defaultAmount(quote.getAmount())) != 0) {
+      throw new BusinessException("应收计划合计必须等于合同总额");
     }
-    if (receivableCode != null && receivableRepository.existsByCode(receivableCode)) {
-      throw new BusinessException("应收单号已存在");
+    java.util.Set<String> codes = new java.util.HashSet<>();
+    for (ReceivablePlanRequest plan : plans) {
+      if (plan.dueDate() == null) throw new BusinessException("请填写应收到期日");
+      if (defaultAmount(plan.amount()).compareTo(BigDecimal.ZERO) <= 0) throw new BusinessException("应收金额必须大于0");
+      if (hasText(plan.receivableCode())) {
+        if (!codes.add(plan.receivableCode()) || receivableRepository.existsByCode(plan.receivableCode())) {
+          throw new BusinessException("应收单号已存在");
+        }
+      }
     }
+    return plans.stream().map(plan -> {
+      Receivable receivable = new Receivable();
+      receivable.setCustomerId(quote.getCustomerId());
+      receivable.setContractId(contract.getId());
+      receivable.setCode(hasText(plan.receivableCode()) ? plan.receivableCode() : codeGenerator.generate("RECEIVABLE"));
+      receivable.setSourceNo(contract.getCode());
+      receivable.setAmount(defaultAmount(plan.amount()));
+      receivable.setDueDate(plan.dueDate());
+      receivable.setSettledAmount(BigDecimal.ZERO);
+      receivable.setStatus(ReceivableStatus.INVOICE_PENDING);
+      return receivableRepository.save(receivable);
+    }).toList();
+  }
 
-    Receivable receivable = new Receivable();
-    receivable.setCustomerId(quote.getCustomerId());
-    receivable.setContractId(contract.getId());
-    receivable.setCode(receivableCode);
-    receivable.setSourceNo(contract.getCode());
-    receivable.setAmount(amount);
-    receivable.setDueDate(request.firstReceivableDueDate());
-    receivable.setSettledAmount(BigDecimal.ZERO);
-    receivable.setStatus(ReceivableStatus.INVOICE_PENDING);
-    return receivableRepository.save(receivable);
+  private void createProjectFromApprovedContract(ServiceContract contract) {
+    if (projectRepository.existsByContractId(contract.getId())) {
+      return;
+    }
+    if (contract.getQuoteId() == null) {
+      throw new BusinessException("合同未关联报价，不能自动生成项目");
+    }
+    QuotePlan quote = quoteRepository.findById(contract.getQuoteId())
+        .orElseThrow(() -> new BusinessException("合同关联报价不存在"));
+    Customer customer = customerRepository.findById(quote.getCustomerId())
+        .orElseThrow(() -> new BusinessException("客户不存在"));
+    QuoteCostRequest approvedCost = latestApprovedQuoteCost(quote.getId());
+    String managerName = "待项目管理部门分配";
+    String siteAddress = hasText(customer.getRegisteredAddress())
+        ? customer.getRegisteredAddress()
+        : "待项目负责人确认";
+    projectService.createProject(new CreateProjectRequest(
+        quote.getCustomerId(),
+        null,
+        contract.getProjectName(),
+        ProjectType.RENOVATION,
+        managerName,
+        siteAddress,
+        defaultAmount(quote.getAmount()),
+        contract.getStartDate(),
+        contract.getEndDate(),
+        List.of(
+            new ProjectBudgetItemRequest(ProjectCostCategory.LABOR, defaultAmount(quote.getLaborBudget()), "报价成本核对-人工"),
+            new ProjectBudgetItemRequest(ProjectCostCategory.MATERIAL, defaultAmount(quote.getMaterialBudget()), "报价成本核对-材料"),
+            new ProjectBudgetItemRequest(ProjectCostCategory.SUBCONTRACT, defaultAmount(quote.getSubcontractBudget()), "报价成本核对-外包"),
+            new ProjectBudgetItemRequest(ProjectCostCategory.TRAVEL, defaultAmount(quote.getTravelBudget()), "报价成本核对-差旅"),
+            new ProjectBudgetItemRequest(ProjectCostCategory.OTHER, defaultAmount(quote.getOtherBudget()), "报价成本核对-设备/风险/其他")
+        ),
+        null,
+        contract.getId()
+    ));
+  }
+
+  @Transactional
+  public ContractResponse approveContract(UUID id, String operatorName, String comment) {
+    ServiceContract contract = contractRepository.findById(id)
+        .orElseThrow(() -> new BusinessException("合同不存在"));
+    if (contract.getStatus() != ContractStatus.PENDING_APPROVAL) {
+      throw new BusinessException("只有待合同审批的合同可以审批通过");
+    }
+    requireContractAttachment(id, "APPROVAL_DOC", "请先上传合同审批件");
+    contract.setStatus(ContractStatus.PENDING_SEAL);
+    ServiceContract saved = contractRepository.save(contract);
+    return toContract(saved, customerMap(nullableId(saved.getCustomerId())));
+  }
+
+  @Transactional
+  public ContractResponse submitSignedDocumentApproval(UUID id, String requestedBy, String comment) {
+    ServiceContract contract = contractRepository.findById(id)
+        .orElseThrow(() -> new BusinessException("合同不存在"));
+    if (contract.getStatus() != ContractStatus.PENDING_SEAL) {
+      throw new BusinessException("合同审批通过后才可以提交双方盖章件审批");
+    }
+    requireContractAttachment(id, "SIGNED_DOC", "请先上传双方盖章件");
+    boolean hasPending = changeRepository.findByContractIdAndStatusOrderByCreatedAtDesc(id, "PENDING")
+        .stream()
+        .anyMatch(this::isSignedDocApproval);
+    if (hasPending) {
+      throw new BusinessException("双方盖章件已提交审批，请勿重复提交");
+    }
+    ContractChangeRequest change = new ContractChangeRequest();
+    change.setContractId(id);
+    change.setChangeData("{\"type\":\"" + SIGNED_DOC_APPROVAL_TYPE + "\"}");
+    change.setReason(hasText(comment) ? comment : "双方盖章件审批");
+    change.setRequestedBy(hasText(requestedBy) ? requestedBy : "当前用户");
+    change.setRequestedAt(OffsetDateTime.now());
+    change.setStatus("PENDING");
+    changeRepository.save(change);
+    contract.setStatus(ContractStatus.SEAL_APPROVAL);
+    ServiceContract saved = contractRepository.save(contract);
+    return toContract(saved, customerMap(nullableId(saved.getCustomerId())));
+  }
+
+  private void requireContractAttachment(UUID contractId, String attachmentType, String message) {
+    boolean hasAttachment = attachmentRepository
+        .findByEntityTypeAndEntityIdAndAttachmentType("CONTRACT", contractId, attachmentType)
+        .stream()
+        .anyMatch(item -> !deleteGovernanceService.isHidden("CRM_ATTACHMENT", item.getId()));
+    if (!hasAttachment) {
+      throw new BusinessException(message);
+    }
   }
 
   private void markOpportunityWon(QuotePlan quote, ServiceContract contract) {
@@ -943,11 +1110,19 @@ public class CrmOperationsService {
   }
 
   private void applyApprovedCostToQuote(QuotePlan quote, QuoteCostRequest cost) {
-    quote.setLaborBudget(defaultAmount(cost.getLaborCost()));
-    quote.setMaterialBudget(defaultAmount(cost.getMaterialCost()));
-    quote.setSubcontractBudget(defaultAmount(cost.getSubcontractCost()));
-    quote.setTravelBudget(defaultAmount(cost.getTravelCost()));
-    quote.setOtherBudget(sum(List.of(cost.getEquipmentCost(), cost.getRiskReserve(), cost.getOtherCost())));
+    quote.setLaborBudget(netAmount(cost.getLaborCost(), cost.getLaborTaxRate()));
+    quote.setMaterialBudget(netAmount(cost.getMaterialCost(), cost.getMaterialTaxRate()));
+    quote.setSubcontractBudget(netAmount(cost.getSubcontractCost(), cost.getSubcontractTaxRate()));
+    quote.setTravelBudget(netAmount(cost.getTravelCost(), cost.getTravelTaxRate()));
+    quote.setOtherBudget(sum(List.of(
+        netAmount(cost.getEquipmentCost(), cost.getEquipmentTaxRate()),
+        netAmount(cost.getRiskReserve(), cost.getRiskReserveTaxRate()),
+        netAmount(cost.getOtherCost(), cost.getOtherTaxRate())
+    )));
+  }
+
+  private boolean hasText(String value) {
+    return value != null && !value.isBlank();
   }
 
   private QuoteCostRequestResponse toQuoteCostRequest(QuoteCostRequest cost) {
@@ -961,13 +1136,21 @@ public class CrmOperationsService {
         cost.getRequestedAt(),
         cost.getProjectManager(),
         defaultAmount(cost.getLaborCost()),
+        defaultLaborTaxRate(cost.getLaborTaxRate()),
         defaultAmount(cost.getMaterialCost()),
+        defaultTaxRate(cost.getMaterialTaxRate()),
         defaultAmount(cost.getSubcontractCost()),
+        defaultTaxRate(cost.getSubcontractTaxRate()),
         defaultAmount(cost.getTravelCost()),
+        defaultZeroTaxRate(cost.getTravelTaxRate()),
         defaultAmount(cost.getEquipmentCost()),
+        defaultTaxRate(cost.getEquipmentTaxRate()),
         defaultAmount(cost.getRiskReserve()),
+        defaultZeroTaxRate(cost.getRiskReserveTaxRate()),
         defaultAmount(cost.getOtherCost()),
+        defaultTaxRate(cost.getOtherTaxRate()),
         quoteCostTotal(cost),
+        quoteCostNetTotal(cost),
         defaultAmount(cost.getSuggestedPrice()),
         cost.getCostRemark(),
         cost.getSubmittedAt(),
@@ -1039,9 +1222,24 @@ public class CrmOperationsService {
         netAmount(item.getAmount(), item.getTaxRate()),
         item.getStartDate(),
         item.getEndDate(),
+        contractSalesOwnerName(item, customers),
         item.getServiceCycle(),
         item.getStatus()
     );
+  }
+
+  private String contractSalesOwnerName(ServiceContract contract, Map<UUID, Customer> customers) {
+    if (contract.getQuoteId() != null) {
+      QuotePlan quote = quoteRepository.findById(contract.getQuoteId()).orElse(null);
+      if (quote != null && quote.getOpportunityId() != null) {
+        Opportunity opportunity = opportunityRepository.findById(quote.getOpportunityId()).orElse(null);
+        if (opportunity != null && hasText(opportunity.getOwnerName())) {
+          return opportunity.getOwnerName();
+        }
+      }
+    }
+    Customer customer = contract.getCustomerId() == null ? null : customers.get(contract.getCustomerId());
+    return customer != null && hasText(customer.getOwnerName()) ? customer.getOwnerName() : "";
   }
 
   private ReceivableResponse toReceivable(
@@ -1063,6 +1261,10 @@ public class CrmOperationsService {
         item.getDueDate(),
         item.getInvoiceNo(),
         item.getInvoiceDate(),
+        item.isInvoiceRequested(),
+        item.getInvoiceRequestedBy(),
+        item.getInvoiceRequestedAt(),
+        item.getInvoiceRequestRemark(),
         defaultAmount(item.getSettledAmount()),
         outstandingAmount(item),
         item.getStatus()
@@ -1180,6 +1382,18 @@ public class CrmOperationsService {
     ));
   }
 
+  private BigDecimal quoteCostNetTotal(QuoteCostRequest cost) {
+    return sum(List.of(
+        netAmount(cost.getLaborCost(), cost.getLaborTaxRate()),
+        netAmount(cost.getMaterialCost(), cost.getMaterialTaxRate()),
+        netAmount(cost.getSubcontractCost(), cost.getSubcontractTaxRate()),
+        netAmount(cost.getTravelCost(), cost.getTravelTaxRate()),
+        netAmount(cost.getEquipmentCost(), cost.getEquipmentTaxRate()),
+        netAmount(cost.getRiskReserve(), cost.getRiskReserveTaxRate()),
+        netAmount(cost.getOtherCost(), cost.getOtherTaxRate())
+    ));
+  }
+
   private void applyQuoteBudget(
       QuotePlan quote,
       BigDecimal laborBudget,
@@ -1229,19 +1443,19 @@ public class CrmOperationsService {
   }
 
   private BigDecimal quoteGrossMargin(QuotePlan quote) {
-    return defaultAmount(quote.getAmount()).subtract(quoteBudgetAmount(quote));
+    return netAmount(quote.getAmount(), quote.getTaxRate()).subtract(quoteBudgetAmount(quote));
   }
 
   private BigDecimal revisionGrossMargin(QuoteRevision revision) {
-    return defaultAmount(revision.getAmount()).subtract(revisionBudgetAmount(revision));
+    return netAmount(revision.getAmount(), revision.getTaxRate()).subtract(revisionBudgetAmount(revision));
   }
 
   private BigDecimal quoteGrossMarginRate(QuotePlan quote) {
-    return marginRate(defaultAmount(quote.getAmount()), quoteGrossMargin(quote));
+    return marginRate(netAmount(quote.getAmount(), quote.getTaxRate()), quoteGrossMargin(quote));
   }
 
   private BigDecimal revisionGrossMarginRate(QuoteRevision revision) {
-    return marginRate(defaultAmount(revision.getAmount()), revisionGrossMargin(revision));
+    return marginRate(netAmount(revision.getAmount(), revision.getTaxRate()), revisionGrossMargin(revision));
   }
 
   private BigDecimal marginRate(BigDecimal amount, BigDecimal grossMargin) {
@@ -1253,6 +1467,9 @@ public class CrmOperationsService {
 
   private BigDecimal projectBudgetAmountForQuote(QuotePlan quote) {
     if (quote == null || quote.getId() == null) {
+      return BigDecimal.ZERO;
+    }
+    if (entityManager == null) {
       return BigDecimal.ZERO;
     }
     Object value = entityManager.createNativeQuery("""
@@ -1276,6 +1493,14 @@ public class CrmOperationsService {
 
   private BigDecimal defaultTaxRate(BigDecimal value) {
     return value == null ? BigDecimal.valueOf(13) : value;
+  }
+
+  private BigDecimal defaultLaborTaxRate(BigDecimal value) {
+    return value == null ? BigDecimal.valueOf(6) : value;
+  }
+
+  private BigDecimal defaultZeroTaxRate(BigDecimal value) {
+    return value == null ? BigDecimal.ZERO : value;
   }
 
   private BigDecimal netAmount(BigDecimal amount, BigDecimal taxRate) {
@@ -1315,31 +1540,29 @@ public class CrmOperationsService {
   public ReceivableResponse updateReceivable(UUID id, UpdateReceivableRequest request) {
     Receivable receivable = receivableRepository.findById(id)
         .orElseThrow(() -> new BusinessException("应收单不存在"));
-    if (request.amount() != null) {
-      BigDecimal newAmount = defaultAmount(request.amount());
-      BigDecimal settled = receivable.getSettledAmount() != null ? receivable.getSettledAmount() : BigDecimal.ZERO;
-      if (newAmount.compareTo(settled) < 0) {
-        throw new BusinessException("修改后应收金额不能小于已收金额");
-      }
-      receivable.setAmount(newAmount);
+    if (receivable.getContractId() == null) {
+      throw new BusinessException("应收未关联合同，不能发起变更审批");
     }
-    if (request.dueDate() != null) receivable.setDueDate(request.dueDate());
-    if (request.sourceNo() != null) receivable.setSourceNo(request.sourceNo());
-    BigDecimal outstanding = receivable.getAmount().subtract(receivable.getSettledAmount() != null ? receivable.getSettledAmount() : BigDecimal.ZERO);
-    LocalDate due = receivable.getDueDate();
-    if (outstanding.compareTo(BigDecimal.ZERO) <= 0) {
-      receivable.setStatus(ReceivableStatus.SETTLED);
-    } else if (due != null && due.isBefore(LocalDate.now())) {
-      receivable.setStatus(ReceivableStatus.OVERDUE);
-    } else if (receivable.getInvoiceNo() != null) {
-      receivable.setStatus(ReceivableStatus.PAYMENT_PENDING);
-    } else {
-      receivable.setStatus(ReceivableStatus.INVOICE_PENDING);
+    if (request.amount() != null && defaultAmount(request.amount()).compareTo(defaultAmount(receivable.getSettledAmount())) < 0) {
+      throw new BusinessException("修改后应收金额不能小于已收金额");
     }
-    Receivable saved = receivableRepository.save(receivable);
-    return toReceivable(saved,
-        customerMap(nullableId(saved.getCustomerId())),
-        contractMap(nullableId(saved.getContractId())));
+    boolean hasPending = changeRepository.findByContractIdAndStatusOrderByCreatedAtDesc(receivable.getContractId(), "PENDING")
+        .stream()
+        .anyMatch(change -> isReceivableUpdate(change, id));
+    if (hasPending) {
+      throw new BusinessException("该应收已有待审批变更，请勿重复提交");
+    }
+    ContractChangeRequest change = new ContractChangeRequest();
+    change.setContractId(receivable.getContractId());
+    change.setChangeData(receivableUpdateData(id, request));
+    change.setReason("应收计划变更：" + (receivable.getCode() == null ? id : receivable.getCode()));
+    change.setRequestedBy("当前用户");
+    change.setRequestedAt(OffsetDateTime.now());
+    change.setStatus("PENDING");
+    changeRepository.save(change);
+    return toReceivable(receivable,
+        customerMap(nullableId(receivable.getCustomerId())),
+        contractMap(nullableId(receivable.getContractId())));
   }
 
 
@@ -1363,7 +1586,13 @@ public class CrmOperationsService {
     if (!"PENDING".equals(change.getStatus())) {
       throw new BusinessException("该变更请求已处理");
     }
-    applyContractChanges(change);
+    if (isSignedDocApproval(change)) {
+      approveSignedDocument(change);
+    } else if (isReceivableUpdate(change)) {
+      applyReceivableUpdate(change);
+    } else {
+      applyContractChanges(change);
+    }
     change.setStatus("APPROVED");
     change.setApprovedBy(operatorName);
     change.setApprovedAt(java.time.OffsetDateTime.now());
@@ -1377,6 +1606,12 @@ public class CrmOperationsService {
         .orElseThrow(() -> new BusinessException("变更请求不存在"));
     if (!"PENDING".equals(change.getStatus())) {
       throw new BusinessException("该变更请求已处理");
+    }
+    if (isSignedDocApproval(change)) {
+      ServiceContract contract = contractRepository.findById(change.getContractId())
+          .orElseThrow(() -> new BusinessException("合同不存在"));
+      contract.setStatus(ContractStatus.PENDING_SEAL);
+      contractRepository.save(contract);
     }
     change.setStatus("REJECTED");
     change.setApprovedBy(operatorName);
@@ -1404,6 +1639,87 @@ public class CrmOperationsService {
     } catch (Exception e) {
       throw new BusinessException("变更数据解析失败: " + e.getMessage());
     }
+  }
+
+  private boolean isSignedDocApproval(ContractChangeRequest change) {
+    String data = change.getChangeData();
+    return data != null && data.contains("\"type\":\"" + SIGNED_DOC_APPROVAL_TYPE + "\"");
+  }
+
+  private boolean isReceivableUpdate(ContractChangeRequest change) {
+    String data = change.getChangeData();
+    return data != null && data.contains("\"type\":\"" + RECEIVABLE_UPDATE_APPROVAL_TYPE + "\"");
+  }
+
+  private boolean isReceivableUpdate(ContractChangeRequest change, UUID receivableId) {
+    String data = change.getChangeData();
+    return isReceivableUpdate(change) && data != null && data.contains("\"receivableId\":\"" + receivableId + "\"");
+  }
+
+  private String receivableUpdateData(UUID receivableId, UpdateReceivableRequest request) {
+    try {
+      com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+      com.fasterxml.jackson.databind.node.ObjectNode root = mapper.createObjectNode();
+      root.put("type", RECEIVABLE_UPDATE_APPROVAL_TYPE);
+      root.put("receivableId", receivableId.toString());
+      if (request.sourceNo() != null) root.put("sourceNo", request.sourceNo());
+      if (request.amount() != null) root.put("amount", request.amount());
+      if (request.dueDate() != null) root.put("dueDate", request.dueDate().toString());
+      return mapper.writeValueAsString(root);
+    } catch (Exception e) {
+      throw new BusinessException("应收变更数据生成失败");
+    }
+  }
+
+  private void applyReceivableUpdate(ContractChangeRequest change) {
+    try {
+      com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+      com.fasterxml.jackson.databind.JsonNode root = mapper.readTree(change.getChangeData());
+      UUID receivableId = UUID.fromString(root.get("receivableId").asText());
+      Receivable receivable = receivableRepository.findById(receivableId)
+          .orElseThrow(() -> new BusinessException("应收单不存在"));
+      if (root.has("amount")) {
+        BigDecimal newAmount = new BigDecimal(root.get("amount").asText());
+        if (newAmount.compareTo(defaultAmount(receivable.getSettledAmount())) < 0) {
+          throw new BusinessException("修改后应收金额不能小于已收金额");
+        }
+        receivable.setAmount(newAmount);
+      }
+      if (root.has("dueDate")) receivable.setDueDate(LocalDate.parse(root.get("dueDate").asText()));
+      if (root.has("sourceNo")) receivable.setSourceNo(root.get("sourceNo").asText());
+      refreshReceivableStatus(receivable);
+      receivableRepository.save(receivable);
+    } catch (BusinessException e) {
+      throw e;
+    } catch (Exception e) {
+      throw new BusinessException("应收变更数据解析失败: " + e.getMessage());
+    }
+  }
+
+  private void refreshReceivableStatus(Receivable receivable) {
+    BigDecimal outstanding = defaultAmount(receivable.getAmount()).subtract(defaultAmount(receivable.getSettledAmount()));
+    LocalDate due = receivable.getDueDate();
+    if (outstanding.compareTo(BigDecimal.ZERO) <= 0) {
+      receivable.setStatus(ReceivableStatus.SETTLED);
+    } else if (due != null && due.isBefore(LocalDate.now())) {
+      receivable.setStatus(ReceivableStatus.OVERDUE);
+    } else if (receivable.getInvoiceNo() != null) {
+      receivable.setStatus(ReceivableStatus.PAYMENT_PENDING);
+    } else {
+      receivable.setStatus(ReceivableStatus.INVOICE_PENDING);
+    }
+  }
+
+  private void approveSignedDocument(ContractChangeRequest change) {
+    ServiceContract contract = contractRepository.findById(change.getContractId())
+        .orElseThrow(() -> new BusinessException("合同不存在"));
+    if (contract.getStatus() != ContractStatus.SEAL_APPROVAL) {
+      throw new BusinessException("只有盖章件审批中的合同可以通过盖章审批");
+    }
+    requireContractAttachment(contract.getId(), "SIGNED_DOC", "请先上传双方盖章件");
+    contract.setStatus(ContractStatus.ACTIVE);
+    ServiceContract saved = contractRepository.save(contract);
+    createProjectFromApprovedContract(saved);
   }
 
   @Transactional

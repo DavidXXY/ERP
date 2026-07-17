@@ -129,6 +129,20 @@
             <a-descriptions-item label="报销状态">{{ expenseDetail(detailApproval)?.status ? expenseStatusLabel(expenseDetail(detailApproval)!.status as ExpenseStatus) : "-" }}</a-descriptions-item>
             <a-descriptions-item label="费用说明" :span="2">{{ expenseDetail(detailApproval)?.description || detailApproval.content || "-" }}</a-descriptions-item>
           </a-descriptions>
+          <a-table
+            v-if="isExpenseApproval(detailApproval) && expenseDetail(detailApproval)?.lines?.length"
+            size="small"
+            :columns="expenseLineColumns"
+            :data-source="expenseDetail(detailApproval)?.lines"
+            :pagination="false"
+            :row-key="(line: any) => line.id || line.lineNo"
+          >
+            <template #bodyCell="{ column, record: line }">
+              <template v-if="column.key === 'expenseType'">{{ expenseTypeLabel(line.expenseType as ExpenseType) }}</template>
+              <template v-else-if="column.key === 'amount'">{{ formatMoney(Number(line.amount || 0)) }}</template>
+              <template v-else-if="column.key === 'invoice'">{{ line.invoiceFileName || "-" }}</template>
+            </template>
+          </a-table>
 
           <a-descriptions v-else-if="detailApproval.sourceDetail" bordered size="small" :column="2" title="业务单据内容">
             <a-descriptions-item v-for="line in sourceDetailLines(detailApproval)" :key="line.label" :label="line.label" :span="line.span || 1">{{ line.value }}</a-descriptions-item>
@@ -269,6 +283,14 @@ const approvalCreateRules = { title: [{ required: true }], applicantName: [{ req
 const processRules = { decision: [{ required: true }], comment: [{ required: true }], approverName: [{ required: true }] };
 const runtimeRules = { targetUserId: [{ required: true, message: "请选择处理人" }], comment: [{ required: true, message: "请输入说明" }] };
 const userOptions = computed(() => users.value.filter(item => item.enabled).map(item => ({ label: item.displayName, value: item.id })));
+const expenseLineColumns = [
+  { title: "序号", dataIndex: "lineNo", width: 70 },
+  { title: "费用类型", key: "expenseType", width: 100 },
+  { title: "发生日期", dataIndex: "expenseDate", width: 110 },
+  { title: "金额", key: "amount", width: 120 },
+  { title: "说明", dataIndex: "description" },
+  { title: "发票", key: "invoice", width: 180 },
+];
 
 // Unified approval list
 const mergedList = computed(() => {

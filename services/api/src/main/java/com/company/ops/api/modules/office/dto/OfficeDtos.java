@@ -5,6 +5,7 @@ import com.company.ops.api.modules.office.domain.ApprovalType;
 import com.company.ops.api.modules.office.domain.ExpenseStatus;
 import com.company.ops.api.modules.office.domain.ExpenseType;
 import com.company.ops.api.modules.office.domain.OutsourceStatus;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -59,15 +60,26 @@ public final class OfficeDtos {
                                  Object sourceDetail,
                                  List<ApprovalRuntimeNodeResponse> nodes,
                                  List<ApprovalActionResponse> actions) {}
+  public record CreateExpenseLineRequest(@NotNull ExpenseType expenseType,
+                                         @NotNull @DecimalMin("0.01") BigDecimal amount,
+                                         @NotNull LocalDate expenseDate,
+                                         @NotBlank @Size(max=500) String description,
+                                         @Size(max=240) String invoiceFileName,
+                                         @Size(max=120) String invoiceContentType,
+                                         Long invoiceSizeBytes) {}
   public record CreateExpenseRequest(// auto-gen
     String code, UUID claimantId,
                                      @NotBlank @Size(max=80) String claimantName, UUID projectId, UUID workOrderId,
-                                     @NotNull ExpenseType expenseType, @NotNull @DecimalMin("0.01") BigDecimal amount,
-                                     @NotNull LocalDate expenseDate, @NotBlank @Size(max=500) String description) {}
+                                     ExpenseType expenseType, @DecimalMin("0.01") BigDecimal amount,
+                                     LocalDate expenseDate, @Size(max=500) String description,
+                                     @Valid List<CreateExpenseLineRequest> lines) {}
+  public record ExpenseLineResponse(UUID id, Integer lineNo, ExpenseType expenseType, BigDecimal amount,
+                                    LocalDate expenseDate, String description, String invoiceFileName,
+                                    String invoiceContentType, Long invoiceSizeBytes) {}
   public record ExpenseResponse(UUID id, String code, UUID claimantId, String claimantName, UUID projectId,
                                 String projectCode, UUID workOrderId, String workOrderCode, ExpenseType expenseType,
                                 BigDecimal amount, LocalDate expenseDate, String description, ExpenseStatus status,
-                                UUID approvalRequestId) {}
+                                UUID approvalRequestId, List<ExpenseLineResponse> lines) {}
   public record CreateOutsourceRequest(// auto-gen
     String code, @NotNull UUID supplierId,
                                        UUID projectId, UUID workOrderId, @NotBlank @Size(max=100) String serviceType,

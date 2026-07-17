@@ -101,6 +101,9 @@ export function uploadQualificationAttachment(file: File, operatorName: string) 
 }
 
 export async function getQualificationAttachmentObjectUrl(dataUrl: string) {
-  const response = await http.get<Blob>(dataUrl, { responseType: "blob" });
+  const url = dataUrl.startsWith("/qualification-files/")
+    ? "/api" + dataUrl
+    : dataUrl;
+  const response = await http.get<Blob>(url, { baseURL: "", responseType: "blob" });
   return URL.createObjectURL(response.data);
 }

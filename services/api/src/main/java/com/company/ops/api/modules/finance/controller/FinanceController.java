@@ -9,6 +9,7 @@ import com.company.ops.api.modules.finance.dto.CreatePaymentApplicationRequest;
 import com.company.ops.api.modules.finance.dto.ExecutePaymentRequest;
 import com.company.ops.api.modules.finance.dto.FinanceOverviewResponse;
 import com.company.ops.api.modules.finance.dto.FinancePayableResponse;
+import com.company.ops.api.modules.finance.dto.FinanceReceivableDetailResponse;
 import com.company.ops.api.modules.finance.dto.PaymentApplicationResponse;
 import com.company.ops.api.modules.finance.dto.PaymentRecordResponse;
 import com.company.ops.api.modules.finance.dto.ProcessPaymentApplicationRequest;
@@ -51,6 +52,12 @@ public class FinanceController {
   @PreAuthorize("hasAuthority('finance:receivable:view')")
   public ApiResponse<List<ReceivableResponse>> listReceivables() {
     return ApiResponse.ok(crmOperationsService.listReceivables());
+  }
+
+  @GetMapping("/receivables/{id}")
+  @PreAuthorize("hasAuthority('finance:receivable:view')")
+  public ApiResponse<FinanceReceivableDetailResponse> getReceivable(@PathVariable UUID id) {
+    return ApiResponse.ok(financeService.getReceivableDetail(id));
   }
 
   @PostMapping("/receivables/{id}/invoice")

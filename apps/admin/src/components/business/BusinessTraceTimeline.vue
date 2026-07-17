@@ -232,6 +232,15 @@ const summary = computed(() => {
 
 const marginRate = computed(() => summary.value.contractAmount > 0 ? summary.value.grossProfit / summary.value.contractAmount * 100 : 0);
 const collectionRate = computed(() => summary.value.receivableAmount > 0 ? summary.value.receivedAmount / summary.value.receivableAmount * 100 : 0);
+const needsMaterialSupply = computed(() => {
+  const materialBudget = activeProjectDetail.value?.budgetItems
+    .filter((item) => item.category === "MATERIAL")
+    .reduce((sum, item) => sum + Number(item.plannedAmount || 0), 0) || 0;
+  const materialCost = activeProjectDetail.value?.costEntries
+    .filter((item) => item.category === "MATERIAL" || item.sourceType === "INVENTORY" || item.sourceType === "PROCUREMENT")
+    .reduce((sum, item) => sum + Number(item.amount || 0), 0) || 0;
+  return materialBudget > 0 || materialCost > 0;
+});
 const traceScore = computed(() => {
   const required = ["customer", "contract", "receivable", "profit"];
   const execution = activeProject.value ? ["project", "cost"] : [];
@@ -276,7 +285,7 @@ const gapAlerts = computed(() => {
   const rows: Array<{ key: string; level: "high" | "medium"; title: string; description: string; route?: string }> = [];
   if (activeContract.value?.quoteId && !relatedQuote.value) rows.push({ key: "missing-quote", level: "medium", title: "报价链路未打通", description: "合同存在报价ID，但报价详情未能加载，建议核对报价归档。", route: "/crm/quotes" });
   if (activeContract.value && !activeProject.value && activeContract.value.status === "ACTIVE") rows.push({ key: "missing-project", level: "high", title: "合同已生效但未承接项目", description: "后续采购、领料、成本和利润无法完整归集。", route: `/crm/contracts/${activeContract.value.id}` });
-  if (activeProject.value && procurementRequests.value.length === 0 && purchaseOrders.value.length === 0 && materialIssues.value.length === 0) rows.push({ key: "missing-supply", level: "medium", title: "项目执行无采购/领料记录", description: "如项目已开工，建议补齐采购、入库或领料数据。", route: "/procurement/requests" });
+  if (activeProject.value && needsMaterialSupply.value && procurementRequests.value.length === 0 && purchaseOrders.value.length === 0 && materialIssues.value.length === 0) rows.push({ key: "missing-supply", level: "medium", title: "项目执行无采购/领料记录", description: "项目预算或成本包含材料类费用，建议补齐采购、入库或领料数据。", route: "/procurement/requests" });
   if ((activeContract.value || activeProject.value) && receivables.value.length === 0) rows.push({ key: "missing-receivable", level: "high", title: "缺少合同应收计划", description: "无法跟踪回款和现金流，请补齐应收节点。", route: "/crm/receivables" });
   if (summary.value.outstandingAmount > 0 && receivables.value.some((item) => item.status === "OVERDUE")) rows.push({ key: "overdue-receivable", level: "high", title: "存在逾期应收", description: `未回款 ${formatMoney(summary.value.outstandingAmount)}，建议生成催收跟进。`, route: "/finance/receivables" });
   if (summary.value.grossProfit < 0) rows.push({ key: "negative-profit", level: "high", title: "项目毛利为负", description: "当前成本已超过合同额，需要复核成本归集或发起预算/变更审批。", route: "/projects/budget" });

@@ -12,6 +12,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -54,6 +55,13 @@ public class GlobalExceptionHandler {
     return ResponseEntity
         .status(HttpStatus.FORBIDDEN)
         .body(ApiResponse.fail("没有权限访问该资源"));
+  }
+
+  @ExceptionHandler(NoResourceFoundException.class)
+  public ResponseEntity<ApiResponse<Void>> handleNoResource(NoResourceFoundException exception) {
+    return ResponseEntity
+        .status(HttpStatus.NOT_FOUND)
+        .body(ApiResponse.fail("接口不存在，请检查访问路径"));
   }
 
   @ExceptionHandler(Exception.class)

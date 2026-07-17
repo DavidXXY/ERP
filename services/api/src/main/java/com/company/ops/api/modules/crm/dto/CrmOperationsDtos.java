@@ -73,7 +73,7 @@ public final class CrmOperationsDtos {
     String code,
       @NotBlank @Size(max = 800) String serviceScope,
       @Size(max = 120) String inspectCycle,
-      @Size(max = 300) String paymentNodes,
+      @NotBlank @Size(max = 300) String paymentNodes,
       @NotNull @DecimalMin("0") BigDecimal amount,
       @DecimalMin("0") BigDecimal taxRate,
       @DecimalMin("0") BigDecimal laborBudget,
@@ -88,7 +88,7 @@ public final class CrmOperationsDtos {
   public record UpdateQuoteRequest(
       @NotBlank @Size(max = 800) String serviceScope,
       @Size(max = 120) String inspectCycle,
-      @Size(max = 300) String paymentNodes,
+      @NotBlank @Size(max = 300) String paymentNodes,
       @NotNull @DecimalMin("0") BigDecimal amount,
       @DecimalMin("0") BigDecimal taxRate,
       @DecimalMin("0") BigDecimal laborBudget,
@@ -151,10 +151,13 @@ public final class CrmOperationsDtos {
       @DecimalMin("0") BigDecimal subcontractCost,
       @DecimalMin("0") BigDecimal subcontractTaxRate,
       @DecimalMin("0") BigDecimal travelCost,
+      @DecimalMin("0") BigDecimal travelTaxRate,
       @DecimalMin("0") BigDecimal equipmentCost,
       @DecimalMin("0") BigDecimal equipmentTaxRate,
       @DecimalMin("0") BigDecimal riskReserve,
+      @DecimalMin("0") BigDecimal riskReserveTaxRate,
       @DecimalMin("0") BigDecimal otherCost,
+      @DecimalMin("0") BigDecimal otherTaxRate,
       @DecimalMin("0") BigDecimal suggestedPrice,
       @Size(max = 800) String costRemark
   ) {
@@ -183,11 +186,15 @@ public final class CrmOperationsDtos {
       BigDecimal subcontractCost,
       BigDecimal subcontractTaxRate,
       BigDecimal travelCost,
+      BigDecimal travelTaxRate,
       BigDecimal equipmentCost,
       BigDecimal equipmentTaxRate,
       BigDecimal riskReserve,
+      BigDecimal riskReserveTaxRate,
       BigDecimal otherCost,
+      BigDecimal otherTaxRate,
       BigDecimal totalCost,
+      BigDecimal netTotalCost,
       BigDecimal suggestedPrice,
       String costRemark,
       OffsetDateTime submittedAt,
@@ -220,14 +227,22 @@ public final class CrmOperationsDtos {
       @Size(max = 120) String serviceCycle,
       @Size(max = 64) String receivableCode,
       @DecimalMin("0") BigDecimal firstReceivableAmount,
-      LocalDate firstReceivableDueDate
+      LocalDate firstReceivableDueDate,
+      java.util.List<ReceivablePlanRequest> receivables
+  ) {
+  }
+
+  public record ReceivablePlanRequest(
+      @Size(max = 64) String receivableCode,
+      @NotNull @DecimalMin("0.01") BigDecimal amount,
+      @NotNull LocalDate dueDate
   ) {
   }
 
   public record QuoteConversionResult(
       QuoteResponse quote,
       ContractResponse contract,
-      ReceivableResponse receivable
+      java.util.List<ReceivableResponse> receivables
   ) {
   }
 
@@ -296,6 +311,7 @@ public final class CrmOperationsDtos {
       BigDecimal netAmount,
       LocalDate startDate,
       LocalDate endDate,
+      String salesOwnerName,
       String serviceCycle,
       ContractStatus status
   ) {
@@ -313,9 +329,19 @@ public final class CrmOperationsDtos {
       LocalDate dueDate,
       String invoiceNo,
       LocalDate invoiceDate,
+      Boolean invoiceRequested,
+      String invoiceRequestedBy,
+      OffsetDateTime invoiceRequestedAt,
+      String invoiceRequestRemark,
       BigDecimal settledAmount,
       BigDecimal outstandingAmount,
       ReceivableStatus status
+  ) {
+  }
+
+  public record ApplyInvoiceRequest(
+      @NotBlank @Size(max = 80) String applicantName,
+      @Size(max = 500) String remark
   ) {
   }
 

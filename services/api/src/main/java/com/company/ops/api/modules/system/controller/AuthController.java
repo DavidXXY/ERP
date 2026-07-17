@@ -6,6 +6,8 @@ import com.company.ops.api.modules.system.dto.LoginResponse;
 import com.company.ops.api.modules.system.security.UserPrincipal;
 import com.company.ops.api.modules.system.service.AuthService;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -29,14 +31,15 @@ public class AuthController {
   }
 
   @GetMapping("/me")
-  public ApiResponse<LoginResponse.CurrentUserResponse> currentUser(
+  public ResponseEntity<ApiResponse<LoginResponse.CurrentUserResponse>> currentUser(
       @AuthenticationPrincipal UserPrincipal principal
   ) {
     var user = authService.currentUser(principal);
     if (user == null) {
-      throw new com.company.ops.api.common.exception.BusinessException("未登录");
+      return ResponseEntity
+          .status(HttpStatus.UNAUTHORIZED)
+          .body(new ApiResponse<>(false, "未登录", null));
     }
-    return ApiResponse.ok(user);
+    return ResponseEntity.ok(ApiResponse.ok(user));
   }
 }
-

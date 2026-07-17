@@ -6,6 +6,7 @@ apps/admin/vite.config.ts.timestamp-*.mjs
 services/api/target/
 .dev/
 .local-data/
+.local-deploy/
 .env
 .env.local
 .env.*.local

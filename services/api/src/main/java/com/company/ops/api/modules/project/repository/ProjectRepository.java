@@ -16,6 +16,7 @@ public interface ProjectRepository extends JpaRepository<Project, UUID> {
 
   boolean existsByCode(String code);
   Optional<Project> findByCode(String code);
+  boolean existsByContractId(UUID contractId);
 
   int countByCodeStartingWith(String prefix);
 

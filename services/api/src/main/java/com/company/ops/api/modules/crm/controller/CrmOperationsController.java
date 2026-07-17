@@ -2,6 +2,7 @@ package com.company.ops.api.modules.crm.controller;
 
 import com.company.ops.api.common.api.ApiResponse;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.AdvanceOpportunityRequest;
+import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ApplyInvoiceRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ContractResponse;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ConvertQuoteRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.CreateFollowUpRequest;
@@ -197,9 +198,27 @@ public class CrmOperationsController {
   }
 
   @GetMapping("/contracts/{id}")
-  @PreAuthorize("hasAuthority('crm:contract:view')")
+  @PreAuthorize("hasAnyAuthority('crm:contract:view', 'finance:receivable:view')")
   public ApiResponse<ContractResponse> getContract(@PathVariable UUID id) {
     return ApiResponse.ok(crmOperationsService.getContract(id));
+  }
+
+  @PostMapping("/contracts/{id}/approval")
+  @PreAuthorize("hasAuthority('crm:contract:update') and @approvalFlowSecurity.canApprove('CONTRACT')")
+  public ApiResponse<ContractResponse> approveContract(
+      @PathVariable UUID id,
+      @Valid @RequestBody ApprovalActionRequest request
+  ) {
+    return ApiResponse.ok(crmOperationsService.approveContract(id, request.operatorName(), request.comment()));
+  }
+
+  @PostMapping("/contracts/{id}/signed-doc-approval")
+  @PreAuthorize("hasAuthority('crm:contract:update')")
+  public ApiResponse<ContractResponse> submitSignedDocumentApproval(
+      @PathVariable UUID id,
+      @Valid @RequestBody ApprovalActionRequest request
+  ) {
+    return ApiResponse.ok(crmOperationsService.submitSignedDocumentApproval(id, request.operatorName(), request.comment()));
   }
 
   @GetMapping("/follow-ups")
@@ -236,6 +255,15 @@ public class CrmOperationsController {
       @Valid @RequestBody RegisterInvoiceRequest request
   ) {
     return ApiResponse.ok(crmOperationsService.registerInvoice(id, request));
+  }
+
+  @PostMapping("/receivables/{id}/invoice-request")
+  @PreAuthorize("hasAnyAuthority('crm:receivable:invoice', 'crm:receivable:view')")
+  public ApiResponse<ReceivableResponse> applyInvoice(
+      @PathVariable UUID id,
+      @Valid @RequestBody ApplyInvoiceRequest request
+  ) {
+    return ApiResponse.ok(crmOperationsService.applyInvoice(id, request));
   }
 
 
@@ -292,7 +320,7 @@ public class CrmOperationsController {
   }
 
   @GetMapping("/contracts/{id}/changes")
-  @PreAuthorize("hasAuthority('crm:contract:view')")
+  @PreAuthorize("hasAnyAuthority('crm:contract:view', 'finance:receivable:view')")
   public ApiResponse<List<ContractChangeResponse>> listContractChanges(@PathVariable UUID id) {
     return ApiResponse.ok(crmOperationsService.listContractChanges(id));
   }

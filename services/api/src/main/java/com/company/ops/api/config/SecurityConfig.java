@@ -68,6 +68,8 @@ public class SecurityConfig {
         "http://127.0.0.1:5174",
         "http://localhost:5175",
         "http://127.0.0.1:5175",
+        "http://localhost:8088",
+        "http://127.0.0.1:8088",
         "http://10.10.10.111:88",
         "http://oa.davidxi.com:88"
     ));

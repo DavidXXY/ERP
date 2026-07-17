@@ -41,7 +41,7 @@
             <strong>{{ formatMoney(record.netAmount ?? calcNetAmount(record.amount, record.taxRate)) }}</strong>
           </a-descriptions-item>
           <a-descriptions-item label="服务频次">{{ record.inspectCycle || "未设置" }}</a-descriptions-item>
-          <a-descriptions-item label="付款节点">{{ record.paymentNodes || "未设置" }}</a-descriptions-item>
+          <a-descriptions-item label="付款方式/节点">{{ record.paymentNodes || "未设置" }}</a-descriptions-item>
           <a-descriptions-item label="更新">{{ formatDateTime(record.updatedAt) }}</a-descriptions-item>
         </a-descriptions>
 
@@ -150,7 +150,7 @@ const budgetColumns = [
 
 const quoteMargin = computed(() => {
   if (!record.value) return { cost: 0, gross: 0, rate: 0 };
-  const amount = Number(record.value.amount || 0);
+  const amount = Number(record.value.netAmount ?? calcNetAmount(record.value.amount, record.value.taxRate));
   const cost = Number(record.value.budgetAmount ?? budgetRows.value.reduce((sum, item) => sum + item.amount, 0));
   const gross = Number(record.value.grossMargin ?? (amount - cost));
   const rate = Number(record.value.grossMarginRate ?? (amount > 0 ? gross / amount * 100 : 0));

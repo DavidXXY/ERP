@@ -7,6 +7,7 @@ import com.company.ops.api.modules.system.dto.UpdateUserRequest;
 import com.company.ops.api.modules.system.dto.UserResponse;
 import com.company.ops.api.modules.system.service.UserService;
 import jakarta.validation.Valid;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -23,7 +24,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/users")
+@RequestMapping({"/api/users", "/api/system/users"})
 public class UserController {
 
   private final UserService userService;
@@ -36,6 +37,12 @@ public class UserController {
   @PreAuthorize("hasAuthority('system:user:view')")
   public ApiResponse<Page<UserResponse>> list(@PageableDefault(size = 20) Pageable pageable) {
     return ApiResponse.ok(userService.listUsers(pageable));
+  }
+
+  @GetMapping("/options")
+  @PreAuthorize("hasAnyAuthority('system:user:view', 'crm:customer:update', 'crm:opportunity:create', 'crm:opportunity:update', 'crm:followup:create', 'crm:quote:create', 'project:update', 'project:approve')")
+  public ApiResponse<List<UserResponse>> options() {
+    return ApiResponse.ok(userService.listEnabledUserOptions());
   }
 
   @GetMapping("/{id}")

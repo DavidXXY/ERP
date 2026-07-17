@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/permissions")
+@RequestMapping({"/api/permissions", "/api/system/permissions"})
 public class PermissionController {
 
   private final PermissionService permissionService;

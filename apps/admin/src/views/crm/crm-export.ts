@@ -49,12 +49,12 @@ export function receivableRowToCsv(r: {
 export function contractRowToCsv(r: {
   code?: string; customerName: string; projectName: string;
   contractType: string; amount: number; netAmount?: number; taxRate?: number; startDate?: string;
-  endDate?: string; status: string;
+  endDate?: string; salesOwnerName?: string; status: string;
 }): string[] {
   return [
     r.code || "", r.customerName, r.projectName, r.contractType,
     String(r.amount), String(r.netAmount ?? calcNetAmount(r.amount, r.taxRate)),
-    r.startDate || "", r.endDate || "",
+    r.startDate || "", r.endDate || "", r.salesOwnerName || "",
     contractStatusLabel(r.status),
   ];
 }
@@ -76,5 +76,5 @@ function receivableStatusLabel(v: string) {
   return { INVOICE_PENDING: "待开票", PAYMENT_PENDING: "待回款", SETTLED: "已核销", OVERDUE: "逾期" }[v] || v;
 }
 function contractStatusLabel(v: string) {
-  return { ACTIVE: "履约中", RENEWAL_PENDING: "待续约", OVERDUE_RISK: "履约风险", CLOSED: "已关闭" }[v] || v;
+  return { PENDING_APPROVAL: "合同审批中", PENDING_SEAL: "待双方盖章", SEAL_APPROVAL: "盖章件审批中", ACTIVE: "履约中", RENEWAL_PENDING: "待续约", OVERDUE_RISK: "履约风险", CLOSED: "已关闭" }[v] || v;
 }

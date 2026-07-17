@@ -46,7 +46,7 @@ export function quoteStatusLabel(value: QuoteStatus) {
     DRAFT: "草稿",
     COST_REQUESTED: "已询价",
     COSTING: "成本测算中",
-    COST_APPROVED: "成本已确认",
+    COST_APPROVED: "成本已核对，可以报价",
     PENDING_APPROVAL: "审批中",
     APPROVED: "待客户确认",
     REJECTED: "已驳回",
@@ -73,6 +73,9 @@ export function quoteStatusColor(value: QuoteStatus) {
 
 export function contractStatusLabel(value: ContractStatus) {
   return {
+    PENDING_APPROVAL: "合同审批中",
+    PENDING_SEAL: "待双方盖章",
+    SEAL_APPROVAL: "盖章件审批中",
     ACTIVE: "履约中",
     RENEWAL_PENDING: "待续约",
     OVERDUE_RISK: "履约风险",
@@ -82,6 +85,9 @@ export function contractStatusLabel(value: ContractStatus) {
 
 export function contractStatusColor(value: ContractStatus) {
   return {
+    PENDING_APPROVAL: "orange",
+    PENDING_SEAL: "blue",
+    SEAL_APPROVAL: "purple",
     ACTIVE: "green",
     RENEWAL_PENDING: "orange",
     OVERDUE_RISK: "red",

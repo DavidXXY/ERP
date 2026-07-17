@@ -35,20 +35,21 @@
           <template v-else-if="column.key === 'action'">
             <a-space size="small">
               <a-button
-                v-if="auth.can('crm:receivable:invoice') && !record.invoiceNo && !requestedIds.includes(record.id) && record.status !== 'SETTLED'"
+                v-if="auth.can('crm:receivable:view') && !record.invoiceNo && !record.invoiceRequested && record.status !== 'SETTLED'"
                 size="small"
                 type="link"
                 @click="openInvoiceRequest(record)"
               >
                 申请开票
               </a-button>
+              <a-tag v-else-if="!record.invoiceNo && record.invoiceRequested" color="blue">已申请开票</a-tag>
 <a-button
                 v-if="record.status !== 'SETTLED'"
                 size="small"
                 type="link"
                 @click="openEdit(record)"
               >
-                修改
+                变更审批
               </a-button>
               <a-button
                 v-if="auth.can('crm:receivable:settle') && record.invoiceNo && !requestedReceiptIds.includes(record.id) && record.outstandingAmount > 0"
@@ -77,7 +78,7 @@
       </a-form>
     </a-modal>
 
-    <a-modal v-model:open="editOpen" title="修改应收" :confirm-loading="saving" @ok="handleEdit">
+    <a-modal v-model:open="editOpen" title="应收变更审批" :confirm-loading="saving" @ok="handleEdit">
       <a-alert v-if="selectedItem" class="section-alert" type="info" :message="selectedItem.code + ' ' + selectedItem.customerName" />
       <a-form ref="editFormRef" :model="editForm" layout="vertical">
         <a-row :gutter="16">
@@ -109,6 +110,7 @@ const receivableColumns = [
 
 import {
   listReceivables,
+  applyReceivableInvoice,
   updateReceivable,
   type Receivable,
   type ReceivableStatus,
@@ -122,7 +124,6 @@ const items = ref<Receivable[]>([]);
 const loading = ref(false);
 const saving = ref(false);
 const invoiceOpen = ref(false);
-const requestedIds = ref<string[]>([]);
 const receiptOpen = ref(false);
 const selectedItem = ref<Receivable | null>(null);
 const invoiceFormRef = ref();
@@ -187,11 +188,19 @@ function openInvoiceRequest(record: Receivable) {
 async function handleInvoiceRequest() {
   if (!selectedItem.value) return;
   saving.value = true;
-  await new Promise(resolve => setTimeout(resolve, 300));
-  requestedIds.value.push(selectedItem.value.id);
-  invoiceOpen.value = false;
-  message.success("开票申请已提交，请等待财务处理");
-  saving.value = false;
+  try {
+    await applyReceivableInvoice(selectedItem.value.id, {
+      applicantName: auth.user?.displayName || "当前用户",
+      remark: invoiceForm.remark || undefined,
+    });
+    invoiceOpen.value = false;
+    message.success("开票申请已提交，请等待财务处理");
+    await loadData();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "提交开票申请失败");
+  } finally {
+    saving.value = false;
+  }
 }
 
 function openReceiptRequest(record: Receivable) {
@@ -225,10 +234,10 @@ async function handleEdit() {
   try {
     await updateReceivable(selectedItem.value.id, { ...editForm });
     editOpen.value = false;
-    message.success("应收已修改");
+    message.success("应收变更已提交审批，通过后自动更新");
     await loadData();
   } catch (error) {
-    message.error(error instanceof Error ? error.message : "修改失败");
+    message.error(error instanceof Error ? error.message : "提交变更审批失败");
   } finally {
     saving.value = false;
   }

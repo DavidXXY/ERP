@@ -1,5 +1,6 @@
 import { request } from "./http";
 import { type PageResponse } from "./system";
+import type { ApprovalDecision, QuoteCostRequest, QuotePlan } from "./crm";
 
 export type ProjectStage =
   | "INITIATED"
@@ -126,6 +127,18 @@ export function listProjectProfitability() {
   return request<ProjectProfitability[]>({ method: "GET", url: "/projects/profitability" });
 }
 
+export function listPreSalesSupport() {
+  return request<QuotePlan[]>({ method: "GET", url: "/projects/presales-support" });
+}
+
+export function submitPreSalesCost(id: string, payload: { projectManager: string; laborCost?: number; laborTaxRate?: number; materialCost?: number; materialTaxRate?: number; subcontractCost?: number; subcontractTaxRate?: number; travelCost?: number; travelTaxRate?: number; equipmentCost?: number; equipmentTaxRate?: number; riskReserve?: number; riskReserveTaxRate?: number; otherCost?: number; otherTaxRate?: number; suggestedPrice?: number; costRemark?: string }) {
+  return request<QuoteCostRequest>({ method: "POST", url: `/projects/presales-support/${id}/cost`, data: payload });
+}
+
+export function approvePreSalesCost(id: string, payload: { decision: ApprovalDecision; approverName: string; comment: string }) {
+  return request<QuoteCostRequest>({ method: "POST", url: `/projects/presales-support/${id}/approval`, data: payload });
+}
+
 export function createProject(payload: CreateProjectPayload) {
   return request<ProjectDetail>({ method: "POST", url: "/projects", data: payload });
 }
@@ -138,7 +151,11 @@ export function processProjectApproval(id: string, payload: { decision: ProjectA
   return request<ProjectDetail>({ method: "POST", url: `/projects/${id}/approval`, data: payload });
 }
 
-export function advanceProjectStage(id: string, payload: { targetStage: ProjectStage; progress: number; comment: string; operatorName: string }) {
+export function assignProjectManager(id: string, payload: { managerName: string; operatorName: string; comment?: string }) {
+  return request<ProjectDetail>({ method: "POST", url: `/projects/${id}/manager`, data: payload });
+}
+
+export function advanceProjectStage(id: string, payload: { targetStage: ProjectStage; comment: string; operatorName: string }) {
   return request<ProjectDetail>({ method: "POST", url: `/projects/${id}/stage`, data: payload });
 }
 

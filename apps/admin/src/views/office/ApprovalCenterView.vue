@@ -14,6 +14,7 @@
           <a-radio-button value="all">全部 ({{ mergedList.length }})</a-radio-button>
           <a-radio-button value="office">办公室 ({{ officeCount }})</a-radio-button>
           <a-radio-button value="quote">报价审批 ({{ quoteCount }})</a-radio-button>
+          <a-radio-button value="contract">合同审批 ({{ contractCount }})</a-radio-button>
           <a-radio-button value="change">合同变更 ({{ changeCount }})</a-radio-button>
         </a-radio-group>
         <a-select v-model:value="slaFilter" allow-clear placeholder="处理时效" :options="slaOptions" style="width: 150px" />
@@ -68,6 +69,11 @@
             <strong>{{ record.code }}</strong>
             <span class="table-subtitle">{{ record.title || record.customerName || record.desc }}</span>
           </template>
+          <template v-else-if="column.key === 'detail'">
+            <div class="approval-detail-list">
+              <span v-for="line in approvalDetailLines(record)" :key="line">{{ line }}</span>
+            </div>
+          </template>
           <template v-else-if="column.key === 'type'">{{ record._type }}</template>
           <template v-else-if="column.key === 'applicant'">{{ record.applicantName || record.requestedBy || '-' }}</template>
           <template v-else-if="column.key === 'amount'">{{ formatMoney(record.amount) }}</template>
@@ -97,6 +103,12 @@
             <template v-else-if="record._source === 'quote'">
               <a-button type="link" size="small" @click="router.push('/crm/quotes/' + record._entityId)">查看报价</a-button>
               <a-button v-if="auth.can('crm:quote:approve')" type="link" size="small" @click="openCrmProcess(record)">审批处理</a-button>
+            </template>
+            <template v-else-if="record._source === 'contract'">
+              <a-button type="link" size="small" @click="router.push('/crm/contracts/' + record._contractId)">查看合同</a-button>
+              <a-popconfirm title="确认合同审批通过？" @confirm="handleContractApproval(record)">
+                <a-button v-if="auth.can('crm:contract:update')" type="link" size="small">通过</a-button>
+              </a-popconfirm>
             </template>
             <template v-else-if="record._source === 'change'">
               <a-button type="link" size="small" @click="router.push('/crm/contracts/' + record._contractId)">查看合同</a-button>
@@ -131,8 +143,16 @@
     </a-modal>
 
     <!-- Office approval process modal -->
-    <a-modal v-model:open="processOpen" title="处理审批" :confirm-loading="saving" @ok="handleProcess">
-      <a-alert v-if="selectedApproval" class="section-alert" type="info" :message="`${selectedApproval.code} · ${selectedApproval.title} · ${formatMoney(selectedApproval.amount)}`" />
+    <a-modal v-model:open="processOpen" title="处理审批" width="720px" :confirm-loading="saving" @ok="handleProcess">
+      <a-alert v-if="selectedApproval" class="section-alert" type="info" :message="`${selectedApproval.code} · ${selectedApproval.title} · ${formatMoney(selectedApproval.amount)}`" :description="selectedApproval.content || '未填写申请内容'" />
+      <a-descriptions v-if="selectedApproval" size="small" bordered :column="2" class="approval-context">
+        <a-descriptions-item label="审批类型">{{ approvalTypeLabel(selectedApproval.approvalType) }}</a-descriptions-item>
+        <a-descriptions-item label="来源单号">{{ selectedApproval.sourceNo || "-" }}</a-descriptions-item>
+        <a-descriptions-item label="申请人">{{ selectedApproval.applicantName }}</a-descriptions-item>
+        <a-descriptions-item label="部门/业务">{{ selectedApproval.departmentName || "-" }} / {{ selectedApproval.businessType || "-" }}</a-descriptions-item>
+        <a-descriptions-item label="项目编码">{{ selectedApproval.projectCode || "-" }}</a-descriptions-item>
+        <a-descriptions-item label="客户等级">{{ selectedApproval.customerLevel || "-" }}</a-descriptions-item>
+      </a-descriptions>
       <a-form ref="processFormRef" :model="processForm" :rules="processRules" layout="vertical">
         <a-form-item label="审批结论" name="decision"><a-radio-group v-model:value="processForm.decision" button-style="solid"><a-radio-button value="APPROVED">通过</a-radio-button><a-radio-button value="REJECTED">驳回</a-radio-button></a-radio-group></a-form-item>
         <a-form-item label="审批意见" name="comment"><a-textarea v-model:value="processForm.comment" :rows="3" /></a-form-item>
@@ -148,8 +168,15 @@
     </a-modal>
 
     <!-- CRM quote approval modal -->
-    <a-modal v-model:open="crmProcessOpen" title="报价审批" :confirm-loading="saving" @ok="handleCrmProcess">
-      <a-alert v-if="selectedCrmApproval" class="section-alert" type="info" :message="`${selectedCrmApproval.code} · ${selectedCrmApproval.customerName} · ${formatMoney(selectedCrmApproval.amount)}`" />
+    <a-modal v-model:open="crmProcessOpen" title="报价审批" width="760px" :confirm-loading="saving" @ok="handleCrmProcess">
+      <a-alert v-if="selectedCrmApproval" class="section-alert" type="info" :message="`${selectedCrmApproval.code} · ${selectedCrmApproval.customerName} · ${formatMoney(selectedCrmApproval.amount)}`" :description="selectedCrmApproval.desc || '未填写服务范围'" />
+      <a-descriptions v-if="selectedCrmApproval" size="small" bordered :column="2" class="approval-context">
+        <a-descriptions-item label="客户">{{ selectedCrmApproval.customerName || "-" }}</a-descriptions-item>
+        <a-descriptions-item label="报价金额">{{ formatMoney(selectedCrmApproval.amount) }}</a-descriptions-item>
+        <a-descriptions-item label="付款方式/节点" :span="2">{{ selectedCrmApproval.paymentNodes || "-" }}</a-descriptions-item>
+        <a-descriptions-item label="成本预算">{{ selectedCrmApproval.budgetAmount != null ? formatMoney(selectedCrmApproval.budgetAmount) : "-" }}</a-descriptions-item>
+        <a-descriptions-item label="毛利率">{{ selectedCrmApproval.grossMarginRate != null ? `${(Number(selectedCrmApproval.grossMarginRate) * 100).toFixed(1)}%` : "-" }}</a-descriptions-item>
+      </a-descriptions>
       <a-form ref="crmProcessFormRef" :model="crmProcessForm" :rules="crmProcessRules" layout="vertical">
         <a-form-item label="审批结论" name="decision"><a-radio-group v-model:value="crmProcessForm.decision" button-style="solid"><a-radio-button value="APPROVED">通过</a-radio-button><a-radio-button value="REJECTED">驳回</a-radio-button></a-radio-group></a-form-item>
         <a-form-item label="审批意见" name="comment"><a-textarea v-model:value="crmProcessForm.comment" :rows="3" /></a-form-item>
@@ -165,7 +192,7 @@ import { useRouter } from "vue-router";
 import { message } from "ant-design-vue";
 import PlusOutlined from "@ant-design/icons-vue/PlusOutlined"; import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
 import { addSignApproval, createApproval, getOfficeReferences, getOfficeWorkbench, listApprovals, processApproval, returnApproval, transferApproval, withdrawApproval, type Approval, type ApprovalRuntimeNode, type ApprovalStatus, type ApprovalType, type Workbench } from "@/api/office";
-import { listQuotes, listContracts, listContractChanges, processQuoteApproval, approveContractChange, rejectContractChange, type QuotePlan } from "@/api/crm";
+import { listQuotes, listContracts, listContractChanges, processQuoteApproval, approveContract, approveContractChange, rejectContractChange, type QuotePlan, type ServiceContract } from "@/api/crm";
 import { useAuthStore } from "@/stores/auth";
 
 const auth = useAuthStore(); const router = useRouter(); const loading = ref(false); const saving = ref(false);
@@ -179,6 +206,7 @@ const workbench = ref<Workbench | null>(null);
 const users = ref<Array<{ id: string; displayName: string; enabled: boolean }>>([]);
 // CRM approval data
 const pendingQuotes = ref<QuotePlan[]>([]);
+const pendingContracts = ref<ServiceContract[]>([]);
 const pendingChanges = ref<any[]>([]);
 
 // Modals
@@ -207,8 +235,10 @@ const mergedList = computed(() => {
       _key: "office-" + a.id, _source: "office", _entityId: a.id,
       _type: "通用审批", _statusLabel: approvalStatusLabel(a.status),
       _statusColor: approvalStatusColor(a.status),
-      id: a.id, code: a.code, title: a.title, amount: a.amount,
+      id: a.id, code: a.code, title: a.title, amount: a.amount, content: a.content,
+      approvalType: a.approvalType, sourceNo: a.sourceNo,
       applicantName: a.applicantName, status: a.status, date: a.createdAt,
+      departmentName: a.departmentName, businessType: a.businessType, projectCode: a.projectCode, customerLevel: a.customerLevel,
       approverName: a.approverName, approvalComment: a.approvalComment,
       currentApproverName: a.currentApproverName, matchedRuleText: a.matchedRuleText,
       approvalConfigVersion: a.approvalConfigVersion, nodes: a.nodes || [],
@@ -222,12 +252,28 @@ const mergedList = computed(() => {
       _key: "quote-" + q.id, _source: "quote", _entityId: q.id,
       _type: "报价审批", _statusLabel: "待审批",
       _statusColor: "orange",
-      id: q.id, code: q.code, title: q.customerName, desc: q.serviceScope?.slice(0, 40),
+      id: q.id, code: q.code, title: q.customerName, desc: q.serviceScope,
       amount: q.amount, customerName: q.customerName, status: q.status, date: q.updatedAt,
+      paymentNodes: q.paymentNodes, budgetAmount: q.budgetAmount, grossMarginRate: q.grossMarginRate,
       applicantName: (q as any).editorName, approverName: q.lastApproverName,
       approvalComment: q.lastApprovalComment,
       _slaLevel: slaLevel(q.updatedAt, true),
       _riskLevel: approvalRiskLevel(q.amount, q.updatedAt, true),
+    });
+  });
+  // Contract approvals
+  pendingContracts.value.forEach((c) => {
+    items.push({
+      _key: "contract-" + c.id, _source: "contract", _entityId: c.id,
+      _contractId: c.id,
+      _type: "合同审批", _statusLabel: "待审批",
+      _statusColor: "orange",
+      id: c.id, code: c.code || "-", title: c.projectName,
+      desc: `${c.customerName || "-"} · ${c.contractType || "-"}`,
+      amount: c.amount, customerName: c.customerName, status: c.status, date: c.startDate,
+      contractType: c.contractType, startDate: c.startDate, endDate: c.endDate, serviceCycle: c.serviceCycle,
+      _slaLevel: slaLevel(c.startDate, true),
+      _riskLevel: approvalRiskLevel(c.amount, c.startDate, true),
     });
   });
   // Contract changes
@@ -238,7 +284,7 @@ const mergedList = computed(() => {
       _type: "合同变更", _statusLabel: "待审批",
       _statusColor: "orange",
       id: c.id, code: c.contractCode || "-", title: c.reason,
-      desc: c.changeData, amount: 0, date: c.requestedAt,
+      desc: changeSummary(c), amount: changeAmount(c), changeData: c.changeData, date: c.requestedAt,
       applicantName: c.requestedBy, status: c.status,
       _slaLevel: slaLevel(c.requestedAt, true),
       _riskLevel: approvalRiskLevel(0, c.requestedAt, true),
@@ -257,6 +303,7 @@ const filteredList = computed(() => {
 });
 const officeCount = computed(() => mergedList.value.filter((i) => i._source === "office").length);
 const quoteCount = computed(() => mergedList.value.filter((i) => i._source === "quote").length);
+const contractCount = computed(() => mergedList.value.filter((i) => i._source === "contract").length);
 const changeCount = computed(() => mergedList.value.filter((i) => i._source === "change").length);
 const workbenchTodos = computed(() => (workbench.value?.todos || []).slice(0, 5));
 const workbenchWarnings = computed(() => (workbench.value?.warnings || []).slice(0, 5));
@@ -285,6 +332,7 @@ const riskOptions = [
 const mergedColumns = [
   { title: "来源", key: "source", width: 100 },
   { title: "编号 / 说明", key: "approval", width: 240 },
+  { title: "审批信息", key: "detail", width: 360 },
   { title: "类型", key: "type", width: 100 },
   { title: "申请人", key: "applicant", width: 120 },
   { title: "金额", key: "amount", width: 130 },
@@ -319,6 +367,7 @@ async function loadData() {
     const allQuotes = results[3];
     const allContracts = results[4];
     pendingQuotes.value = allQuotes.filter((q: QuotePlan) => q.status === "PENDING_APPROVAL");
+    pendingContracts.value = allContracts.filter((c: ServiceContract) => c.status === "PENDING_APPROVAL");
     // Fetch contract changes
     try {
       const contracts = allContracts;
@@ -388,6 +437,14 @@ async function handleCrmProcess() {
   catch (error) { message.error(error instanceof Error ? error.message : "审批处理失败"); }
   finally { saving.value = false; }
 }
+async function handleContractApproval(item: any) {
+  saving.value = true;
+  try {
+    await approveContract(item._contractId, { operatorName: auth.user?.displayName || "", comment: "合同审批通过" });
+    message.success("合同审批已通过"); await loadData();
+  } catch (error) { message.error(error instanceof Error ? error.message : "合同审批失败"); }
+  finally { saving.value = false; }
+}
 async function handleCrmChangeAction(item: any, decision: string) {
   saving.value = true;
   try {
@@ -396,6 +453,76 @@ async function handleCrmChangeAction(item: any, decision: string) {
     message.success(decision === "APPROVED" ? "变更已通过" : "变更已驳回"); await loadData();
   } catch (error) { message.error(error instanceof Error ? error.message : "操作失败"); }
   finally { saving.value = false; }
+}
+
+function approvalDetailLines(record: any) {
+  if (record._source === "office") {
+    return [
+      `类型：${approvalTypeLabel(record.approvalType) || record._type}`,
+      `内容：${record.content || "未填写"}`,
+      record.sourceNo ? `来源单号：${record.sourceNo}` : "",
+      record.departmentName || record.businessType ? `组织/业务：${record.departmentName || "-"} / ${record.businessType || "-"}` : "",
+    ].filter(Boolean);
+  }
+  if (record._source === "quote") {
+    return [
+      `客户：${record.customerName || "-"}`,
+      `服务范围：${record.desc || "-"}`,
+      `付款方式：${record.paymentNodes || "-"}`,
+      `预算/毛利率：${record.budgetAmount != null ? formatMoney(record.budgetAmount) : "-"} / ${record.grossMarginRate != null ? `${(Number(record.grossMarginRate) * 100).toFixed(1)}%` : "-"}`,
+    ];
+  }
+  if (record._source === "contract") {
+    return [
+      `客户：${record.customerName || "-"}`,
+      `合同类型：${record.contractType || "-"}`,
+      `周期：${record.startDate || "-"} 至 ${record.endDate || "-"}`,
+      `服务周期：${record.serviceCycle || "-"}`,
+    ];
+  }
+  if (record._source === "change") {
+    return [
+      `合同：${record.code || "-"}`,
+      `变更类型：${changeTypeLabel(record)}`,
+      `变更内容：${changeSummary(record)}`,
+      `申请原因：${record.title || "-"}`,
+    ];
+  }
+  return ["-"];
+}
+
+function parseChangeData(record: any) {
+  try { return record.changeData ? JSON.parse(record.changeData) : {}; }
+  catch { return {}; }
+}
+
+function changeTypeLabel(record: any) {
+  const data = parseChangeData(record);
+  if (data.type === "SIGNED_DOC_APPROVAL") return "双方盖章件审批";
+  if (data.type === "RECEIVABLE_UPDATE") return "应收计划变更";
+  return "合同信息变更";
+}
+
+function changeSummary(record: any) {
+  const data = parseChangeData(record);
+  if (data.type === "SIGNED_DOC_APPROVAL") return "审批双方盖章件，通过后合同生效并自动创建项目";
+  if (data.type === "RECEIVABLE_UPDATE") {
+    return [
+      data.amount != null ? `金额改为 ${formatMoney(Number(data.amount))}` : "",
+      data.dueDate ? `到期日改为 ${data.dueDate}` : "",
+      data.sourceNo ? `来源单号改为 ${data.sourceNo}` : "",
+    ].filter(Boolean).join("；") || "应收计划信息变更";
+  }
+  const labels: Record<string, string> = { projectName: "项目名称", contractType: "合同类型", amount: "合同金额", taxRate: "税率", startDate: "开始日期", endDate: "结束日期", serviceCycle: "服务周期" };
+  return Object.entries(data)
+    .filter(([key]) => key !== "type")
+    .map(([key, value]) => `${labels[key] || key}：${key === "amount" ? formatMoney(Number(value)) : value}`)
+    .join("；") || record.changeData || "-";
+}
+
+function changeAmount(record: any) {
+  const data = parseChangeData(record);
+  return data.amount != null ? Number(data.amount) : 0;
 }
 
 function generateCode(prefix: string) {
@@ -474,6 +601,22 @@ function formatMoney(v: number) { return new Intl.NumberFormat("zh-CN", { style:
 .health-card strong {
   color: #101828;
   font-size: 20px;
+}
+
+.approval-detail-list {
+  display: grid;
+  gap: 3px;
+  color: #475467;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.approval-detail-list span {
+  overflow-wrap: anywhere;
+}
+
+.approval-context {
+  margin: 12px 0 16px;
 }
 
 .text-danger {

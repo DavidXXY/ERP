@@ -60,9 +60,9 @@
               size="small"
               type="link"
               :disabled="record.stage === 'WON' || record.stage === 'LOST'"
-              @click.stop="openAdvance(record)"
+              @click.stop="handlePrimaryAction(record)"
             >
-              推进
+              {{ record.stage === "QUOTATION" ? "报价" : "推进" }}
             </a-button>
             <a-button
               v-if="auth.can('crm:opportunity:update') && record.stage !== 'WON' && record.stage !== 'LOST'"
@@ -90,7 +90,7 @@
       <div v-for="record in filteredOpportunities" :key="record.id" class="mobile-card-item" @click="router.push('/crm/opportunities/' + record.id)">
         <div class="mobile-card-header"><strong>{{ record.code }}</strong><a-tag :color="opportunityStageColor(record.stage)">{{ opportunityStageLabel(record.stage) }}</a-tag></div>
         <div class="mobile-card-body"><span>{{ record.customerName }}</span><strong>{{ formatMoney(record.expectedAmount) }}</strong></div>
-        <div class="mobile-card-footer"><span v-if="record.nextAction">下一步：{{ record.nextAction }}</span><span v-if="record.nextActionAt">· {{ record.nextActionAt }}</span></div>
+        <div class="mobile-card-footer"><span>负责人：{{ record.ownerName || "未分配" }}</span><span v-if="record.nextAction"> · 下一步：{{ record.nextAction }}</span><span v-if="record.nextActionAt">· {{ record.nextActionAt }}</span></div>
       </div>
     </div>
     </a-card>
@@ -217,7 +217,7 @@ const filteredOpportunities = computed(() => {
   const term = keyword.value.trim().toLowerCase();
   const results = opportunities.value.filter((item) => {
     const matchesStage = !stageFilter.value || item.stage === stageFilter.value;
-    const text = `${item.code} ${item.customerName} ${item.needSummary}`.toLowerCase();
+    const text = `${item.code} ${item.customerName} ${item.needSummary} ${item.ownerName || ""}`.toLowerCase();
     return matchesStage && (!term || text.includes(term));
   });
   results.sort((a, b) => {
@@ -304,6 +304,14 @@ function openAdvance(record: Opportunity) {
   advanceOpen.value = true;
 }
 
+function handlePrimaryAction(record: Opportunity) {
+  if (record.stage === "QUOTATION") {
+    router.push({ path: "/crm/quotes", query: { create: "1", opportunity: record.id } });
+    return;
+  }
+  openAdvance(record);
+}
+
 async function handleDeleteOpportunity(record: Opportunity) {
   try {
     await deleteOpportunity(record.id);
@@ -372,6 +380,9 @@ async function handleAdvance() {
     advanceOpen.value = false;
     message.success("商机阶段已推进");
     await loadData();
+    if (result.stage === "QUOTATION") {
+      await router.push({ path: "/crm/quotes", query: { create: "1", opportunity: result.id } });
+    }
   } catch (error) {
     message.error(error instanceof Error ? error.message : "商机推进失败");
   } finally {

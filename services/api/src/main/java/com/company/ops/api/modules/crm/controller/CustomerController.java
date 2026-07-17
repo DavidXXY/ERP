@@ -4,6 +4,7 @@ import com.company.ops.api.common.api.ApiResponse;
 import com.company.ops.api.modules.crm.dto.CreateCustomerRequest;
 import com.company.ops.api.modules.crm.dto.CustomerDetailResponse;
 import com.company.ops.api.modules.crm.dto.CustomerSummaryResponse;
+import com.company.ops.api.modules.crm.dto.TransferCustomerOwnerRequest;
 import com.company.ops.api.modules.crm.dto.UpdateCustomerRequest;
 import com.company.ops.api.modules.crm.service.CustomerService;
 import com.company.ops.api.modules.crm.service.CrmImportService;
@@ -60,6 +61,16 @@ public class CustomerController {
       @Valid @RequestBody UpdateCustomerRequest request
   ) {
     return ApiResponse.ok(customerService.updateCustomer(id, request));
+  }
+
+  @PostMapping("/{id}/transfer-owner")
+  @PreAuthorize("hasAuthority('crm:customer:update')")
+  public ApiResponse<Void> transferOwner(
+      @PathVariable UUID id,
+      @Valid @RequestBody TransferCustomerOwnerRequest request
+  ) {
+    customerService.transferOwner(id, request.ownerName());
+    return ApiResponse.ok();
   }
 
   @DeleteMapping("/{id}")

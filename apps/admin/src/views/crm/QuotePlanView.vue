@@ -4,7 +4,7 @@
       <template #extra>
         <a-space>
           <a-button @click="loadData">刷新</a-button>
-          <a-button v-if="auth.can('crm:quote:create')" type="primary" @click="openCreate">新增报价</a-button>
+          <a-button v-if="auth.can('crm:quote:create')" type="primary" @click="openCreate()">新增报价</a-button>
         </a-space>
       </template>
 
@@ -14,12 +14,11 @@
         <a-col :xs="12" :lg="6"><a-statistic title="待客户确认" :value="customerPendingCount" suffix="份" /></a-col>
         <a-col :xs="12" :lg="6"><a-statistic title="低毛利预警" :value="lowMarginCount" suffix="份" :value-style="{ color: lowMarginCount > 0 ? '#ff4d4f' : '#52c41a' }" /></a-col>
       </a-row>
-      <a-alert class="section-alert" type="info" show-icon message="报价利润校验：报价阶段必须确认项目预算，系统按预算测算毛利率；低于 15% 的报价可提交内部审批，审批时重点提醒。" />
+      <a-alert class="section-alert" type="info" show-icon message="报价利润校验：销售在报价阶段发起售前支持，项目管理填写并审批成本；成本核对通过后，报价才可以继续提交审批。" />
 
       <div class="quote-toolbar">
         <a-input v-model:value="keyword" allow-clear placeholder="搜索报价编号、客户或服务范围" />
         <a-select v-model:value="statusFilter" :options="statusOptions" />
-        <a-checkbox v-model:checked="showConverted">显示已转合同</a-checkbox>
       </div>
 
       <!-- desktop-table --><div class="desktop-table">
@@ -28,7 +27,7 @@
         :data-source="filteredQuotes"
         :loading="loading"
         :row-key="(record: any) => record.id"
-        :scroll="{ x: 1280 }"
+        :scroll="{ x: 1420 }"
         :customRow="(record: any) => ({ onClick: (e: any) => { if (e.target?.closest?.('button,a,.ant-btn,.ant-tag,.ant-popconfirm,.ant-dropdown-trigger,input,select,[role=button]')) return; router.push('/crm/quotes/' + record.id) } })"
       >
         <template #bodyCell="{ column, record }">
@@ -47,6 +46,9 @@
           <template v-else-if="column.key === 'margin'">
             <a-tag :color="quoteMargin(record).rate < 15 ? 'red' : quoteMargin(record).rate < 25 ? 'orange' : 'green'">{{ quoteMargin(record).rate.toFixed(1) }}%</a-tag>
             <span class="table-subtitle">预算 {{ formatMoney(quoteMargin(record).cost) }} · 毛利 {{ formatMoney(quoteMargin(record).gross) }}</span>
+          </template>
+          <template v-else-if="column.key === 'owner'">
+            <span>{{ quoteOwnerName(record) }}</span>
           </template>
           <template v-else-if="column.key === 'status'">
             <a-tag :color="quoteStatusColor(record.status)">{{ quoteStatusLabel(record.status) }}</a-tag>
@@ -74,27 +76,11 @@
               </a-button>
               <a-popconfirm
                 v-if="auth.can('crm:quote:update') && canRequestCost(record)"
-                title="确认向项目管理发起成本询价？"
+                title="确认向项目管理发起售前支持？"
                 @confirm="openCostRequest(record)"
               >
-                <a-button size="small" type="link">发起询价</a-button>
+                <a-button size="small" type="link">售前支持</a-button>
               </a-popconfirm>
-              <a-button
-                v-if="auth.can('crm:quote:cost') && canSubmitCost(record)"
-                size="small"
-                type="link"
-                @click="openCostSubmit(record)"
-              >
-                填写成本
-              </a-button>
-              <a-button
-                v-if="auth.can('crm:quote:cost') && canApproveCost(record)"
-                size="small"
-                type="link"
-                @click="openCostApproval(record)"
-              >
-                成本审批
-              </a-button>
               <a-popconfirm
                 v-if="auth.can('crm:quote:submit') && (record.status === 'DRAFT' || record.status === 'COST_APPROVED')"
                 :title="quoteSubmitTip(record)"
@@ -146,7 +132,7 @@
         <div class="mobile-card-header"><strong>{{ record.code }}</strong><a-tag :color="quoteStatusColor(record.status)">{{ quoteStatusLabel(record.status) }}</a-tag></div>
         <div class="mobile-card-body"><span>{{ record.customerName }}</span><strong>{{ formatMoney(record.amount) }}</strong></div>
         <div class="mobile-card-tags">未税 {{ formatMoney(record.netAmount ?? calcNetAmount(record.amount, record.taxRate)) }} · 税率 {{ formatTaxRate(record.taxRate) }}</div>
-        <div class="mobile-card-tags">{{ record.opportunityCode || "未关联商机" }}</div>
+        <div class="mobile-card-tags">{{ record.opportunityCode || "未关联商机" }} · 销售负责人 {{ quoteOwnerName(record) }}</div>
       </div>
     </div>
     </a-card>
@@ -191,15 +177,16 @@
                 <strong>项目预算确认</strong>
                 <a-space>
                   <a-tag :color="formMargin.rate < 15 ? 'red' : formMargin.rate < 25 ? 'orange' : 'green'">毛利率 {{ formMargin.rate.toFixed(1) }}%</a-tag>
-                  <a-button size="small" @click="applyDefaultBudget">按标准比例生成</a-button>
+                  <a-tag v-if="quoteBudgetLocked" color="green">售前成本已填写，预算只读</a-tag>
+                  <a-button size="small" :disabled="quoteBudgetLocked" @click="applyDefaultBudget">按标准比例生成</a-button>
                 </a-space>
               </div>
               <a-row :gutter="12">
-                <a-col :xs="12" :md="8"><a-form-item label="人工预算"><a-input-number v-model:value="form.laborBudget" :min="0" :precision="2" class="full-input" /></a-form-item></a-col>
-                <a-col :xs="12" :md="8"><a-form-item label="材料预算"><a-input-number v-model:value="form.materialBudget" :min="0" :precision="2" class="full-input" /></a-form-item></a-col>
-                <a-col :xs="12" :md="8"><a-form-item label="外包预算"><a-input-number v-model:value="form.subcontractBudget" :min="0" :precision="2" class="full-input" /></a-form-item></a-col>
-                <a-col :xs="12" :md="8"><a-form-item label="差旅预算"><a-input-number v-model:value="form.travelBudget" :min="0" :precision="2" class="full-input" /></a-form-item></a-col>
-                <a-col :xs="12" :md="8"><a-form-item label="其他预算"><a-input-number v-model:value="form.otherBudget" :min="0" :precision="2" class="full-input" /></a-form-item></a-col>
+                <a-col :xs="12" :md="8"><a-form-item label="人工预算"><a-input-number v-model:value="form.laborBudget" :disabled="quoteBudgetLocked" :min="0" :precision="2" class="full-input" /></a-form-item></a-col>
+                <a-col :xs="12" :md="8"><a-form-item label="材料预算"><a-input-number v-model:value="form.materialBudget" :disabled="quoteBudgetLocked" :min="0" :precision="2" class="full-input" /></a-form-item></a-col>
+                <a-col :xs="12" :md="8"><a-form-item label="外包预算"><a-input-number v-model:value="form.subcontractBudget" :disabled="quoteBudgetLocked" :min="0" :precision="2" class="full-input" /></a-form-item></a-col>
+                <a-col :xs="12" :md="8"><a-form-item label="差旅预算"><a-input-number v-model:value="form.travelBudget" :disabled="quoteBudgetLocked" :min="0" :precision="2" class="full-input" /></a-form-item></a-col>
+                <a-col :xs="12" :md="8"><a-form-item label="其他预算"><a-input-number v-model:value="form.otherBudget" :disabled="quoteBudgetLocked" :min="0" :precision="2" class="full-input" /></a-form-item></a-col>
                 <a-col :xs="12" :md="8">
                   <div class="quote-budget-summary">
                     <span>预算合计</span>
@@ -208,9 +195,29 @@
                   </div>
                 </a-col>
               </a-row>
+              <div v-if="editingQuote?.costRequest && hasFilledPresalesCost(editingQuote.costRequest)" class="quote-presales-cost">
+                <div class="quote-presales-cost-title">
+                  <strong>售前支持成本</strong>
+                  <span>{{ editingQuote.costRequest.projectManager || "未填写负责人" }}</span>
+                </div>
+                <div class="presales-cost-table">
+                  <div class="presales-cost-head">
+                    <span>成本项</span>
+                    <span>含税价</span>
+                    <span>不含税价</span>
+                    <span>税率</span>
+                  </div>
+                  <div v-for="item in presalesCostRows(editingQuote.costRequest)" :key="item.key" class="presales-cost-row">
+                    <strong>{{ item.label }}</strong>
+                    <em>{{ formatMoney(item.gross) }}</em>
+                    <em>{{ formatMoney(item.net) }}</em>
+                    <span class="tax-static">{{ item.taxLabel }}</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </a-col>
-          <a-col :span="24"><a-form-item label="付款节点"><a-input v-model:value="form.paymentNodes" placeholder="例如：签约30%，半年节点30%，验收40%" /></a-form-item></a-col>
+          <a-col :span="24"><a-form-item label="付款方式/节点" name="paymentNodes"><a-input v-model:value="form.paymentNodes" placeholder="例如：签约30%，半年节点30%，验收40%" /></a-form-item></a-col>
           <a-col v-if="editingQuote" :span="24">
             <a-form-item label="本次修订说明" required>
               <a-textarea v-model:value="form.revisionNote" :rows="2" placeholder="说明本次价格、范围、频次或付款节点的调整" />
@@ -284,7 +291,7 @@
         type="success"
         show-icon
         :message="`${selectedQuote.code} V${selectedQuote.versionNo} 已获客户接受`"
-        description="确认后生成合同及全部应收，同时将关联商机标记为赢单。"
+        description="确认后生成待审批合同及全部应收，同时将关联商机标记为赢单；合同审批通过后再上传双方盖章件。"
       />
       <a-form ref="conversionFormRef" :model="conversionForm" :rules="conversionRules" layout="vertical">
         <a-divider>合同信息</a-divider>
@@ -295,99 +302,75 @@
           <a-col :xs="24" :md="8"><a-form-item label="开始日期" name="startDate"><a-input v-model:value="conversionForm.startDate" type="date" /></a-form-item></a-col>
           <a-col :xs="24" :md="8"><a-form-item label="结束日期" name="endDate"><a-input v-model:value="conversionForm.endDate" type="date" /></a-form-item></a-col>
           <a-col :xs="24" :md="8"><a-form-item label="服务周期"><a-input v-model:value="conversionForm.serviceCycle" /></a-form-item></a-col>
+          <a-col :span="24"><a-form-item label="付款方式/节点" required><a-input :value="selectedQuote?.paymentNodes || ''" disabled placeholder="请先在报价中填写付款方式/节点" /></a-form-item></a-col>
         </a-row>
 
-        <a-form-item label="合同附件" required>
+        <a-form-item label="合同审批件" required>
           <a-upload :show-upload-list="false" :before-upload="selectConversionAttachment" accept=".jpg,.jpeg,.png,.webp,.pdf,.doc,.docx,.xls,.xlsx">
-            <a-button><template #icon><UploadOutlined /></template>选择合同附件</a-button>
+            <a-button><template #icon><UploadOutlined /></template>选择审批件</a-button>
           </a-upload>
           <div v-if="conversionAttachment" class="selected-attachment">
             <span>{{ conversionAttachment.name }}</span>
             <a-button type="link" size="small" @click="conversionAttachment = null">移除</a-button>
           </div>
-          <div v-else class="form-help">请上传合同文件，转合同后将自动归档到合同附件。</div>
+          <div v-else class="form-help">请上传合同审批件，转合同后将自动归档到合同审批件。</div>
         </a-form-item>
 
         <a-divider>应收账款分期</a-divider><div class="receivable-summary" style="margin-bottom: 12px"><a-statistic title="合同总额" :value="selectedQuote?.amount || 0" :formatter="moneyFormatter" style="display: inline-block; margin-right: 32px" /><a-statistic title="已分配" :value="receivableAllocated" :formatter="moneyFormatter" style="display: inline-block; margin-right: 32px" /><a-statistic title="剩余" :value="Math.max(0, (selectedQuote?.amount || 0) - receivableAllocated)" :formatter="moneyFormatter" style="display: inline-block" :value-style="{ color: receivableAllocated > (selectedQuote?.amount || 0) ? '#ff4d4f' : '#52c41a' }" /></div><a-table :data-source="conversionForm.receivables" :columns="receivableColumns" :pagination="false" row-key="rowKey" size="small"><template #bodyCell="{ column, record, index }"><template v-if="column.key === 'amount'"><a-input-number v-model:value="record.amount" :min="0" :precision="2" style="width: 100%" @change="(val: any) => syncReceivable(index, 'amount', val)" /></template><template v-else-if="column.key === 'ratio'"><a-input-number v-model:value="record.ratio" :min="0" :max="100" :precision="1" style="width: 100%" @change="(val: any) => syncReceivable(index, 'ratio', val)" /></template><template v-else-if="column.key === 'dueDate'"><a-input v-model:value="record.dueDate" type="date" style="width: 100%" /></template><template v-else-if="column.key === 'action'"><a-button type="link" danger size="small" @click="removeReceivable(index)">删除</a-button></template></template></a-table><a-button type="dashed" block style="margin-top: 8px" @click="addReceivable">+ 新增分期</a-button>
       </a-form>
     </a-modal>
 
-    <a-modal v-model:open="costRequestOpen" title="发起项目询价" width="520px" :confirm-loading="saving" @ok="handleCostRequest">
+    <a-modal v-model:open="costRequestOpen" title="发起售前支持" width="520px" :confirm-loading="saving" @ok="handleCostRequest">
       <a-alert
         v-if="selectedQuote"
         class="section-alert"
         type="info"
         show-icon
         :message="`${selectedQuote.code} · ${selectedQuote.customerName}`"
-        description="项目管理填写成本并审批通过后，成本会自动回写到报价预算。"
+        description="请求会进入项目管理的售前支持工作台，由项目管理人员填写并审批成本。"
       />
       <a-form ref="costRequestFormRef" :model="costRequestForm" :rules="costRequestRules" layout="vertical">
         <a-form-item label="询价发起人" name="requestedBy"><a-input v-model:value="costRequestForm.requestedBy" /></a-form-item>
       </a-form>
     </a-modal>
 
-    <a-modal v-model:open="costSubmitOpen" title="填写售前支持成本" width="860px" :confirm-loading="saving" @ok="handleCostSubmit">
+    <a-modal v-model:open="costSubmitOpen" title="填写售前成本" width="780px" :confirm-loading="saving" @ok="handleCostSubmit">
       <a-alert
         v-if="selectedQuote"
         class="section-alert"
         type="info"
         show-icon
         :message="`${selectedQuote.code} · ${selectedQuote.customerName}`"
-        description="人工默认税率 6%，材料和设备默认税率 13%，差旅、风险预留和其他成本不设置税率。"
+        :description="`成本合计 ${formatMoney(costSubmitTotal)}，建议报价 ${formatMoney(costSubmitForm.suggestedPrice || 0)}`"
       />
       <a-form ref="costSubmitFormRef" :model="costSubmitForm" :rules="costSubmitRules" layout="vertical">
-        <div class="cost-summary-strip">
-          <a-form-item label="项目负责人" name="projectManager" class="cost-summary-owner">
-            <a-input v-model:value="costSubmitForm.projectManager" />
-          </a-form-item>
-          <div>
-            <span>成本合计</span>
-            <strong>{{ formatMoney(costSubmitTotal) }}</strong>
-          </div>
-          <a-form-item label="建议报价" class="cost-summary-price">
-            <a-input-number v-model:value="costSubmitForm.suggestedPrice" :min="0" :precision="2" class="full-input" />
-          </a-form-item>
-        </div>
-
-        <div class="cost-entry-table">
-          <div class="cost-entry-head">
-            <span>成本类型</span>
-            <span>金额</span>
-            <span>税率</span>
-          </div>
-          <div v-for="item in costEntryRows" :key="item.amountKey" class="cost-entry-row">
-            <div>
-              <strong>{{ item.title }}</strong>
-              <span>{{ item.description }}</span>
-            </div>
-            <a-input-number v-model:value="costSubmitForm[item.amountKey]" :min="0" :precision="2" class="full-input" />
-            <a-input-number
-              v-if="item.taxKey"
-              v-model:value="costSubmitForm[item.taxKey]"
-              :min="0"
-              :max="100"
-              :precision="2"
-              addon-after="%"
-              class="full-input"
-            />
-            <a-tag v-else color="default">无税率</a-tag>
-          </div>
-        </div>
-
-        <a-form-item label="成本说明">
-          <a-textarea v-model:value="costSubmitForm.costRemark" :rows="3" placeholder="填写成本口径、供应商依据、风险说明或售前支持范围" />
-        </a-form-item>
+        <a-row :gutter="12">
+          <a-col :xs="24" :md="8">
+            <a-form-item label="成本负责人" name="projectManager">
+              <a-select v-model:value="costSubmitForm.projectManager" :options="userOptions" show-search option-filter-prop="label" placeholder="选择成本负责人" />
+            </a-form-item>
+          </a-col>
+          <a-col :xs="12" :md="8"><a-form-item label="人工成本"><a-input-number v-model:value="costSubmitForm.laborCost" :min="0" :precision="2" class="full-input" /></a-form-item></a-col>
+          <a-col :xs="12" :md="8"><a-form-item label="材料成本"><a-input-number v-model:value="costSubmitForm.materialCost" :min="0" :precision="2" class="full-input" /></a-form-item></a-col>
+          <a-col :xs="12" :md="8"><a-form-item label="外包成本"><a-input-number v-model:value="costSubmitForm.subcontractCost" :min="0" :precision="2" class="full-input" /></a-form-item></a-col>
+          <a-col :xs="12" :md="8"><a-form-item label="差旅成本"><a-input-number v-model:value="costSubmitForm.travelCost" :min="0" :precision="2" class="full-input" /></a-form-item></a-col>
+          <a-col :xs="12" :md="8"><a-form-item label="设备成本"><a-input-number v-model:value="costSubmitForm.equipmentCost" :min="0" :precision="2" class="full-input" /></a-form-item></a-col>
+          <a-col :xs="12" :md="8"><a-form-item label="风险预留"><a-input-number v-model:value="costSubmitForm.riskReserve" :min="0" :precision="2" class="full-input" /></a-form-item></a-col>
+          <a-col :xs="12" :md="8"><a-form-item label="其他成本"><a-input-number v-model:value="costSubmitForm.otherCost" :min="0" :precision="2" class="full-input" /></a-form-item></a-col>
+          <a-col :xs="12" :md="8"><a-form-item label="建议报价"><a-input-number v-model:value="costSubmitForm.suggestedPrice" :min="0" :precision="2" class="full-input" /></a-form-item></a-col>
+          <a-col :span="24"><a-form-item label="成本说明"><a-textarea v-model:value="costSubmitForm.costRemark" :rows="3" /></a-form-item></a-col>
+        </a-row>
       </a-form>
     </a-modal>
 
-    <a-modal v-model:open="costApprovalOpen" title="项目成本审批" width="620px" :confirm-loading="saving" @ok="handleCostApproval">
+    <a-modal v-model:open="costApprovalOpen" title="售前成本审批" width="620px" :confirm-loading="saving" @ok="handleCostApproval">
       <a-alert
         v-if="selectedCostRequest"
         class="section-alert"
         type="warning"
         show-icon
         :message="`成本合计 ${formatMoney(selectedCostRequest.totalCost || 0)} · 建议报价 ${formatMoney(selectedCostRequest.suggestedPrice || 0)}`"
-        :description="selectedCostRequest.costRemark || '项目管理未填写备注'"
+        :description="selectedCostRequest.costRemark || '成本负责人未填写备注'"
       />
       <a-form ref="costApprovalFormRef" :model="costApprovalForm" :rules="costApprovalRules" layout="vertical">
         <a-form-item label="审批结论" name="decision">
@@ -436,7 +419,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { message } from "ant-design-vue";
 import UploadOutlined from "@ant-design/icons-vue/UploadOutlined";
 import {
@@ -464,11 +447,14 @@ import {
 import { useAuthStore } from "@/stores/auth";
 import { formatMoney, generateCode, quoteStatusColor, quoteStatusLabel } from "./crm-options";
 import { deleteQuote } from "@/api/crm";
+import { listUsersApi, type UserResponse } from "@/api/system";
 
-const router = useRouter();
 const auth = useAuthStore();
+const route = useRoute();
+const router = useRouter();
 const quotes = ref<QuotePlan[]>([]);
 const opportunities = ref<Opportunity[]>([]);
+const users = ref<UserResponse[]>([]);
 const revisions = ref<QuoteRevision[]>([]);
 const loading = ref(false);
 const saving = ref(false);
@@ -494,7 +480,6 @@ const revisionQuote = ref<QuotePlan | null>(null);
 const selectedCostRequest = ref<QuoteCostRequest | null>(null);
 const keyword = ref("");
 const statusFilter = ref<QuoteStatus | "ALL">("ALL");
-const showConverted = ref(false);
 const form = reactive(initialForm());
 const approvalForm = reactive(initialApprovalForm());
 const customerResultForm = reactive(initialCustomerResultForm());
@@ -509,6 +494,7 @@ const rules = {
   opportunityId: [{ required: true, message: "请选择关联商机" }],
   serviceScope: [{ required: true, message: "请输入服务范围" }],
   amount: [{ required: true, message: "请输入报价金额" }],
+  paymentNodes: [{ required: true, message: "请输入付款方式/节点" }],
 };
 const approvalRules = {
   decision: [{ required: true, message: "请选择审批结论" }],
@@ -524,7 +510,7 @@ const costRequestRules = {
   requestedBy: [{ required: true, message: "请输入询价发起人" }],
 };
 const costSubmitRules = {
-  projectManager: [{ required: true, message: "请输入项目负责人" }],
+  projectManager: [{ required: true, message: "请选择成本负责人" }],
 };
 const costApprovalRules = {
   decision: [{ required: true, message: "请选择审批结论" }],
@@ -547,9 +533,6 @@ const contractTypeOptions = [
 const statusOptions = [
   { label: "全部状态", value: "ALL" },
   { label: "草稿", value: "DRAFT" },
-  { label: "已询价", value: "COST_REQUESTED" },
-  { label: "成本测算中", value: "COSTING" },
-  { label: "成本已确认", value: "COST_APPROVED" },
   { label: "审批中", value: "PENDING_APPROVAL" },
   { label: "待客户确认", value: "APPROVED" },
   { label: "内部驳回", value: "REJECTED" },
@@ -596,6 +579,7 @@ const columns = [
   { title: "方案内容", key: "scope", width: 320 },
   { title: "报价金额", key: "amount", width: 180 },
   { title: "毛利校验", key: "margin", width: 150 },
+  { title: "销售负责人", key: "owner", width: 130 },
   { title: "流程状态", key: "status", width: 220 },
   { title: "客户反馈", key: "customerResult", width: 260 },
   { title: "更新时间", key: "updatedAt", width: 150 },
@@ -609,42 +593,54 @@ const revisionColumns = [
 const opportunityOptions = computed(() => opportunities.value
   .filter((item) => item.stage !== "LOST")
   .map((item) => ({ label: `${item.code} · ${item.customerName} · ${item.needSummary}`, value: item.id })));
+const userOptions = computed(() => {
+  const options = users.value
+    .filter((item) => item.enabled)
+    .map((item) => ({ label: `${item.displayName} · ${item.username}`, value: item.displayName }));
+  const selected = costSubmitForm.projectManager;
+  return selected && !options.some((item) => item.value === selected)
+    ? [{ label: selected, value: selected }, ...options]
+    : options;
+});
 const filteredQuotes = computed(() => {
   const normalized = keyword.value.trim().toLowerCase();
-  return quotes.value.filter((item) => {
-    const matchesStatus = statusFilter.value === "ALL" || item.status === statusFilter.value;
-    const matchesKeyword = !normalized || [item.code, item.customerName, item.opportunityCode, item.serviceScope]
-      .some((value) => value?.toLowerCase().includes(normalized));
-    if (!showConverted.value && item.status === "CONVERTED") return false;
-    return matchesStatus && matchesKeyword;
-  });
+  return quotes.value
+    .filter((item) => {
+      const matchesStatus = statusFilter.value === "ALL" || item.status === statusFilter.value;
+      const matchesKeyword = !normalized || [item.code, item.customerName, item.opportunityCode, item.serviceScope, quoteOwnerName(item)]
+        .some((value) => value?.toLowerCase().includes(normalized));
+      return matchesStatus && matchesKeyword;
+    })
+    .sort((a, b) => {
+      const convertedOrder = Number(a.status === "CONVERTED") - Number(b.status === "CONVERTED");
+      if (convertedOrder !== 0) return convertedOrder;
+      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+    });
 });
 const totalAmount = computed(() => quotes.value.reduce((sum, item) => sum + Number(item.amount || 0), 0));
 const customerPendingCount = computed(() => quotes.value.filter((item) => item.status === "APPROVED").length);
 const customerAcceptedCount = computed(() => quotes.value.filter((item) => item.status === "CUSTOMER_ACCEPTED").length);
 const lowMarginCount = computed(() => quotes.value.filter((item) => quoteMargin(item).rate < 15).length);
 const selectedQuoteMargin = computed(() => selectedQuote.value ? quoteMargin(selectedQuote.value) : { cost: 0, gross: 0, rate: 0 });
+const quoteBudgetLocked = computed(() => editingQuote.value?.costRequest ? hasFilledPresalesCost(editingQuote.value.costRequest) : false);
 const formMargin = computed(() => {
-  const amount = Number(form.amount || 0);
+  const amount = calcNetAmount(form.amount, form.taxRate);
   const cost = quoteBudgetTotal(form);
   const gross = amount - cost;
   return { cost, gross, rate: amount > 0 ? gross / amount * 100 : 0 };
 });
 const costSubmitTotal = computed(() => quoteCostTotal(costSubmitForm));
-type CostAmountKey = "laborCost" | "materialCost" | "subcontractCost" | "travelCost" | "equipmentCost" | "riskReserve" | "otherCost";
-type CostTaxKey = "laborTaxRate" | "materialTaxRate" | "subcontractTaxRate" | "equipmentTaxRate";
-const costEntryRows: Array<{ title: string; description: string; amountKey: CostAmountKey; taxKey?: CostTaxKey }> = [
-  { title: "人工成本", description: "售前方案、现场踏勘、技术支持等人工投入", amountKey: "laborCost", taxKey: "laborTaxRate" },
-  { title: "材料成本", description: "项目所需材料、耗材、配件", amountKey: "materialCost", taxKey: "materialTaxRate" },
-  { title: "外包成本", description: "第三方服务、专业分包、外协支持", amountKey: "subcontractCost", taxKey: "subcontractTaxRate" },
-  { title: "差旅成本", description: "交通、住宿、现场补贴等，不设置税率", amountKey: "travelCost" },
-  { title: "设备成本", description: "设备采购、租赁、检测工具", amountKey: "equipmentCost", taxKey: "equipmentTaxRate" },
-  { title: "风险预留", description: "范围变更、不可预见费用，不设置税率", amountKey: "riskReserve" },
-  { title: "其他成本", description: "无法归类的售前支持费用，不设置税率", amountKey: "otherCost" },
-];
 
-function quoteMargin(record: Pick<QuotePlan, "amount" | "laborBudget" | "materialBudget" | "subcontractBudget" | "travelBudget" | "otherBudget" | "budgetAmount" | "grossMargin" | "grossMarginRate">) {
-  const amount = Number(record.amount || 0);
+function quoteOwnerName(record: Pick<QuotePlan, "opportunityId" | "opportunityCode">) {
+  const opportunity = opportunities.value.find((item) =>
+    (record.opportunityId && item.id === record.opportunityId)
+    || (record.opportunityCode && item.code === record.opportunityCode)
+  );
+  return opportunity?.ownerName || "未关联负责人";
+}
+
+function quoteMargin(record: Pick<QuotePlan, "amount" | "taxRate" | "netAmount" | "laborBudget" | "materialBudget" | "subcontractBudget" | "travelBudget" | "otherBudget" | "budgetAmount" | "grossMargin" | "grossMarginRate">) {
+  const amount = Number(record.netAmount ?? calcNetAmount(record.amount, record.taxRate));
   const cost = Number(record.budgetAmount ?? quoteBudgetTotal(record));
   const gross = Number(record.grossMargin ?? (amount - cost));
   const rate = Number(record.grossMarginRate ?? (amount > 0 ? gross / amount * 100 : 0));
@@ -673,6 +669,37 @@ function quoteCostTotal(record: { laborCost?: number; materialCost?: number; sub
     + Number(record.otherCost || 0);
 }
 
+function hasFilledPresalesCost(cost?: QuoteCostRequest | null) {
+  if (!cost) return false;
+  return cost.status === "SUBMITTED"
+    || cost.status === "APPROVED"
+    || quoteCostTotal(cost) > 0;
+}
+
+function presalesCostRows(cost: QuoteCostRequest) {
+  return [
+    presalesCostRow("labor", "人工", cost.laborCost, cost.laborTaxRate ?? 6),
+    presalesCostRow("material", "材料", cost.materialCost, cost.materialTaxRate ?? 13),
+    presalesCostRow("subcontract", "外包", cost.subcontractCost, cost.subcontractTaxRate ?? 13),
+    presalesCostRow("travel", "差旅", cost.travelCost, 0, true),
+    presalesCostRow("equipment", "设备", cost.equipmentCost, cost.equipmentTaxRate ?? 13),
+    presalesCostRow("risk", "风险金", cost.riskReserve, 0, true),
+    presalesCostRow("other", "其他", cost.otherCost, cost.otherTaxRate ?? 13),
+  ];
+}
+
+function presalesCostRow(key: string, label: string, gross?: number, taxRate = 13, taxFree = false) {
+  const amount = Number(gross || 0);
+  const rate = taxFree ? 0 : Number(taxRate ?? 13);
+  return {
+    key,
+    label,
+    gross: amount,
+    net: calcNetAmount(amount, rate),
+    taxLabel: taxFree ? "无税率" : formatTaxRate(rate),
+  };
+}
+
 function applyDefaultBudget() {
   const amount = Number(form.amount || 0);
   form.laborBudget = roundMoney(amount * 0.2);
@@ -686,12 +713,27 @@ function roundMoney(value: number) {
   return Math.round(Number(value || 0) * 100) / 100;
 }
 
-onMounted(loadData);
+onMounted(async () => {
+  await loadData();
+  const opportunityId = typeof route.query.opportunity === "string" ? route.query.opportunity : undefined;
+  if (route.query.create === "1" && opportunityId) {
+    openCreate(opportunityId);
+    const { create: _create, opportunity: _opportunity, ...query } = route.query;
+    await router.replace({ path: route.path, query });
+  }
+});
 
 async function loadData() {
   loading.value = true;
   try {
-    [quotes.value, opportunities.value] = await Promise.all([listQuotes(), listOpportunities()]);
+    const [quoteRows, opportunityRows, userPage] = await Promise.all([
+      listQuotes(),
+      listOpportunities(),
+      listUsersApi(0, 999).catch(() => ({ content: [] as UserResponse[] })),
+    ]);
+    quotes.value = quoteRows;
+    opportunities.value = opportunityRows;
+    users.value = userPage.content;
   } catch (error) {
     message.error(error instanceof Error ? error.message : "报价加载失败");
   } finally {
@@ -699,9 +741,13 @@ async function loadData() {
   }
 }
 
-function openCreate() {
+function openCreate(opportunityId?: string) {
   editingQuote.value = null;
   Object.assign(form, initialForm());
+  if (opportunityId) {
+    form.opportunityId = opportunityId;
+    syncCustomer(opportunityId);
+  }
   editorOpen.value = true;
 }
 
@@ -737,6 +783,10 @@ function syncCustomer(opportunityId: string) {
 
 async function handleSaveQuote() {
   await formRef.value?.validate();
+  if (!form.paymentNodes.trim()) {
+    message.warning("请输入付款方式/节点");
+    return;
+  }
   if (!form.editorName.trim()) {
     message.warning("请输入创建人或修订人");
     return;
@@ -794,7 +844,7 @@ async function handleSaveQuote() {
 async function handleSubmit(record: QuotePlan) {
   const margin = quoteMargin(record);
   if (!quoteBudgetConfirmed(record)) {
-    message.warning("请先修订报价并确认项目预算，再提交审批");
+    message.warning("请先完成售前成本核算并审批通过，再提交报价审批");
     return;
   }
   try {
@@ -833,10 +883,10 @@ async function handleCostRequest() {
   try {
     await requestQuoteCost(selectedQuote.value.id, { ...costRequestForm });
     costRequestOpen.value = false;
-    message.success("已发起项目成本询价");
+    message.success("已向项目管理发起售前支持");
     await loadData();
   } catch (error) {
-    message.error(error instanceof Error ? error.message : "发起询价失败");
+    message.error(error instanceof Error ? error.message : "发起成本核算失败");
   } finally {
     saving.value = false;
   }
@@ -844,7 +894,7 @@ async function handleCostRequest() {
 
 function openCostSubmit(record: QuotePlan) {
   if (!record.costRequest?.id) {
-    message.warning("请先发起项目询价");
+    message.warning("请先发起售前成本核算");
     return;
   }
   selectedQuote.value = record;
@@ -864,7 +914,7 @@ async function handleCostSubmit() {
   try {
     await submitQuoteCost(selectedCostRequest.value.id, { ...costSubmitForm });
     costSubmitOpen.value = false;
-    message.success("项目成本已提交审批");
+    message.success("售前成本已提交审批");
     await loadData();
   } catch (error) {
     message.error(error instanceof Error ? error.message : "成本提交失败");
@@ -891,7 +941,7 @@ async function handleCostApproval() {
   try {
     await approveQuoteCost(selectedCostRequest.value.id, { ...costApprovalForm });
     costApprovalOpen.value = false;
-    message.success(costApprovalForm.decision === "APPROVED" ? "成本已确认，销售可填写报价并提交审批" : "成本已驳回，可重新填写");
+    message.success(costApprovalForm.decision === "APPROVED" ? "成本已核对，销售可以提交报价审批" : "成本已驳回，可重新填写");
     await loadData();
   } catch (error) {
     message.error(error instanceof Error ? error.message : "成本审批失败");
@@ -901,13 +951,13 @@ async function handleCostApproval() {
 }
 
 function quoteBudgetConfirmed(record: QuotePlan) {
-  return record.costRequest?.status === "APPROVED" || quoteBudgetRawTotal(record) > 0;
+  return record.status === "COST_APPROVED" && record.costRequest?.status === "APPROVED";
 }
 
 function quoteSubmitTip(record: QuotePlan) {
   const margin = quoteMargin(record);
   if (!quoteBudgetConfirmed(record)) {
-    return "请先修订报价并确认项目预算，再提交审批";
+    return "请先由成本负责人填写售前成本，并审批通过后再提交报价审批";
   }
   if (margin.rate < 15) {
     return `当前毛利率 ${margin.rate.toFixed(1)}%，低于 15%，将作为审批重点提醒。确认提交？`;
@@ -968,6 +1018,10 @@ async function handleCustomerResult() {
 }
 
 function openConversion(record: QuotePlan) {
+  if (!record.paymentNodes?.trim()) {
+    message.warning("请先在报价中填写付款方式/节点，再转合同");
+    return;
+  }
   selectedQuote.value = record;
   Object.assign(conversionForm, initialConversionForm(record));
   conversionAttachment.value = null;
@@ -982,8 +1036,12 @@ function selectConversionAttachment(file: File) {
 async function handleConversion() {
   await conversionFormRef.value?.validate();
   if (!selectedQuote.value) return;
+  if (!selectedQuote.value.paymentNodes?.trim()) {
+    message.warning("请先在报价中填写付款方式/节点");
+    return;
+  }
   if (!conversionAttachment.value) {
-    message.warning("请先上传合同附件");
+    message.warning("请先上传合同审批件");
     return;
   }
   saving.value = true;
@@ -991,7 +1049,7 @@ async function handleConversion() {
     const result = await convertQuote(selectedQuote.value.id, { ...conversionForm });
     if (!result.contract?.id) throw new Error("合同生成结果缺少合同编号");
     try {
-      await uploadAttachment("CONTRACT", result.contract.id, "SIGNED_DOC", conversionAttachment.value);
+      await uploadAttachment("CONTRACT", result.contract.id, "APPROVAL_DOC", conversionAttachment.value);
     } catch (error) {
       conversionOpen.value = false;
       message.warning(`合同已生成，但附件上传失败：${error instanceof Error ? error.message : "请到合同详情页补传"}`);
@@ -999,7 +1057,7 @@ async function handleConversion() {
       return;
     }
     conversionOpen.value = false;
-    message.success(`已生成合同 ${result.contract.code || ""}，合同附件已归档`);
+    message.success(`已生成合同 ${result.contract.code || ""}，审批件已归档`);
     await loadData();
   } catch (error) {
     message.error(error instanceof Error ? error.message : "转合同失败");
@@ -1082,14 +1140,10 @@ function initialCostSubmitForm(cost?: QuoteCostRequest) {
   return {
     projectManager: cost?.projectManager || auth.user?.displayName || "",
     laborCost: Number(cost?.laborCost || 0),
-    laborTaxRate: Number(cost?.laborTaxRate ?? 6),
     materialCost: Number(cost?.materialCost || 0),
-    materialTaxRate: Number(cost?.materialTaxRate ?? 13),
     subcontractCost: Number(cost?.subcontractCost || 0),
-    subcontractTaxRate: Number(cost?.subcontractTaxRate ?? 6),
     travelCost: Number(cost?.travelCost || 0),
     equipmentCost: Number(cost?.equipmentCost || 0),
-    equipmentTaxRate: Number(cost?.equipmentTaxRate ?? 13),
     riskReserve: Number(cost?.riskReserve || 0),
     otherCost: Number(cost?.otherCost || 0),
     suggestedPrice: Number(cost?.suggestedPrice || selectedQuote.value?.amount || 0),
@@ -1101,7 +1155,7 @@ function initialCostApprovalForm() {
   return {
     decision: "APPROVED" as ApprovalDecision,
     approverName: auth.user?.displayName || "",
-    comment: "同意项目成本测算，作为本次报价毛利核算依据。",
+    comment: "同意售前成本测算，作为本次报价毛利核算依据。",
   };
 }
 
@@ -1201,76 +1255,76 @@ function calcNetAmount(amount?: number, taxRate?: number) {
   font-size: 12px;
 }
 
-.cost-summary-strip {
-  display: grid;
-  align-items: end;
-  grid-template-columns: minmax(180px, 1.1fr) minmax(140px, 0.8fr) minmax(160px, 0.9fr);
-  gap: 12px;
-  margin-bottom: 14px;
-  padding: 12px;
-  border: 1px solid #d9d9d9;
-  border-radius: 8px;
-  background: #fafafa;
+.quote-presales-cost {
+  margin-top: 14px;
 }
 
-.cost-summary-strip > div:not(.ant-form-item) span {
-  display: block;
+.quote-presales-cost-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.quote-presales-cost-title strong {
+  color: #101828;
+}
+
+.quote-presales-cost-title span {
   color: #667085;
   font-size: 12px;
 }
 
-.cost-summary-strip > div:not(.ant-form-item) strong {
-  display: block;
-  margin-top: 6px;
-  color: #172033;
-  font-size: 20px;
-}
-
-.cost-summary-owner,
-.cost-summary-price {
-  margin-bottom: 0;
-}
-
-.cost-entry-table {
-  overflow: hidden;
-  margin-bottom: 16px;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-}
-
-.cost-entry-head,
-.cost-entry-row {
+.presales-cost-table {
   display: grid;
-  align-items: center;
-  grid-template-columns: minmax(240px, 1.4fr) minmax(150px, 0.8fr) minmax(130px, 0.65fr);
+  overflow: hidden;
+  border: 1px solid #eef2f7;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.presales-cost-head,
+.presales-cost-row {
+  display: grid;
+  grid-template-columns: 110px minmax(150px, 1fr) minmax(150px, 1fr) 120px;
   gap: 12px;
+  align-items: center;
   padding: 10px 12px;
 }
 
-.cost-entry-head {
+.presales-cost-head {
+  background: #f8fafc;
   color: #667085;
   font-size: 12px;
   font-weight: 600;
-  background: #f7f8fa;
 }
 
-.cost-entry-row + .cost-entry-row {
-  border-top: 1px solid #eef0f3;
+.presales-cost-row {
+  border-top: 1px solid #eef2f7;
 }
 
-.cost-entry-row strong,
-.cost-entry-row span {
-  display: block;
+.presales-cost-row strong,
+.presales-cost-row em {
+  overflow: hidden;
+  color: #344054;
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.cost-entry-row strong {
-  color: #172033;
-}
-
-.cost-entry-row span {
-  margin-top: 3px;
+.tax-static {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 11px;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  background: #f5f5f5;
   color: #667085;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .approval-margin-card {
@@ -1339,15 +1393,17 @@ function calcNetAmount(amount?: number, taxRate?: number) {
     width: 100%;
   }
 
-  .cost-summary-strip,
-  .cost-entry-head,
-  .cost-entry-row {
-    grid-template-columns: 1fr;
+  .presales-cost-head {
+    display: none;
   }
 
-  .cost-entry-head {
-    display: none;
+  .presales-cost-row {
+    grid-template-columns: 80px minmax(0, 1fr);
+  }
+
+  .presales-cost-row :nth-child(3),
+  .presales-cost-row :nth-child(4) {
+    grid-column: 2;
   }
 }
 </style>
-

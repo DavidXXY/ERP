@@ -79,7 +79,11 @@
           <a-col :xs="24" :md="12"><a-form-item label="客户" name="customerId"><a-select v-model:value="form.customerId" show-search option-filter-prop="label" :options="customerOptions" @change="syncOpportunity" /></a-form-item></a-col>
           <a-col :xs="24" :md="12"><a-form-item label="关联商机"><a-select v-model:value="form.opportunityId" allow-clear show-search option-filter-prop="label" :options="availableOpportunityOptions" /></a-form-item></a-col>
           <a-col :xs="24" :md="8"><a-form-item label="跟进类型" name="type"><a-select v-model:value="form.type" :options="typeOptions" /></a-form-item></a-col>
-          <a-col :xs="24" :md="8"><a-form-item label="负责人" name="ownerName"><a-input v-model:value="form.ownerName" /></a-form-item></a-col>
+          <a-col :xs="24" :md="8">
+            <a-form-item label="负责人" name="ownerName">
+              <a-select v-model:value="form.ownerName" :options="userOptions" show-search option-filter-prop="label" placeholder="选择负责人" />
+            </a-form-item>
+          </a-col>
           <a-col :xs="24" :md="8"><a-form-item label="发生时间" name="followedAt"><a-input v-model:value="form.followedAt" type="datetime-local" /></a-form-item></a-col>
           <a-col :span="24"><a-form-item label="主题" name="subject"><a-input v-model:value="form.subject" /></a-form-item></a-col>
           <a-col :span="24"><a-form-item label="沟通内容" name="content"><a-textarea v-model:value="form.content" :rows="4" /></a-form-item></a-col>
@@ -97,11 +101,13 @@ import type { FollowUpType } from "@/api/crm";
 import { createFollowUp, deleteFollowUp, listCustomers, listFollowUps, listOpportunities, type FollowUp } from "@/api/crm";
 import { useAuthStore } from "@/stores/auth";
 import { followUpTypeColor, followUpTypeLabel, followUpTypeOptions } from "./crm-options";
+import { listUsersApi, type UserResponse } from "@/api/system";
 
 const auth = useAuthStore();
 const items = ref<FollowUp[]>([]);
 const customers = ref<any[]>([]);
 const opportunities = ref<any[]>([]);
+const users = ref<UserResponse[]>([]);
 const loading = ref(false);
 const saving = ref(false);
 const createOpen = ref(false);
@@ -127,7 +133,7 @@ const rules = {
   subject: [{ required: true, message: "请输入主题" }],
   content: [{ required: true, message: "请输入沟通内容" }],
   followedAt: [{ required: true, message: "请选择发生时间" }],
-  ownerName: [{ required: true, message: "请输入负责人" }],
+  ownerName: [{ required: true, message: "请选择负责人" }],
 };
 
 const customerOptions = computed(() =>
@@ -138,6 +144,15 @@ const availableOpportunityOptions = computed(() =>
     .filter((o) => o.customerId === form.customerId && o.stage !== "WON" && o.stage !== "LOST")
     .map((o) => ({ label: `${o.code} ${o.needSummary?.slice(0, 20)}`, value: o.id }))
 );
+const userOptions = computed(() => {
+  const options = users.value
+    .filter((item) => item.enabled)
+    .map((item) => ({ label: `${item.displayName} · ${item.username}`, value: item.displayName }));
+  const selected = form.ownerName;
+  return selected && !options.some((item) => item.value === selected)
+    ? [{ label: selected, value: selected }, ...options]
+    : options;
+});
 const filteredItems = computed(() => {
   const term = keyword.value.trim().toLowerCase();
   return items.value.filter((item) => {
@@ -202,9 +217,16 @@ onMounted(loadData);
 async function loadData() {
   loading.value = true;
   try {
-    [items.value, customers.value, opportunities.value] = await Promise.all([
-      listFollowUps(), listCustomers(), listOpportunities(),
+    const [followUps, customerRows, opportunityRows, userPage] = await Promise.all([
+      listFollowUps(),
+      listCustomers(),
+      listOpportunities(),
+      listUsersApi(0, 999).catch(() => ({ content: [] as UserResponse[] })),
     ]);
+    items.value = followUps;
+    customers.value = customerRows;
+    opportunities.value = opportunityRows;
+    users.value = userPage.content;
   } catch (error) {
     message.error(error instanceof Error ? error.message : "数据加载失败");
   } finally {

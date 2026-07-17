@@ -1,11 +1,15 @@
 <template>
-    <a-modal :open="createOpen" @update:open="emit('update:createOpen', $event)" title="新增项目立项" width="860px" :confirm-loading="saving" @ok="handleCreate">
+    <a-modal :open="createOpen" @update:open="emit('update:createOpen', $event)" title="新增项目" width="860px" :confirm-loading="saving" @ok="handleCreate">
       <a-form ref="createFormRef" :model="createForm" :rules="createRules" layout="vertical">
         <a-row :gutter="16">
           <a-col :xs="24" :md="16"><a-form-item label="项目名称" name="name"><a-input v-model:value="createForm.name" /></a-form-item></a-col>
           <a-col :xs="24" :md="12"><a-form-item label="关联客户" name="customerId"><a-select v-model:value="createForm.customerId" :options="customerOptions" show-search option-filter-prop="label" /></a-form-item></a-col>
           <a-col :xs="24" :md="6"><a-form-item label="项目类型" name="projectType"><a-select v-model:value="createForm.projectType" :options="projectTypeOptions" /></a-form-item></a-col>
-          <a-col :xs="24" :md="6"><a-form-item label="项目负责人" name="managerName"><a-input v-model:value="createForm.managerName" /></a-form-item></a-col>
+          <a-col :xs="24" :md="6">
+            <a-form-item label="项目负责人" name="managerName">
+              <a-select v-model:value="createForm.managerName" :options="userOptions" show-search option-filter-prop="label" placeholder="选择项目负责人" />
+            </a-form-item>
+          </a-col>
           <a-col :span="24"><a-form-item label="现场地址" name="siteAddress"><a-input v-model:value="createForm.siteAddress" /></a-form-item></a-col>
           <a-col :xs="24" :md="8"><a-form-item label="合同金额" name="contractAmount"><a-input-number v-model:value="createForm.contractAmount" :min="0" :precision="2" class="full-input" /></a-form-item></a-col>
           <a-col :xs="24" :md="8"><a-form-item label="计划开始" name="plannedStartDate"><a-input v-model:value="createForm.plannedStartDate" type="date" /></a-form-item></a-col>
@@ -23,13 +27,17 @@
       </a-form>
     </a-modal>
 
-    <a-modal :open="approvalOpen" @update:open="emit('update:approvalOpen', $event)" title="项目立项审批" width="700px" :confirm-loading="saving" @ok="handleApproval">
+    <a-modal :open="approvalOpen" @update:open="emit('update:approvalOpen', $event)" :title="managerModalTitle" width="700px" :confirm-loading="saving" @ok="handleApproval">
       <a-alert v-if="activeProject" class="section-alert" type="info" :message="`${activeProject.code} · ${activeProject.name} · ${formatMoney(activeProject.contractAmount)}`" />
       <a-form ref="approvalFormRef" :model="approvalForm" :rules="approvalRules" layout="vertical">
         <a-row :gutter="16">
-          <a-col :xs="24" :md="10"><a-form-item label="审批结论" name="decision"><a-radio-group v-model:value="approvalForm.decision" button-style="solid"><a-radio-button value="APPROVED">通过</a-radio-button><a-radio-button value="REJECTED">驳回</a-radio-button></a-radio-group></a-form-item></a-col>
-          <a-col :xs="24" :md="14"><a-form-item label="审批人" name="approverName"><a-input v-model:value="approvalForm.approverName" /></a-form-item></a-col>
-          <a-col :span="24"><a-form-item label="审批意见" name="comment"><a-textarea v-model:value="approvalForm.comment" :rows="3" /></a-form-item></a-col>
+          <a-col :xs="24" :md="12">
+            <a-form-item label="项目经理" name="managerName">
+              <a-select v-model:value="approvalForm.managerName" :options="userOptions" show-search option-filter-prop="label" placeholder="选择项目经理" />
+            </a-form-item>
+          </a-col>
+          <a-col :xs="24" :md="12"><a-form-item label="分配人" name="operatorName"><a-input v-model:value="approvalForm.operatorName" disabled /></a-form-item></a-col>
+          <a-col :span="24"><a-form-item label="分配说明"><a-textarea v-model:value="approvalForm.comment" :rows="3" /></a-form-item></a-col>
         </a-row>
       </a-form>
     </a-modal>
@@ -39,7 +47,6 @@
       <a-form ref="stageFormRef" :model="stageForm" :rules="stageRules" layout="vertical">
         <a-row :gutter="16">
           <a-col :xs="24" :md="8"><a-form-item label="目标阶段"><a-input :value="nextStage ? stageLabel(nextStage) : ''" disabled /></a-form-item></a-col>
-          <a-col :xs="24" :md="8"><a-form-item label="完成进度" name="progress"><a-input-number v-model:value="stageForm.progress" :min="detail?.project.progress || 0" :max="100" class="full-input" /></a-form-item></a-col>
           <a-col :xs="24" :md="8"><a-form-item label="操作人" name="operatorName"><a-input v-model:value="stageForm.operatorName" /></a-form-item></a-col>
           <a-col :span="24"><a-form-item label="节点说明" name="comment"><a-textarea v-model:value="stageForm.comment" :rows="3" /></a-form-item></a-col>
         </a-row>
@@ -70,15 +77,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 import { message } from "ant-design-vue";
-import { createProject, createProjectCost, advanceProjectStage, processProjectApproval, type ProjectApprovalStatus, type ProjectStage } from "@/api/project";
+import { createProject, createProjectCost, advanceProjectStage, assignProjectManager, type ProjectStage } from "@/api/project";
 import { useAuthStore } from "@/stores/auth";
 
 const auth = useAuthStore();
 const emit = defineEmits(["update:createOpen", "update:approvalOpen", "update:stageOpen", "update:costOpen", "created", "updated"]);
 // @ts-ignore - props types are any for flexibility with option arrays
-const props: any = defineProps(["createOpen", "approvalOpen", "stageOpen", "costOpen", "saving", "customerOptions", "categoryOptions", "projectTypeOptions", "sourceOptions", "detail", "activeProject", "nextStage"]);
+const props: any = defineProps(["createOpen", "approvalOpen", "stageOpen", "costOpen", "saving", "customerOptions", "categoryOptions", "projectTypeOptions", "sourceOptions", "userOptions", "detail", "activeProject", "nextStage"]);
 
 const createFormRef = ref();
 const approvalFormRef = ref();
@@ -90,16 +97,18 @@ const createForm = reactive({
   siteAddress: "", contractAmount: 0, plannedStartDate: dateAfter(0), plannedEndDate: dateAfter(90), warrantyEndDate: dateAfter(455),
   budgets: { LABOR: 0, MATERIAL: 0, SUBCONTRACT: 0, TRAVEL: 0, OTHER: 0 } as { [key: string]: number },
 });
-const approvalForm = reactive({ decision: "APPROVED", comment: "同意立项，按预算执行", approverName: auth.user?.displayName || "" });
-const stageForm = reactive({ progress: 0, comment: "", operatorName: auth.user?.displayName || "" });
+const approvalForm = reactive({ managerName: "", operatorName: auth.user?.displayName || "", comment: "" });
+const stageForm = reactive({ comment: "", operatorName: auth.user?.displayName || "" });
 const costForm = reactive({ category: "LABOR", sourceType: "MANUAL", sourceNo: "", description: "", amount: 0.01, incurredDate: dateAfter(0) });
 
-const createRules = { name: [{ required: true, message: "请输入项目名称" }], customerId: [{ required: true, message: "请选择客户" }], projectType: [{ required: true, message: "请选择项目类型" }], managerName: [{ required: true, message: "请输入项目负责人" }], siteAddress: [{ required: true, message: "请输入现场地址" }], contractAmount: [{ required: true, message: "请输入合同金额" }], plannedStartDate: [{ required: true, message: "请选择计划开始日期" }], plannedEndDate: [{ required: true, message: "请选择计划结束日期" }] };
-const approvalRules = { decision: [{ required: true }], comment: [{ required: true, message: "请输入审批意见" }], approverName: [{ required: true, message: "请输入审批人" }] };
-const stageRules = { progress: [{ required: true, message: "请输入完成进度" }], comment: [{ required: true, message: "请输入节点说明" }], operatorName: [{ required: true, message: "请输入操作人" }] };
+const createRules = { name: [{ required: true, message: "请输入项目名称" }], customerId: [{ required: true, message: "请选择客户" }], projectType: [{ required: true, message: "请选择项目类型" }], managerName: [{ required: true, message: "请选择项目负责人" }], siteAddress: [{ required: true, message: "请输入现场地址" }], contractAmount: [{ required: true, message: "请输入合同金额" }], plannedStartDate: [{ required: true, message: "请选择计划开始日期" }], plannedEndDate: [{ required: true, message: "请选择计划结束日期" }] };
+const approvalRules = { managerName: [{ required: true, message: "请选择项目经理" }], operatorName: [{ required: true, message: "请输入分配人" }] };
+const stageRules = { comment: [{ required: true, message: "请输入节点说明" }], operatorName: [{ required: true, message: "请输入操作人" }] };
 const costRules = { category: [{ required: true }], sourceType: [{ required: true }], incurredDate: [{ required: true }], description: [{ required: true, message: "请输入成本说明" }], amount: [{ required: true, message: "请输入成本金额" }] };
 
 const createBudgetTotal = computed(() => Object.values(createForm.budgets).reduce((s, v) => s + Number(v || 0), 0));
+const userOptions = computed(() => props.userOptions || []);
+const managerModalTitle = computed(() => props.activeProject?.approvalStatus === "APPROVED" ? "变更项目负责人" : "分配项目经理");
 const projectedCostAfterEntry = computed(() => Number(props.detail?.project?.actualCost || 0) + Number(costForm.amount || 0));
 const projectedBudgetVariance = computed(() => Number(props.detail?.project?.budgetAmount || 0) - projectedCostAfterEntry.value);
 const costBudgetUsageAfter = computed(() => {
@@ -108,9 +117,18 @@ const costBudgetUsageAfter = computed(() => {
 });
 const costBudgetOverrun = computed(() => projectedBudgetVariance.value < 0);
 
+watch(() => props.approvalOpen, (open) => {
+  if (!open) return;
+  const currentManager = String(props.activeProject?.managerName || "");
+  approvalForm.managerName = currentManager.startsWith("待") ? "" : currentManager;
+  approvalForm.operatorName = auth.user?.displayName || "";
+  approvalForm.comment = "";
+});
+
 function dateAfter(days: number) { const d = new Date(); d.setDate(d.getDate() + days); return d.toISOString().slice(0, 10); }
 function stageLabel(s: string) {
-  const opts = [{ label: "立项", value: "INITIATED" }, { label: "投标", value: "BIDDING" }, { label: "进场", value: "ENTRY" }, { label: "施工", value: "CONSTRUCTION" }, { label: "调试", value: "COMMISSIONING" }, { label: "初验", value: "INITIAL_ACCEPTANCE" }, { label: "终验", value: "FINAL_ACCEPTANCE" }, { label: "质保", value: "WARRANTY" }, { label: "关闭", value: "CLOSED" }];
+  if (s === "INITIATED" || s === "BIDDING") return "入场";
+  const opts = [{ label: "入场", value: "ENTRY" }, { label: "施工", value: "CONSTRUCTION" }, { label: "调试", value: "COMMISSIONING" }, { label: "初验", value: "INITIAL_ACCEPTANCE" }, { label: "终验", value: "FINAL_ACCEPTANCE" }, { label: "质保", value: "WARRANTY" }, { label: "关闭", value: "CLOSED" }];
   return opts.find((o) => o.value === s)?.label || s;
 }
 function formatMoney(v: number) { return new Intl.NumberFormat("zh-CN", { style: "currency", currency: "CNY", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v || 0); }
@@ -134,10 +152,10 @@ async function handleApproval() {
   if (!props.activeProject) return;
   await approvalFormRef.value?.validate();
   try {
-    await processProjectApproval(props.activeProject.id, { ...approvalForm } as any);
+    await assignProjectManager(props.activeProject.id, { ...approvalForm } as any);
     emit("updated"); emit("update:approvalOpen", false);
-    message.success(approvalForm.decision === "APPROVED" ? "项目立项已审批通过" : "项目立项已驳回");
-  } catch (error) { message.error(error instanceof Error ? error.message : "项目审批失败"); }
+    message.success(props.activeProject.approvalStatus === "APPROVED" ? "项目负责人已变更" : "项目经理已分配，项目进入入场执行");
+  } catch (error) { message.error(error instanceof Error ? error.message : "项目经理分配失败"); }
 }
 
 async function handleAdvanceStage() {

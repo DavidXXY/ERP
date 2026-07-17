@@ -75,6 +75,7 @@
           <template #icon><ProjectOutlined /></template>
           <template #title>项目管理</template>
           <a-menu-item key="/projects/list">项目列表</a-menu-item>
+          <a-menu-item key="/projects/presales-support">售前支持</a-menu-item>
           <a-menu-item key="/projects/budget">预算执行</a-menu-item>
           <a-menu-item key="/projects/costs">成本明细</a-menu-item>
           <a-menu-item key="/projects/stages">阶段履历</a-menu-item>

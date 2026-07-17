@@ -1,8 +1,8 @@
-import { request } from "./http";
+import { http, request } from "./http";
 
 export type CustomerLevel = "STRATEGIC" | "KEY" | "NORMAL";
 export type RiskStatus = "NORMAL" | "OVERDUE" | "RENEWAL_RISK";
-export type ContractStatus = "ACTIVE" | "RENEWAL_PENDING" | "OVERDUE_RISK" | "CLOSED";
+export type ContractStatus = "PENDING_APPROVAL" | "PENDING_SEAL" | "SEAL_APPROVAL" | "ACTIVE" | "RENEWAL_PENDING" | "OVERDUE_RISK" | "CLOSED";
 export type ReceivableStatus = "INVOICE_PENDING" | "PAYMENT_PENDING" | "SETTLED" | "OVERDUE";
 export type OpportunityStage = "LEAD" | "QUALIFIED" | "SOLUTION" | "QUOTATION" | "NEGOTIATION" | "WON" | "LOST";
 export type QuoteStatus = "DRAFT" | "COST_REQUESTED" | "COSTING" | "COST_APPROVED" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED" | "CUSTOMER_ACCEPTED" | "CUSTOMER_DECLINED" | "CONVERTED";
@@ -189,11 +189,15 @@ export type QuoteCostRequest = {
   subcontractCost?: number;
   subcontractTaxRate?: number;
   travelCost?: number;
+  travelTaxRate?: number;
   equipmentCost?: number;
   equipmentTaxRate?: number;
   riskReserve?: number;
+  riskReserveTaxRate?: number;
   otherCost?: number;
+  otherTaxRate?: number;
   totalCost?: number;
+  netTotalCost?: number;
   suggestedPrice?: number;
   costRemark?: string;
   submittedAt?: string;
@@ -254,10 +258,13 @@ export type SubmitQuoteCostPayload = {
   subcontractCost?: number;
   subcontractTaxRate?: number;
   travelCost?: number;
+  travelTaxRate?: number;
   equipmentCost?: number;
   equipmentTaxRate?: number;
   riskReserve?: number;
+  riskReserveTaxRate?: number;
   otherCost?: number;
+  otherTaxRate?: number;
   suggestedPrice?: number;
   costRemark?: string;
 };
@@ -351,6 +358,7 @@ export type ServiceContract = {
   netAmount?: number;
   startDate: string;
   endDate: string;
+  salesOwnerName?: string;
   serviceCycle?: string;
   status: ContractStatus;
 };
@@ -367,6 +375,10 @@ export type Receivable = {
   dueDate: string;
   invoiceNo?: string;
   invoiceDate?: string;
+  invoiceRequested?: boolean;
+  invoiceRequestedBy?: string;
+  invoiceRequestedAt?: string;
+  invoiceRequestRemark?: string;
   settledAmount: number;
   outstandingAmount: number;
   status: ReceivableStatus;
@@ -472,6 +484,14 @@ export function updateCustomer(id: string, payload: UpdateCustomerPayload) {
   });
 }
 
+export function transferCustomerOwner(id: string, ownerName: string) {
+  return request<void>({
+    method: "POST",
+    url: `/crm/customers/${id}/transfer-owner`,
+    data: { ownerName },
+  });
+}
+
 export function deleteCustomer(id: string) {
   return request<void>({ method: "DELETE", url: "/crm/customers/" + id });
 }
@@ -552,6 +572,14 @@ export function getContract(id: string) {
   return request<ServiceContract>({ method: "GET", url: "/crm/contracts/" + id });
 }
 
+export function approveContract(id: string, payload: ApprovalActionPayload) {
+  return request<ServiceContract>({ method: "POST", url: `/crm/contracts/${id}/approval`, data: payload });
+}
+
+export function submitSignedDocumentApproval(id: string, payload: ApprovalActionPayload) {
+  return request<ServiceContract>({ method: "POST", url: `/crm/contracts/${id}/signed-doc-approval`, data: payload });
+}
+
 export function listFollowUps() {
   return request<FollowUp[]>({ method: "GET", url: "/crm/follow-ups" });
 }
@@ -590,6 +618,10 @@ export function deleteFollowUp(id: string) {
 
 export function registerReceivableInvoice(id: string, payload: { invoiceNo: string; invoiceDate: string }) {
   return request<Receivable>({ method: "POST", url: `/crm/receivables/${id}/invoice`, data: payload });
+}
+
+export function applyReceivableInvoice(id: string, payload: { applicantName: string; remark?: string }) {
+  return request<Receivable>({ method: "POST", url: `/crm/receivables/${id}/invoice-request`, data: payload });
 }
 
 export function recordReceivableReceipt(id: string, payload: { amount: number; receivedDate: string; referenceNo: string; recorderName: string }) {
@@ -632,6 +664,32 @@ export function deleteAttachment(id: string) {
 
 export function getAttachmentDownloadUrl(id: string): string {
   return "/api/crm/attachments/" + id + "/download";
+}
+
+export async function downloadAttachment(item: CrmAttachment) {
+  const response = await http.get<Blob>(`/crm/attachments/${item.id}/download`, { responseType: "blob" });
+  const url = URL.createObjectURL(response.data);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = item.fileName;
+  anchor.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export async function openAttachment(item: CrmAttachment) {
+  const response = await http.get<Blob>(`/crm/attachments/${item.id}/download`, { responseType: "blob" });
+  const type = response.data.type || item.mimeType || "";
+  const url = URL.createObjectURL(response.data);
+  if (type.startsWith("image/") || type === "application/pdf") {
+    window.open(url, "_blank", "noopener,noreferrer");
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    return;
+  }
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = item.fileName;
+  anchor.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export type UpdateReceivablePayload = {

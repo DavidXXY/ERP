@@ -4,10 +4,12 @@
       <template #extra><a-button @click="loadData">刷新</a-button><a-button @click="handleExportCsv"><template #icon><DownloadOutlined /></template>导出</a-button></template>
 
       <a-row :gutter="[16, 16]" class="metric-row">
-        <a-col :xs="12" :lg="6"><a-statistic title="合同总数" :value="contracts.length" suffix="份" /></a-col>
-        <a-col :xs="12" :lg="6"><a-statistic title="合同总额" :value="totalAmount" :formatter="moneyFormatter" /></a-col>
-        <a-col :xs="12" :lg="6"><a-statistic title="履约中" :value="activeCount" suffix="份" /></a-col>
-        <a-col :xs="12" :lg="6"><a-statistic title="需关注" :value="riskCount" suffix="份" /></a-col>
+        <a-col :xs="12" :lg="4"><a-statistic title="合同总数" :value="contracts.length" suffix="份" /></a-col>
+        <a-col :xs="12" :lg="4"><a-statistic title="合同总额" :value="totalAmount" :formatter="moneyFormatter" /></a-col>
+        <a-col :xs="12" :lg="4"><a-statistic title="已开票金额" :value="totalInvoicedAmount" :formatter="moneyFormatter" /></a-col>
+        <a-col :xs="12" :lg="4"><a-statistic title="已回款金额" :value="totalReceivedAmount" :formatter="moneyFormatter" /></a-col>
+        <a-col :xs="12" :lg="4"><a-statistic title="履约中" :value="activeCount" suffix="份" /></a-col>
+        <a-col :xs="12" :lg="4"><a-statistic title="需关注" :value="riskCount" suffix="份" /></a-col>
       </a-row>
 
       <a-space wrap class="table-toolbar">
@@ -25,7 +27,7 @@
       </a-space>
 
       <!-- desktop-table --><div class="desktop-table">
-<a-table :columns="columns" :data-source="filteredContracts" :loading="loading" row-key="id" :scroll="{ x: 1120 }" :customRow="customRow">
+<a-table :columns="columns" :data-source="filteredContracts" :loading="loading" row-key="id" :scroll="{ x: 1360 }" :customRow="customRow">
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'contract'">
             <strong>{{ record.code }}</strong>
@@ -43,6 +45,8 @@
             <span>{{ record.salesOwnerName || "未关联销售" }}</span>
           </template>
           <template v-else-if="column.key === 'amount'"><strong>{{ formatMoney(record.amount) }}</strong><span class="table-subtitle">未税 {{ formatMoney(record.netAmount ?? calcNetAmount(record.amount, record.taxRate)) }} · 税率 {{ formatTaxRate(record.taxRate) }}</span></template>
+          <template v-else-if="column.key === 'invoiced'"><strong>{{ formatMoney(contractFinancial(record).invoicedAmount) }}</strong></template>
+          <template v-else-if="column.key === 'received'"><strong>{{ formatMoney(contractFinancial(record).receivedAmount) }}</strong></template>
           <template v-else-if="column.key === 'status'"><a-tag :color="contractStatusColor(record.status)">{{ contractStatusLabel(record.status) }}</a-tag></template>
           <template v-else-if="column.key === 'action'">
             <a-space size="small" @click.stop>
@@ -71,6 +75,7 @@
       <div v-for="record in filteredContracts" :key="record.id" class="mobile-card-item" @click="router.push('/crm/contracts/' + record.id)">
         <div class="mobile-card-header"><strong>{{ record.code }}</strong><a-tag :color="contractStatusColor(record.status)">{{ contractStatusLabel(record.status) }}</a-tag></div>
         <div class="mobile-card-body"><span>{{ record.projectName || record.customerName }}</span><strong>{{ formatMoney(record.amount) }}</strong></div>
+        <div class="mobile-card-tags">已开票 {{ formatMoney(contractFinancial(record).invoicedAmount) }} · 已回款 {{ formatMoney(contractFinancial(record).receivedAmount) }}</div>
         <div class="mobile-card-tags">未税 {{ formatMoney(record.netAmount ?? calcNetAmount(record.amount, record.taxRate)) }} · 税率 {{ formatTaxRate(record.taxRate) }}</div>
         <div class="mobile-card-footer"><span>{{ record.startDate || "" }} {{ record.endDate ? "~ " + record.endDate : "" }} · {{ record.salesOwnerName || "未关联销售" }}</span></div>
       </div>
@@ -87,7 +92,7 @@ import { useAuthStore } from "@/stores/auth";
 import { exportContractsExcel } from "@/api/crm";
 import { message } from "ant-design-vue";
 import { deleteContract } from "@/api/crm";
-import { listContracts, type ContractStatus, type ServiceContract } from "@/api/crm";
+import { listContracts, listReceivables, type ContractStatus, type Receivable, type ServiceContract } from "@/api/crm";
 import { listUsersApi, type UserResponse } from "@/api/system";
 import { contractStatusColor, contractStatusLabel, formatMoney } from "./crm-options";
 import { downloadCsv, contractRowToCsv } from "./crm-export";
@@ -95,6 +100,7 @@ import { downloadCsv, contractRowToCsv } from "./crm-export";
 const router = useRouter();
 const auth = useAuthStore();
 const contracts = ref<ServiceContract[]>([]);
+const receivables = ref<Receivable[]>([]);
 const loading = ref(false);
 const keyword = ref("");
 const statusFilter = ref<ContractStatus>();
@@ -125,6 +131,8 @@ const columns = [
   { title: "合同日期", key: "period", width: 270 },
   { title: "销售人员", key: "sales", width: 120 },
   { title: "金额", key: "amount", width: 180 },
+  { title: "已开票", key: "invoiced", width: 140 },
+  { title: "已回款", key: "received", width: 140 },
   { title: "状态", key: "status", width: 110 },
   { title: "操作", key: "action", width: 210 }, 
 ];
@@ -152,6 +160,8 @@ const salesOptions = computed(() => {
     .map((name) => ({ label: name, value: name }));
 });
 const totalAmount = computed(() => contracts.value.reduce((sum, item) => sum + Number(item.amount || 0), 0));
+const totalInvoicedAmount = computed(() => contracts.value.reduce((sum, item) => sum + contractFinancial(item).invoicedAmount, 0));
+const totalReceivedAmount = computed(() => contracts.value.reduce((sum, item) => sum + contractFinancial(item).receivedAmount, 0));
 const activeCount = computed(() => contracts.value.filter((item) => item.status === "ACTIVE").length);
 const riskCount = computed(() => contracts.value.filter((item) => item.status === "RENEWAL_PENDING" || item.status === "OVERDUE_RISK").length);
 
@@ -166,8 +176,12 @@ async function handleDeleteContract(record: any) {
 }
 
 function handleExportCsv() {
-  const headers = ["合同编号", "客户名称", "项目名称", "合同类型", "合同金额", "未税金额", "开始日期", "结束日期", "销售人员", "状态"];
-  const rows = filteredContracts.value.map((r: any) => contractRowToCsv(r));
+  const headers = ["合同编号", "客户名称", "项目名称", "合同类型", "合同金额", "未税金额", "已开票金额", "已回款金额", "开始日期", "结束日期", "销售人员", "状态"];
+  const rows = filteredContracts.value.map((r) => {
+    const financial = contractFinancial(r);
+    const base = contractRowToCsv(r);
+    return [...base.slice(0, 6), String(financial.invoicedAmount), String(financial.receivedAmount), ...base.slice(6)];
+  });
   downloadCsv("客户合同.csv", headers, rows);
 }
 
@@ -231,11 +245,13 @@ async function doExport() { try { await exportContractsExcel(); } catch(e: any) 
 async function loadData() {
   loading.value = true;
   try {
-    const [contractRows, userPage] = await Promise.all([
+    const [contractRows, receivableRows, userPage] = await Promise.all([
       listContracts(),
+      listReceivables().catch(() => [] as Receivable[]),
       listUsersApi(0, 999).catch(() => ({ content: [] as UserResponse[] })),
     ]);
     contracts.value = contractRows;
+    receivables.value = receivableRows;
     users.value = userPage.content;
   } catch (error) {
     message.error(error instanceof Error ? error.message : "合同加载失败");
@@ -256,5 +272,14 @@ function calcNetAmount(amount?: number, taxRate?: number) {
   const rate = Number(taxRate ?? 13);
   const divisor = 1 + rate / 100;
   return divisor > 0 ? Number(amount || 0) / divisor : Number(amount || 0);
+}
+
+function contractFinancial(record: ServiceContract) {
+  return receivables.value
+    .filter((item) => item.contractId === record.id || item.contractCode === record.code || item.sourceNo === record.code)
+    .reduce((summary, item) => ({
+      invoicedAmount: summary.invoicedAmount + (item.invoiceNo ? Number(item.amount || 0) : 0),
+      receivedAmount: summary.receivedAmount + Number(item.settledAmount || 0),
+    }), { invoicedAmount: 0, receivedAmount: 0 });
 }
 </script>

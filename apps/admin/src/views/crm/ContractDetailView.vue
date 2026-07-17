@@ -50,6 +50,26 @@
           </a-row>
         </a-card>
 
+        <a-card title="审批进展" style="margin-top: 16px">
+          <a-timeline>
+            <a-timeline-item color="green">
+              发起合同 · {{ record.customerName || "-" }}
+              <span class="table-subtitle">金额：{{ formatMoney(record.amount) }} · 类型：{{ record.contractType || "-" }}</span>
+            </a-timeline-item>
+            <a-timeline-item :color="record.status === 'PENDING_APPROVAL' ? 'orange' : 'green'">
+              合同审批 · {{ record.status === 'PENDING_APPROVAL' ? "待审批人处理" : "已通过" }}
+              <span class="table-subtitle">{{ record.status === 'PENDING_APPROVAL' ? "未审批" : "合同已进入盖章阶段" }}</span>
+            </a-timeline-item>
+            <a-timeline-item :color="record.status === 'SEAL_APPROVAL' ? 'orange' : record.status === 'ACTIVE' ? 'green' : 'gray'">
+              盖章件审批 · {{ pendingSignedDocApproval?.requestedBy || (record.status === 'ACTIVE' ? "已完成" : "未提交") }}
+              <span class="table-subtitle">{{ record.status === 'SEAL_APPROVAL' ? "待审批人处理" : record.status === 'ACTIVE' ? "已审批通过" : "未审批" }}</span>
+            </a-timeline-item>
+            <a-timeline-item :color="record.status === 'ACTIVE' ? 'green' : 'gray'">
+              合同生效 / 项目承接 · {{ relatedProject?.code || "未承接" }}
+            </a-timeline-item>
+          </a-timeline>
+        </a-card>
+
         <a-card title="合同闭环工作台" class="closure-card" style="margin-top: 16px">
           <template #extra>
             <a-space>

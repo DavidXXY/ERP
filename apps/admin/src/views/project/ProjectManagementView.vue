@@ -498,6 +498,21 @@
               {{ detail.project.approverName }} · {{ detail.project.approvalComment }}
             </a-descriptions-item>
           </a-descriptions>
+          <a-card title="审批进展" size="small" style="margin-top: 12px">
+            <a-timeline>
+              <a-timeline-item color="green">
+                发起项目 · {{ detail.project.customerName || "-" }}
+                <span class="table-subtitle">{{ detail.project.contractCode || detail.project.name }}</span>
+              </a-timeline-item>
+              <a-timeline-item :color="detail.project.approvalStatus === 'PENDING' ? 'orange' : detail.project.approvalStatus === 'REJECTED' ? 'red' : 'green'">
+                项目审批 / 负责人分配 · {{ detail.project.approverName || "待审批人处理" }}
+                <span class="table-subtitle">{{ detail.project.approvalStatus === 'PENDING' ? '未审批' : detail.project.approvalComment || approvalLabel(detail.project.approvalStatus) }}</span>
+              </a-timeline-item>
+              <a-timeline-item :color="detail.project.approvalStatus === 'APPROVED' ? 'green' : 'gray'">
+                项目执行 · {{ detail.project.approvalStatus === 'APPROVED' ? stageLabel(detail.project.stage) : "未开始" }}
+              </a-timeline-item>
+            </a-timeline>
+          </a-card>
 
           <a-row :gutter="[16, 16]" class="drawer-metrics">
             <a-col :span="8"><a-statistic title="预算成本" :value="detail.project.budgetAmount" :formatter="moneyFormatter" /></a-col>

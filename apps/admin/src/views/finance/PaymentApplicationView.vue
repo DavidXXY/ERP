@@ -97,6 +97,7 @@
                 <template #icon><AuditOutlined /></template>
                 审批
               </a-button>
+              <a-button v-else type="link" size="small" @click="openApproval(record)">流程</a-button>
               <a-button v-if="auth.can('finance:payment:execute') && record.status === 'APPROVED'" type="link" size="small" @click="openPayment(record)">
                 <template #icon><PayCircleOutlined /></template>
                 执行付款
@@ -132,9 +133,24 @@
       </a-table>
     </a-card>
 
-    <a-modal v-model:open="approvalOpen" title="审批付款申请" :confirm-loading="saving" @ok="handleApproval">
+    <a-modal v-model:open="approvalOpen" title="付款申请审批进展" :footer="canApproveSelected ? undefined : null" :confirm-loading="saving" @ok="handleApproval">
       <a-alert v-if="selectedApplication" class="section-alert" type="info" :message="`${selectedApplication.code} · ${selectedApplication.supplierName} · ${formatMoney(selectedApplication.requestedAmount)}`" />
-      <a-form ref="approvalFormRef" :model="approvalForm" :rules="approvalRules" layout="vertical">
+      <a-card v-if="selectedApplication" size="small" title="流程进展" class="section-alert">
+        <a-timeline>
+          <a-timeline-item color="green">
+            发起申请 · {{ selectedApplication.applicantName || "-" }}
+            <span class="table-subtitle">{{ selectedApplication.requestedDate || "-" }} · {{ selectedApplication.purpose || "-" }}</span>
+          </a-timeline-item>
+          <a-timeline-item :color="selectedApplication.status === 'PENDING_APPROVAL' ? 'orange' : selectedApplication.status === 'REJECTED' ? 'red' : 'green'">
+            审批阶段 · {{ selectedApplication.approverName || "待审批人处理" }}
+            <span class="table-subtitle">{{ selectedApplication.status === 'PENDING_APPROVAL' ? '未审批' : `${statusLabel(selectedApplication.status)} · ${selectedApplication.approvalComment || '-'}` }}</span>
+          </a-timeline-item>
+          <a-timeline-item :color="selectedApplication.status === 'PAID' ? 'green' : 'gray'">
+            付款完成 · {{ selectedApplication.paymentCode || "未付款" }}
+          </a-timeline-item>
+        </a-timeline>
+      </a-card>
+      <a-form v-if="canApproveSelected" ref="approvalFormRef" :model="approvalForm" :rules="approvalRules" layout="vertical">
         <a-form-item label="审批结论" name="decision">
           <a-radio-group v-model:value="approvalForm.decision" button-style="solid">
             <a-radio-button value="APPROVED">通过</a-radio-button>
@@ -244,6 +260,7 @@ const duplicateBankReference = computed(() => {
   if (!reference) return false;
   return payments.value.some((item) => item.bankReference === reference);
 });
+const canApproveSelected = computed(() => !!selectedApplication.value && selectedApplication.value.status === "PENDING_APPROVAL" && auth.can("finance:payment:approve"));
 const workbenchCards = computed(() => [
   {
     key: "approval",

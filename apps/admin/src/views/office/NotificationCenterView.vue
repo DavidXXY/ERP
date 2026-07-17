@@ -4,7 +4,6 @@
       <template #title>消息中心 <a-tag v-if="unreadCount>0" color="red">{{ unreadCount }} 条未读</a-tag></template>
       <template #extra><a-space><a-button @click="goBack">返回办公室</a-button><a-button :loading="loading" @click="loadData"><template #icon><ReloadOutlined /></template>刷新</a-button><a-button v-if="unreadCount>0" @click="handleMarkAllRead">全部标记已读</a-button></a-space></template>
       <a-space class="table-toolbar" wrap>
-        <a-button @click="handleRefreshNotifications"><template #icon><ReloadOutlined /></template>扫描业务预警</a-button>
         <a-radio-group v-model:value="readFilter" button-style="solid" size="small">
           <a-radio-button value="all">全部</a-radio-button>
           <a-radio-button value="unread">未读</a-radio-button>
@@ -45,7 +44,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue"; import { useRouter } from "vue-router";
 import { message } from "ant-design-vue"; import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
-import { listNotifications, readNotification, refreshNotifications, type NotificationRecord } from "@/api/office";
+import { listNotifications, readNotification, type NotificationRecord } from "@/api/office";
 const router=useRouter(); const loading=ref(false); const notifications=ref<NotificationRecord[]>([]);
 const readFilter=ref<'all'|'unread'|'read'>('all');
 const unreadCount=computed(()=>notifications.value.filter(n=>!n.read).length);
@@ -55,7 +54,6 @@ async function loadData(){loading.value=true;try{notifications.value=await listN
 function goBack(){router.push('/office');}
 async function handleRead(item:NotificationRecord){try{await readNotification(item.id);await loadData();}catch(error){message.error(error instanceof Error?error.message:'消息处理失败');}}
 async function handleMarkAllRead(){const unread=notifications.value.filter(n=>!n.read);if(!unread.length)return;for(const n of unread){try{await readNotification(n.id);}catch{}}message.success('已标记 '+unread.length+' 条为已读');await loadData();}
-async function handleRefreshNotifications(){try{const count=await refreshNotifications();message.success(count?'新增 '+count+' 条业务预警':'当前没有新的业务预警');await loadData();}catch(error){message.error(error instanceof Error?error.message:'预警扫描失败');}}
 function relatedRoute(item:NotificationRecord){
   const type=(item.relatedType||item.type||'').toUpperCase();
   if(type.includes('APPROVAL'))return '/office/approvals';

@@ -5,10 +5,12 @@
         <div>
           <a-typography-title :level="3">业务待办中心</a-typography-title>
           <a-typography-text type="secondary">
-            汇总审批、风险、CRM、采购、库存、项目和资金事项，形成跨模块可执行队列。
+            只放需要推进的业务事项；审批到审批中心处理，通知到消息中心查看。
           </a-typography-text>
         </div>
         <a-space>
+          <a-button @click="go('/office/approvals')">审批中心</a-button>
+          <a-button @click="go('/office/notifications')">消息中心</a-button>
           <a-button @click="resetFilters">重置筛选</a-button>
           <a-button type="primary" :loading="loading" @click="loadData">刷新待办</a-button>
         </a-space>

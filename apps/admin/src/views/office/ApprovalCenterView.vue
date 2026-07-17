@@ -30,34 +30,6 @@
         </button>
       </section>
 
-      <a-row :gutter="[16, 16]" style="margin-bottom:16px">
-        <a-col :xs="24" :lg="12">
-          <a-card size="small" title="办公室待办">
-            <template #extra><a-tag color="orange">{{ workbench?.pendingTodoCount || 0 }} 项</a-tag></template>
-            <a-table size="small" :data-source="workbenchTodos" :columns="todoColumns" :pagination="false" :row-key="(r:any)=>`${r.type}-${r.id}`">
-              <template #bodyCell="{column,record}">
-                <template v-if="column.key==='title'"><a-button type="link" class="table-link" @click="goWorkbenchRoute(record.route)">{{ record.title }}</a-button><span class="table-subtitle">{{ record.subtitle }}</span></template>
-                <template v-else-if="column.key==='amount'">{{ formatMoney(record.amount) }}</template>
-                <template v-else-if="column.key==='priority'"><a-tag :color="priorityColor(record.priority)">{{ priorityLabel(record.priority) }}</a-tag></template>
-              </template>
-              <template #emptyText>暂无办公室待办</template>
-            </a-table>
-          </a-card>
-        </a-col>
-        <a-col :xs="24" :lg="12">
-          <a-card size="small" title="风险预警">
-            <template #extra><a-tag :color="(workbench?.highSeverityWarningCount || 0)>0?'red':'green'">{{ workbench?.highSeverityWarningCount || 0 }} 高风险</a-tag></template>
-            <a-table size="small" :data-source="workbenchWarnings" :columns="warningColumns" :pagination="false" :row-key="(r:any)=>`${r.type}-${r.id}`">
-              <template #bodyCell="{column,record}">
-                <template v-if="column.key==='title'"><a-button type="link" class="table-link" @click="goWorkbenchRoute(record.route)">{{ record.title }}</a-button><span class="table-subtitle">{{ record.content }}</span></template>
-                <template v-else-if="column.key==='severity'"><a-tag :color="severityColor(record.severity)">{{ severityLabel(record.severity) }}</a-tag></template>
-              </template>
-              <template #emptyText>暂无风险预警</template>
-            </a-table>
-          </a-card>
-        </a-col>
-      </a-row>
-
       <a-table :columns="mergedColumns" :data-source="filteredList" :loading="loading" :pagination="{pageSize:10}" :row-key="(r:any)=>r._key" :scroll="{x:1350}">
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'source'">
@@ -263,7 +235,7 @@ import { computed, onMounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 import { message } from "ant-design-vue";
 import PlusOutlined from "@ant-design/icons-vue/PlusOutlined"; import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
-import { addSignApproval, createApproval, getOfficeReferences, getOfficeWorkbench, listApprovals, processApproval, returnApproval, transferApproval, withdrawApproval, type Approval, type ApprovalRuntimeNode, type ApprovalStatus, type ApprovalType, type Expense, type ExpenseStatus, type ExpenseType, type Workbench } from "@/api/office";
+import { addSignApproval, createApproval, getOfficeReferences, listApprovals, processApproval, returnApproval, transferApproval, withdrawApproval, type Approval, type ApprovalRuntimeNode, type ApprovalStatus, type ApprovalType, type Expense, type ExpenseStatus, type ExpenseType } from "@/api/office";
 import { listQuotes, listContracts, listContractChanges, processQuoteApproval, approveContract, approveContractChange, rejectContractChange, type QuotePlan, type ServiceContract } from "@/api/crm";
 import { useAuthStore } from "@/stores/auth";
 
@@ -274,7 +246,6 @@ const riskFilter = ref<string>();
 
 // Office approval data
 const officeApprovals = ref<Approval[]>([]);
-const workbench = ref<Workbench | null>(null);
 const users = ref<Array<{ id: string; displayName: string; enabled: boolean }>>([]);
 // CRM approval data
 const pendingQuotes = ref<QuotePlan[]>([]);
@@ -380,8 +351,6 @@ const officeCount = computed(() => mergedList.value.filter((i) => i._source === 
 const quoteCount = computed(() => mergedList.value.filter((i) => i._source === "quote").length);
 const contractCount = computed(() => mergedList.value.filter((i) => i._source === "contract").length);
 const changeCount = computed(() => mergedList.value.filter((i) => i._source === "change").length);
-const workbenchTodos = computed(() => (workbench.value?.todos || []).slice(0, 5));
-const workbenchWarnings = computed(() => (workbench.value?.warnings || []).slice(0, 5));
 const pendingCount = computed(() => mergedList.value.filter((item) => isPendingApproval(item)).length);
 const overdueCount = computed(() => mergedList.value.filter((item) => item._slaLevel === "OVERDUE").length);
 const dueSoonCount = computed(() => mergedList.value.filter((item) => item._slaLevel === "DUE_SOON").length);
@@ -416,31 +385,22 @@ const mergedColumns = [
   { title: "时间", key: "date", width: 120 },
   { title: "操作", key: "action", width: 220, fixed: "right" as const },
 ];
-const todoColumns = [
-  { title: "事项", key: "title" }, { title: "金额", key: "amount", width: 120 }, { title: "优先级", key: "priority", width: 90 },
-];
-const warningColumns = [
-  { title: "预警", key: "title" }, { title: "等级", key: "severity", width: 90 },
-];
-
 onMounted(loadData);
 
 async function loadData() {
   loading.value = true;
   try {
     const promises: Promise<any>[] = [
-      getOfficeWorkbench(),
       getOfficeReferences(),
       listApprovals(),
       listQuotes(),
       listContracts(),
     ];
     const results = await Promise.all(promises);
-    workbench.value = results[0];
-    users.value = results[1].users;
-    officeApprovals.value = results[2];
-    const allQuotes = results[3];
-    const allContracts = results[4];
+    users.value = results[0].users;
+    officeApprovals.value = results[1];
+    const allQuotes = results[2];
+    const allContracts = results[3];
     pendingQuotes.value = allQuotes.filter((q: QuotePlan) => q.status === "PENDING_APPROVAL");
     pendingContracts.value = allContracts.filter((c: ServiceContract) => c.status === "PENDING_APPROVAL");
     // Fetch contract changes
@@ -460,7 +420,6 @@ async function loadData() {
 }
 
 function goBack() { router.push("/office"); }
-function goWorkbenchRoute(route: string) { if (route) router.push(route); }
 function openApprovalCreate() {
   Object.assign(approvalCreateForm, { code: generateCode("SP"), approvalType: "OTHER" as ApprovalType, title: "", sourceNo: "", amount: 0, applicantName: auth.user?.displayName || "", content: "", departmentName: "", businessType: "", projectCode: "", supplierRisk: "", customerLevel: "" });
   approvalCreateOpen.value = true;
@@ -683,10 +642,6 @@ function approvalActionColor(v: ApprovalStatus) { return v === "APPROVED" ? "gre
 function approvalTypeLabel(v: ApprovalType) { return ({ QUOTE: "报价", CONTRACT: "合同", PURCHASE: "采购", OUTSOURCE: "外包", EXPENSE: "报销", PAYMENT: "付款", SEAL: "用章", LEAVE: "请假", TRAVEL: "出差", OTHER: "其他" } as Record<ApprovalType, string>)[v]; }
 function approvalStatusLabel(v: ApprovalStatus) { return ({ PENDING: "待审批", APPROVED: "已通过", REJECTED: "已驳回" } as Record<ApprovalStatus, string>)[v]; }
 function approvalStatusColor(v: ApprovalStatus) { return ({ PENDING: "orange", APPROVED: "green", REJECTED: "red" } as Record<ApprovalStatus, string>)[v]; }
-function priorityLabel(v: string) { return ({ HIGH: "高", MEDIUM: "中", LOW: "低" } as Record<string, string>)[v] || v; }
-function priorityColor(v: string) { return ({ HIGH: "red", MEDIUM: "orange", LOW: "green" } as Record<string, string>)[v] || "default"; }
-function severityLabel(v: string) { return ({ HIGH: "高", MEDIUM: "中", LOW: "低" } as Record<string, string>)[v] || v; }
-function severityColor(v: string) { return ({ HIGH: "red", MEDIUM: "orange", LOW: "green" } as Record<string, string>)[v] || "default"; }
 function expenseTypeLabel(v: ExpenseType) { return ({ TRAVEL: "差旅", TRANSPORT: "交通", ACCOMMODATION: "住宿", TOOL: "工具采购", OTHER: "其他" } as Record<ExpenseType, string>)[v]; }
 function expenseStatusLabel(v: ExpenseStatus) { return ({ PENDING_APPROVAL: "待审批", APPROVED: "已通过", REJECTED: "已驳回", PAID: "已付款" } as Record<ExpenseStatus, string>)[v]; }
 function formatMoney(v: number) { return new Intl.NumberFormat("zh-CN", { style: "currency", currency: "CNY", minimumFractionDigits: 2 }).format(v || 0); }

@@ -959,7 +959,30 @@ public class OfficeService {
     SystemNotification item = new SystemNotification(); item.setType(type); item.setTitle(title); item.setContent(content);
     item.setRelatedType(relatedType); item.setRelatedId(relatedId); item.setRead(false); notificationRepository.save(item);
   }
-  private ApprovalResponse toApproval(ApprovalRequest item) { return new ApprovalResponse(item.getId(), item.getCode(), item.getApprovalType(), item.getTitle(), item.getSourceNo(), amount(item.getAmount()), item.getStatus(), item.getApplicantName(), item.getContent(), item.getApproverName(), item.getApprovalComment(), item.getProcessedAt(), item.getCreatedAt(), item.getDepartmentName(), item.getBusinessType(), item.getProjectCode(), item.getSupplierRisk(), item.getCustomerLevel(), item.getApprovalMode(), item.getCurrentStep(), item.getTotalSteps(), item.getCurrentApproverName(), item.getMatchedRuleText(), item.getApprovalConfigVersion(), item.getApprovalPlanSnapshot(), runtimeNodeRepository.findByApprovalIdOrderByStepNoAscCreatedAtAsc(item.getId()).stream().map(this::toRuntimeNode).toList(), actionRepository.findByApprovalIdOrderByCreatedAtAsc(item.getId()).stream().map(action -> new ApprovalActionResponse(action.getId(), action.getDecision(), action.getOperatorName(), action.getComment(), action.getActionType(), action.getStepNo(), action.getCreatedAt())).toList()); }
+  private ApprovalResponse toApproval(ApprovalRequest item) { return new ApprovalResponse(item.getId(), item.getCode(), item.getApprovalType(), item.getTitle(), item.getSourceNo(), amount(item.getAmount()), item.getStatus(), item.getApplicantName(), item.getContent(), item.getApproverName(), item.getApprovalComment(), item.getProcessedAt(), item.getCreatedAt(), item.getDepartmentName(), item.getBusinessType(), item.getProjectCode(), item.getSupplierRisk(), item.getCustomerLevel(), item.getApprovalMode(), item.getCurrentStep(), item.getTotalSteps(), item.getCurrentApproverName(), item.getMatchedRuleText(), item.getApprovalConfigVersion(), item.getApprovalPlanSnapshot(), approvalSourceDetail(item), runtimeNodeRepository.findByApprovalIdOrderByStepNoAscCreatedAtAsc(item.getId()).stream().map(this::toRuntimeNode).toList(), actionRepository.findByApprovalIdOrderByCreatedAtAsc(item.getId()).stream().map(action -> new ApprovalActionResponse(action.getId(), action.getDecision(), action.getOperatorName(), action.getComment(), action.getActionType(), action.getStepNo(), action.getCreatedAt())).toList()); }
+  private Object approvalSourceDetail(ApprovalRequest item) {
+    if (item.getApprovalType() == ApprovalType.EXPENSE) {
+      return expenseRepository.findByApprovalRequestId(item.getId())
+          .or(() -> item.getSourceNo() == null ? java.util.Optional.empty() : expenseRepository.findByCode(item.getSourceNo()))
+          .map(expense -> toExpense(
+              expense,
+              expense.getProjectId() == null ? null : projectRepository.findById(expense.getProjectId()).orElse(null),
+              expense.getWorkOrderId() == null ? null : workOrderRepository.findById(expense.getWorkOrderId()).orElse(null)
+          ))
+          .orElse(null);
+    }
+    if (item.getApprovalType() == ApprovalType.OUTSOURCE) {
+      return outsourceRepository.findByApprovalRequestId(item.getId())
+          .map(order -> toOutsource(
+              order,
+              supplierRepository.findById(order.getSupplierId()).orElse(null),
+              order.getProjectId() == null ? null : projectRepository.findById(order.getProjectId()).orElse(null),
+              order.getWorkOrderId() == null ? null : workOrderRepository.findById(order.getWorkOrderId()).orElse(null)
+          ))
+          .orElse(null);
+    }
+    return null;
+  }
   private ApprovalRuntimeNodeResponse toRuntimeNode(ApprovalRuntimeNode item) { return new ApprovalRuntimeNodeResponse(item.getId(), item.getStepNo(), item.getNodeStatus(), item.getApprovalMode(), item.getStepPolicy(), item.getAssigneeType(), item.getAssigneeId(), item.getAssigneeName(), item.getSourceType(), item.getSourceValue(), item.getConditionText(), item.getSlaHours(), item.getDueAt(), item.getRemindedAt(), item.getEscalatedAt(), item.getCompletedAt(), item.getApproverName(), item.getApprovalComment()); }
   private ExpenseResponse toExpense(ExpenseClaim item, Project project, WorkOrder order) { return new ExpenseResponse(item.getId(), item.getCode(), item.getClaimantId(), item.getClaimantName(), item.getProjectId(), project == null ? null : project.getCode(), item.getWorkOrderId(), order == null ? null : order.getCode(), item.getExpenseType(), item.getAmount(), item.getExpenseDate(), item.getDescription(), item.getStatus(), item.getApprovalRequestId()); }
   private OutsourceResponse toOutsource(OutsourceOrder item, Supplier supplier, Project project, WorkOrder order) { return new OutsourceResponse(item.getId(), item.getCode(), item.getSupplierId(), supplier == null ? null : supplier.getName(), item.getProjectId(), project == null ? null : project.getCode(), item.getWorkOrderId(), order == null ? null : order.getCode(), item.getServiceType(), item.getDescription(), item.getAmount(), item.getPlannedDate(), item.getStatus(), item.getApprovalRequestId(), item.getAcceptanceNote()); }

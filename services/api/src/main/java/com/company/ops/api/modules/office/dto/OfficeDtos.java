@@ -56,6 +56,7 @@ public final class OfficeDtos {
                                  String supplierRisk, String customerLevel, String approvalMode, Integer currentStep,
                                  Integer totalSteps, String currentApproverName, String matchedRuleText,
                                  Integer approvalConfigVersion, String approvalPlanSnapshot,
+                                 Object sourceDetail,
                                  List<ApprovalRuntimeNodeResponse> nodes,
                                  List<ApprovalActionResponse> actions) {}
   public record CreateExpenseRequest(// auto-gen

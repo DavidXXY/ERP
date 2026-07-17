@@ -275,7 +275,7 @@ public class HrExportImportService {
           double totalDays = totalStr != null ? Double.parseDouble(totalStr.trim()) : 0;
           double usedDays = usedStr != null ? Double.parseDouble(usedStr.trim()) : 0;
 
-          var existing = leaveBalanceRepository.findByEmployeeIdAndLeaveTypeAndYear(emp.getId(), leaveType, year);
+          var existing = leaveBalanceRepository.findByEmployee_IdAndLeaveTypeAndYear(emp.getId(), leaveType, year);
           LeaveBalance bal;
           if (existing.isPresent()) {
             bal = existing.get();

@@ -175,7 +175,7 @@
                   <template #icon><UserOutlined /></template>个人设置
                 </a-menu-item>
                 <a-menu-item key="roles" disabled>
-                  {{ auth.user?.roleCodes.join(" / ") || "未加载角色" }}
+                  {{ (auth.user?.roleCodes ?? []).join(" / ") || "未加载角色" }}
                 </a-menu-item>
                 <a-menu-divider />
                 <a-menu-item key="logout" @click="handleLogout">退出登录</a-menu-item>

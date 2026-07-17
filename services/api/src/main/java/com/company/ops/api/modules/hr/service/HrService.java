@@ -530,14 +530,14 @@ public class HrService {
         // ====== Leave Balance ======
     @Transactional(readOnly = true)
     public List<LeaveBalanceResponse> listBalances(UUID employeeId) {
-        return leaveBalanceRepository.findByEmployeeIdOrderByLeaveTypeAsc(employeeId)
+        return leaveBalanceRepository.findByEmployee_IdOrderByLeaveTypeAsc(employeeId)
             .stream().map(this::toBalanceResponse).toList();
     }
 
     @Transactional
     public LeaveBalanceResponse setBalance(UUID employeeId, LeaveBalanceRequest req) {
         var emp = findEmployee(employeeId);
-        var existing = leaveBalanceRepository.findByEmployeeIdAndLeaveTypeAndYear(employeeId, req.leaveType(), req.year());
+        var existing = leaveBalanceRepository.findByEmployee_IdAndLeaveTypeAndYear(employeeId, req.leaveType(), req.year());
         LeaveBalance entity;
         if (existing.isPresent()) {
             entity = existing.get();
@@ -558,7 +558,7 @@ public class HrService {
     public void batchInitBalances(UUID employeeId) {
         int year = LocalDate.now().getYear();
         // Auto-create default balances: annual 15 days, sick 12 days
-        var existingTypes = leaveBalanceRepository.findByEmployeeIdAndYear(employeeId, year)
+        var existingTypes = leaveBalanceRepository.findByEmployee_IdAndYear(employeeId, year)
             .stream().map(LeaveBalance::getLeaveType).toList();
         if (!existingTypes.contains("ANNUAL")) {
             var bal = new LeaveBalance();
@@ -582,7 +582,7 @@ public class HrService {
 
     private void deductLeaveBalance(QualificationEmployee emp, String leaveType, double days) {
         int year = LocalDate.now().getYear();
-        var balance = leaveBalanceRepository.findByEmployeeIdAndLeaveTypeAndYear(emp.getId(), leaveType, year);
+        var balance = leaveBalanceRepository.findByEmployee_IdAndLeaveTypeAndYear(emp.getId(), leaveType, year);
         balance.ifPresent(b -> {
             b.setUsedDays(b.getUsedDays() + days);
             leaveBalanceRepository.save(b);

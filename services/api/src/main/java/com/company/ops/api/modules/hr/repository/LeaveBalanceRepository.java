@@ -7,7 +7,7 @@ import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface LeaveBalanceRepository extends JpaRepository<LeaveBalance, UUID> {
-    Optional<LeaveBalance> findByEmployeeIdAndLeaveTypeAndYear(UUID employeeId, String leaveType, int year);
-    List<LeaveBalance> findByEmployeeIdOrderByLeaveTypeAsc(UUID employeeId);
-    List<LeaveBalance> findByEmployeeIdAndYear(UUID employeeId, int year);
+    Optional<LeaveBalance> findByEmployee_IdAndLeaveTypeAndYear(UUID employeeId, String leaveType, int year);
+    List<LeaveBalance> findByEmployee_IdOrderByLeaveTypeAsc(UUID employeeId);
+    List<LeaveBalance> findByEmployee_IdAndYear(UUID employeeId, int year);
 }

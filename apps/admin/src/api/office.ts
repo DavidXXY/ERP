@@ -19,7 +19,7 @@ export type Approval = { id: string; code: string; approvalType: ApprovalType; t
 export type DocumentRecord = { id: string; bizType: string; bizId?: string; fileName: string; contentType?: string; sizeBytes: number; createdAt: string };
 export type NotificationRecord = { id: string; type: string; title: string; content: string; relatedType?: string; relatedId?: string; read: boolean; readAt?: string; createdAt: string };
 export type AuditRecord = { id: string; username?: string; httpMethod: string; requestPath: string; responseStatus: number; clientIp?: string; durationMs: number; createdAt: string };
-export type WorkbenchTodo = { type: string; id: string; title: string; subtitle: string; amount: number; priority: string; route: string; createdAt: string };
+export type WorkbenchTodo = { type: string; id: string; title: string; subtitle: string; amount: number; priority: string; route: string; createdAt: string; status?: string };
 export type WorkbenchWarning = { type: string; id: string; title: string; content: string; severity: string; route: string; createdAt: string };
 export type Workbench = { todos: WorkbenchTodo[]; warnings: WorkbenchWarning[]; pendingTodoCount: number; highSeverityWarningCount: number };
 

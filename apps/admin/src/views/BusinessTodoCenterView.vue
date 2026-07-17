@@ -73,6 +73,7 @@
             <a-select-option value="OVERDUE">已超时</a-select-option>
             <a-select-option value="OPEN">待处理</a-select-option>
             <a-select-option value="PROCESSING">处理中</a-select-option>
+            <a-select-option value="DONE">已处理</a-select-option>
           </a-select>
         </a-space>
       </template>
@@ -133,7 +134,7 @@
       </a-table>
     </a-card>
 
-    <ApprovalCenterView ref="approvalCenterRef" embedded drawer-only />
+    <ApprovalCenterView ref="approvalCenterRef" embedded drawer-only @changed="loadData" />
   </div>
 </template>
 
@@ -145,14 +146,13 @@ import { createApproval, getOfficeWorkbench } from "@/api/office";
 import { listRiskItems } from "@/api/risk";
 import { createFollowUp, listContracts, listOpportunities, listQuotes } from "@/api/crm";
 import { listFinancePayables, listFinanceReceivables, listPaymentApplications } from "@/api/finance";
-import { createPurchaseRequest, listProcurementCostTargets, listProcurementMatching, listPurchaseRequests } from "@/api/procurement";
-import { listReplenishmentSuggestions } from "@/api/inventory";
+import { listProcurementMatching, listPurchaseRequests } from "@/api/procurement";
 import { createProject, listProjectProfitability } from "@/api/project";
 import { useAuthStore } from "@/stores/auth";
 import ApprovalCenterView from "@/views/office/ApprovalCenterView.vue";
 
 type Priority = "HIGH" | "MEDIUM" | "LOW";
-type TodoStatus = "OPEN" | "PROCESSING" | "OVERDUE";
+type TodoStatus = "OPEN" | "PROCESSING" | "OVERDUE" | "DONE";
 
 type BusinessTodo = {
   key: string;
@@ -182,13 +182,6 @@ type AutomationAction =
       subject: string;
       content: string;
       nextAction?: string;
-    }
-  | {
-      type: "CREATE_PURCHASE_REQUEST";
-      partId: string;
-      partName: string;
-      quantity: number;
-      reason: string;
     }
   | {
       type: "CREATE_PROJECT_DRAFT";
@@ -316,12 +309,12 @@ async function loadData() {
         title: item.title,
         subject: item.subtitle,
         priority: normalizePriority(item.priority),
-        status: isOverdue(item.createdAt, 2) ? "OVERDUE" : "OPEN",
+        status: item.status === "APPROVED" || item.status === "REJECTED" ? "DONE" : isOverdue(item.createdAt, 2) ? "OVERDUE" : "OPEN",
         owner: "当前审批人",
         amount: item.amount,
         dueDate: item.createdAt,
         route: item.route || "/workbench/todos",
-        action: "处理审批或协同事项",
+        action: item.status === "APPROVED" || item.status === "REJECTED" ? "查看已处理审批" : "处理审批或协同事项",
         entityId: item.id,
       }));
       workbench.warnings.forEach((item) => next.push({
@@ -533,29 +526,6 @@ async function loadData() {
           action: item.riskMessage || "核对订单、入库、应付和付款差异",
         }));
     }),
-    collect("库存", async () => {
-      const replenishments = await listReplenishmentSuggestions();
-      replenishments.forEach((item) => next.push({
-        key: `inventory-replenishment-${item.partId}`,
-        module: "INVENTORY",
-        moduleName: "库存管理",
-        title: "库存补货建议",
-        subject: `${item.partName} · 当前${item.stockQty} / 安全${item.safetyQty}`,
-        priority: normalizePriority(item.priority),
-        status: "OPEN",
-        owner: "仓储/采购",
-        amount: item.suggestedQty,
-        route: "/procurement/requests",
-        action: "生成采购申请并联动库存计划",
-        automation: {
-          type: "CREATE_PURCHASE_REQUEST",
-          partId: item.partId,
-          partName: item.partName,
-          quantity: item.suggestedQty,
-          reason: item.reason,
-        },
-      }));
-    }),
     collect("项目管理", async () => {
       const projects = await listProjectProfitability();
       projects
@@ -604,7 +574,7 @@ function dedupe(items: BusinessTodo[]) {
 }
 
 function sortTodos(a: BusinessTodo, b: BusinessTodo) {
-  const statusRank = { OVERDUE: 0, OPEN: 1, PROCESSING: 2 };
+  const statusRank = { OVERDUE: 0, OPEN: 1, PROCESSING: 2, DONE: 3 };
   const priorityRank = { HIGH: 0, MEDIUM: 1, LOW: 2 };
   return statusRank[a.status] - statusRank[b.status]
     || priorityRank[a.priority] - priorityRank[b.priority]
@@ -681,27 +651,6 @@ async function runAutomation(record: BusinessTodo) {
         ownerName: record.automation.ownerName || currentUser,
       });
       message.success("已生成跟进/催收记录");
-    } else if (record.automation.type === "CREATE_PURCHASE_REQUEST") {
-      const targets = await listProcurementCostTargets();
-      const department = targets.departments[0];
-      const project = targets.projects[0];
-      if (!department && !project) {
-        message.warning("缺少采购成本归集对象，请先维护部门或项目后再生成采购申请");
-        router.push("/procurement/requests");
-        return;
-      }
-      await createPurchaseRequest({
-        partId: record.automation.partId,
-        partName: record.automation.partName,
-        quantity: record.automation.quantity,
-        expectedDate: addDaysText(7),
-        reason: `库存补货建议：${record.automation.reason}`,
-        requesterName: currentUser,
-        costType: department ? "DEPARTMENT" : "PROJECT",
-        departmentId: department?.id,
-        projectId: department ? undefined : project?.id,
-      });
-      message.success("已生成采购申请");
     } else if (record.automation.type === "CREATE_PROJECT_DRAFT") {
       const amount = record.automation.contractAmount;
       await createProject({
@@ -750,12 +699,6 @@ function todayText() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function addDaysText(days: number) {
-  const date = new Date();
-  date.setDate(date.getDate() + days);
-  return date.toISOString().slice(0, 10);
-}
-
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("zh-CN", { style: "currency", currency: "CNY", maximumFractionDigits: 0 }).format(value);
 }
@@ -773,11 +716,11 @@ function priorityLabel(value: Priority) {
 }
 
 function statusColor(value: TodoStatus) {
-  return value === "OVERDUE" ? "red" : value === "PROCESSING" ? "blue" : "gold";
+  return value === "OVERDUE" ? "red" : value === "PROCESSING" ? "blue" : value === "DONE" ? "green" : "gold";
 }
 
 function statusLabel(value: TodoStatus) {
-  return { OVERDUE: "已超时", PROCESSING: "处理中", OPEN: "待处理" }[value];
+  return { OVERDUE: "已超时", PROCESSING: "处理中", OPEN: "待处理", DONE: "已处理" }[value];
 }
 
 onMounted(loadData);

@@ -241,6 +241,7 @@ import { useAuthStore } from "@/stores/auth";
 
 const props = defineProps<{ embedded?: boolean; drawerOnly?: boolean }>();
 const { embedded, drawerOnly } = props;
+const emit = defineEmits<{ changed: [] }>();
 
 const auth = useAuthStore(); const router = useRouter(); const loading = ref(false); const saving = ref(false);
 const sourceFilter = ref("all");
@@ -453,7 +454,7 @@ async function openApprovalById(id: string) {
 defineExpose({ openApprovalById, loadData });
 async function handleProcess() {
   await processFormRef.value?.validate(); if (!selectedApproval.value) return; saving.value = true;
-  try { await processApproval(selectedApproval.value.id, { ...processForm }); processOpen.value = false; message.success(processForm.decision === "APPROVED" ? "审批已通过" : "审批已驳回"); await loadData(); }
+  try { await processApproval(selectedApproval.value.id, { ...processForm }); processOpen.value = false; message.success(processForm.decision === "APPROVED" ? "审批已通过" : "审批已驳回"); await loadData(); emit("changed"); }
   catch (error) { message.error(error instanceof Error ? error.message : "审批处理失败"); }
   finally { saving.value = false; }
 }
@@ -464,6 +465,7 @@ async function handleDetailProcess() {
     detailOpen.value = false;
     message.success(detailProcessForm.decision === "APPROVED" ? "审批已通过" : "审批已驳回");
     await loadData();
+    emit("changed");
   } catch (error) { message.error(error instanceof Error ? error.message : "审批处理失败"); }
   finally { saving.value = false; }
 }

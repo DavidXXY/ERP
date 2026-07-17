@@ -187,24 +187,23 @@ public class OfficeService {
   public WorkbenchResponse workbench() {
     List<TodoItemResponse> todos = new ArrayList<>();
     approvalRepository.findAllByOrderByCreatedAtDesc().stream()
-        .filter(item -> item.getStatus() == ApprovalStatus.PENDING)
         .forEach(item -> todos.add(new TodoItemResponse(
             "APPROVAL", item.getId(), item.getTitle(), item.getApprovalType().name() + " · " + item.getApplicantName(),
-            amount(item.getAmount()), "HIGH", "/office/approvals", item.getCreatedAt()
+            amount(item.getAmount()), item.getStatus() == ApprovalStatus.PENDING ? "HIGH" : "LOW", "/office/approvals", item.getCreatedAt(), item.getStatus().name()
         )));
     expenseRepository.findAllByOrderByExpenseDateDescCreatedAtDesc().stream()
         .filter(item -> item.getStatus() == ExpenseStatus.PENDING_APPROVAL)
         .filter(item -> item.getApprovalRequestId() == null)
         .forEach(item -> todos.add(new TodoItemResponse(
             "EXPENSE", item.getId(), "费用报销待审批 " + item.getCode(), item.getClaimantName() + " · " + item.getDescription(),
-            amount(item.getAmount()), "MEDIUM", "/office/expenses", item.getCreatedAt()
+            amount(item.getAmount()), "MEDIUM", "/office/expenses", item.getCreatedAt(), item.getStatus().name()
         )));
     outsourceRepository.findAllByOrderByPlannedDateDescCreatedAtDesc().stream()
         .filter(item -> item.getStatus() == OutsourceStatus.PENDING_APPROVAL)
         .filter(item -> item.getApprovalRequestId() == null)
         .forEach(item -> todos.add(new TodoItemResponse(
             "OUTSOURCE", item.getId(), "外包服务待审批 " + item.getCode(), item.getServiceType() + " · " + item.getDescription(),
-            amount(item.getAmount()), "MEDIUM", "/office/outsourcing", item.getCreatedAt()
+            amount(item.getAmount()), "MEDIUM", "/office/outsourcing", item.getCreatedAt(), item.getStatus().name()
         )));
 
     LocalDate today = LocalDate.now();
@@ -224,7 +223,7 @@ public class OfficeService {
     return new WorkbenchResponse(
         todos.stream().sorted((a, b) -> b.createdAt().compareTo(a.createdAt())).toList(),
         warnings.stream().sorted((a, b) -> b.createdAt().compareTo(a.createdAt())).toList(),
-        todos.size(),
+        todos.stream().filter(item -> !"APPROVED".equals(item.status()) && !"REJECTED".equals(item.status())).count(),
         warnings.stream().filter(item -> "HIGH".equals(item.severity())).count()
     );
   }

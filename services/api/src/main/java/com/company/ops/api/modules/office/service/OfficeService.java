@@ -194,12 +194,14 @@ public class OfficeService {
         )));
     expenseRepository.findAllByOrderByExpenseDateDescCreatedAtDesc().stream()
         .filter(item -> item.getStatus() == ExpenseStatus.PENDING_APPROVAL)
+        .filter(item -> item.getApprovalRequestId() == null)
         .forEach(item -> todos.add(new TodoItemResponse(
             "EXPENSE", item.getId(), "费用报销待审批 " + item.getCode(), item.getClaimantName() + " · " + item.getDescription(),
             amount(item.getAmount()), "MEDIUM", "/office/expenses", item.getCreatedAt()
         )));
     outsourceRepository.findAllByOrderByPlannedDateDescCreatedAtDesc().stream()
         .filter(item -> item.getStatus() == OutsourceStatus.PENDING_APPROVAL)
+        .filter(item -> item.getApprovalRequestId() == null)
         .forEach(item -> todos.add(new TodoItemResponse(
             "OUTSOURCE", item.getId(), "外包服务待审批 " + item.getCode(), item.getServiceType() + " · " + item.getDescription(),
             amount(item.getAmount()), "MEDIUM", "/office/outsourcing", item.getCreatedAt()
@@ -218,12 +220,6 @@ public class OfficeService {
         .filter(item -> item.getPlannedDate() != null && item.getPlannedDate().isBefore(today))
         .forEach(item -> warnings.add(new WarningItemResponse(
             "OUTSOURCE_OVERDUE", item.getId(), "外包服务逾期", item.getCode() + " 计划日期 " + item.getPlannedDate(), "MEDIUM", "/office/outsourcing", item.getCreatedAt()
-        )));
-    notificationRepository.findAllByOrderByCreatedAtDesc().stream()
-        .filter(item -> !item.isRead())
-        .limit(20)
-        .forEach(item -> warnings.add(new WarningItemResponse(
-            item.getType(), item.getId(), item.getTitle(), item.getContent(), "LOW", "/office/notifications", item.getCreatedAt()
         )));
     return new WorkbenchResponse(
         todos.stream().sorted((a, b) -> b.createdAt().compareTo(a.createdAt())).toList(),

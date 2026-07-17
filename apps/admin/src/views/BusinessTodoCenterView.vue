@@ -227,14 +227,17 @@ const columns = [
 
 const moduleOptions = computed(() => {
   const map = new Map<string, string>();
-  todos.value.forEach((item) => map.set(item.module, item.moduleName));
+  todos.value.forEach((item) => {
+    const value = normalizeModuleCode(item.module);
+    if (!map.has(value)) map.set(value, item.moduleName);
+  });
   return Array.from(map.entries()).map(([value, label]) => ({ value, label }));
 });
 
 const filteredTodos = computed(() => {
   const text = keyword.value.trim().toLowerCase();
   return todos.value.filter((item) => {
-    if (moduleFilter.value !== "ALL" && item.module !== moduleFilter.value) return false;
+    if (moduleFilter.value !== "ALL" && normalizeModuleCode(item.module) !== moduleFilter.value) return false;
     if (priorityFilter.value !== "ALL" && item.priority !== priorityFilter.value) return false;
     if (statusFilter.value !== "ALL" && item.status !== statusFilter.value) return false;
     if (!text) return true;
@@ -243,6 +246,10 @@ const filteredTodos = computed(() => {
       .some((value) => String(value).toLowerCase().includes(text));
   });
 });
+
+function normalizeModuleCode(value?: string) {
+  return (value || "").trim().toUpperCase();
+}
 
 const highCount = computed(() => filteredTodos.value.filter((item) => item.priority === "HIGH").length);
 const overdueCount = computed(() => filteredTodos.value.filter((item) => item.status === "OVERDUE").length);

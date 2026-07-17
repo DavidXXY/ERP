@@ -1,10 +1,10 @@
 <template>
   <div class="page-stack">
     <a-card>
-      <template #title>审批中心</template>
+      <template #title>审批处理</template>
       <template #extra>
         <a-space>
-          <a-button @click="goBack">返回办公室</a-button>
+          <a-button v-if="!embedded" @click="goBack">返回办公室</a-button>
           <a-button :loading="loading" @click="loadData"><template #icon><ReloadOutlined /></template>刷新</a-button>
         </a-space>
       </template>
@@ -238,6 +238,8 @@ import PlusOutlined from "@ant-design/icons-vue/PlusOutlined"; import ReloadOutl
 import { addSignApproval, createApproval, getOfficeReferences, listApprovals, processApproval, returnApproval, transferApproval, withdrawApproval, type Approval, type ApprovalRuntimeNode, type ApprovalStatus, type ApprovalType, type Expense, type ExpenseStatus, type ExpenseType } from "@/api/office";
 import { listQuotes, listContracts, listContractChanges, processQuoteApproval, approveContract, approveContractChange, rejectContractChange, type QuotePlan, type ServiceContract } from "@/api/crm";
 import { useAuthStore } from "@/stores/auth";
+
+defineProps<{ embedded?: boolean }>();
 
 const auth = useAuthStore(); const router = useRouter(); const loading = ref(false); const saving = ref(false);
 const sourceFilter = ref("all");

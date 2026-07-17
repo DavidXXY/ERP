@@ -38,11 +38,6 @@
           <span>业务待办中心</span>
         </a-menu-item>
 
-        <a-menu-item v-if="auth.can('office:approval:view')" key="/office/approvals">
-          <template #icon><FileDoneOutlined /></template>
-          <span>审批中心</span>
-        </a-menu-item>
-
         <a-sub-menu
           v-if="canAccessCrm"
           key="crm"

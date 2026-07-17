@@ -7,7 +7,7 @@
           <a-typography-text>{{ employee ? `${employee.position || '未设置岗位'} · ${employee.organizationName || '未分配组织'}` : '正在同步员工档案' }}</a-typography-text>
         </div>
         <a-space wrap class="self-hero-actions">
-          <a-button @click="$router.push('/office/approvals')"><template #icon><CheckSquareOutlined /></template>审批中心</a-button>
+          <a-button @click="$router.push('/workbench/todos?tab=approvals')"><template #icon><CheckSquareOutlined /></template>业务待办</a-button>
           <a-button type="primary" @click="$router.push('/self/leaves/new')"><template #icon><PlusOutlined /></template>提交请假</a-button>
         </a-space>
       </div>
@@ -24,7 +24,7 @@
       <a-col :xs="24" :lg="15">
         <a-card title="待办事项" class="self-work-card">
           <template #extra>
-            <a-button type="link" @click="$router.push('/office/approvals')">审批中心 {{ approvalTodoCount }}</a-button>
+            <a-button type="link" @click="$router.push('/workbench/todos?tab=approvals')">业务待办 {{ approvalTodoCount }}</a-button>
           </template>
           <a-list :data-source="todos" size="small" v-if="todos.length">
             <template #renderItem="{ item }">
@@ -53,7 +53,7 @@
         <a-card title="快捷操作" class="quick-actions self-work-card">
           <a-row :gutter="[10, 10]">
             <a-col :xs="12"><a-button block @click="$router.push('/self/leaves/new')"><template #icon><PlusOutlined /></template>提交请假</a-button></a-col>
-            <a-col :xs="12"><a-button block @click="$router.push('/office/approvals')"><template #icon><CheckSquareOutlined /></template>审批中心</a-button></a-col>
+            <a-col :xs="12"><a-button block @click="$router.push('/workbench/todos?tab=approvals')"><template #icon><CheckSquareOutlined /></template>业务待办</a-button></a-col>
             <a-col :xs="12"><a-button block @click="$router.push('/self/leaves')"><template #icon><OrderedListOutlined /></template>我的请假</a-button></a-col>
             <a-col :xs="12"><a-button block @click="$router.push('/self/profile')"><template #icon><UserOutlined /></template>我的档案</a-button></a-col>
             <a-col :xs="24"><a-button block @click="$router.push('/self/balances')"><template #icon><BarChartOutlined /></template>我的额度</a-button></a-col>

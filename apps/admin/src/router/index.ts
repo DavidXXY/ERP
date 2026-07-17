@@ -83,8 +83,8 @@ const rootRoutes: RouteRecordRaw[] = [
   { path: "qualification/tender", name: "qualification-tender", component: () => import("@/views/qualification/QualificationCenterView.vue"), meta: { title: "\u6295\u6807\u67e5\u8be2", permission: "qualification:tender:view" } },
   { path: "qualification/warnings", name: "qualification-warnings", component: () => import("@/views/qualification/QualificationCenterView.vue"), meta: { title: "\u8d44\u8d28\u9884\u8b66", permission: "qualification:warning:view" } },
   // Office
-  { path: "office", redirect: "/office/approvals" },
-  { path: "office/approvals", name: "office-approvals", component: () => import("@/views/office/ApprovalCenterView.vue"), meta: { title: "\u5ba1\u6279\u4e2d\u5fc3", permission: "office:approval:view" } },
+  { path: "office", redirect: "/workbench/todos" },
+  { path: "office/approvals", redirect: "/workbench/todos?tab=approvals" },
   { path: "office/expenses", name: "office-expenses", component: () => import("@/views/office/ExpenseView.vue"), meta: { title: "\u8d39\u7528\u62a5\u9500", permission: "office:expense:view" } },
   { path: "office/outsourcing", name: "office-outsourcing", component: () => import("@/views/office/OutsourceView.vue"), meta: { title: "\u5916\u5305\u670d\u52a1", permission: "office:outsource:view" } },
   { path: "office/documents", name: "office-documents", component: () => import("@/views/office/DocumentArchiveView.vue"), meta: { title: "\u7535\u5b50\u6863\u6848", permission: "office:document:view" } },
@@ -113,7 +113,7 @@ const rootRoutes: RouteRecordRaw[] = [
   { path: "self/leaves", name: "self-leaves", component: SelfLeaveHistoryView, meta: { title: "\u6211\u7684\u8bf7\u5047" } },
   { path: "self/leaves/new", name: "self-leave-new", component: SelfLeaveSubmitView, meta: { title: "\u63d0\u4ea4\u8bf7\u5047" } },
   { path: "self/balances", name: "self-balances", component: SelfBalanceView, meta: { title: "\u6211\u7684\u989d\u5ea6" } },
-  { path: "self/approvals", redirect: "/office/approvals" },
+  { path: "self/approvals", redirect: "/workbench/todos?tab=approvals" },
 ];
 
 const router = createRouter({

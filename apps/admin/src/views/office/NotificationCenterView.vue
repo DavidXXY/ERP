@@ -56,7 +56,7 @@ async function handleRead(item:NotificationRecord){try{await readNotification(it
 async function handleMarkAllRead(){const unread=notifications.value.filter(n=>!n.read);if(!unread.length)return;for(const n of unread){try{await readNotification(n.id);}catch{}}message.success('已标记 '+unread.length+' 条为已读');await loadData();}
 function relatedRoute(item:NotificationRecord){
   const type=(item.relatedType||item.type||'').toUpperCase();
-  if(type.includes('APPROVAL'))return '/office/approvals';
+  if(type.includes('APPROVAL'))return '/workbench/todos?tab=approvals';
   if(type.includes('EXPENSE'))return '/office/expenses';
   if(type.includes('OUTSOURCE'))return '/office/outsourcing';
   if(type.includes('DOCUMENT'))return '/office/documents';

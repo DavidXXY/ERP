@@ -192,6 +192,14 @@ public class QuoteCostRequest extends BaseEntity {
     this.subcontractCost = subcontractCost;
   }
 
+  public BigDecimal getSubcontractTaxRate() {
+    return subcontractTaxRate;
+  }
+
+  public void setSubcontractTaxRate(BigDecimal subcontractTaxRate) {
+    this.subcontractTaxRate = subcontractTaxRate;
+  }
+
   public BigDecimal getTravelCost() {
     return travelCost;
   }

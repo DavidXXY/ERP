@@ -74,16 +74,18 @@ management:
 # Swagger — 生产环境建议关闭，或加权限控制
 springdoc:
   api-docs:
-    enabled: true   # 如有安全要求可改为 false
+    enabled: false
   swagger-ui:
-    enabled: true   # 如有安全要求可改为 false
+    enabled: false
     path: /swagger-ui
 
 # 业务配置
 ops:
   security:
     jwt-secret: ${JWT_SECRET}
-    jwt-expire-minutes: ${JWT_EXPIRE_MINUTES:720}
+    jwt-expire-minutes: ${JWT_EXPIRE_MINUTES:30}
+    allowed-origins: ${ALLOWED_ORIGINS}
+    data-encryption-key: ${DATA_ENCRYPTION_KEY}
   storage:
     type: ${STORAGE_TYPE:minio}
     endpoint: ${MINIO_ENDPOINT}

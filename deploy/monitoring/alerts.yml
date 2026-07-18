@@ -1,0 +1,27 @@
+groups:
+  - name: ops-erp
+    rules:
+      - alert: OpsErpApiDown
+        expr: up{job="ops-erp-api"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "ERP API unavailable"
+      - alert: OpsErpHighErrorRate
+        expr: sum(rate(http_server_requests_seconds_count{application="ops-erp-api",status=~"5.."}[5m])) / clamp_min(sum(rate(http_server_requests_seconds_count{application="ops-erp-api"}[5m])), 1) > 0.05
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "ERP API 5xx rate exceeds 5%"
+      - alert: OpsErpSlowApi
+        expr: histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{application="ops-erp-api"}[5m]))) > 2
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "ERP API p95 latency exceeds 2 seconds"
+      - alert: OpsErpDatabasePoolExhausted
+        expr: hikaricp_connections_pending{application="ops-erp-api"} > 0
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "ERP database connection pool has pending callers"

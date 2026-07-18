@@ -33,4 +33,6 @@ else
   tar -czf "$output" -C "$(dirname "$local_data_dir")" "$(basename "$local_data_dir")"
 fi
 
+shasum -a 256 "$output" > "${output}.sha256"
+"$ROOT_DIR/scripts/verify-backup.sh" "$output"
 echo "$output"

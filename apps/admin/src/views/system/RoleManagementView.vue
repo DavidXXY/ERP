@@ -6,23 +6,41 @@
         <p>角色同时决定可执行的操作和可查看的数据范围。</p>
       </div>
       <a-space>
-        <a-button @click="reloadAll"><template #icon><ReloadOutlined /></template>刷新</a-button>
-        <a-button v-if="auth.can('system:role:create')" type="primary" @click="openCreateModal">
+        <a-button @click="reloadAll"
+          ><template #icon><ReloadOutlined /></template>刷新</a-button
+        >
+        <a-button
+          v-if="auth.can('system:role:create')"
+          type="primary"
+          @click="openCreateModal"
+        >
           <template #icon><PlusOutlined /></template>新增角色
         </a-button>
       </a-space>
     </header>
 
     <section class="metric-band">
-      <div><span>角色总数</span><strong>{{ pagination.total }}</strong></div>
-      <div><span>已分配账号</span><strong>{{ assignedUserCount }}</strong></div>
-      <div><span>全公司权限</span><strong>{{ allScopeCount }}</strong></div>
-      <div><span>权限点</span><strong>{{ permissions.length }}</strong></div>
+      <div>
+        <span>角色总数</span><strong>{{ pagination.total }}</strong>
+      </div>
+      <div>
+        <span>已分配账号</span><strong>{{ assignedUserCount }}</strong>
+      </div>
+      <div>
+        <span>全公司权限</span><strong>{{ allScopeCount }}</strong>
+      </div>
+      <div>
+        <span>权限点</span><strong>{{ permissions.length }}</strong>
+      </div>
     </section>
 
     <section class="role-content">
       <div class="table-toolbar">
-        <a-input v-model:value="keyword" allow-clear placeholder="搜索角色名称或代码" />
+        <a-input
+          v-model:value="keyword"
+          allow-clear
+          placeholder="搜索角色名称或代码"
+        />
         <a-select v-model:value="scopeFilter" :options="scopeFilterOptions" />
       </div>
 
@@ -44,29 +62,60 @@
             <span class="table-subtitle">{{ record.code }}</span>
           </template>
           <template v-else-if="column.key === 'dataScope'">
-            <a-tag :color="getDataScopeColor(record.dataScope)">{{ getDataScopeName(record.dataScope) }}</a-tag>
+            <a-tag :color="getDataScopeColor(record.dataScope)">{{
+              getDataScopeName(record.dataScope)
+            }}</a-tag>
             <span v-if="record.dataScope === 'CUSTOM'" class="table-subtitle">
-              {{ record.dataOrganizations.map((item: RoleResponse['dataOrganizations'][number]) => item.name).join('、') }}
+              {{
+                record.dataOrganizations
+                  .map(
+                    (item: RoleResponse["dataOrganizations"][number]) =>
+                      item.name,
+                  )
+                  .join("、")
+              }}
             </span>
           </template>
-          <template v-else-if="column.key === 'userCount'"><strong>{{ record.userCount }}</strong> 个账号</template>
+          <template v-else-if="column.key === 'userCount'"
+            ><strong>{{ record.userCount }}</strong> 个账号</template
+          >
           <template v-else-if="column.key === 'permissions'">
             <strong>{{ record.permissions.length }}</strong> 项权限
-            <span class="table-subtitle">{{ permissionModuleSummary(record) }}</span>
+            <span class="table-subtitle">{{
+              permissionModuleSummary(record)
+            }}</span>
           </template>
-          <template v-else-if="column.key === 'updatedAt'">{{ formatDateTime(record.updatedAt) }}</template>
+          <template v-else-if="column.key === 'updatedAt'">{{
+            formatDateTime(record.updatedAt)
+          }}</template>
           <template v-else-if="column.key === 'action'">
             <a-space>
-              <a-button v-if="auth.can('system:role:update')" size="small" type="link" @click="openEditModal(record)">编辑授权</a-button>
+              <a-button
+                v-if="auth.can('system:role:update')"
+                size="small"
+                type="link"
+                @click="openEditModal(record)"
+                >编辑授权</a-button
+              >
               <a-popconfirm
                 v-if="auth.can('system:role:delete') && !record.builtIn"
-                :title="record.userCount ? `该角色仍分配给 ${record.userCount} 个账号` : '确定删除该角色？'"
+                :title="
+                  record.userCount
+                    ? `该角色仍分配给 ${record.userCount} 个账号`
+                    : '确定删除该角色？'
+                "
                 ok-text="确定"
                 cancel-text="取消"
                 :disabled="record.userCount > 0"
                 @confirm="handleDelete(record.id)"
               >
-                <a-button size="small" type="link" danger :disabled="record.userCount > 0">删除</a-button>
+                <a-button
+                  size="small"
+                  type="link"
+                  danger
+                  :disabled="record.userCount > 0"
+                  >删除</a-button
+                >
               </a-popconfirm>
             </a-space>
           </template>
@@ -89,26 +138,51 @@
         show-icon
         message="正在修改系统内置角色，保存后该角色下所有账号的权限会立即变化。"
       />
-      <a-form ref="formRef" :model="formState" :rules="formRules" layout="vertical">
+      <a-form
+        ref="formRef"
+        :model="formState"
+        :rules="formRules"
+        layout="vertical"
+      >
         <a-row :gutter="16">
           <a-col :xs="24" :md="10">
-            <a-form-item label="角色代码" name="code"><a-input v-model:value="formState.code" :disabled="isEdit" placeholder="例如：PROJECT_MANAGER" /></a-form-item>
+            <a-form-item label="角色代码" name="code"
+              ><a-input
+                v-model:value="formState.code"
+                :disabled="isEdit"
+                placeholder="例如：PROJECT_MANAGER"
+            /></a-form-item>
           </a-col>
           <a-col :xs="24" :md="14">
-            <a-form-item label="角色名称" name="name"><a-input v-model:value="formState.name" placeholder="例如：项目经理" /></a-form-item>
+            <a-form-item label="角色名称" name="name"
+              ><a-input
+                v-model:value="formState.name"
+                placeholder="例如：项目经理"
+            /></a-form-item>
           </a-col>
         </a-row>
 
         <a-form-item label="数据范围" name="dataScope">
-          <a-radio-group v-model:value="formState.dataScope" button-style="solid">
-            <a-radio-button v-for="option in dataScopeOptions" :key="option.value" :value="option.value">
+          <a-radio-group
+            v-model:value="formState.dataScope"
+            button-style="solid"
+          >
+            <a-radio-button
+              v-for="option in dataScopeOptions"
+              :key="option.value"
+              :value="option.value"
+            >
               {{ option.label }}
             </a-radio-button>
           </a-radio-group>
         </a-form-item>
         <p class="scope-help">{{ dataScopeDescription }}</p>
 
-        <a-form-item v-if="formState.dataScope === 'CUSTOM'" label="指定组织" required>
+        <a-form-item
+          v-if="formState.dataScope === 'CUSTOM'"
+          label="指定组织"
+          required
+        >
           <a-tree-select
             v-model:value="formState.dataOrganizationIds"
             :tree-data="organizations"
@@ -122,27 +196,59 @@
         <div class="permission-heading">
           <div>
             <strong>操作权限</strong>
-            <span>已选择 {{ formState.permissionIds.length }} / {{ permissions.length }} 项</span>
+            <span
+              >已选择 {{ formState.permissionIds.length }} /
+              {{ permissions.length }} 项</span
+            >
           </div>
           <a-space>
-            <a-button size="small" type="link" @click="selectAllPermissions">全部选择</a-button>
-            <a-button size="small" type="link" @click="formState.permissionIds = []">全部清空</a-button>
+            <a-button size="small" type="link" @click="selectAllPermissions"
+              >全部选择</a-button
+            >
+            <a-button
+              size="small"
+              type="link"
+              @click="formState.permissionIds = []"
+              >全部清空</a-button
+            >
           </a-space>
         </div>
 
         <div class="permission-matrix">
-          <section v-for="group in permissionGroups" :key="group.module" class="permission-group">
+          <section
+            v-for="group in permissionGroups"
+            :key="group.module"
+            class="permission-group"
+          >
             <div class="permission-group-heading">
               <div>
                 <strong>{{ moduleLabel(group.module) }}</strong>
-                <span>{{ selectedModuleCount(group.module) }} / {{ group.permissions.length }}</span>
+                <span
+                  >{{ selectedModuleCount(group.module) }} /
+                  {{ group.permissions.length }}</span
+                >
               </div>
-              <a-button size="small" type="link" @click="toggleModule(group.module)">
-                {{ selectedModuleCount(group.module) === group.permissions.length ? "清空" : "全选" }}
+              <a-button
+                size="small"
+                type="link"
+                @click="toggleModule(group.module)"
+              >
+                {{
+                  selectedModuleCount(group.module) === group.permissions.length
+                    ? "清空"
+                    : "全选"
+                }}
               </a-button>
             </div>
-            <a-checkbox-group v-model:value="formState.permissionIds" class="permission-options">
-              <a-checkbox v-for="permission in group.permissions" :key="permission.id" :value="permission.id">
+            <a-checkbox-group
+              v-model:value="formState.permissionIds"
+              class="permission-options"
+            >
+              <a-checkbox
+                v-for="permission in group.permissions"
+                :key="permission.id"
+                :value="permission.id"
+              >
                 <span>{{ permission.name }}</span>
                 <small>{{ actionLabel(permission.code) }}</small>
               </a-checkbox>
@@ -207,7 +313,10 @@ const dataScopeOptions = [
   { label: "指定组织", value: "CUSTOM" },
   { label: "全公司", value: "ALL" },
 ];
-const scopeFilterOptions = [{ label: "全部数据范围", value: "ALL_SCOPES" }, ...dataScopeOptions];
+const scopeFilterOptions = [
+  { label: "全部数据范围", value: "ALL_SCOPES" },
+  ...dataScopeOptions,
+];
 const formRules = {
   code: [{ required: true, message: "请输入角色代码" }],
   name: [{ required: true, message: "请输入角色名称" }],
@@ -221,7 +330,14 @@ const dataScopeMap: Record<string, string> = {
   CUSTOM: "指定组织",
   ALL: "全公司",
 };
-const dataScopeColorMap: Record<string, string> = { SELF: "green", DEPT: "blue", DEPARTMENT: "blue", DEPT_AND_SUB: "orange", CUSTOM: "purple", ALL: "red" };
+const dataScopeColorMap: Record<string, string> = {
+  SELF: "green",
+  DEPT: "blue",
+  DEPARTMENT: "blue",
+  DEPT_AND_SUB: "orange",
+  CUSTOM: "purple",
+  ALL: "red",
+};
 const dataScopeDescriptions: Record<string, string> = {
   SELF: "只能查看本人负责或分配给本人的业务数据。",
   DEPT: "可以查看本人所在组织的成员数据，不包含下级组织。",
@@ -230,16 +346,29 @@ const dataScopeDescriptions: Record<string, string> = {
   ALL: "可以查看全公司的业务数据，请谨慎授予。",
 };
 const moduleLabels: Record<string, string> = {
-  system: "系统设置", dashboard: "经营驾驶舱", crm: "CRM", procurement: "供应链采购",
-  project: "项目管理", inventory: "库存管理", workforce: "人事管理",
-  qualification: "资质管理", office: "OA协同", finance: "财务资金", bi: "经营分析",
+  system: "系统设置",
+  dashboard: "经营驾驶舱",
+  crm: "CRM",
+  procurement: "供应链采购",
+  project: "项目管理",
+  inventory: "库存管理",
+  workforce: "人事管理",
+  qualification: "资质管理",
+  office: "OA协同",
+  finance: "财务资金",
+  bi: "经营分析",
 };
 
 const filteredRoles = computed(() => {
   const normalized = keyword.value.trim().toLowerCase();
   return roles.value.filter((role) => {
-    const scopeMatches = scopeFilter.value === "ALL_SCOPES" || role.dataScope === scopeFilter.value;
-    const keywordMatches = !normalized || role.name.toLowerCase().includes(normalized) || role.code.toLowerCase().includes(normalized);
+    const scopeMatches =
+      scopeFilter.value === "ALL_SCOPES" ||
+      role.dataScope === scopeFilter.value;
+    const keywordMatches =
+      !normalized ||
+      role.name.toLowerCase().includes(normalized) ||
+      role.code.toLowerCase().includes(normalized);
     return scopeMatches && keywordMatches;
   });
 });
@@ -250,12 +379,23 @@ const permissionGroups = computed(() => {
     grouped.get(permission.module)?.push(permission);
   });
   return Array.from(grouped.entries())
-    .map(([module, items]) => ({ module, permissions: items.sort((a, b) => a.code.localeCompare(b.code)) }))
-    .sort((a, b) => moduleLabel(a.module).localeCompare(moduleLabel(b.module), "zh-CN"));
+    .map(([module, items]) => ({
+      module,
+      permissions: items.sort((a, b) => a.code.localeCompare(b.code)),
+    }))
+    .sort((a, b) =>
+      moduleLabel(a.module).localeCompare(moduleLabel(b.module), "zh-CN"),
+    );
 });
-const assignedUserCount = computed(() => roles.value.reduce((sum, role) => sum + Number(role.userCount || 0), 0));
-const allScopeCount = computed(() => roles.value.filter((role) => role.dataScope === "ALL").length);
-const dataScopeDescription = computed(() => dataScopeDescriptions[formState.dataScope] || "");
+const assignedUserCount = computed(() =>
+  roles.value.reduce((sum, role) => sum + Number(role.userCount || 0), 0),
+);
+const allScopeCount = computed(
+  () => roles.value.filter((role) => role.dataScope === "ALL").length,
+);
+const dataScopeDescription = computed(
+  () => dataScopeDescriptions[formState.dataScope] || "",
+);
 
 onMounted(loadData);
 onMounted(loadPermissions);
@@ -268,7 +408,10 @@ async function reloadAll() {
 async function loadData() {
   loading.value = true;
   try {
-    const result = await listRolesApi(pagination.current - 1, pagination.pageSize);
+    const result = await listRolesApi(
+      pagination.current - 1,
+      pagination.pageSize,
+    );
     roles.value = result.content;
     pagination.total = result.totalElements;
   } catch (error) {
@@ -332,7 +475,10 @@ function closeModal() {
 async function handleModalOk() {
   try {
     await formRef.value?.validate();
-    if (formState.dataScope === "CUSTOM" && !formState.dataOrganizationIds.length) {
+    if (
+      formState.dataScope === "CUSTOM" &&
+      !formState.dataOrganizationIds.length
+    ) {
       message.warning("自定义数据范围至少选择一个组织");
       return;
     }
@@ -341,7 +487,8 @@ async function handleModalOk() {
       name: formState.name,
       dataScope: formState.dataScope,
       permissionIds: formState.permissionIds,
-      dataOrganizationIds: formState.dataScope === "CUSTOM" ? formState.dataOrganizationIds : [],
+      dataOrganizationIds:
+        formState.dataScope === "CUSTOM" ? formState.dataOrganizationIds : [],
     };
     if (isEdit.value) {
       await updateRoleApi(editId.value, payload);
@@ -370,38 +517,78 @@ async function handleDelete(id: string) {
 }
 
 function initialForm() {
-  return { code: "", name: "", dataScope: "SELF", permissionIds: [] as string[], dataOrganizationIds: [] as string[] };
+  return {
+    code: "",
+    name: "",
+    dataScope: "SELF",
+    permissionIds: [] as string[],
+    dataOrganizationIds: [] as string[],
+  };
 }
 
 function selectAllPermissions() {
-  formState.permissionIds = permissions.value.map((permission) => permission.id);
+  formState.permissionIds = permissions.value.map(
+    (permission) => permission.id,
+  );
 }
 
 function selectedModuleCount(module: string) {
   const selected = new Set(formState.permissionIds);
-  return permissions.value.filter((permission) => permission.module === module && selected.has(permission.id)).length;
+  return permissions.value.filter(
+    (permission) => permission.module === module && selected.has(permission.id),
+  ).length;
 }
 
 function toggleModule(module: string) {
-  const moduleIds = permissions.value.filter((permission) => permission.module === module).map((permission) => permission.id);
+  const moduleIds = permissions.value
+    .filter((permission) => permission.module === module)
+    .map((permission) => permission.id);
   const selected = new Set(formState.permissionIds);
   const allSelected = moduleIds.every((id) => selected.has(id));
-  moduleIds.forEach((id) => allSelected ? selected.delete(id) : selected.add(id));
+  moduleIds.forEach((id) =>
+    allSelected ? selected.delete(id) : selected.add(id),
+  );
   formState.permissionIds = Array.from(selected);
 }
 
 function permissionModuleSummary(role: RoleResponse) {
-  const modules = Array.from(new Set(role.permissions.map((permission) => moduleLabel(permission.module))));
-  return modules.length ? modules.slice(0, 3).join("、") + (modules.length > 3 ? ` 等 ${modules.length} 个模块` : "") : "未配置权限";
+  const modules = Array.from(
+    new Set(
+      role.permissions.map((permission) => moduleLabel(permission.module)),
+    ),
+  );
+  return modules.length
+    ? modules.slice(0, 3).join("、") +
+        (modules.length > 3 ? ` 等 ${modules.length} 个模块` : "")
+    : "未配置权限";
 }
 
 function actionLabel(code: string) {
   const action = code.split(":").pop() || "";
   const labels: Record<string, string> = {
-    view: "查看", create: "新增", update: "编辑", delete: "删除", approve: "审批", submit: "提交",
-    execute: "执行", settle: "核销", invoice: "开票", apply: "申请", collect: "回款", generate: "生成",
-    accept: "验收", assign: "派工", receive: "收货", issue: "领用", return: "归还", manage: "维护",
-    process: "处理", upload: "上传", complete: "验收", convert: "转合同", "customer-result": "客户结果",
+    view: "查看",
+    create: "新增",
+    update: "编辑",
+    delete: "删除",
+    approve: "审批",
+    submit: "提交",
+    execute: "执行",
+    settle: "核销",
+    invoice: "开票",
+    apply: "申请",
+    collect: "回款",
+    generate: "生成",
+    accept: "验收",
+    assign: "派工",
+    receive: "收货",
+    issue: "领用",
+    return: "归还",
+    manage: "维护",
+    process: "处理",
+    upload: "上传",
+    complete: "验收",
+    convert: "转合同",
+    "customer-result": "客户结果",
     "reset-password": "重置密码",
   };
   return labels[action] || action;

@@ -5,7 +5,9 @@
       <template #extra>
         <a-space>
           <a-button @click="loadData">刷新</a-button>
-          <a-button type="primary" :loading="savingAll" @click="saveAll">保存全部模板</a-button>
+          <a-button type="primary" :loading="savingAll" @click="saveAll"
+            >保存全部模板</a-button
+          >
         </a-space>
       </template>
       <a-alert
@@ -25,39 +27,69 @@
             </a-space>
           </template>
           <template #extra>
-            <a-switch v-model:checked="item.enabled" checked-children="启用" un-checked-children="停用" />
+            <a-switch
+              v-model:checked="item.enabled"
+              checked-children="启用"
+              un-checked-children="停用"
+            />
           </template>
 
           <a-form layout="vertical">
             <a-row :gutter="12">
               <a-col :xs="24" :md="12">
                 <a-form-item :label="thresholdLabel(item, 'high')">
-                  <a-input-number v-model:value="item.highThreshold" :min="0" :precision="2" class="full-input" />
+                  <a-input-number
+                    v-model:value="item.highThreshold"
+                    :min="0"
+                    :precision="2"
+                    class="full-input"
+                  />
                 </a-form-item>
               </a-col>
               <a-col :xs="24" :md="12">
                 <a-form-item :label="thresholdLabel(item, 'medium')">
-                  <a-input-number v-model:value="item.mediumThreshold" :min="0" :precision="2" class="full-input" />
+                  <a-input-number
+                    v-model:value="item.mediumThreshold"
+                    :min="0"
+                    :precision="2"
+                    class="full-input"
+                  />
                 </a-form-item>
               </a-col>
               <a-col :xs="24" :md="12">
                 <a-form-item label="预警提前天数">
-                  <a-input-number v-model:value="item.warningDays" :min="0" :precision="0" class="full-input" />
+                  <a-input-number
+                    v-model:value="item.warningDays"
+                    :min="0"
+                    :precision="0"
+                    class="full-input"
+                  />
                 </a-form-item>
               </a-col>
               <a-col :xs="24" :md="12">
                 <a-form-item label="SLA处理时限(小时)">
-                  <a-input-number v-model:value="item.slaHours" :min="1" :precision="0" class="full-input" />
+                  <a-input-number
+                    v-model:value="item.slaHours"
+                    :min="1"
+                    :precision="0"
+                    class="full-input"
+                  />
                 </a-form-item>
               </a-col>
               <a-col :xs="24" :md="12">
                 <a-form-item label="默认责任人">
-                  <a-input v-model:value="item.defaultOwner" placeholder="例如：项目经理" />
+                  <a-input
+                    v-model:value="item.defaultOwner"
+                    placeholder="例如：项目经理"
+                  />
                 </a-form-item>
               </a-col>
               <a-col :xs="24" :md="12">
                 <a-form-item label="升级责任人">
-                  <a-input v-model:value="item.escalationOwner" placeholder="例如：运营负责人" />
+                  <a-input
+                    v-model:value="item.escalationOwner"
+                    placeholder="例如：运营负责人"
+                  />
                 </a-form-item>
               </a-col>
               <a-col :span="24">
@@ -70,7 +102,13 @@
 
           <div class="rule-footer">
             <span>{{ previewText(item) }}</span>
-            <a-button type="primary" size="small" :loading="savingCode === item.ruleCode" @click="saveOne(item)">保存规则</a-button>
+            <a-button
+              type="primary"
+              size="small"
+              :loading="savingCode === item.ruleCode"
+              @click="saveOne(item)"
+              >保存规则</a-button
+            >
           </div>
         </a-card>
       </a-col>
@@ -78,7 +116,13 @@
 
     <a-card :bordered="false">
       <template #title>已配置规则</template>
-      <a-table :columns="columns" :data-source="rules" :loading="loading" row-key="ruleCode" :pagination="{ pageSize: 10 }">
+      <a-table
+        :columns="columns"
+        :data-source="rules"
+        :loading="loading"
+        row-key="ruleCode"
+        :pagination="{ pageSize: 10 }"
+      >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'name'">
             <strong>{{ record.name }}</strong>
@@ -88,14 +132,18 @@
             <a-tag>{{ moduleLabel(record.module) }}</a-tag>
           </template>
           <template v-else-if="column.key === 'enabled'">
-            <a-tag :color="record.enabled ? 'green' : 'default'">{{ record.enabled ? "启用" : "停用" }}</a-tag>
+            <a-tag :color="record.enabled ? 'green' : 'default'">{{
+              record.enabled ? "启用" : "停用"
+            }}</a-tag>
           </template>
           <template v-else-if="column.key === 'thresholds'">
             <span>{{ thresholdText(record) }}</span>
           </template>
           <template v-else-if="column.key === 'owner'">
             <span>{{ record.defaultOwner || "-" }}</span>
-            <span class="table-subtitle">升级：{{ record.escalationOwner || "-" }}</span>
+            <span class="table-subtitle"
+              >升级：{{ record.escalationOwner || "-" }}</span
+            >
           </template>
         </template>
       </a-table>
@@ -106,7 +154,11 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import { message } from "ant-design-vue";
-import { listRiskRules, saveRiskRule, type RiskRuleConfigResponse } from "@/api/risk";
+import {
+  listRiskRules,
+  saveRiskRule,
+  type RiskRuleConfigResponse,
+} from "@/api/risk";
 
 type RuleForm = Omit<RiskRuleConfigResponse, "id">;
 
@@ -122,7 +174,8 @@ const templates: RuleForm[] = [
     slaHours: 48,
     defaultOwner: "项目经理",
     escalationOwner: "项目总监",
-    remark: "阶段推进前校验审批、预算、成本、资料、验收记录。高阈值表示必须满足项比例。",
+    remark:
+      "阶段推进前校验审批、预算、成本、资料、验收记录。高阈值表示必须满足项比例。",
   },
   {
     ruleCode: "crm_low_margin_quote",
@@ -186,7 +239,9 @@ async function loadData() {
     rules.value = await listRiskRules();
     ruleForms.value = templates.map((template) => ({
       ...cloneRule(template),
-      ...stripId(rules.value.find((item) => item.ruleCode === template.ruleCode)),
+      ...stripId(
+        rules.value.find((item) => item.ruleCode === template.ruleCode),
+      ),
     }));
   } catch (error) {
     message.error(error instanceof Error ? error.message : "规则配置加载失败");
@@ -211,7 +266,9 @@ async function saveOne(item: RuleForm) {
 async function saveAll() {
   savingAll.value = true;
   try {
-    await Promise.all(ruleForms.value.map((item) => saveRiskRule(normalizeRule(item))));
+    await Promise.all(
+      ruleForms.value.map((item) => saveRiskRule(normalizeRule(item))),
+    );
     message.success("流程规则模板已全部保存");
     await loadData();
   } catch (error) {
@@ -252,22 +309,29 @@ function numberOrUndefined(value?: number) {
 }
 
 function moduleLabel(module: string) {
-  return ({
-    project: "项目管理",
-    crm: "CRM",
-    procurement: "供应链采购",
-    office: "OA协同",
-    finance: "财务资金",
-    inventory: "库存管理",
-    qualification: "资质管理",
-    maintenance: "维保",
-  } as Record<string, string>)[module] || module;
+  return (
+    (
+      {
+        project: "项目管理",
+        crm: "CRM",
+        procurement: "供应链采购",
+        office: "OA协同",
+        finance: "财务资金",
+        inventory: "库存管理",
+        qualification: "资质管理",
+        maintenance: "维保",
+      } as Record<string, string>
+    )[module] || module
+  );
 }
 
 function thresholdLabel(item: RuleForm, level: "high" | "medium") {
-  if (item.ruleCode === "project_stage_gate") return level === "high" ? "强制闸口满足率(%)" : "预警闸口满足率(%)";
-  if (item.ruleCode === "crm_low_margin_quote") return level === "high" ? "高危毛利率下限(%)" : "关注毛利率下限(%)";
-  if (item.ruleCode === "supplier_score_rule") return level === "high" ? "高风险评分线" : "观察评分线";
+  if (item.ruleCode === "project_stage_gate")
+    return level === "high" ? "强制闸口满足率(%)" : "预警闸口满足率(%)";
+  if (item.ruleCode === "crm_low_margin_quote")
+    return level === "high" ? "高危毛利率下限(%)" : "关注毛利率下限(%)";
+  if (item.ruleCode === "supplier_score_rule")
+    return level === "high" ? "高风险评分线" : "观察评分线";
   return level === "high" ? "高危阈值" : "关注阈值";
 }
 

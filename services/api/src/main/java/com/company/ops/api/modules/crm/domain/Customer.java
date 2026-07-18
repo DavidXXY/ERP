@@ -3,6 +3,8 @@ package com.company.ops.api.modules.crm.domain;
 import com.company.ops.api.common.domain.BaseEntity;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
+import com.company.ops.api.common.security.EncryptedStringConverter;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -44,13 +46,15 @@ public class Customer extends BaseEntity {
   @Column(name = "invoice_title", length = 180)
   private String invoiceTitle;
 
-  @Column(name = "tax_no", length = 64)
+  @Convert(converter = EncryptedStringConverter.class)
+  @Column(name = "tax_no", length = 512)
   private String taxNo;
 
   @Column(name = "bank_name", length = 160)
   private String bankName;
 
-  @Column(name = "bank_account", length = 80)
+  @Convert(converter = EncryptedStringConverter.class)
+  @Column(name = "bank_account", length = 512)
   private String bankAccount;
 
   @Column(name = "registered_address", length = 240)
@@ -195,4 +199,3 @@ public class Customer extends BaseEntity {
     return sites;
   }
 }
-

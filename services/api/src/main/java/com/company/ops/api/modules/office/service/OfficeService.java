@@ -15,6 +15,7 @@ import com.company.ops.api.modules.office.domain.ApprovalStatus;
 import com.company.ops.api.modules.office.domain.ApprovalType;
 import com.company.ops.api.modules.office.domain.DocumentFile;
 import com.company.ops.api.modules.office.domain.ExpenseClaim;
+import com.company.ops.api.modules.office.domain.ExpenseClaimLine;
 import com.company.ops.api.modules.office.domain.ExpenseStatus;
 import com.company.ops.api.modules.office.domain.ExpenseType;
 import com.company.ops.api.modules.office.domain.OutsourceOrder;
@@ -34,6 +35,8 @@ import com.company.ops.api.modules.office.dto.OfficeDtos.CreateApprovalRequest;
 import com.company.ops.api.modules.office.dto.OfficeDtos.CreateExpenseRequest;
 import com.company.ops.api.modules.office.dto.OfficeDtos.CreateOutsourceRequest;
 import com.company.ops.api.modules.office.dto.OfficeDtos.DocumentResponse;
+import com.company.ops.api.modules.office.dto.OfficeDtos.CreateExpenseLineRequest;
+import com.company.ops.api.modules.office.dto.OfficeDtos.ExpenseLineResponse;
 import com.company.ops.api.modules.office.dto.OfficeDtos.ExpenseResponse;
 import com.company.ops.api.modules.office.dto.OfficeDtos.NotificationResponse;
 import com.company.ops.api.modules.office.dto.OfficeDtos.OfficeOverview;
@@ -51,6 +54,7 @@ import com.company.ops.api.modules.office.repository.ApprovalActionRepository;
 import com.company.ops.api.modules.office.repository.ApprovalRequestRepository;
 import com.company.ops.api.modules.office.repository.ApprovalRuntimeNodeRepository;
 import com.company.ops.api.modules.office.repository.DocumentFileRepository;
+import com.company.ops.api.modules.office.repository.ExpenseClaimLineRepository;
 import com.company.ops.api.modules.office.repository.ExpenseClaimRepository;
 import com.company.ops.api.modules.office.repository.OutsourceOrderRepository;
 import com.company.ops.api.modules.office.repository.SystemNotificationRepository;
@@ -107,6 +111,7 @@ public class OfficeService {
   private final ApprovalActionRepository actionRepository;
   private final ApprovalRuntimeNodeRepository runtimeNodeRepository;
   private final ExpenseClaimRepository expenseRepository;
+  private final ExpenseClaimLineRepository expenseLineRepository;
   private final OutsourceOrderRepository outsourceRepository;
   private final DocumentFileRepository documentRepository;
   private final SystemNotificationRepository notificationRepository;
@@ -127,7 +132,7 @@ public class OfficeService {
   private EntityManager entityManager;
 
   public OfficeService(ApprovalRequestRepository approvalRepository, ApprovalActionRepository actionRepository, ApprovalRuntimeNodeRepository runtimeNodeRepository,
-                       ExpenseClaimRepository expenseRepository, OutsourceOrderRepository outsourceRepository,
+                       ExpenseClaimRepository expenseRepository, ExpenseClaimLineRepository expenseLineRepository, OutsourceOrderRepository outsourceRepository,
                        DocumentFileRepository documentRepository, SystemNotificationRepository notificationRepository,
 	                       SupplierRepository supplierRepository, CustomerRepository customerRepository,
 	                       ProjectRepository projectRepository, WorkOrderRepository workOrderRepository,
@@ -135,7 +140,7 @@ public class OfficeService {
 	                       FileStorageService storageService,
 	                       DeleteGovernanceService deleteGovernanceService) {
     this.approvalRepository = approvalRepository; this.actionRepository = actionRepository; this.runtimeNodeRepository = runtimeNodeRepository;
-    this.expenseRepository = expenseRepository; this.outsourceRepository = outsourceRepository;
+    this.expenseRepository = expenseRepository; this.expenseLineRepository = expenseLineRepository; this.outsourceRepository = outsourceRepository;
     this.documentRepository = documentRepository; this.notificationRepository = notificationRepository;
     this.supplierRepository = supplierRepository; this.customerRepository = customerRepository;
     this.projectRepository = projectRepository; this.workOrderRepository = workOrderRepository;
@@ -365,10 +370,13 @@ public class OfficeService {
     List<ExpenseClaim> items = expenseRepository.findAllByOrderByExpenseDateDescCreatedAtDesc();
     Map<UUID, Project> projects = projectMap(items.stream().map(ExpenseClaim::getProjectId).filter(id -> id != null).toList());
     Map<UUID, WorkOrder> orders = workOrderMap(items.stream().map(ExpenseClaim::getWorkOrderId).filter(id -> id != null).toList());
+    Map<UUID, List<ExpenseClaimLine>> lines = expenseLineRepository.findByExpenseIdInOrderByExpenseIdAscLineNoAsc(items.stream().map(ExpenseClaim::getId).toList())
+        .stream().collect(Collectors.groupingBy(ExpenseClaimLine::getExpenseId));
     return items.stream().map(item -> toExpense(
         item,
         item.getProjectId() == null ? null : projects.get(item.getProjectId()),
-        item.getWorkOrderId() == null ? null : orders.get(item.getWorkOrderId())
+        item.getWorkOrderId() == null ? null : orders.get(item.getWorkOrderId()),
+        lines.getOrDefault(item.getId(), List.of())
     )).toList();
   }
 
@@ -377,17 +385,21 @@ public class OfficeService {
     if (expenseRepository.existsByCode(request.code())) throw new BusinessException("报销单号已存在");
     Project project = request.projectId() == null ? null : projectRepository.findById(request.projectId()).orElseThrow(() -> new BusinessException("项目不存在"));
     WorkOrder order = request.workOrderId() == null ? null : workOrderRepository.findById(request.workOrderId()).orElseThrow(() -> new BusinessException("工单不存在"));
+    List<CreateExpenseLineRequest> lineRequests = normalizeExpenseLines(request);
+    BigDecimal totalAmount = lineRequests.stream().map(CreateExpenseLineRequest::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
+    CreateExpenseLineRequest firstLine = lineRequests.get(0);
     ExpenseClaim item = new ExpenseClaim(); item.setCode(request.code()); item.setClaimantId(request.claimantId());
     item.setClaimantName(request.claimantName()); item.setProjectId(request.projectId()); item.setWorkOrderId(request.workOrderId());
-    item.setExpenseType(request.expenseType()); item.setAmount(request.amount()); item.setExpenseDate(request.expenseDate());
-    item.setDescription(request.description()); item.setStatus(ExpenseStatus.PENDING_APPROVAL);
+    item.setExpenseType(firstLine.expenseType()); item.setAmount(totalAmount); item.setExpenseDate(firstLine.expenseDate());
+    item.setDescription(expenseSummary(lineRequests, request.description())); item.setStatus(ExpenseStatus.PENDING_APPROVAL);
     ExpenseClaim saved = expenseRepository.save(item);
-    ApprovalRequest approval = createApprovalEntity("SP-" + request.code(), ApprovalType.EXPENSE, "费用报销 " + request.code(), request.code(), request.amount(), request.claimantName(), request.description(),
-        null, request.expenseType().name(), project == null ? null : project.getCode(), null, null);
+    List<ExpenseClaimLine> savedLines = saveExpenseLines(saved.getId(), lineRequests);
+    ApprovalRequest approval = createApprovalEntity("SP-" + request.code(), ApprovalType.EXPENSE, "费用报销 " + request.code(), request.code(), totalAmount, request.claimantName(), saved.getDescription(),
+        null, firstLine.expenseType().name(), project == null ? null : project.getCode(), null, null);
     saved.setApprovalRequestId(approval.getId()); expenseRepository.save(saved);
     if (approval.getStatus() == ApprovalStatus.APPROVED) processExpenseSource(approval);
     notify("APPROVAL", "费用报销待审批", request.code() + " · " + request.claimantName(), "EXPENSE", saved.getId());
-    return toExpense(saved, project, order);
+    return toExpense(saved, project, order, savedLines);
   }
 
   @Transactional(readOnly = true)
@@ -832,18 +844,23 @@ public class OfficeService {
     expenseRepository.findByApprovalRequestId(approval.getId()).ifPresent(expense -> {
       if (approval.getStatus() == ApprovalStatus.APPROVED) {
         expense.setStatus(ExpenseStatus.APPROVED);
-        if (expense.getProjectId() != null) projectService.createCost(expense.getProjectId(), new CreateProjectCostRequest(
-            expense.getExpenseType() == ExpenseType.TRAVEL || expense.getExpenseType() == ExpenseType.TRANSPORT || expense.getExpenseType() == ExpenseType.ACCOMMODATION ? ProjectCostCategory.TRAVEL : ProjectCostCategory.OTHER,
-            ProjectCostSource.EXPENSE, expense.getCode(), "费用报销：" + expense.getDescription(), expense.getAmount(), expense.getExpenseDate()));
+        List<ExpenseClaimLine> lines = expenseLineRepository.findByExpenseIdOrderByLineNoAsc(expense.getId());
+        if (lines.isEmpty()) {
+          ExpenseClaimLine fallback = new ExpenseClaimLine();
+          fallback.setLineNo(1); fallback.setExpenseType(expense.getExpenseType()); fallback.setAmount(expense.getAmount());
+          fallback.setExpenseDate(expense.getExpenseDate()); fallback.setDescription(expense.getDescription());
+          lines = List.of(fallback);
+        }
+        if (expense.getProjectId() != null) lines.forEach(line -> projectService.createCost(expense.getProjectId(), new CreateProjectCostRequest(
+            isTravelExpense(line.getExpenseType()) ? ProjectCostCategory.TRAVEL : ProjectCostCategory.OTHER,
+            ProjectCostSource.EXPENSE, expense.getCode() + "-" + line.getLineNo(), "费用报销：" + line.getDescription(), line.getAmount(), line.getExpenseDate())));
         if (expense.getWorkOrderId() != null) workOrderRepository.findById(expense.getWorkOrderId()).ifPresent(order -> {
           order.setTravelCost(amount(order.getTravelCost()).add(expense.getAmount())); order.setCostAmount(amount(order.getCostAmount()).add(expense.getAmount())); workOrderRepository.save(order);
         });
-        String expenseAccount = expense.getExpenseType() == ExpenseType.TOOL ? "6602" : "6601";
-        String expenseAccountName = expense.getExpenseType() == ExpenseType.TOOL ? "工具及办公费" : "差旅交通费";
-        ledgerService.post("EXPENSE", expense.getCode(), expense.getExpenseDate(), "费用报销 " + expense.getCode(), List.of(
-            new PostingLine(expenseAccount, expenseAccountName, expense.getAmount(), BigDecimal.ZERO, expense.getDescription()),
-            new PostingLine("2241", "其他应付款", BigDecimal.ZERO, expense.getAmount(), expense.getClaimantName())
-        ));
+        List<PostingLine> postings = new ArrayList<>();
+        lines.forEach(line -> postings.add(new PostingLine(expenseAccount(line.getExpenseType()), expenseAccountName(line.getExpenseType()), line.getAmount(), BigDecimal.ZERO, line.getDescription())));
+        postings.add(new PostingLine("2241", "其他应付款", BigDecimal.ZERO, expense.getAmount(), expense.getClaimantName()));
+        ledgerService.post("EXPENSE", expense.getCode(), expense.getExpenseDate(), "费用报销 " + expense.getCode(), postings);
       } else expense.setStatus(ExpenseStatus.REJECTED);
       expenseRepository.save(expense);
     });
@@ -954,6 +971,36 @@ public class OfficeService {
     SystemNotification item = new SystemNotification(); item.setType(type); item.setTitle(title); item.setContent(content);
     item.setRelatedType(relatedType); item.setRelatedId(relatedId); item.setRead(false); notificationRepository.save(item);
   }
+  private List<CreateExpenseLineRequest> normalizeExpenseLines(CreateExpenseRequest request) {
+    List<CreateExpenseLineRequest> lines = request.lines() == null ? List.of() : request.lines().stream()
+        .filter(line -> line != null && line.amount() != null && line.expenseType() != null && line.expenseDate() != null && line.description() != null && !line.description().isBlank())
+        .toList();
+    if (!lines.isEmpty()) return lines;
+    if (request.expenseType() == null || request.amount() == null || request.expenseDate() == null || request.description() == null || request.description().isBlank()) {
+      throw new BusinessException("请至少填写一条报销明细");
+    }
+    return List.of(new CreateExpenseLineRequest(request.expenseType(), request.amount(), request.expenseDate(), request.description(), null, null, null));
+  }
+
+  private List<ExpenseClaimLine> saveExpenseLines(UUID expenseId, List<CreateExpenseLineRequest> lines) {
+    expenseLineRepository.deleteByExpenseId(expenseId);
+    List<ExpenseClaimLine> entities = new ArrayList<>();
+    for (int i = 0; i < lines.size(); i++) {
+      CreateExpenseLineRequest line = lines.get(i);
+      ExpenseClaimLine entity = new ExpenseClaimLine();
+      entity.setExpenseId(expenseId); entity.setLineNo(i + 1); entity.setExpenseType(line.expenseType());
+      entity.setAmount(line.amount()); entity.setExpenseDate(line.expenseDate()); entity.setDescription(line.description());
+      entity.setInvoiceFileName(trimToNull(line.invoiceFileName())); entity.setInvoiceContentType(trimToNull(line.invoiceContentType()));
+      entity.setInvoiceSizeBytes(line.invoiceSizeBytes());
+      entities.add(entity);
+    }
+    return expenseLineRepository.saveAll(entities);
+  }
+
+  private String expenseSummary(List<CreateExpenseLineRequest> lines, String fallback) {
+    if (lines.size() == 1) return lines.get(0).description();
+    return "多行报销（" + lines.size() + "项）：" + lines.stream().map(CreateExpenseLineRequest::description).limit(3).collect(Collectors.joining("；")) + (lines.size() > 3 ? "；..." : "");
+  }
   private ApprovalResponse toApproval(ApprovalRequest item) { return new ApprovalResponse(item.getId(), item.getCode(), item.getApprovalType(), item.getTitle(), item.getSourceNo(), amount(item.getAmount()), item.getStatus(), item.getApplicantName(), item.getContent(), item.getApproverName(), item.getApprovalComment(), item.getProcessedAt(), item.getCreatedAt(), item.getDepartmentName(), item.getBusinessType(), item.getProjectCode(), item.getSupplierRisk(), item.getCustomerLevel(), item.getApprovalMode(), item.getCurrentStep(), item.getTotalSteps(), item.getCurrentApproverName(), item.getMatchedRuleText(), item.getApprovalConfigVersion(), item.getApprovalPlanSnapshot(), approvalSourceDetail(item), runtimeNodeRepository.findByApprovalIdOrderByStepNoAscCreatedAtAsc(item.getId()).stream().map(this::toRuntimeNode).toList(), actionRepository.findByApprovalIdOrderByCreatedAtAsc(item.getId()).stream().map(action -> new ApprovalActionResponse(action.getId(), action.getDecision(), action.getOperatorName(), action.getComment(), action.getActionType(), action.getStepNo(), action.getCreatedAt())).toList()); }
   private Object approvalSourceDetail(ApprovalRequest item) {
     if (item.getApprovalType() == ApprovalType.EXPENSE) {
@@ -962,7 +1009,8 @@ public class OfficeService {
           .map(expense -> toExpense(
               expense,
               expense.getProjectId() == null ? null : projectRepository.findById(expense.getProjectId()).orElse(null),
-              expense.getWorkOrderId() == null ? null : workOrderRepository.findById(expense.getWorkOrderId()).orElse(null)
+              expense.getWorkOrderId() == null ? null : workOrderRepository.findById(expense.getWorkOrderId()).orElse(null),
+              expenseLineRepository.findByExpenseIdOrderByLineNoAsc(expense.getId())
           ))
           .orElse(null);
     }
@@ -979,11 +1027,15 @@ public class OfficeService {
     return null;
   }
   private ApprovalRuntimeNodeResponse toRuntimeNode(ApprovalRuntimeNode item) { return new ApprovalRuntimeNodeResponse(item.getId(), item.getStepNo(), item.getNodeStatus(), item.getApprovalMode(), item.getStepPolicy(), item.getAssigneeType(), item.getAssigneeId(), item.getAssigneeName(), item.getSourceType(), item.getSourceValue(), item.getConditionText(), item.getSlaHours(), item.getDueAt(), item.getRemindedAt(), item.getEscalatedAt(), item.getCompletedAt(), item.getApproverName(), item.getApprovalComment()); }
-  private ExpenseResponse toExpense(ExpenseClaim item, Project project, WorkOrder order) { return new ExpenseResponse(item.getId(), item.getCode(), item.getClaimantId(), item.getClaimantName(), item.getProjectId(), project == null ? null : project.getCode(), item.getWorkOrderId(), order == null ? null : order.getCode(), item.getExpenseType(), item.getAmount(), item.getExpenseDate(), item.getDescription(), item.getStatus(), item.getApprovalRequestId()); }
+  private ExpenseResponse toExpense(ExpenseClaim item, Project project, WorkOrder order, List<ExpenseClaimLine> lines) { return new ExpenseResponse(item.getId(), item.getCode(), item.getClaimantId(), item.getClaimantName(), item.getProjectId(), project == null ? null : project.getCode(), item.getWorkOrderId(), order == null ? null : order.getCode(), item.getExpenseType(), item.getAmount(), item.getExpenseDate(), item.getDescription(), item.getStatus(), item.getApprovalRequestId(), lines.stream().map(this::toExpenseLine).toList()); }
+  private ExpenseLineResponse toExpenseLine(ExpenseClaimLine item) { return new ExpenseLineResponse(item.getId(), item.getLineNo(), item.getExpenseType(), item.getAmount(), item.getExpenseDate(), item.getDescription(), item.getInvoiceFileName(), item.getInvoiceContentType(), item.getInvoiceSizeBytes()); }
   private OutsourceResponse toOutsource(OutsourceOrder item, Supplier supplier, Project project, WorkOrder order) { return new OutsourceResponse(item.getId(), item.getCode(), item.getSupplierId(), supplier == null ? null : supplier.getName(), item.getProjectId(), project == null ? null : project.getCode(), item.getWorkOrderId(), order == null ? null : order.getCode(), item.getServiceType(), item.getDescription(), item.getAmount(), item.getPlannedDate(), item.getStatus(), item.getApprovalRequestId(), item.getAcceptanceNote()); }
   private DocumentResponse toDocument(DocumentFile item) { return new DocumentResponse(item.getId(), item.getBizType(), item.getBizId(), item.getFileName(), item.getContentType(), item.getSizeBytes(), item.getCreatedAt()); }
   private NotificationResponse toNotification(SystemNotification item) { return new NotificationResponse(item.getId(), item.getType(), item.getTitle(), item.getContent(), item.getRelatedType(), item.getRelatedId(), item.isRead(), item.getReadAt(), item.getCreatedAt()); }
   private BigDecimal amount(BigDecimal value) { return value == null ? BigDecimal.ZERO : value; }
+  private boolean isTravelExpense(ExpenseType type) { return type == ExpenseType.TRAVEL || type == ExpenseType.TRANSPORT || type == ExpenseType.ACCOMMODATION; }
+  private String expenseAccount(ExpenseType type) { return type == ExpenseType.TOOL ? "6602" : "6601"; }
+  private String expenseAccountName(ExpenseType type) { return type == ExpenseType.TOOL ? "工具及办公费" : "差旅交通费"; }
   private String trimToNull(String value) { return value == null || value.isBlank() ? null : value.trim(); }
   private Map<UUID, Supplier> supplierMap(List<UUID> ids) { return ids.isEmpty() ? Map.of() : supplierRepository.findAllById(ids.stream().distinct().toList()).stream().collect(Collectors.toMap(Supplier::getId, Function.identity())); }
   private Map<UUID, Project> projectMap(List<UUID> ids) { return ids.isEmpty() ? Map.of() : projectRepository.findAllById(ids.stream().distinct().toList()).stream().collect(Collectors.toMap(Project::getId, Function.identity())); }

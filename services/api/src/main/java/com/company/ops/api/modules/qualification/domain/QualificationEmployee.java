@@ -2,6 +2,8 @@ package com.company.ops.api.modules.qualification.domain;
 
 import com.company.ops.api.common.domain.BaseEntity;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
+import com.company.ops.api.common.security.EncryptedStringConverter;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
@@ -25,7 +27,8 @@ public class QualificationEmployee extends BaseEntity {
   @Column(name = "work_no", length = 64) private String workNo;
   @Column(length = 120) private String department;
   @Column(name = "position_name", length = 120) private String position;
-  @Column(name = "id_card", length = 32) private String idCard;
+  @Convert(converter = EncryptedStringConverter.class)
+  @Column(name = "id_card", length = 512) private String idCard;
   @Column(length = 40) private String phone;
   @Column(name = "entry_date") private LocalDate entryDate;
   @Column(name = "employment_status", nullable = false, length = 32) private String employmentStatus = "ACTIVE";

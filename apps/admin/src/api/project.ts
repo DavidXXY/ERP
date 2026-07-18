@@ -15,10 +15,28 @@ export type ProjectStage =
 
 export type ProjectType = "NEW_CONSTRUCTION" | "RENOVATION" | "O_M_RENOVATION";
 export type ProjectApprovalStatus = "PENDING" | "APPROVED" | "REJECTED";
-export type ProjectCostCategory = "LABOR" | "MATERIAL" | "SUBCONTRACT" | "TRAVEL" | "OTHER";
-export type ProjectCostSource = "MANUAL" | "INVENTORY" | "PROCUREMENT" | "EXPENSE" | "SUBCONTRACT";
+export type ProjectCostCategory =
+  | "LABOR"
+  | "MATERIAL"
+  | "SUBCONTRACT"
+  | "TRAVEL"
+  | "OTHER";
+export type ProjectCostSource =
+  | "MANUAL"
+  | "INVENTORY"
+  | "PROCUREMENT"
+  | "EXPENSE"
+  | "SUBCONTRACT";
 
-export type ContractSummary = { id: string; code: string; projectName: string; amount: number; startDate: string; endDate: string; status: string; };
+export type ContractSummary = {
+  id: string;
+  code: string;
+  projectName: string;
+  amount: number;
+  startDate: string;
+  endDate: string;
+  status: string;
+};
 export type Project = {
   id: string;
   customerId?: string;
@@ -120,47 +138,136 @@ export type ProjectProfitability = {
 };
 
 export function listProjects(page?: number, size?: number) {
-  return request<PageResponse<Project>>({ method: "GET", url: "/projects", params: { page, size } });
+  return request<PageResponse<Project>>({
+    method: "GET",
+    url: "/projects",
+    params: { page, size },
+  });
 }
 
 export function listProjectProfitability() {
-  return request<ProjectProfitability[]>({ method: "GET", url: "/projects/profitability" });
+  return request<ProjectProfitability[]>({
+    method: "GET",
+    url: "/projects/profitability",
+  });
 }
 
 export function listPreSalesSupport() {
-  return request<QuotePlan[]>({ method: "GET", url: "/projects/presales-support" });
+  return request<QuotePlan[]>({
+    method: "GET",
+    url: "/projects/presales-support",
+  });
 }
 
-export function submitPreSalesCost(id: string, payload: { projectManager: string; laborCost?: number; laborTaxRate?: number; materialCost?: number; materialTaxRate?: number; subcontractCost?: number; subcontractTaxRate?: number; travelCost?: number; travelTaxRate?: number; equipmentCost?: number; equipmentTaxRate?: number; riskReserve?: number; riskReserveTaxRate?: number; otherCost?: number; otherTaxRate?: number; suggestedPrice?: number; costRemark?: string }) {
-  return request<QuoteCostRequest>({ method: "POST", url: `/projects/presales-support/${id}/cost`, data: payload });
+export function submitPreSalesCost(
+  id: string,
+  payload: {
+    projectManager: string;
+    laborCost?: number;
+    laborTaxRate?: number;
+    materialCost?: number;
+    materialTaxRate?: number;
+    subcontractCost?: number;
+    subcontractTaxRate?: number;
+    travelCost?: number;
+    travelTaxRate?: number;
+    equipmentCost?: number;
+    equipmentTaxRate?: number;
+    riskReserve?: number;
+    riskReserveTaxRate?: number;
+    otherCost?: number;
+    otherTaxRate?: number;
+    suggestedPrice?: number;
+    costRemark?: string;
+  },
+) {
+  return request<QuoteCostRequest>({
+    method: "POST",
+    url: `/projects/presales-support/${id}/cost`,
+    data: payload,
+  });
 }
 
-export function approvePreSalesCost(id: string, payload: { decision: ApprovalDecision; approverName: string; comment: string }) {
-  return request<QuoteCostRequest>({ method: "POST", url: `/projects/presales-support/${id}/approval`, data: payload });
+export function approvePreSalesCost(
+  id: string,
+  payload: {
+    decision: ApprovalDecision;
+    approverName: string;
+    comment: string;
+  },
+) {
+  return request<QuoteCostRequest>({
+    method: "POST",
+    url: `/projects/presales-support/${id}/approval`,
+    data: payload,
+  });
 }
 
 export function createProject(payload: CreateProjectPayload) {
-  return request<ProjectDetail>({ method: "POST", url: "/projects", data: payload });
+  return request<ProjectDetail>({
+    method: "POST",
+    url: "/projects",
+    data: payload,
+  });
 }
 
 export function getProject(id: string) {
   return request<ProjectDetail>({ method: "GET", url: `/projects/${id}` });
 }
 
-export function processProjectApproval(id: string, payload: { decision: ProjectApprovalStatus; comment: string; approverName: string }) {
-  return request<ProjectDetail>({ method: "POST", url: `/projects/${id}/approval`, data: payload });
+export function processProjectApproval(
+  id: string,
+  payload: {
+    decision: ProjectApprovalStatus;
+    comment: string;
+    approverName: string;
+  },
+) {
+  return request<ProjectDetail>({
+    method: "POST",
+    url: `/projects/${id}/approval`,
+    data: payload,
+  });
 }
 
-export function assignProjectManager(id: string, payload: { managerName: string; operatorName: string; comment?: string }) {
-  return request<ProjectDetail>({ method: "POST", url: `/projects/${id}/manager`, data: payload });
+export function assignProjectManager(
+  id: string,
+  payload: { managerName: string; operatorName: string; comment?: string },
+) {
+  return request<ProjectDetail>({
+    method: "POST",
+    url: `/projects/${id}/manager`,
+    data: payload,
+  });
 }
 
-export function advanceProjectStage(id: string, payload: { targetStage: ProjectStage; comment: string; operatorName: string }) {
-  return request<ProjectDetail>({ method: "POST", url: `/projects/${id}/stage`, data: payload });
+export function advanceProjectStage(
+  id: string,
+  payload: { targetStage: ProjectStage; comment: string; operatorName: string },
+) {
+  return request<ProjectDetail>({
+    method: "POST",
+    url: `/projects/${id}/stage`,
+    data: payload,
+  });
 }
 
-export function createProjectCost(id: string, payload: { category: ProjectCostCategory; sourceType: ProjectCostSource; sourceNo?: string; description: string; amount: number; incurredDate: string }) {
-  return request<ProjectDetail>({ method: "POST", url: `/projects/${id}/costs`, data: payload });
+export function createProjectCost(
+  id: string,
+  payload: {
+    category: ProjectCostCategory;
+    sourceType: ProjectCostSource;
+    sourceNo?: string;
+    description: string;
+    amount: number;
+    incurredDate: string;
+  },
+) {
+  return request<ProjectDetail>({
+    method: "POST",
+    url: `/projects/${id}/costs`,
+    data: payload,
+  });
 }
 
 export function deleteProject(id: string) {

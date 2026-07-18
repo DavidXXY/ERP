@@ -4,127 +4,302 @@
       <template #extra>
         <a-space>
           <a-button @click="loadData">刷新</a-button>
-          <a-button v-if="auth.can('crm:opportunity:create')" type="primary" @click="openCreate()">
+          <a-button
+            v-if="auth.can('crm:opportunity:create')"
+            type="primary"
+            @click="openCreate()"
+          >
             新增商机
           </a-button>
         </a-space>
       </template>
 
       <a-row :gutter="[16, 16]" class="metric-row">
-        <a-col :xs="12" :lg="6"><a-statistic title="进行中" :value="activeCount" suffix="项" /></a-col>
-        <a-col :xs="12" :lg="6"><a-statistic title="预计金额" :value="activeAmount" :formatter="moneyFormatter" /></a-col>
-        <a-col :xs="12" :lg="6"><a-statistic title="加权金额" :value="weightedAmount" :formatter="moneyFormatter" /></a-col>
-        <a-col :xs="12" :lg="6"><a-statistic title="待办已到期" :value="overdueActionCount" suffix="项" /></a-col>
+        <a-col :xs="12" :lg="6"
+          ><a-statistic title="进行中" :value="activeCount" suffix="项"
+        /></a-col>
+        <a-col :xs="12" :lg="6"
+          ><a-statistic
+            title="预计金额"
+            :value="activeAmount"
+            :formatter="moneyFormatter"
+        /></a-col>
+        <a-col :xs="12" :lg="6"
+          ><a-statistic
+            title="加权金额"
+            :value="weightedAmount"
+            :formatter="moneyFormatter"
+        /></a-col>
+        <a-col :xs="12" :lg="6"
+          ><a-statistic
+            title="待办已到期"
+            :value="overdueActionCount"
+            suffix="项"
+        /></a-col>
       </a-row>
 
-            <a-space wrap class="table-toolbar">
-        <a-select v-model:value="stageFilter" allow-clear placeholder="全部阶段" :options="stageOptions" style="width: 150px" />
-        <a-input v-model:value="keyword" allow-clear placeholder="搜索客户、商机编号、需求" style="width: 280px" />
+      <a-space wrap class="table-toolbar">
+        <a-select
+          v-model:value="stageFilter"
+          allow-clear
+          placeholder="全部阶段"
+          :options="stageOptions"
+          style="width: 150px"
+        />
+        <a-input
+          v-model:value="keyword"
+          allow-clear
+          placeholder="搜索客户、商机编号、需求"
+          style="width: 280px"
+        />
       </a-space>
 
-            <!-- desktop-table --><div class="desktop-table">
-<a-table
-        :row-selection="{selectedRowKeys:selectedBatchKeys,onChange:(keys:any)=>(selectedBatchKeys as any).value=keys}"
-        :columns="columns"
-        :data-source="filteredOpportunities"
-        :loading="loading"
-        :row-key="(record: any) => record.id"
-        :pagination="{ pageSize: 10 }"
-        :scroll="{ x: 1180 }"
-        :customRow="(record: any) => ({ onClick: (e: any) => { if (e.target?.closest?.('button,a,.ant-btn,.ant-tag,.ant-popconfirm,.ant-dropdown-trigger,input,select,[role=button]')) return; router.push('/crm/opportunities/' + record.id) } })"
-      >
-        <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'opportunity'">
-            <strong>{{ record.code }}</strong>
-            <span class="table-subtitle">{{ record.customerName }} · {{ record.source || "来源未填" }}</span>
-          </template>
-          <template v-else-if="column.key === 'need'">
-            <span class="line-clamp-2">{{ record.needSummary }}</span>
-          </template>
-          <template v-else-if="column.key === 'stage'">
-            <a-tag :color="opportunityStageColor(record.stage)">{{ opportunityStageLabel(record.stage) }}</a-tag>
-            <a-progress :percent="record.probability" size="small" :show-info="false" />
-          </template>
-          <template v-else-if="column.key === 'amount'">
-            <strong>{{ formatMoney(record.expectedAmount) }}</strong>
-          </template>
-          <template v-else-if="column.key === 'nextAction'">
-            <span>{{ record.nextAction || "-" }}</span>
-            <span class="table-subtitle" :class="{ 'text-danger': actionOverdue(record) }">
-              {{ record.nextActionAt || "未安排日期" }}
-            </span>
-          </template>
-          <template v-else-if="column.key === 'action'">
-            <a-button
-              v-if="auth.can('crm:opportunity:update')"
-              size="small"
-              type="link"
-              :disabled="record.stage === 'WON' || record.stage === 'LOST'"
-              @click.stop="handlePrimaryAction(record)"
-            >
-              {{ record.stage === "QUOTATION" ? "报价" : "推进" }}
-            </a-button>
-            <a-button
-              v-if="auth.can('crm:opportunity:update') && record.stage !== 'WON' && record.stage !== 'LOST'"
-              size="small"
-              type="link"
-              danger
-              @click.stop="openMarkLost(record)"
-            >
-              丢单
-            </a-button>
-            <span @click.stop>
-              <a-popconfirm
-                v-if="auth.can('crm:opportunity:delete')"
-                title="确实删除此商机？"
-                @confirm="handleDeleteOpportunity(record)"
+      <!-- desktop-table -->
+      <div class="desktop-table">
+        <a-table
+          :row-selection="{
+            selectedRowKeys: selectedBatchKeys,
+            onChange: (keys: any) => ((selectedBatchKeys as any).value = keys),
+          }"
+          :columns="columns"
+          :data-source="filteredOpportunities"
+          :loading="loading"
+          :row-key="(record: any) => record.id"
+          :pagination="{ pageSize: 10 }"
+          :scroll="{ x: 1180 }"
+          :customRow="
+            (record: any) => ({
+              onClick: (e: any) => {
+                if (
+                  e.target?.closest?.(
+                    'button,a,.ant-btn,.ant-tag,.ant-popconfirm,.ant-dropdown-trigger,input,select,[role=button]',
+                  )
+                )
+                  return;
+                router.push('/crm/opportunities/' + record.id);
+              },
+            })
+          "
+        >
+          <template #bodyCell="{ column, record }">
+            <template v-if="column.key === 'opportunity'">
+              <strong>{{ record.code }}</strong>
+              <span class="table-subtitle"
+                >{{ record.customerName }} ·
+                {{ record.source || "来源未填" }}</span
               >
-                <a-button size="small" type="link" danger>删除</a-button>
-              </a-popconfirm>
-            </span>
+            </template>
+            <template v-else-if="column.key === 'need'">
+              <span class="line-clamp-2">{{ record.needSummary }}</span>
+            </template>
+            <template v-else-if="column.key === 'stage'">
+              <a-tag :color="opportunityStageColor(record.stage)">{{
+                opportunityStageLabel(record.stage)
+              }}</a-tag>
+              <a-progress
+                :percent="record.probability"
+                size="small"
+                :show-info="false"
+              />
+            </template>
+            <template v-else-if="column.key === 'amount'">
+              <strong>{{ formatMoney(record.expectedAmount) }}</strong>
+            </template>
+            <template v-else-if="column.key === 'nextAction'">
+              <span>{{ record.nextAction || "-" }}</span>
+              <span
+                class="table-subtitle"
+                :class="{ 'text-danger': actionOverdue(record) }"
+              >
+                {{ record.nextActionAt || "未安排日期" }}
+              </span>
+            </template>
+            <template v-else-if="column.key === 'action'">
+              <a-button
+                v-if="auth.can('crm:opportunity:update')"
+                size="small"
+                type="link"
+                :disabled="record.stage === 'WON' || record.stage === 'LOST'"
+                @click.stop="handlePrimaryAction(record)"
+              >
+                {{ record.stage === "QUOTATION" ? "报价" : "推进" }}
+              </a-button>
+              <a-button
+                v-if="
+                  auth.can('crm:opportunity:update') &&
+                  record.stage !== 'WON' &&
+                  record.stage !== 'LOST'
+                "
+                size="small"
+                type="link"
+                danger
+                @click.stop="openMarkLost(record)"
+              >
+                丢单
+              </a-button>
+              <span @click.stop>
+                <a-popconfirm
+                  v-if="auth.can('crm:opportunity:delete')"
+                  title="确实删除此商机？"
+                  @confirm="handleDeleteOpportunity(record)"
+                >
+                  <a-button size="small" type="link" danger>删除</a-button>
+                </a-popconfirm>
+              </span>
+            </template>
           </template>
-        </template>
-      </a-table>
-</div><!-- end desktop-table -->
-    <div class="mobile-only">
-      <div v-for="record in filteredOpportunities" :key="record.id" class="mobile-card-item" @click="router.push('/crm/opportunities/' + record.id)">
-        <div class="mobile-card-header"><strong>{{ record.code }}</strong><a-tag :color="opportunityStageColor(record.stage)">{{ opportunityStageLabel(record.stage) }}</a-tag></div>
-        <div class="mobile-card-body"><span>{{ record.customerName }}</span><strong>{{ formatMoney(record.expectedAmount) }}</strong></div>
-        <div class="mobile-card-footer"><span>负责人：{{ record.ownerName || "未分配" }}</span><span v-if="record.nextAction"> · 下一步：{{ record.nextAction }}</span><span v-if="record.nextActionAt">· {{ record.nextActionAt }}</span></div>
+        </a-table>
       </div>
-    </div>
+      <!-- end desktop-table -->
+      <div class="mobile-only">
+        <div
+          v-for="record in filteredOpportunities"
+          :key="record.id"
+          class="mobile-card-item"
+          @click="router.push('/crm/opportunities/' + record.id)"
+        >
+          <div class="mobile-card-header">
+            <strong>{{ record.code }}</strong
+            ><a-tag :color="opportunityStageColor(record.stage)">{{
+              opportunityStageLabel(record.stage)
+            }}</a-tag>
+          </div>
+          <div class="mobile-card-body">
+            <span>{{ record.customerName }}</span
+            ><strong>{{ formatMoney(record.expectedAmount) }}</strong>
+          </div>
+          <div class="mobile-card-footer">
+            <span>负责人：{{ record.ownerName || "未分配" }}</span
+            ><span v-if="record.nextAction">
+              · 下一步：{{ record.nextAction }}</span
+            ><span v-if="record.nextActionAt">· {{ record.nextActionAt }}</span>
+          </div>
+        </div>
+      </div>
     </a-card>
 
-    <a-modal v-model:open="createOpen" title="新增商机" width="760px" :confirm-loading="saving" @ok="handleCreate">
-      <a-form ref="createFormRef" :model="createForm" :rules="createRules" layout="vertical">
+    <a-modal
+      v-model:open="createOpen"
+      title="新增商机"
+      width="760px"
+      :confirm-loading="saving"
+      @ok="handleCreate"
+    >
+      <a-form
+        ref="createFormRef"
+        :model="createForm"
+        :rules="createRules"
+        layout="vertical"
+      >
         <a-row :gutter="16">
-          <a-col :xs="24"><a-form-item label="客户" name="customerId"><a-select v-model:value="createForm.customerId" show-search option-filter-prop="label" :options="customerOptions" /></a-form-item></a-col>
+          <a-col :xs="24"
+            ><a-form-item label="客户" name="customerId"
+              ><a-select
+                v-model:value="createForm.customerId"
+                show-search
+                option-filter-prop="label"
+                :options="customerOptions" /></a-form-item
+          ></a-col>
 
-          <a-col :xs="24" :md="8"><a-form-item label="负责人" name="ownerName"><a-select v-model:value="createForm.ownerName" :options="userOptions" show-search option-filter-prop="label" placeholder="选择负责人" /></a-form-item></a-col>
-          <a-col :xs="24" :md="8"><a-form-item label="预计金额"><a-input-number v-model:value="createForm.expectedAmount" :min="0" class="full-input" /></a-form-item></a-col>
-          <a-col :span="24"><a-form-item label="客户需求" name="needSummary"><a-textarea v-model:value="createForm.needSummary" :rows="3" /></a-form-item></a-col>
-          <a-col :xs="24" :md="16"><a-form-item label="下一步动作"><a-input v-model:value="createForm.nextAction" /></a-form-item></a-col>
-          <a-col :xs="24" :md="8"><a-form-item label="计划日期"><a-input v-model:value="createForm.nextActionAt" type="date" /></a-form-item></a-col>
+          <a-col :xs="24" :md="8"
+            ><a-form-item label="负责人" name="ownerName"
+              ><a-select
+                v-model:value="createForm.ownerName"
+                :options="userOptions"
+                show-search
+                option-filter-prop="label"
+                placeholder="选择负责人" /></a-form-item
+          ></a-col>
+          <a-col :xs="24" :md="8"
+            ><a-form-item label="预计金额"
+              ><a-input-number
+                v-model:value="createForm.expectedAmount"
+                :min="0"
+                class="full-input" /></a-form-item
+          ></a-col>
+          <a-col :span="24"
+            ><a-form-item label="客户需求" name="needSummary"
+              ><a-textarea
+                v-model:value="createForm.needSummary"
+                :rows="3" /></a-form-item
+          ></a-col>
+          <a-col :xs="24" :md="16"
+            ><a-form-item label="下一步动作"
+              ><a-input v-model:value="createForm.nextAction" /></a-form-item
+          ></a-col>
+          <a-col :xs="24" :md="8"
+            ><a-form-item label="计划日期"
+              ><a-input
+                v-model:value="createForm.nextActionAt"
+                type="date" /></a-form-item
+          ></a-col>
         </a-row>
       </a-form>
     </a-modal>
 
-    <a-modal v-model:open="advanceOpen" title="推进商机" width="620px" :confirm-loading="saving" @ok="handleAdvance">
-      <a-alert v-if="selectedOpportunity" class="section-alert" type="info" :message="`${selectedOpportunity.code} · ${selectedOpportunity.customerName}`" />
-      <a-form ref="advanceFormRef" :model="advanceForm" :rules="advanceRules" layout="vertical">
+    <a-modal
+      v-model:open="advanceOpen"
+      title="推进商机"
+      width="620px"
+      :confirm-loading="saving"
+      @ok="handleAdvance"
+    >
+      <a-alert
+        v-if="selectedOpportunity"
+        class="section-alert"
+        type="info"
+        :message="`${selectedOpportunity.code} · ${selectedOpportunity.customerName}`"
+      />
+      <a-form
+        ref="advanceFormRef"
+        :model="advanceForm"
+        :rules="advanceRules"
+        layout="vertical"
+      >
         <a-row :gutter="16">
-          <a-col :xs="24" :md="12"><a-form-item label="推进至" name="stage"><a-select v-model:value="advanceForm.stage" :options="stageOptions" /></a-form-item></a-col>
-          <a-col :xs="24" :md="12"><a-form-item label="成功率" name="probability"><a-input-number v-model:value="advanceForm.probability" :min="0" :max="100" addon-after="%" class="full-input" /></a-form-item></a-col>
-          <a-col :span="24"><a-form-item label="下一步动作" name="nextAction"><a-input v-model:value="advanceForm.nextAction" /></a-form-item></a-col>
-          <a-col :span="24"><a-form-item label="计划日期" name="nextActionAt"><a-input v-model:value="advanceForm.nextActionAt" type="date" /></a-form-item></a-col>
+          <a-col :xs="24" :md="12"
+            ><a-form-item label="推进至" name="stage"
+              ><a-select
+                v-model:value="advanceForm.stage"
+                :options="stageOptions" /></a-form-item
+          ></a-col>
+          <a-col :xs="24" :md="12"
+            ><a-form-item label="成功率" name="probability"
+              ><a-input-number
+                v-model:value="advanceForm.probability"
+                :min="0"
+                :max="100"
+                addon-after="%"
+                class="full-input" /></a-form-item
+          ></a-col>
+          <a-col :span="24"
+            ><a-form-item label="下一步动作" name="nextAction"
+              ><a-input v-model:value="advanceForm.nextAction" /></a-form-item
+          ></a-col>
+          <a-col :span="24"
+            ><a-form-item label="计划日期" name="nextActionAt"
+              ><a-input
+                v-model:value="advanceForm.nextActionAt"
+                type="date" /></a-form-item
+          ></a-col>
         </a-row>
       </a-form>
     </a-modal>
 
-    <a-modal v-model:open="markLostOpen" title="标记为丢单" width="480px" :confirm-loading="saving" @ok="handleConfirmMarkLost">
+    <a-modal
+      v-model:open="markLostOpen"
+      title="标记为丢单"
+      width="480px"
+      :confirm-loading="saving"
+      @ok="handleConfirmMarkLost"
+    >
       <a-form layout="vertical">
         <a-form-item label="丢单原因" required>
-          <a-textarea v-model:value="lostReason" :rows="3" placeholder="请说明丢单原因" />
+          <a-textarea
+            v-model:value="lostReason"
+            :rows="3"
+            placeholder="请说明丢单原因"
+          />
         </a-form-item>
       </a-form>
     </a-modal>
@@ -172,8 +347,11 @@ const selectedBatchKeys = ref<string[]>([]);
 async function handleBatchDeleteOpps() {
   const ids = [...selectedBatchKeys.value];
   selectedBatchKeys.value = [];
-  for (const id of ids) try { await deleteOpportunity(id); } catch {}
-  message.success('批量删除完成 (' + ids.length + ' 项)');
+  for (const id of ids)
+    try {
+      await deleteOpportunity(id);
+    } catch {}
+  message.success("批量删除完成 (" + ids.length + " 项)");
   await loadData();
 }
 const advanceOpen = ref(false);
@@ -197,7 +375,12 @@ const columns = [
 
 const createForm = reactive(initialCreateForm());
 
-const advanceForm = reactive({ stage: "QUALIFIED" as OpportunityStage, probability: 30, nextAction: "", nextActionAt: "" });
+const advanceForm = reactive({
+  stage: "QUALIFIED" as OpportunityStage,
+  probability: 30,
+  nextAction: "",
+  nextActionAt: "",
+});
 const createRules = {
   code: [],
   customerId: [{ required: true, message: "请选择客户" }],
@@ -211,40 +394,77 @@ const advanceRules = {
   nextActionAt: [{ required: true, message: "请选择计划日期" }],
 };
 
-const customerOptions = computed(() => customers.value.map((item) => ({ label: item.code ? `${item.name}（${item.code}）` : item.name, value: item.id })));
-const userOptions = computed(() => users.value.map((u) => ({ label: u.displayName, value: u.displayName })));
+const customerOptions = computed(() =>
+  customers.value.map((item) => ({
+    label: item.code ? `${item.name}（${item.code}）` : item.name,
+    value: item.id,
+  })),
+);
+const userOptions = computed(() =>
+  users.value.map((u) => ({ label: u.displayName, value: u.displayName })),
+);
 const filteredOpportunities = computed(() => {
   const term = keyword.value.trim().toLowerCase();
   const results = opportunities.value.filter((item) => {
     const matchesStage = !stageFilter.value || item.stage === stageFilter.value;
-    const text = `${item.code} ${item.customerName} ${item.needSummary} ${item.ownerName || ""}`.toLowerCase();
+    const text =
+      `${item.code} ${item.customerName} ${item.needSummary} ${item.ownerName || ""}`.toLowerCase();
     return matchesStage && (!term || text.includes(term));
   });
   results.sort((a, b) => {
-    const getOrder = (s: string) => s === "WON" ? 2 : s === "LOST" ? 3 : 1;
+    const getOrder = (s: string) => (s === "WON" ? 2 : s === "LOST" ? 3 : 1);
     return getOrder(a.stage) - getOrder(b.stage);
   });
   return results;
 });
-const activeItems = computed(() => opportunities.value.filter((item) => item.stage !== "WON" && item.stage !== "LOST"));
+const activeItems = computed(() =>
+  opportunities.value.filter(
+    (item) => item.stage !== "WON" && item.stage !== "LOST",
+  ),
+);
 const activeCount = computed(() => activeItems.value.length);
-const activeAmount = computed(() => activeItems.value.reduce((sum, item) => sum + Number(item.expectedAmount || 0), 0));
-const weightedAmount = computed(() => activeItems.value.reduce((sum, item) => sum + Number(item.expectedAmount || 0) * item.probability / 100, 0));
-const overdueActionCount = computed(() => activeItems.value.filter(actionOverdue).length);
+const activeAmount = computed(() =>
+  activeItems.value.reduce(
+    (sum, item) => sum + Number(item.expectedAmount || 0),
+    0,
+  ),
+);
+const weightedAmount = computed(() =>
+  activeItems.value.reduce(
+    (sum, item) =>
+      sum + (Number(item.expectedAmount || 0) * item.probability) / 100,
+    0,
+  ),
+);
+const overdueActionCount = computed(
+  () => activeItems.value.filter(actionOverdue).length,
+);
 
 onMounted(async () => {
   await loadData();
-  const customerId = typeof route.query.customer === "string" ? route.query.customer : undefined;
-  if (route.query.create === "1" && customerId && customers.value.some(customer => customer.id === customerId)) {
+  const customerId =
+    typeof route.query.customer === "string" ? route.query.customer : undefined;
+  if (
+    route.query.create === "1" &&
+    customerId &&
+    customers.value.some((customer) => customer.id === customerId)
+  ) {
     openCreate({
       customerId,
 
-      needSummary: typeof route.query.need === "string" ? route.query.need : "原合同续约",
+      needSummary:
+        typeof route.query.need === "string" ? route.query.need : "原合同续约",
       expectedAmount: Number(route.query.amount || 0),
       nextAction: "确认续约服务范围、付款节点和合同周期",
       nextActionAt: dateAfterDays(7),
     });
-    const { customer: _customer, create: _create, need: _need, amount: _amount, ...query } = route.query;
+    const {
+      customer: _customer,
+      create: _create,
+      need: _need,
+      amount: _amount,
+      ...query
+    } = route.query;
     await router.replace({ path: route.path, query });
   }
 });
@@ -252,7 +472,11 @@ onMounted(async () => {
 async function loadData() {
   loading.value = true;
   try {
-    [opportunities.value, customers.value, users.value] = await Promise.all([listOpportunities(), listCustomers(), listUsersApi(1, 9999).then(r => r.content)]);
+    [opportunities.value, customers.value, users.value] = await Promise.all([
+      listOpportunities(),
+      listCustomers(),
+      listUsersApi(1, 9999).then((r) => r.content),
+    ]);
   } catch (error) {
     message.error(error instanceof Error ? error.message : "商机加载失败");
   } finally {
@@ -283,8 +507,12 @@ async function handleCreate() {
   }
 }
 
-function openCreate(prefill: Partial<ReturnType<typeof initialCreateForm>> = {}) {
-  const customer = prefill.customerId ? customers.value.find(item => item.id === prefill.customerId) : undefined;
+function openCreate(
+  prefill: Partial<ReturnType<typeof initialCreateForm>> = {},
+) {
+  const customer = prefill.customerId
+    ? customers.value.find((item) => item.id === prefill.customerId)
+    : undefined;
   Object.assign(createForm, initialCreateForm(), {
     code: generateCode("SJ"),
     ownerName: customer?.ownerName || auth.user?.displayName || "",
@@ -297,7 +525,10 @@ function openAdvance(record: Opportunity) {
   selectedOpportunity.value = record;
   Object.assign(advanceForm, {
     stage: nextStage(record.stage),
-    probability: Math.max(record.probability, defaultProbability(nextStage(record.stage))),
+    probability: Math.max(
+      record.probability,
+      defaultProbability(nextStage(record.stage)),
+    ),
     nextAction: record.nextAction || "待确定",
     nextActionAt: record.nextActionAt || dateAfterDays(7),
   });
@@ -306,7 +537,10 @@ function openAdvance(record: Opportunity) {
 
 function handlePrimaryAction(record: Opportunity) {
   if (record.stage === "QUOTATION") {
-    router.push({ path: "/crm/quotes", query: { create: "1", opportunity: record.id } });
+    router.push({
+      path: "/crm/quotes",
+      query: { create: "1", opportunity: record.id },
+    });
     return;
   }
   openAdvance(record);
@@ -337,7 +571,12 @@ async function handleConfirmMarkLost() {
   if (!record) return;
   saving.value = true;
   try {
-    await advanceOpportunity(record.id, { stage: "LOST", probability: 0, nextAction: "已标记为丢单", nextActionAt: new Date().toISOString().slice(0, 10) });
+    await advanceOpportunity(record.id, {
+      stage: "LOST",
+      probability: 0,
+      nextAction: "已标记为丢单",
+      nextActionAt: new Date().toISOString().slice(0, 10),
+    });
     try {
       await createFollowUp({
         customerId: record.customerId!,
@@ -364,7 +603,11 @@ async function handleAdvance() {
   if (!selectedOpportunity.value) return;
   saving.value = true;
   try {
-    const result = await advanceOpportunity(selectedOpportunity.value.id, { ...advanceForm, nextActionAt: advanceForm.nextActionAt || dateAfterDays(7), nextAction: advanceForm.nextAction || "待确定" });
+    const result = await advanceOpportunity(selectedOpportunity.value.id, {
+      ...advanceForm,
+      nextActionAt: advanceForm.nextActionAt || dateAfterDays(7),
+      nextAction: advanceForm.nextAction || "待确定",
+    });
     try {
       await createFollowUp({
         customerId: selectedOpportunity.value.customerId!,
@@ -376,12 +619,17 @@ async function handleAdvance() {
         nextAction: result.nextAction || undefined,
         ownerName: auth.user?.displayName || "",
       });
-    } catch { /* auto-record is supplementary */ }
+    } catch {
+      /* auto-record is supplementary */
+    }
     advanceOpen.value = false;
     message.success("商机阶段已推进");
     await loadData();
     if (result.stage === "QUOTATION") {
-      await router.push({ path: "/crm/quotes", query: { create: "1", opportunity: result.id } });
+      await router.push({
+        path: "/crm/quotes",
+        query: { create: "1", opportunity: result.id },
+      });
     }
   } catch (error) {
     message.error(error instanceof Error ? error.message : "商机推进失败");
@@ -391,24 +639,48 @@ async function handleAdvance() {
 }
 
 function actionOverdue(record: Opportunity) {
-  return Boolean(record.nextActionAt && record.nextActionAt < new Date().toISOString().slice(0, 10));
+  return Boolean(
+    record.nextActionAt &&
+      record.nextActionAt < new Date().toISOString().slice(0, 10),
+  );
 }
 
 function nextStage(stage: OpportunityStage): OpportunityStage {
-  const stages: OpportunityStage[] = ["LEAD", "QUALIFIED", "SOLUTION", "QUOTATION", "NEGOTIATION", "WON"];
+  const stages: OpportunityStage[] = [
+    "LEAD",
+    "QUALIFIED",
+    "SOLUTION",
+    "QUOTATION",
+    "NEGOTIATION",
+    "WON",
+  ];
   const index = stages.indexOf(stage);
   return index >= 0 && index < stages.length - 1 ? stages[index + 1] : stage;
 }
 
 function defaultProbability(stage: OpportunityStage) {
-  return { LEAD: 10, QUALIFIED: 30, SOLUTION: 50, QUOTATION: 70, NEGOTIATION: 85, WON: 100, LOST: 0 }[stage];
+  return {
+    LEAD: 10,
+    QUALIFIED: 30,
+    SOLUTION: 50,
+    QUOTATION: 70,
+    NEGOTIATION: 85,
+    WON: 100,
+    LOST: 0,
+  }[stage];
 }
 
 function initialCreateForm() {
-  return { customerId: undefined as string | undefined, code: "", needSummary: "", expectedAmount: 0, nextAction: "", nextActionAt: "", ownerName: "" };
+  return {
+    customerId: undefined as string | undefined,
+    code: "",
+    needSummary: "",
+    expectedAmount: 0,
+    nextAction: "",
+    nextActionAt: "",
+    ownerName: "",
+  };
 }
-
-
 
 function dateAfterDays(days: number) {
   const date = new Date();

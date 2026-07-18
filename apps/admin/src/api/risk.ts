@@ -1,6 +1,11 @@
 import { request } from "./http";
 
-export type RiskWorkflowStatus = "UNCLAIMED" | "CLAIMED" | "PROCESSING" | "IGNORED" | "CLOSED";
+export type RiskWorkflowStatus =
+  | "UNCLAIMED"
+  | "CLAIMED"
+  | "PROCESSING"
+  | "IGNORED"
+  | "CLOSED";
 
 export type RiskWorkflowResponse = {
   riskKey: string;
@@ -103,7 +108,11 @@ export function listRiskItems() {
 }
 
 export function getRiskSummary(days = 14) {
-  return request<RiskSummaryResponse>({ method: "GET", url: "/risk/summary", params: { days } });
+  return request<RiskSummaryResponse>({
+    method: "GET",
+    url: "/risk/summary",
+    params: { days },
+  });
 }
 
 export function snapshotRiskToday() {
@@ -115,25 +124,69 @@ export function scanRiskEscalations() {
 }
 
 export function listRiskRules() {
-  return request<RiskRuleConfigResponse[]>({ method: "GET", url: "/risk/rules" });
+  return request<RiskRuleConfigResponse[]>({
+    method: "GET",
+    url: "/risk/rules",
+  });
 }
 
 export function saveRiskRule(data: Omit<RiskRuleConfigResponse, "id">) {
-  return request<RiskRuleConfigResponse>({ method: "POST", url: "/risk/rules", data });
+  return request<RiskRuleConfigResponse>({
+    method: "POST",
+    url: "/risk/rules",
+    data,
+  });
 }
 
 export function listRiskWorkflows() {
-  return request<RiskWorkflowResponse[]>({ method: "GET", url: "/risk/workflows" });
+  return request<RiskWorkflowResponse[]>({
+    method: "GET",
+    url: "/risk/workflows",
+  });
 }
 
 export function listRiskWorkflowActions(riskKey: string) {
-  return request<RiskWorkflowActionResponse[]>({ method: "GET", url: "/risk/workflows/actions", params: { riskKey } });
+  return request<RiskWorkflowActionResponse[]>({
+    method: "GET",
+    url: "/risk/workflows/actions",
+    params: { riskKey },
+  });
 }
 
-export function updateRiskWorkflow(data: { riskKey: string; status: RiskWorkflowStatus; owner?: string; note?: string; reason?: string; rootCause?: string; responsibleDepartment?: string; handlingHours?: number; recurrence?: boolean; preventionAction?: string }) {
-  return request<RiskWorkflowResponse>({ method: "POST", url: "/risk/workflows", data });
+export function updateRiskWorkflow(data: {
+  riskKey: string;
+  status: RiskWorkflowStatus;
+  owner?: string;
+  note?: string;
+  reason?: string;
+  rootCause?: string;
+  responsibleDepartment?: string;
+  handlingHours?: number;
+  recurrence?: boolean;
+  preventionAction?: string;
+}) {
+  return request<RiskWorkflowResponse>({
+    method: "POST",
+    url: "/risk/workflows",
+    data,
+  });
 }
 
-export function batchUpdateRiskWorkflow(data: { riskKeys: string[]; status: RiskWorkflowStatus; owner?: string; note?: string; reason?: string; rootCause?: string; responsibleDepartment?: string; handlingHours?: number; recurrence?: boolean; preventionAction?: string }) {
-  return request<RiskWorkflowResponse[]>({ method: "POST", url: "/risk/workflows/batch", data });
+export function batchUpdateRiskWorkflow(data: {
+  riskKeys: string[];
+  status: RiskWorkflowStatus;
+  owner?: string;
+  note?: string;
+  reason?: string;
+  rootCause?: string;
+  responsibleDepartment?: string;
+  handlingHours?: number;
+  recurrence?: boolean;
+  preventionAction?: string;
+}) {
+  return request<RiskWorkflowResponse[]>({
+    method: "POST",
+    url: "/risk/workflows/batch",
+    data,
+  });
 }

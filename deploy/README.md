@@ -5,7 +5,7 @@
 ```
 ┌──────────┐       ┌──────────────┐       ┌────────────┐
 │  浏览器   │ ───→ │   Nginx      │ ───→ │  Spring     │
-│          │       │  端口 80     │       │  后端 8080  │
+│          │       │ HTTPS 443    │       │  后端 8080  │
 └──────────┘       │              │       └─────┬──────┘
                    │ / → dist/    │             │
                    │ /api/ → 8080 │       ┌─────┴──────┐
@@ -60,6 +60,7 @@ deploy/
 # 创建操作系统用户和目录
 sudo useradd -r -s /sbin/nologin -M ops-erp
 sudo mkdir -p /opt/engineering-ops-erp /var/www/ops-erp-admin /etc/ops-erp
+sudo mkdir -p /etc/nginx/tls
 sudo chown ops-erp:ops-erp /opt/engineering-ops-erp
 
 # 配置环境变量
@@ -67,6 +68,8 @@ sudo cp deploy/ops-erp.env.example /etc/ops-erp/ops-erp.env
 sudo chmod 600 /etc/ops-erp/ops-erp.env
 sudo vi /etc/ops-erp/ops-erp.env   # 修改密码等敏感信息
 ```
+
+必须配置 `JWT_SECRET`、`DATA_ENCRYPTION_KEY`、`REDIS_PASSWORD` 和数据库密码；两个应用密钥建议分别用 `openssl rand -hex 32` 生成。将证书链和私钥安装为 `/etc/nginx/tls/fullchain.pem`、`/etc/nginx/tls/privkey.pem` 后再启用 Nginx。
 
 `STORAGE_TYPE=minio` 时后端使用 MinIO/S3 兼容对象存储，`MINIO_ENDPOINT`、`MINIO_ACCESS_KEY`、`MINIO_SECRET_KEY`、`MINIO_BUCKET` 必须与 Docker Compose 或外部对象存储服务一致。`MINIO_PRESIGNED_EXPIRY_SECONDS` 控制附件临时下载链接有效期，建议生产保持 5-15 分钟。开发或单机调试可改为 `STORAGE_TYPE=local`，文件会写入 `LOCAL_STORAGE_PATH` 或默认本地目录。
 
@@ -102,16 +105,16 @@ docker compose -f docker-compose.yml up -d
 
 ```bash
 # 后端健康检查
-curl http://localhost:8080/actuator/health
+curl http://127.0.0.1:8080/actuator/health
 # 生产 profile 使用 MinIO 时，health 结果中应包含 minio 存储检查；MinIO 控制台默认在 http://localhost:9001
 
 # API 可达性
-curl -s http://localhost/api/auth/login \
+curl -s https://erp.example.com/api/auth/login \
   -H 'Content-Type: application/json' \
   -d '{"username":"admin","password":"Admin@123"}'
 
 # 前端可达性
-curl -s -o /dev/null -w "%{http_code}" http://localhost/
+curl -s -o /dev/null -w "%{http_code}" https://erp.example.com/
 ```
 
 ## 日常运维
@@ -126,19 +129,25 @@ sudo systemctl restart ops-erp-api
 # 重新部署（仅推送变动的文件）
 ./deploy/build.sh && ./deploy/deploy.sh root@10.10.10.111
 
-# 备份数据库
-docker exec ops-erp-postgres pg_dump -U ops_erp ops_erp > backup_$(date +%Y%m%d).sql
+# 生成并校验 PostgreSQL 备份
+BACKUP_MODE=postgres DB_PASSWORD='...' ../scripts/backup-data.sh
+
+# 恢复到预先创建的演练库（不得使用生产库名）
+RESTORE_TARGET=ops_erp_restore_drill RESTORE_CONFIRM=ops_erp_restore_drill \
+  DB_PASSWORD='...' ../scripts/restore-backup.sh ../backups/ops-erp-postgres-YYYYMMDD-HHMMSS.dump
 ```
 
 ## 生产安全清单
 
 - [ ] 修改 `/etc/ops-erp/ops-erp.env` 中所有默认密码
 - [ ] 生成随机 JWT 密钥：`openssl rand -hex 32`
+- [ ] 生成独立的数据加密密钥并离线托管；轮换前制定旧密钥解密与重加密方案
 - [ ] 确认 `application-prod.yml` 中 `ddl-auto: validate`（不会自动改表结构）
 - [ ] 确认 Nginx 已配置 HTTPS（Let's Encrypt 或自签名）
 - [ ] 确认 `/actuator/health` 不对外暴露敏感信息
 - [ ] 限制 `management.endpoints.web.exposure.include` 为最小集
 - [ ] 配置防火墙，仅开放 80/443 端口对外
+- [ ] 定期运行恢复演练，而不只是检查备份文件存在
 - [ ] 关闭 Docker 基础设施端口的外部访问（已配置 `127.0.0.1:`）
 - [ ] MinIO bucket 保持私有读写，通过后端接口或预签名链接访问附件
 - [ ] 配置 MinIO 生命周期策略，按公司档案保留制度清理临时/过期对象

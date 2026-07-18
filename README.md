@@ -68,7 +68,15 @@ npm run admin:dev
 ## 生产加强状态
 
 - 已加强：维修模块细粒度权限、维保超期风险沉淀、历史环境权限补齐、CRM/OA/资质附件统一存储、MinIO/S3 兼容对象存储适配、预签名临时链接、上传文件白名单与路径穿越防护、统一待办预警、后端统一风险聚合、风险规则配置、自动责任人、SLA 超时升级、每日风险快照、风险趋势与模块分布、统一风险中心批量处理、持久化闭环与处理轨迹、采购三单匹配、库存补货建议、项目利润摘要、经营驾驶舱时间筛选与公司级 KPI、统一编号规则接口与组织维度编号生成、条件化多级审批、审批转交/加签/撤回、审计详情与导出、审计模块/对象/操作类型追踪、核心后端测试覆盖。
-- 规划中：移动端代码实现、完整多租户运行时隔离、更多端到端流程测试。
+- 本轮系统加固：JWT 短时令牌与登录限流、租户级 JPA 隔离、敏感字段 AES-GCM 加密、乐观锁、分布式任务锁、Flyway 空库集成测试、API 登录链路集成测试、前端单测/静态检查/500KB 分包预算、Prometheus 告警、HTTPS 安全响应头、可校验备份与受保护恢复演练。
+- 规划中：移动端代码实现，以及按真实业务租户接入独立域名/身份源。
 
 本地 H2 数据备份前先停止 API，然后运行 `npm run data:backup`。PostgreSQL 模式使用
 `BACKUP_MODE=postgres npm run data:backup`。
+
+恢复前先做校验，并且必须显式指定全新的目标与同值确认。例如本地恢复演练：
+
+```bash
+RESTORE_TARGET=/safe/new-data-dir RESTORE_CONFIRM=/safe/new-data-dir \
+  scripts/restore-backup.sh backups/ops-erp-local-YYYYMMDD-HHMMSS.tar.gz
+```

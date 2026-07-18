@@ -9,17 +9,29 @@
         <a-button @click="loadData">
           <template #icon><ReloadOutlined /></template>刷新
         </a-button>
-        <a-button v-if="auth.can('system:user:create')" type="primary" @click="openCreateModal">
+        <a-button
+          v-if="auth.can('system:user:create')"
+          type="primary"
+          @click="openCreateModal"
+        >
           <template #icon><PlusOutlined /></template>新增账号
         </a-button>
       </a-space>
     </header>
 
     <section class="metric-band">
-      <div><span>账号总数</span><strong>{{ pagination.total }}</strong></div>
-      <div><span>启用账号</span><strong>{{ enabledUserCount }}</strong></div>
-      <div><span>角色模板</span><strong>{{ roles.length }}</strong></div>
-      <div><span>组织节点</span><strong>{{ organizations.length }}</strong></div>
+      <div>
+        <span>账号总数</span><strong>{{ pagination.total }}</strong>
+      </div>
+      <div>
+        <span>启用账号</span><strong>{{ enabledUserCount }}</strong>
+      </div>
+      <div>
+        <span>角色模板</span><strong>{{ roles.length }}</strong>
+      </div>
+      <div>
+        <span>组织节点</span><strong>{{ organizations.length }}</strong>
+      </div>
     </section>
 
     <section class="user-content">
@@ -30,7 +42,11 @@
           placeholder="搜索姓名、账号、手机号或邮箱"
           style="width: 320px"
         />
-        <a-select v-model:value="statusFilter" :options="statusOptions" style="width: 140px" />
+        <a-select
+          v-model:value="statusFilter"
+          :options="statusOptions"
+          style="width: 140px"
+        />
         <a-select
           v-model:value="roleFilter"
           :options="roleFilterOptions"
@@ -63,18 +79,37 @@
           </template>
           <template v-else-if="column.key === 'roles'">
             <a-space wrap size="small">
-              <a-tag v-for="role in record.roles" :key="role.id" color="blue">{{ role.name }}</a-tag>
-              <span v-if="!record.roles.length" class="table-subtitle">未分配</span>
+              <a-tag v-for="role in record.roles" :key="role.id" color="blue">{{
+                role.name
+              }}</a-tag>
+              <span v-if="!record.roles.length" class="table-subtitle"
+                >未分配</span
+              >
             </a-space>
           </template>
           <template v-else-if="column.key === 'enabled'">
-            <a-tag :color="record.enabled ? 'green' : 'default'">{{ record.enabled ? "启用" : "停用" }}</a-tag>
+            <a-tag :color="record.enabled ? 'green' : 'default'">{{
+              record.enabled ? "启用" : "停用"
+            }}</a-tag>
           </template>
-          <template v-else-if="column.key === 'updatedAt'">{{ formatDateTime(record.updatedAt) }}</template>
+          <template v-else-if="column.key === 'updatedAt'">{{
+            formatDateTime(record.updatedAt)
+          }}</template>
           <template v-else-if="column.key === 'action'">
             <a-space>
-              <a-button v-if="auth.can('system:user:update')" size="small" type="link" @click="openEditModal(record)">编辑</a-button>
-              <a-button v-if="auth.can('system:user:update')" size="small" type="link" @click="toggleEnabled(record)">
+              <a-button
+                v-if="auth.can('system:user:update')"
+                size="small"
+                type="link"
+                @click="openEditModal(record)"
+                >编辑</a-button
+              >
+              <a-button
+                v-if="auth.can('system:user:update')"
+                size="small"
+                type="link"
+                @click="toggleEnabled(record)"
+              >
                 {{ record.enabled ? "停用" : "启用" }}
               </a-button>
               <a-popconfirm
@@ -109,26 +144,44 @@
       @ok="handleModalOk"
       @cancel="closeModal"
     >
-      <a-form ref="formRef" :model="formState" :rules="formRules" layout="vertical">
+      <a-form
+        ref="formRef"
+        :model="formState"
+        :rules="formRules"
+        layout="vertical"
+      >
         <a-row :gutter="16">
           <a-col :xs="24" :md="12">
             <a-form-item label="登录账号" name="username">
-              <a-input v-model:value="formState.username" :disabled="isEdit" placeholder="例如：zhangsan" />
+              <a-input
+                v-model:value="formState.username"
+                :disabled="isEdit"
+                placeholder="例如：zhangsan"
+              />
             </a-form-item>
           </a-col>
           <a-col :xs="24" :md="12">
             <a-form-item v-if="!isEdit" label="初始密码" name="password">
-              <a-input-password v-model:value="formState.password" placeholder="至少 6 位" />
+              <a-input-password
+                v-model:value="formState.password"
+                placeholder="至少 6 位"
+              />
             </a-form-item>
             <a-form-item v-else label="账号状态" name="enabled">
-              <a-switch v-model:checked="formState.enabled" checked-children="启用" un-checked-children="停用" />
+              <a-switch
+                v-model:checked="formState.enabled"
+                checked-children="启用"
+                un-checked-children="停用"
+              />
             </a-form-item>
           </a-col>
         </a-row>
 
         <a-row :gutter="16">
           <a-col :xs="24" :md="12">
-            <a-form-item label="姓名" name="displayName"><a-input v-model:value="formState.displayName" /></a-form-item>
+            <a-form-item label="姓名" name="displayName"
+              ><a-input v-model:value="formState.displayName"
+            /></a-form-item>
           </a-col>
           <a-col :xs="24" :md="12">
             <a-form-item label="所属组织">
@@ -146,10 +199,14 @@
 
         <a-row :gutter="16">
           <a-col :xs="24" :md="12">
-            <a-form-item label="手机号"><a-input v-model:value="formState.phone" /></a-form-item>
+            <a-form-item label="手机号"
+              ><a-input v-model:value="formState.phone"
+            /></a-form-item>
           </a-col>
           <a-col :xs="24" :md="12">
-            <a-form-item label="邮箱"><a-input v-model:value="formState.email" /></a-form-item>
+            <a-form-item label="邮箱"
+              ><a-input v-model:value="formState.email"
+            /></a-form-item>
           </a-col>
         </a-row>
 
@@ -164,7 +221,11 @@
             placeholder="选择角色"
           />
         </a-form-item>
-        <a-alert type="info" show-icon message="账号权限由角色统一授权；角色的数据范围会影响该账号可见的数据。" />
+        <a-alert
+          type="info"
+          show-icon
+          message="账号权限由角色统一授权；角色的数据范围会影响该账号可见的数据。"
+        />
       </a-form>
     </a-modal>
   </div>
@@ -229,22 +290,41 @@ const statusOptions = [
   { label: "停用", value: "DISABLED" },
 ];
 
-const enabledUserCount = computed(() => users.value.filter((item) => item.enabled).length);
-const organizationOptions = computed(() => organizations.value.map((item) => ({ label: item.fullPath || item.name, value: item.id })));
-const roleOptions = computed(() => roles.value.map((item) => ({ label: `${item.name} · ${item.code}`, value: item.id })));
-const roleFilterOptions = computed(() => [{ label: "全部角色", value: "ALL" }, ...roleOptions.value]);
+const enabledUserCount = computed(
+  () => users.value.filter((item) => item.enabled).length,
+);
+const organizationOptions = computed(() =>
+  organizations.value.map((item) => ({
+    label: item.fullPath || item.name,
+    value: item.id,
+  })),
+);
+const roleOptions = computed(() =>
+  roles.value.map((item) => ({
+    label: `${item.name} · ${item.code}`,
+    value: item.id,
+  })),
+);
+const roleFilterOptions = computed(() => [
+  { label: "全部角色", value: "ALL" },
+  ...roleOptions.value,
+]);
 const filteredUsers = computed(() => {
   const normalized = keyword.value.trim().toLowerCase();
   return users.value.filter((user) => {
-    const keywordMatches = !normalized
-      || user.username.toLowerCase().includes(normalized)
-      || user.displayName.toLowerCase().includes(normalized)
-      || (user.phone || "").toLowerCase().includes(normalized)
-      || (user.email || "").toLowerCase().includes(normalized);
-    const statusMatches = statusFilter.value === "ALL"
-      || (statusFilter.value === "ENABLED" && user.enabled)
-      || (statusFilter.value === "DISABLED" && !user.enabled);
-    const roleMatches = roleFilter.value === "ALL" || user.roles.some((role) => role.id === roleFilter.value);
+    const keywordMatches =
+      !normalized ||
+      user.username.toLowerCase().includes(normalized) ||
+      user.displayName.toLowerCase().includes(normalized) ||
+      (user.phone || "").toLowerCase().includes(normalized) ||
+      (user.email || "").toLowerCase().includes(normalized);
+    const statusMatches =
+      statusFilter.value === "ALL" ||
+      (statusFilter.value === "ENABLED" && user.enabled) ||
+      (statusFilter.value === "DISABLED" && !user.enabled);
+    const roleMatches =
+      roleFilter.value === "ALL" ||
+      user.roles.some((role) => role.id === roleFilter.value);
     return keywordMatches && statusMatches && roleMatches;
   });
 });
@@ -256,8 +336,12 @@ async function loadData() {
   try {
     const [userData, roleData, organizationData] = await Promise.all([
       listUsersApi(pagination.current - 1, pagination.pageSize),
-      auth.can("system:role:view") ? listRolesApi(0, 200) : Promise.resolve({ content: [] as RoleResponse[] }),
-      auth.can("system:organization:view") ? listOrganizationsFlatApi() : Promise.resolve([] as OrganizationResponse[]),
+      auth.can("system:role:view")
+        ? listRolesApi(0, 200)
+        : Promise.resolve({ content: [] as RoleResponse[] }),
+      auth.can("system:organization:view")
+        ? listOrganizationsFlatApi()
+        : Promise.resolve([] as OrganizationResponse[]),
     ]);
     users.value = userData.content;
     pagination.total = userData.totalElements;
@@ -382,7 +466,9 @@ async function handleDelete(id: string) {
   }
 }
 
-function handleTableChange(nextPagination: Parameters<NonNullable<TableProps["onChange"]>>[0]) {
+function handleTableChange(
+  nextPagination: Parameters<NonNullable<TableProps["onChange"]>>[0],
+) {
   pagination.current = Number(nextPagination.current || 1);
   pagination.pageSize = Number(nextPagination.pageSize || 20);
   loadData();
@@ -390,7 +476,9 @@ function handleTableChange(nextPagination: Parameters<NonNullable<TableProps["on
 
 function organizationName(orgId?: string) {
   if (!orgId) return "未绑定";
-  return organizations.value.find((item) => item.id === orgId)?.name || "未绑定";
+  return (
+    organizations.value.find((item) => item.id === orgId)?.name || "未绑定"
+  );
 }
 
 function formatDateTime(value?: string) {

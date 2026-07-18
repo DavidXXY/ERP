@@ -4,7 +4,7 @@ import { AUTH_TOKEN_KEY } from "@/api/http";
 
 export const useAuthStore = defineStore("auth", {
   state: () => ({
-    token: localStorage.getItem(AUTH_TOKEN_KEY) || "",
+    token: sessionStorage.getItem(AUTH_TOKEN_KEY) || "",
     user: null as CurrentUser | null,
     initialized: false,
   }),
@@ -19,12 +19,12 @@ export const useAuthStore = defineStore("auth", {
     async login(username: string, password: string) {
       this.token = "";
       this.user = null;
-      localStorage.removeItem(AUTH_TOKEN_KEY);
+      sessionStorage.removeItem(AUTH_TOKEN_KEY);
       const response = await loginApi({ username, password });
       this.token = response.token;
       this.user = this.normalizeUser(response.user);
       this.initialized = true;
-      localStorage.setItem(AUTH_TOKEN_KEY, response.token);
+      sessionStorage.setItem(AUTH_TOKEN_KEY, response.token);
     },
     async loadCurrentUser() {
       if (!this.token) {
@@ -38,7 +38,7 @@ export const useAuthStore = defineStore("auth", {
       this.token = "";
       this.user = null;
       this.initialized = true;
-      localStorage.removeItem(AUTH_TOKEN_KEY);
+      sessionStorage.removeItem(AUTH_TOKEN_KEY);
     },
     can(permission: string) {
       const roles = this.user?.roleCodes ?? [];

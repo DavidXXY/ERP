@@ -32,6 +32,7 @@ public class JwtService {
     return Jwts.builder()
         .subject(principal.getUsername())
         .claim("uid", principal.id().toString())
+        .claim("tenant", principal.tenantId())
         .claim("name", principal.displayName())
         .claim("roles", principal.roleCodes())
         .claim("permissions", principal.permissions())
@@ -43,6 +44,10 @@ public class JwtService {
 
   public String extractUsername(String token) {
     return parseClaims(token).getSubject();
+  }
+
+  public String extractTenant(String token) {
+    return parseClaims(token).get("tenant", String.class);
   }
 
   public boolean isValid(String token, UserPrincipal principal) {
@@ -69,4 +74,3 @@ public class JwtService {
     return Keys.hmacShaKeyFor(bytes);
   }
 }
-

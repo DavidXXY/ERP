@@ -13,6 +13,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+import com.company.ops.api.common.tenant.TenantContext;
 
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -45,7 +46,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     String token = authorization.substring(7);
-    try {
+    try (TenantContext.Scope ignored = TenantContext.use(jwtService.extractTenant(token))) {
       String username = jwtService.extractUsername(token);
       if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
         UserPrincipal principal = (UserPrincipal) userDetailsService.loadUserByUsername(username);
@@ -59,11 +60,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
           SecurityContextHolder.getContext().setAuthentication(authentication);
         }
       }
+      filterChain.doFilter(request, response);
+      return;
     } catch (RuntimeException e) {
       log.debug("JWT validation failed for request {}: {}", request.getRequestURI(), e.getMessage());
       SecurityContextHolder.clearContext();
     }
-
     filterChain.doFilter(request, response);
   }
 }

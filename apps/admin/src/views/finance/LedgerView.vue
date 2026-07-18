@@ -13,24 +13,61 @@
       </template>
 
       <a-row :gutter="[16, 16]" class="metric-row">
-        <a-col :xs="12" :xl="4"><a-statistic title="记账凭证" :value="overview.voucherCount" suffix="张" /></a-col>
-        <a-col :xs="12" :xl="4"><a-statistic title="累计借方" :value="overview.totalDebit" :formatter="moneyFormatter" /></a-col>
-        <a-col :xs="12" :xl="4"><a-statistic title="营业收入" :value="overview.revenue" :formatter="moneyFormatter" /></a-col>
-        <a-col :xs="12" :xl="4"><a-statistic title="成本费用" :value="overview.expense" :formatter="moneyFormatter" /></a-col>
-        <a-col :xs="12" :xl="4"><a-statistic title="账面利润" :value="overview.profit" :formatter="moneyFormatter" :value-style="profitStyle" /></a-col>
-        <a-col :xs="12" :xl="4"><a-statistic title="银行净流量" :value="overview.cashBalance" :formatter="moneyFormatter" /></a-col>
+        <a-col :xs="12" :xl="4"
+          ><a-statistic
+            title="记账凭证"
+            :value="overview.voucherCount"
+            suffix="张"
+        /></a-col>
+        <a-col :xs="12" :xl="4"
+          ><a-statistic
+            title="累计借方"
+            :value="overview.totalDebit"
+            :formatter="moneyFormatter"
+        /></a-col>
+        <a-col :xs="12" :xl="4"
+          ><a-statistic
+            title="营业收入"
+            :value="overview.revenue"
+            :formatter="moneyFormatter"
+        /></a-col>
+        <a-col :xs="12" :xl="4"
+          ><a-statistic
+            title="成本费用"
+            :value="overview.expense"
+            :formatter="moneyFormatter"
+        /></a-col>
+        <a-col :xs="12" :xl="4"
+          ><a-statistic
+            title="账面利润"
+            :value="overview.profit"
+            :formatter="moneyFormatter"
+            :value-style="profitStyle"
+        /></a-col>
+        <a-col :xs="12" :xl="4"
+          ><a-statistic
+            title="银行净流量"
+            :value="overview.cashBalance"
+            :formatter="moneyFormatter"
+        /></a-col>
       </a-row>
 
       <section class="ledger-check-panel">
         <div class="check-card">
           <span>试算平衡</span>
-          <strong :class="{ 'text-danger': trialBalanceDiff !== 0 }">{{ formatMoney(Math.abs(trialBalanceDiff)) }}</strong>
+          <strong :class="{ 'text-danger': trialBalanceDiff !== 0 }">{{
+            formatMoney(Math.abs(trialBalanceDiff))
+          }}</strong>
           <small>{{ trialBalanceDiff === 0 ? "借贷相等" : "借贷不平" }}</small>
         </div>
         <div class="check-card">
           <span>资产负债差额</span>
-          <strong :class="{ 'text-danger': balanceSheetDiff !== 0 }">{{ formatMoney(Math.abs(balanceSheetDiff)) }}</strong>
-          <small>{{ balanceSheetDiff === 0 ? "勾稽正常" : "需复核权益/利润结转" }}</small>
+          <strong :class="{ 'text-danger': balanceSheetDiff !== 0 }">{{
+            formatMoney(Math.abs(balanceSheetDiff))
+          }}</strong>
+          <small>{{
+            balanceSheetDiff === 0 ? "勾稽正常" : "需复核权益/利润结转"
+          }}</small>
         </div>
         <div class="check-card">
           <span>未记账/冲销</span>
@@ -61,7 +98,11 @@
             <strong>{{ item.count }} 张</strong>
             <small>{{ formatMoney(item.amount) }}</small>
           </button>
-          <a-empty v-if="voucherTypeStats.length === 0" :image="simpleImage" description="暂无凭证来源" />
+          <a-empty
+            v-if="voucherTypeStats.length === 0"
+            :image="simpleImage"
+            description="暂无凭证来源"
+          />
         </div>
       </section>
     </a-card>
@@ -70,9 +111,26 @@
       <a-tabs v-model:active-key="activeTab">
         <a-tab-pane key="vouchers" tab="会计凭证">
           <a-space wrap class="table-toolbar">
-            <a-input-search v-model:value="keyword" allow-clear placeholder="搜索凭证、业务单号、摘要" style="width: 280px" />
-            <a-select v-model:value="bizTypeFilter" allow-clear placeholder="业务来源" :options="bizTypeOptions" style="width: 150px" />
-            <a-select v-model:value="statusFilter" allow-clear placeholder="凭证状态" :options="statusOptions" style="width: 140px" />
+            <a-input-search
+              v-model:value="keyword"
+              allow-clear
+              placeholder="搜索凭证、业务单号、摘要"
+              style="width: 280px"
+            />
+            <a-select
+              v-model:value="bizTypeFilter"
+              allow-clear
+              placeholder="业务来源"
+              :options="bizTypeOptions"
+              style="width: 150px"
+            />
+            <a-select
+              v-model:value="statusFilter"
+              allow-clear
+              placeholder="凭证状态"
+              :options="statusOptions"
+              style="width: 140px"
+            />
           </a-space>
           <a-table
             :columns="voucherColumns"
@@ -84,36 +142,66 @@
           >
             <template #bodyCell="{ column, record }">
               <template v-if="column.key === 'voucher'">
-                <a-button type="link" class="table-link" @click="openVoucher(record)">{{ record.code }}</a-button>
+                <a-button
+                  type="link"
+                  class="table-link"
+                  @click="openVoucher(record)"
+                  >{{ record.code }}</a-button
+                >
                 <span class="table-subtitle">{{ record.description }}</span>
               </template>
               <template v-else-if="column.key === 'bizType'">
                 <a-tag>{{ bizTypeLabel(record.bizType) }}</a-tag>
               </template>
-              <template v-else-if="column.key === 'amount'">{{ formatMoney(record.totalDebit) }}</template>
+              <template v-else-if="column.key === 'amount'">{{
+                formatMoney(record.totalDebit)
+              }}</template>
               <template v-else-if="column.key === 'balance'">
-                <a-tag :color="isVoucherBalanced(record) ? 'green' : 'red'">{{ isVoucherBalanced(record) ? '平衡' : '不平' }}</a-tag>
+                <a-tag :color="isVoucherBalanced(record) ? 'green' : 'red'">{{
+                  isVoucherBalanced(record) ? "平衡" : "不平"
+                }}</a-tag>
               </template>
               <template v-else-if="column.key === 'status'">
-                <a-tag :color="record.status === 'POSTED' ? 'green' : 'default'">{{ record.status === 'POSTED' ? '已记账' : '已冲销' }}</a-tag>
+                <a-tag
+                  :color="record.status === 'POSTED' ? 'green' : 'default'"
+                  >{{ record.status === "POSTED" ? "已记账" : "已冲销" }}</a-tag
+                >
               </template>
               <template v-else-if="column.key === 'action'">
-                <a-button type="link" size="small" @click="openVoucher(record)">查看分录</a-button>
+                <a-button type="link" size="small" @click="openVoucher(record)"
+                  >查看分录</a-button
+                >
               </template>
             </template>
           </a-table>
         </a-tab-pane>
 
         <a-tab-pane key="statements" tab="财务报表">
-          <a-descriptions bordered :column="{ xs: 1, md: 3 }" class="statement-summary">
-            <a-descriptions-item label="资产合计">{{ formatMoney(statements.totalAssets) }}</a-descriptions-item>
-            <a-descriptions-item label="负债合计">{{ formatMoney(statements.totalLiabilities) }}</a-descriptions-item>
+          <a-descriptions
+            bordered
+            :column="{ xs: 1, md: 3 }"
+            class="statement-summary"
+          >
+            <a-descriptions-item label="资产合计">{{
+              formatMoney(statements.totalAssets)
+            }}</a-descriptions-item>
+            <a-descriptions-item label="负债合计">{{
+              formatMoney(statements.totalLiabilities)
+            }}</a-descriptions-item>
             <a-descriptions-item label="本期利润">
-              <strong :class="{ 'text-danger': statements.profit < 0 }">{{ formatMoney(statements.profit) }}</strong>
+              <strong :class="{ 'text-danger': statements.profit < 0 }">{{
+                formatMoney(statements.profit)
+              }}</strong>
             </a-descriptions-item>
-            <a-descriptions-item label="营业收入">{{ formatMoney(statements.totalRevenue) }}</a-descriptions-item>
-            <a-descriptions-item label="成本费用">{{ formatMoney(statements.totalExpense) }}</a-descriptions-item>
-            <a-descriptions-item label="现金净流量">{{ formatMoney(statements.netCashFlow) }}</a-descriptions-item>
+            <a-descriptions-item label="营业收入">{{
+              formatMoney(statements.totalRevenue)
+            }}</a-descriptions-item>
+            <a-descriptions-item label="成本费用">{{
+              formatMoney(statements.totalExpense)
+            }}</a-descriptions-item>
+            <a-descriptions-item label="现金净流量">{{
+              formatMoney(statements.netCashFlow)
+            }}</a-descriptions-item>
           </a-descriptions>
           <a-row :gutter="[16, 16]">
             <a-col :xs="24" :xl="12">
@@ -126,9 +214,15 @@
                 :row-key="(item: StatementLine) => item.accountCode"
               >
                 <template #bodyCell="{ column, record }">
-                  <template v-if="column.key === 'debit'">{{ formatMoney(record.debit) }}</template>
-                  <template v-else-if="column.key === 'credit'">{{ formatMoney(record.credit) }}</template>
-                  <template v-else-if="column.key === 'balance'">{{ formatMoney(record.balance) }}</template>
+                  <template v-if="column.key === 'debit'">{{
+                    formatMoney(record.debit)
+                  }}</template>
+                  <template v-else-if="column.key === 'credit'">{{
+                    formatMoney(record.credit)
+                  }}</template>
+                  <template v-else-if="column.key === 'balance'">{{
+                    formatMoney(record.balance)
+                  }}</template>
                 </template>
               </a-table>
             </a-col>
@@ -142,9 +236,15 @@
                 :row-key="(item: StatementLine) => item.accountCode"
               >
                 <template #bodyCell="{ column, record }">
-                  <template v-if="column.key === 'debit'">{{ formatMoney(record.debit) }}</template>
-                  <template v-else-if="column.key === 'credit'">{{ formatMoney(record.credit) }}</template>
-                  <template v-else-if="column.key === 'balance'">{{ formatMoney(record.balance) }}</template>
+                  <template v-if="column.key === 'debit'">{{
+                    formatMoney(record.debit)
+                  }}</template>
+                  <template v-else-if="column.key === 'credit'">{{
+                    formatMoney(record.credit)
+                  }}</template>
+                  <template v-else-if="column.key === 'balance'">{{
+                    formatMoney(record.balance)
+                  }}</template>
                 </template>
               </a-table>
             </a-col>
@@ -156,11 +256,22 @@
     <a-drawer v-model:open="drawerOpen" title="会计凭证分录" width="680">
       <template v-if="selectedVoucher">
         <a-descriptions bordered :column="2" size="small">
-          <a-descriptions-item label="凭证号">{{ selectedVoucher.code }}</a-descriptions-item>
-          <a-descriptions-item label="日期">{{ selectedVoucher.voucherDate }}</a-descriptions-item>
-          <a-descriptions-item label="业务来源">{{ bizTypeLabel(selectedVoucher.bizType) }} · {{ selectedVoucher.bizNo }}</a-descriptions-item>
-          <a-descriptions-item label="借贷合计">{{ formatMoney(selectedVoucher.totalDebit) }}</a-descriptions-item>
-          <a-descriptions-item label="摘要" :span="2">{{ selectedVoucher.description }}</a-descriptions-item>
+          <a-descriptions-item label="凭证号">{{
+            selectedVoucher.code
+          }}</a-descriptions-item>
+          <a-descriptions-item label="日期">{{
+            selectedVoucher.voucherDate
+          }}</a-descriptions-item>
+          <a-descriptions-item label="业务来源"
+            >{{ bizTypeLabel(selectedVoucher.bizType) }} ·
+            {{ selectedVoucher.bizNo }}</a-descriptions-item
+          >
+          <a-descriptions-item label="借贷合计">{{
+            formatMoney(selectedVoucher.totalDebit)
+          }}</a-descriptions-item>
+          <a-descriptions-item label="摘要" :span="2">{{
+            selectedVoucher.description
+          }}</a-descriptions-item>
         </a-descriptions>
         <a-divider />
         <a-table
@@ -171,8 +282,12 @@
           :row-key="(item: VoucherEntry) => item.id"
         >
           <template #bodyCell="{ column, record }">
-            <template v-if="column.key === 'debit'">{{ record.debit ? formatMoney(record.debit) : '-' }}</template>
-            <template v-else-if="column.key === 'credit'">{{ record.credit ? formatMoney(record.credit) : '-' }}</template>
+            <template v-if="column.key === 'debit'">{{
+              record.debit ? formatMoney(record.debit) : "-"
+            }}</template>
+            <template v-else-if="column.key === 'credit'">{{
+              record.credit ? formatMoney(record.credit) : "-"
+            }}</template>
           </template>
         </a-table>
       </template>
@@ -227,18 +342,50 @@ const statements = reactive<FinancialStatements>({
   netCashFlow: 0,
 });
 
-const profitStyle = computed(() => overview.profit < 0 ? { color: "#cf1322" } : { color: "#237804" });
-const trialBalanceDiff = computed(() => roundMoney(Number(overview.totalDebit || 0) - Number(overview.totalCredit || 0)));
-const balanceSheetDiff = computed(() => roundMoney(Number(statements.totalAssets || 0) - Number(statements.totalLiabilities || 0) - Number(statements.profit || 0)));
-const reversedCount = computed(() => vouchers.value.filter((item) => item.status !== "POSTED" || !isVoucherBalanced(item)).length);
-const voucherTypeStats = computed(() => Array.from(vouchers.value.reduce((map, item) => {
-  const current = map.get(item.bizType) || { type: item.bizType, count: 0, amount: 0 };
-  current.count += 1;
-  current.amount += Number(item.totalDebit || 0);
-  map.set(item.bizType, current);
-  return map;
-}, new Map<string, { type: string; count: number; amount: number }>()).values()).sort((a, b) => b.amount - a.amount));
-const bizTypeOptions = computed(() => voucherTypeStats.value.map((item) => ({ label: bizTypeLabel(item.type), value: item.type })));
+const profitStyle = computed(() =>
+  overview.profit < 0 ? { color: "#cf1322" } : { color: "#237804" },
+);
+const trialBalanceDiff = computed(() =>
+  roundMoney(
+    Number(overview.totalDebit || 0) - Number(overview.totalCredit || 0),
+  ),
+);
+const balanceSheetDiff = computed(() =>
+  roundMoney(
+    Number(statements.totalAssets || 0) -
+      Number(statements.totalLiabilities || 0) -
+      Number(statements.profit || 0),
+  ),
+);
+const reversedCount = computed(
+  () =>
+    vouchers.value.filter(
+      (item) => item.status !== "POSTED" || !isVoucherBalanced(item),
+    ).length,
+);
+const voucherTypeStats = computed(() =>
+  Array.from(
+    vouchers.value
+      .reduce((map, item) => {
+        const current = map.get(item.bizType) || {
+          type: item.bizType,
+          count: 0,
+          amount: 0,
+        };
+        current.count += 1;
+        current.amount += Number(item.totalDebit || 0);
+        map.set(item.bizType, current);
+        return map;
+      }, new Map<string, { type: string; count: number; amount: number }>())
+      .values(),
+  ).sort((a, b) => b.amount - a.amount),
+);
+const bizTypeOptions = computed(() =>
+  voucherTypeStats.value.map((item) => ({
+    label: bizTypeLabel(item.type),
+    value: item.type,
+  })),
+);
 const statusOptions = [
   { label: "已记账", value: "POSTED" },
   { label: "已冲销", value: "REVERSED" },
@@ -246,10 +393,13 @@ const statusOptions = [
 const filteredVouchers = computed(() => {
   const term = keyword.value.trim().toLowerCase();
   return vouchers.value.filter((item) => {
-    const text = `${item.code} ${item.bizNo} ${item.bizType} ${item.description}`.toLowerCase();
-    return (!bizTypeFilter.value || item.bizType === bizTypeFilter.value)
-      && (!statusFilter.value || item.status === statusFilter.value)
-      && (!term || text.includes(term));
+    const text =
+      `${item.code} ${item.bizNo} ${item.bizType} ${item.description}`.toLowerCase();
+    return (
+      (!bizTypeFilter.value || item.bizType === bizTypeFilter.value) &&
+      (!statusFilter.value || item.status === statusFilter.value) &&
+      (!term || text.includes(term))
+    );
   });
 });
 
@@ -303,7 +453,17 @@ function openVoucher(item: AccountingVoucher) {
 }
 
 function exportVouchers() {
-  const headers = ["凭证号", "日期", "业务类型", "业务单号", "摘要", "借方合计", "贷方合计", "状态", "平衡"];
+  const headers = [
+    "凭证号",
+    "日期",
+    "业务类型",
+    "业务单号",
+    "摘要",
+    "借方合计",
+    "贷方合计",
+    "状态",
+    "平衡",
+  ];
   const rows = filteredVouchers.value.map((item) => [
     item.code,
     item.voucherDate,
@@ -330,11 +490,21 @@ function exportStatements() {
 }
 
 function statementRow(type: string, item: StatementLine) {
-  return [type, item.accountCode, item.accountName, item.debit, item.credit, item.balance];
+  return [
+    type,
+    item.accountCode,
+    item.accountName,
+    item.debit,
+    item.credit,
+    item.balance,
+  ];
 }
 
 function isVoucherBalanced(item: AccountingVoucher) {
-  return roundMoney(Number(item.totalDebit || 0) - Number(item.totalCredit || 0)) === 0;
+  return (
+    roundMoney(Number(item.totalDebit || 0) - Number(item.totalCredit || 0)) ===
+    0
+  );
 }
 
 function roundMoney(value: number) {
@@ -342,11 +512,17 @@ function roundMoney(value: number) {
 }
 
 function bizTypeLabel(type: string) {
-  return ({
-    RECEIPT: "客户回款",
-    PAYMENT: "供应商付款",
-    MANUAL: "手工凭证",
-  } as Record<string, string>)[type] || type || "-";
+  return (
+    (
+      {
+        RECEIPT: "客户回款",
+        PAYMENT: "供应商付款",
+        MANUAL: "手工凭证",
+      } as Record<string, string>
+    )[type] ||
+    type ||
+    "-"
+  );
 }
 
 function today() {
@@ -355,7 +531,12 @@ function today() {
 }
 
 function formatMoney(value: number) {
-  return new Intl.NumberFormat("zh-CN", { style: "currency", currency: "CNY", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value || 0);
+  return new Intl.NumberFormat("zh-CN", {
+    style: "currency",
+    currency: "CNY",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value || 0);
 }
 
 function moneyFormatter(value: number | string) {

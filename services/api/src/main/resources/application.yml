@@ -10,7 +10,7 @@ spring:
     password: ${DB_PASSWORD:ops_erp}
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     open-in-view: false
     properties:
       hibernate:
@@ -35,11 +35,18 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health,info,metrics,prometheus
   endpoint:
     health:
       probes:
         enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+logging:
+  pattern:
+    level: "%5p [requestId=%X{requestId:-}]"
 
 springdoc:
   api-docs:
@@ -53,6 +60,10 @@ ops:
   security:
     jwt-secret: ${JWT_SECRET:ops-erp-local-development-secret-please-change}
     jwt-expire-minutes: ${JWT_EXPIRE_MINUTES:720}
+    allowed-origins: ${ALLOWED_ORIGINS:http://localhost:5174,http://127.0.0.1:5174}
+    login-max-attempts: ${LOGIN_MAX_ATTEMPTS:5}
+    login-lock-minutes: ${LOGIN_LOCK_MINUTES:15}
+    data-encryption-key: ${DATA_ENCRYPTION_KEY:ops-erp-local-data-encryption-key-change-me}
   storage:
     type: ${STORAGE_TYPE:local}
     endpoint: ${MINIO_ENDPOINT:http://localhost:9000}

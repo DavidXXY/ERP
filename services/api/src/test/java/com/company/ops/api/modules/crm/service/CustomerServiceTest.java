@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.company.ops.api.common.exception.BusinessException;
+import com.company.ops.api.common.delete.DeleteGovernanceService;
 import com.company.ops.api.modules.crm.domain.Customer;
 import com.company.ops.api.modules.crm.domain.CustomerLevel;
 import com.company.ops.api.modules.crm.domain.RiskStatus;
@@ -17,6 +18,8 @@ import com.company.ops.api.modules.crm.repository.OpportunityRepository;
 import com.company.ops.api.modules.crm.repository.ReceivableRepository;
 import com.company.ops.api.modules.crm.repository.ServiceContractRepository;
 import com.company.ops.api.modules.system.security.DataScopeService;
+import com.company.ops.api.modules.system.domain.SystemUser;
+import com.company.ops.api.modules.system.repository.SystemUserRepository;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -41,6 +44,10 @@ class CustomerServiceTest {
   private FollowUpRepository followUpRepository;
   @Mock
   private DataScopeService dataScopeService;
+  @Mock
+  private SystemUserRepository userRepository;
+  @Mock
+  private DeleteGovernanceService deleteGovernanceService;
 
   @InjectMocks
   private CustomerService customerService;
@@ -52,6 +59,8 @@ class CustomerServiceTest {
     when(customerRepository.findById(customerId)).thenReturn(Optional.of(customer));
     when(customerRepository.save(customer)).thenReturn(customer);
     when(dataScopeService.canViewOwner("客户经理A")).thenReturn(true);
+    when(userRepository.findByDisplayNameAndEnabledTrue("客户经理A"))
+        .thenReturn(List.of(new SystemUser()));
 
     var request = new UpdateCustomerRequest(
         "华东轨交能源集团",
@@ -95,6 +104,8 @@ class CustomerServiceTest {
     Customer customer = customer(customerId);
     when(customerRepository.findById(customerId)).thenReturn(Optional.of(customer));
     when(dataScopeService.canViewOwner("客户经理A")).thenReturn(true);
+    when(userRepository.findByDisplayNameAndEnabledTrue("客户经理A"))
+        .thenReturn(List.of(new SystemUser()));
 
     var request = new UpdateCustomerRequest(
         "华东轨交能源中心",

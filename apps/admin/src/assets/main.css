@@ -472,38 +472,124 @@ body {
 }
 
 /* Procurement filters */
-.filter-space { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; }
-.table-toolbar .ant-space { width: 100%; }
+.filter-space {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.table-toolbar .ant-space {
+  width: 100%;
+}
 
 /* ===== Mobile Responsive ===== */
 @media (max-width: 768px) {
-  .desktop-only { display: none !important; }
-  .page-stack .ant-card-body { padding: 12px !important; }
-  .metric-row .ant-col { margin-bottom: 8px; }
-  .ant-modal { max-width: calc(100vw - 16px) !important; margin: 8px auto !important; top: 8px !important; }
-  .detail-title h2 { font-size: 18px !important; }
+  .desktop-only {
+    display: none !important;
+  }
+  .page-stack .ant-card-body {
+    padding: 12px !important;
+  }
+  .metric-row .ant-col {
+    margin-bottom: 8px;
+  }
+  .ant-modal {
+    max-width: calc(100vw - 16px) !important;
+    margin: 8px auto !important;
+    top: 8px !important;
+  }
+  .detail-title h2 {
+    font-size: 18px !important;
+  }
 }
 @media (min-width: 769px) {
-  .mobile-only { display: none !important; }
+  .mobile-only {
+    display: none !important;
+  }
 }
-.mobile-card-item { background: #fff; border-radius: 8px; padding: 12px 14px; border: 1px solid #f0f0f0; cursor: pointer; margin-bottom: 8px; transition: border-color 0.2s; }
-.mobile-card-item:hover { border-color: #91d5ff; }
-.mobile-card-item:active { background: #fafafa; }
-.mobile-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-.mobile-card-header strong { font-size: 14px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mobile-card-body { font-size: 13px; color: #595959; display: flex; align-items: center; gap: 8px; }
-.mobile-card-body span { flex: 1; min-width: 0; }
-.mobile-card-footer { margin-top: 6px; font-size: 12px; color: #8c8c8c; display: flex; gap: 8px; flex-wrap: wrap; }
-.mobile-card-tags { margin-top: 6px; display: flex; gap: 4px; flex-wrap: wrap; }
+.mobile-card-item {
+  background: #fff;
+  border-radius: 8px;
+  padding: 12px 14px;
+  border: 1px solid #f0f0f0;
+  cursor: pointer;
+  margin-bottom: 8px;
+  transition: border-color 0.2s;
+}
+.mobile-card-item:hover {
+  border-color: #91d5ff;
+}
+.mobile-card-item:active {
+  background: #fafafa;
+}
+.mobile-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.mobile-card-header strong {
+  font-size: 14px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mobile-card-body {
+  font-size: 13px;
+  color: #595959;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mobile-card-body span {
+  flex: 1;
+  min-width: 0;
+}
+.mobile-card-footer {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #8c8c8c;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.mobile-card-tags {
+  margin-top: 6px;
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
 
 /* AppLayout responsive */
 @media (max-width: 768px) {
-  .app-header { flex-wrap: wrap; height: auto !important; padding: 8px 12px !important; gap: 6px; }
-  .app-header-title { width: 100%; }
-  .app-header-title h3 { font-size: 16px !important; }
-  .app-header-title .app-header-subtitle { display: none; }
-  .app-header-actions { gap: 4px !important; }
-  .app-sider { position: fixed; z-index: 100; }
-  .app-content { padding: 12px !important; }
-  .page-stack .ant-card-body { padding: 12px !important; }
+  .app-header {
+    flex-wrap: wrap;
+    height: auto !important;
+    padding: 8px 12px !important;
+    gap: 6px;
+  }
+  .app-header-title {
+    width: 100%;
+  }
+  .app-header-title h3 {
+    font-size: 16px !important;
+  }
+  .app-header-title .app-header-subtitle {
+    display: none;
+  }
+  .app-header-actions {
+    gap: 4px !important;
+  }
+  .app-sider {
+    position: fixed;
+    z-index: 100;
+  }
+  .app-content {
+    padding: 12px !important;
+  }
+  .page-stack .ant-card-body {
+    padding: 12px !important;
+  }
 }

@@ -3,7 +3,9 @@
     <a-card title="入转调离管理">
       <template #extra>
         <a-space>
-          <a-button @click="loadData"><template #icon><ReloadOutlined /></template>刷新</a-button>
+          <a-button @click="loadData"
+            ><template #icon><ReloadOutlined /></template>刷新</a-button
+          >
           <a-button v-if="canManage" type="primary" @click="openCreate">
             <template #icon><PlusOutlined /></template>新增流程
           </a-button>
@@ -17,30 +19,50 @@
         <a-tab-pane key="REJECTED" tab="已驳回" />
       </a-tabs>
 
-      <a-table :loading="loading" :data-source="filteredData" :columns="columns" row-key="id" :pagination="{ pageSize: 15 }">
+      <a-table
+        :loading="loading"
+        :data-source="filteredData"
+        :columns="columns"
+        row-key="id"
+        :pagination="{ pageSize: 15 }"
+      >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'lifecycleType'">
-            <a-tag :color="typeColor(record.lifecycleType)">{{ typeLabel(record.lifecycleType) }}</a-tag>
+            <a-tag :color="typeColor(record.lifecycleType)">{{
+              typeLabel(record.lifecycleType)
+            }}</a-tag>
           </template>
           <template v-else-if="column.key === 'status'">
-            <a-tag :color="statusColor(record.status)">{{ statusLabel(record.status) }}</a-tag>
+            <a-tag :color="statusColor(record.status)">{{
+              statusLabel(record.status)
+            }}</a-tag>
           </template>
           <template v-else-if="column.key === 'transfer'">
             <span v-if="record.lifecycleType === 'TRANSFER'">
-              {{ record.fromOrganizationName || '-' }} <ArrowRightOutlined /> {{ record.toOrganizationName || '-' }}
+              {{ record.fromOrganizationName || "-" }} <ArrowRightOutlined />
+              {{ record.toOrganizationName || "-" }}
             </span>
             <span v-else-if="record.lifecycleType === 'ONBOARDING'">
-              → {{ record.toOrganizationName || '-' }} / {{ record.toPosition || '-' }}
+              → {{ record.toOrganizationName || "-" }} /
+              {{ record.toPosition || "-" }}
             </span>
             <span v-else-if="record.lifecycleType === 'RESIGNATION'">
-              {{ record.reason || '-' }}
+              {{ record.reason || "-" }}
             </span>
-            <span v-else>{{ record.reason || '-' }}</span>
+            <span v-else>{{ record.reason || "-" }}</span>
           </template>
           <template v-else-if="column.key === 'actions'">
             <a-space v-if="record.status === 'PENDING' && canManage">
-              <a-button type="link" size="small" @click="approve(record, true)">通过</a-button>
-              <a-button type="link" danger size="small" @click="approve(record, false)">驳回</a-button>
+              <a-button type="link" size="small" @click="approve(record, true)"
+                >通过</a-button
+              >
+              <a-button
+                type="link"
+                danger
+                size="small"
+                @click="approve(record, false)"
+                >驳回</a-button
+              >
             </a-space>
           </template>
         </template>
@@ -48,33 +70,69 @@
     </a-card>
 
     <!-- Create Lifecycle Modal -->
-    <a-modal v-model:open="createModal" title="新增入转调离流程" width="800px" :confirm-loading="saving" @ok="saveLifecycle">
+    <a-modal
+      v-model:open="createModal"
+      title="新增入转调离流程"
+      width="800px"
+      :confirm-loading="saving"
+      @ok="saveLifecycle"
+    >
       <a-form ref="lcFormRef" :model="lcForm" layout="vertical">
         <a-row :gutter="14">
           <a-col :span="12">
             <a-form-item label="员工" name="employeeId" :rules="requiredRule">
-              <a-select v-model:value="lcForm.employeeId" show-search option-filter-prop="label" placeholder="搜索选择员工" :options="employeeOptions" />
+              <a-select
+                v-model:value="lcForm.employeeId"
+                show-search
+                option-filter-prop="label"
+                placeholder="搜索选择员工"
+                :options="employeeOptions"
+              />
             </a-form-item>
           </a-col>
           <a-col :span="12">
-            <a-form-item label="流程类型" name="lifecycleType" :rules="requiredRule">
-              <a-select v-model:value="lcForm.lifecycleType" :options="lifecycleTypeOptions" @change="onTypeChange" />
+            <a-form-item
+              label="流程类型"
+              name="lifecycleType"
+              :rules="requiredRule"
+            >
+              <a-select
+                v-model:value="lcForm.lifecycleType"
+                :options="lifecycleTypeOptions"
+                @change="onTypeChange"
+              />
             </a-form-item>
           </a-col>
         </a-row>
         <a-row :gutter="14">
           <a-col :span="12">
-            <a-form-item label="生效日期" name="effectiveDate" :rules="requiredRule">
-              <a-date-picker v-model:value="lcForm.effectiveDate" value-format="YYYY-MM-DD" style="width:100%" />
+            <a-form-item
+              label="生效日期"
+              name="effectiveDate"
+              :rules="requiredRule"
+            >
+              <a-date-picker
+                v-model:value="lcForm.effectiveDate"
+                value-format="YYYY-MM-DD"
+                style="width: 100%"
+              />
             </a-form-item>
           </a-col>
           <a-col :span="12" v-if="lcForm.lifecycleType === 'TRANSFER'">
             <a-form-item label="调出组织">
-              <a-input v-model:value="lcForm.fromOrganizationName" placeholder="如不选可手动输入" />
+              <a-input
+                v-model:value="lcForm.fromOrganizationName"
+                placeholder="如不选可手动输入"
+              />
             </a-form-item>
           </a-col>
         </a-row>
-        <template v-if="lcForm.lifecycleType === 'TRANSFER' || lcForm.lifecycleType === 'ONBOARDING'">
+        <template
+          v-if="
+            lcForm.lifecycleType === 'TRANSFER' ||
+            lcForm.lifecycleType === 'ONBOARDING'
+          "
+        >
           <a-row :gutter="14">
             <a-col :span="12">
               <a-form-item label="调入组织">
@@ -98,7 +156,12 @@
     </a-modal>
 
     <!-- Approve Modal -->
-    <a-modal v-model:open="approveModal" :title="approveAction === true ? '审批通过' : '驳回'" :confirm-loading="saving" @ok="confirmApprove">
+    <a-modal
+      v-model:open="approveModal"
+      :title="approveAction === true ? '审批通过' : '驳回'"
+      :confirm-loading="saving"
+      @ok="confirmApprove"
+    >
       <a-form layout="vertical">
         <a-form-item label="审批意见">
           <a-textarea v-model:value="approveRemark" :rows="3" />
@@ -111,12 +174,22 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
 import { message, DatePicker } from "ant-design-vue";
-import { PlusOutlined, ReloadOutlined, ArrowRightOutlined } from "@ant-design/icons-vue";
-import { useAuthStore } from "@/stores/auth";
-import { listQualificationEmployees, type QualificationEmployee } from "@/api/qualification";
 import {
-  listAllLifecycles, createLifecycle, approveLifecycle,
-  type LifecycleRecord, type LifecyclePayload,
+  PlusOutlined,
+  ReloadOutlined,
+  ArrowRightOutlined,
+} from "@ant-design/icons-vue";
+import { useAuthStore } from "@/stores/auth";
+import {
+  listQualificationEmployees,
+  type QualificationEmployee,
+} from "@/api/qualification";
+import {
+  listAllLifecycles,
+  createLifecycle,
+  approveLifecycle,
+  type LifecycleRecord,
+  type LifecyclePayload,
 } from "@/api/hr";
 
 const auth = useAuthStore();
@@ -129,13 +202,16 @@ const data = ref<LifecycleRecord[]>([]);
 const employees = ref<QualificationEmployee[]>([]);
 
 const employeeOptions = computed(() => {
-  const active = employees.value.filter(e => e.employmentStatus === "ACTIVE");
-  return active.map(e => ({ label: `${e.name} (${e.workNo || '无工号'})`, value: e.id }));
+  const active = employees.value.filter((e) => e.employmentStatus === "ACTIVE");
+  return active.map((e) => ({
+    label: `${e.name} (${e.workNo || "无工号"})`,
+    value: e.id,
+  }));
 });
 
 const filteredData = computed(() => {
   if (filterStatus.value === "all") return data.value;
-  return data.value.filter(d => d.status === filterStatus.value);
+  return data.value.filter((d) => d.status === filterStatus.value);
 });
 
 const lifecycleTypeOptions = [
@@ -155,16 +231,44 @@ const columns = [
 ];
 
 function typeColor(t: string) {
-  return ({ ONBOARDING: "green", TRANSFER: "blue", RESIGNATION: "red" } as Record<string, string>)[t] || "default";
+  return (
+    (
+      { ONBOARDING: "green", TRANSFER: "blue", RESIGNATION: "red" } as Record<
+        string,
+        string
+      >
+    )[t] || "default"
+  );
 }
 function typeLabel(t: string) {
-  return ({ ONBOARDING: "入职", TRANSFER: "调岗", RESIGNATION: "离职" } as Record<string, string>)[t] || t;
+  return (
+    (
+      { ONBOARDING: "入职", TRANSFER: "调岗", RESIGNATION: "离职" } as Record<
+        string,
+        string
+      >
+    )[t] || t
+  );
 }
 function statusColor(s: string) {
-  return ({ PENDING: "orange", APPROVED: "green", REJECTED: "red" } as Record<string, string>)[s] || "default";
+  return (
+    (
+      { PENDING: "orange", APPROVED: "green", REJECTED: "red" } as Record<
+        string,
+        string
+      >
+    )[s] || "default"
+  );
 }
 function statusLabel(s: string) {
-  return ({ PENDING: "待审批", APPROVED: "已通过", REJECTED: "已驳回" } as Record<string, string>)[s] || s;
+  return (
+    (
+      { PENDING: "待审批", APPROVED: "已通过", REJECTED: "已驳回" } as Record<
+        string,
+        string
+      >
+    )[s] || s
+  );
 }
 
 // Create form
@@ -172,10 +276,17 @@ const createModal = ref(false);
 const lcFormRef = ref();
 const requiredRule = [{ required: true, message: "请填写必填项" }];
 const lcForm = reactive<LifecyclePayload & { employeeId: string }>({
-  employeeId: "", lifecycleType: "ONBOARDING", effectiveDate: "",
-  fromOrganizationId: "", fromOrganizationName: "", fromPosition: "",
-  toOrganizationId: "", toOrganizationName: "", toPosition: "",
-  reason: "", remark: "",
+  employeeId: "",
+  lifecycleType: "ONBOARDING",
+  effectiveDate: "",
+  fromOrganizationId: "",
+  fromOrganizationName: "",
+  fromPosition: "",
+  toOrganizationId: "",
+  toOrganizationName: "",
+  toPosition: "",
+  reason: "",
+  remark: "",
 });
 
 function onTypeChange() {
@@ -189,7 +300,19 @@ function onTypeChange() {
 }
 
 function openCreate() {
-  Object.assign(lcForm, { employeeId: "", lifecycleType: "ONBOARDING", effectiveDate: "", fromOrganizationId: "", fromOrganizationName: "", fromPosition: "", toOrganizationId: "", toOrganizationName: "", toPosition: "", reason: "", remark: "" });
+  Object.assign(lcForm, {
+    employeeId: "",
+    lifecycleType: "ONBOARDING",
+    effectiveDate: "",
+    fromOrganizationId: "",
+    fromOrganizationName: "",
+    fromPosition: "",
+    toOrganizationId: "",
+    toOrganizationName: "",
+    toPosition: "",
+    reason: "",
+    remark: "",
+  });
   createModal.value = true;
 }
 

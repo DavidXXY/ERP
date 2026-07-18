@@ -9,7 +9,9 @@
       <div class="approval-progress-node">
         <div class="approval-progress-avatar">
           {{ initials(step.personName || step.title) }}
-          <span class="approval-progress-badge">{{ badgeText(step.state) }}</span>
+          <span class="approval-progress-badge">{{
+            badgeText(step.state)
+          }}</span>
         </div>
         <div v-if="index < steps.length - 1" class="approval-progress-line" />
       </div>
@@ -22,7 +24,12 @@
 </template>
 
 <script setup lang="ts">
-export type ApprovalProgressState = "done" | "pending" | "rejected" | "waiting" | "skipped";
+export type ApprovalProgressState =
+  | "done"
+  | "pending"
+  | "rejected"
+  | "waiting"
+  | "skipped";
 
 export type ApprovalProgressStep = {
   key?: string;

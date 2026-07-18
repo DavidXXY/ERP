@@ -16,21 +16,38 @@
       />
 
       <a-form :model="formState" layout="vertical" @finish="handleLogin">
-        <a-form-item label="账号" name="username" :rules="[{ required: true, message: '请输入账号' }]">
-          <a-input v-model:value="formState.username" size="large" autocomplete="username" />
+        <a-form-item
+          label="账号"
+          name="username"
+          :rules="[{ required: true, message: '请输入账号' }]"
+        >
+          <a-input
+            v-model:value="formState.username"
+            size="large"
+            autocomplete="username"
+          />
         </a-form-item>
-        <a-form-item label="密码" name="password" :rules="[{ required: true, message: '请输入密码' }]">
+        <a-form-item
+          label="密码"
+          name="password"
+          :rules="[{ required: true, message: '请输入密码' }]"
+        >
           <a-input-password
             v-model:value="formState.password"
             size="large"
             autocomplete="current-password"
           />
         </a-form-item>
-        <a-button block size="large" type="primary" html-type="submit" :loading="loading">
+        <a-button
+          block
+          size="large"
+          type="primary"
+          html-type="submit"
+          :loading="loading"
+        >
           登录系统
         </a-button>
       </a-form>
-
     </a-card>
   </main>
 </template>
@@ -56,7 +73,10 @@ async function handleLogin() {
   errorMessage.value = "";
   try {
     await auth.login(formState.username, formState.password);
-    const redirect = typeof route.query.redirect === "string" ? route.query.redirect : "/dashboard";
+    const redirect =
+      typeof route.query.redirect === "string"
+        ? route.query.redirect
+        : "/dashboard";
     await router.replace(redirect);
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : "登录失败";

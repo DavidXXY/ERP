@@ -31,7 +31,16 @@ export type ApprovalConfigResponse = {
   publishStatus?: "DRAFT" | "PUBLISHED";
   approvalMode: "PARALLEL" | "SEQUENTIAL";
   sequenceNo: number;
-  conditionType: "ANY" | "AMOUNT" | "DEPARTMENT" | "AMOUNT_AND_DEPARTMENT" | "BUSINESS_TYPE" | "PROJECT" | "SUPPLIER_RISK" | "CUSTOMER_LEVEL" | "COMPOSITE";
+  conditionType:
+    | "ANY"
+    | "AMOUNT"
+    | "DEPARTMENT"
+    | "AMOUNT_AND_DEPARTMENT"
+    | "BUSINESS_TYPE"
+    | "PROJECT"
+    | "SUPPLIER_RISK"
+    | "CUSTOMER_LEVEL"
+    | "COMPOSITE";
   minAmount?: number;
   maxAmount?: number;
   departmentName?: string;
@@ -51,56 +60,161 @@ export type ApprovalFlowPreview = {
   totalSteps: number;
   versionNo: number;
   ruleText: string;
-  steps: Array<{ stepNo: number; assignees: string[]; conditions: string[]; slaHours?: number; escalationRoleName?: string; autoApproved: boolean }>;
+  steps: Array<{
+    stepNo: number;
+    assignees: string[];
+    conditions: string[];
+    slaHours?: number;
+    escalationRoleName?: string;
+    autoApproved: boolean;
+  }>;
 };
 
-export type ApprovalFlowDiagnostic = { flowCode: string; flowName: string; severity: "HIGH" | "MEDIUM" | "LOW"; message: string };
+export type ApprovalFlowDiagnostic = {
+  flowCode: string;
+  flowName: string;
+  severity: "HIGH" | "MEDIUM" | "LOW";
+  message: string;
+};
 
-type ApprovalAssigneePayload = { flowCode: string; flowName: string; assigneeType: "USER" | "ROLE" | "DYNAMIC" | "AUTO"; userId?: string; roleId?: string; dynamicAssignee?: string; autoAction?: string; slaHours?: number; escalationRoleId?: string; stepPolicy?: ApprovalConfigResponse["stepPolicy"]; approvalMode: "PARALLEL" | "SEQUENTIAL"; sequenceNo: number; conditionType?: ApprovalConfigResponse["conditionType"]; minAmount?: number; maxAmount?: number; departmentName?: string; businessType?: string; projectCode?: string; supplierRisk?: string; customerLevel?: string; priority?: number; remark?: string };
-export type ApprovalFlowVersion = { flowCode: string; flowName: string; versionNo: number; ruleCount: number; publishStatus: string };
+type ApprovalAssigneePayload = {
+  flowCode: string;
+  flowName: string;
+  assigneeType: "USER" | "ROLE" | "DYNAMIC" | "AUTO";
+  userId?: string;
+  roleId?: string;
+  dynamicAssignee?: string;
+  autoAction?: string;
+  slaHours?: number;
+  escalationRoleId?: string;
+  stepPolicy?: ApprovalConfigResponse["stepPolicy"];
+  approvalMode: "PARALLEL" | "SEQUENTIAL";
+  sequenceNo: number;
+  conditionType?: ApprovalConfigResponse["conditionType"];
+  minAmount?: number;
+  maxAmount?: number;
+  departmentName?: string;
+  businessType?: string;
+  projectCode?: string;
+  supplierRisk?: string;
+  customerLevel?: string;
+  priority?: number;
+  remark?: string;
+};
+export type ApprovalFlowVersion = {
+  flowCode: string;
+  flowName: string;
+  versionNo: number;
+  ruleCount: number;
+  publishStatus: string;
+};
 
 export function listApprovalConfigs() {
-  return request<ApprovalConfigResponse[]>({ method: "GET", url: "/system/approval-configs" });
+  return request<ApprovalConfigResponse[]>({
+    method: "GET",
+    url: "/system/approval-configs",
+  });
 }
 
-export function previewApprovalFlow(data: { flowCode: string; amount?: number; departmentName?: string; businessType?: string; projectCode?: string; supplierRisk?: string; customerLevel?: string }) {
-  return request<ApprovalFlowPreview>({ method: "POST", url: "/system/approval-configs/preview", data });
+export function previewApprovalFlow(data: {
+  flowCode: string;
+  amount?: number;
+  departmentName?: string;
+  businessType?: string;
+  projectCode?: string;
+  supplierRisk?: string;
+  customerLevel?: string;
+}) {
+  return request<ApprovalFlowPreview>({
+    method: "POST",
+    url: "/system/approval-configs/preview",
+    data,
+  });
 }
 
-export function batchPreviewApprovalFlows(items: Array<{ flowCode: string; amount?: number; departmentName?: string; businessType?: string; projectCode?: string; supplierRisk?: string; customerLevel?: string }>) {
-  return request<ApprovalFlowPreview[]>({ method: "POST", url: "/system/approval-configs/batch-preview", data: { items } });
+export function batchPreviewApprovalFlows(
+  items: Array<{
+    flowCode: string;
+    amount?: number;
+    departmentName?: string;
+    businessType?: string;
+    projectCode?: string;
+    supplierRisk?: string;
+    customerLevel?: string;
+  }>,
+) {
+  return request<ApprovalFlowPreview[]>({
+    method: "POST",
+    url: "/system/approval-configs/batch-preview",
+    data: { items },
+  });
 }
 
 export function listApprovalDiagnostics() {
-  return request<ApprovalFlowDiagnostic[]>({ method: "GET", url: "/system/approval-configs/diagnostics" });
+  return request<ApprovalFlowDiagnostic[]>({
+    method: "GET",
+    url: "/system/approval-configs/diagnostics",
+  });
 }
 
-export function copyApprovalFlow(data: { sourceFlowCode: string; targetFlowCode: string; targetFlowName: string; overwrite: boolean }) {
-  return request<ApprovalConfigResponse[]>({ method: "POST", url: "/system/approval-configs/copy", data });
+export function copyApprovalFlow(data: {
+  sourceFlowCode: string;
+  targetFlowCode: string;
+  targetFlowName: string;
+  overwrite: boolean;
+}) {
+  return request<ApprovalConfigResponse[]>({
+    method: "POST",
+    url: "/system/approval-configs/copy",
+    data,
+  });
 }
 
 export function listApprovalFlowVersions(flowCode: string) {
-  return request<ApprovalFlowVersion[]>({ method: "GET", url: `/system/approval-configs/${flowCode}/versions` });
+  return request<ApprovalFlowVersion[]>({
+    method: "GET",
+    url: `/system/approval-configs/${flowCode}/versions`,
+  });
 }
 
 export function publishApprovalFlow(flowCode: string) {
-  return request<ApprovalConfigResponse[]>({ method: "POST", url: `/system/approval-configs/${flowCode}/publish` });
+  return request<ApprovalConfigResponse[]>({
+    method: "POST",
+    url: `/system/approval-configs/${flowCode}/publish`,
+  });
 }
 
 export function rollbackApprovalFlow(flowCode: string, versionNo: number) {
-  return request<ApprovalConfigResponse[]>({ method: "POST", url: `/system/approval-configs/${flowCode}/rollback/${versionNo}` });
+  return request<ApprovalConfigResponse[]>({
+    method: "POST",
+    url: `/system/approval-configs/${flowCode}/rollback/${versionNo}`,
+  });
 }
 
 export function createApprovalConfig(data: ApprovalAssigneePayload) {
-  return request<ApprovalConfigResponse>({ method: "POST", url: "/system/approval-configs", data });
+  return request<ApprovalConfigResponse>({
+    method: "POST",
+    url: "/system/approval-configs",
+    data,
+  });
 }
 
-export function updateApprovalConfig(id: string, data: ApprovalAssigneePayload & { enabled?: boolean }) {
-  return request<ApprovalConfigResponse>({ method: "PUT", url: `/system/approval-configs/${id}`, data });
+export function updateApprovalConfig(
+  id: string,
+  data: ApprovalAssigneePayload & { enabled?: boolean },
+) {
+  return request<ApprovalConfigResponse>({
+    method: "PUT",
+    url: `/system/approval-configs/${id}`,
+    data,
+  });
 }
 
 export function deleteApprovalConfig(id: string) {
-  return request<void>({ method: "DELETE", url: `/system/approval-configs/${id}` });
+  return request<void>({
+    method: "DELETE",
+    url: `/system/approval-configs/${id}`,
+  });
 }
 
 export type CreateUserRequest = {
@@ -384,7 +498,10 @@ export function createOrganizationApi(data: CreateOrganizationRequest) {
   });
 }
 
-export function updateOrganizationApi(id: string, data: UpdateOrganizationRequest) {
+export function updateOrganizationApi(
+  id: string,
+  data: UpdateOrganizationRequest,
+) {
   return request<OrganizationResponse>({
     method: "PUT",
     url: `/organizations/${id}`,
@@ -466,14 +583,25 @@ export function getSystemHealthApi() {
 
 // ====== Global Search ======
 export type SearchResult = {
-  type: string; id: string; title: string; subtitle: string; url: string;
+  type: string;
+  id: string;
+  title: string;
+  subtitle: string;
+  url: string;
 };
 export function searchGlobal(q: string) {
-  return request<SearchResult[]>({ method: "GET", url: "/search", params: { q } });
+  return request<SearchResult[]>({
+    method: "GET",
+    url: "/search",
+    params: { q },
+  });
 }
 
 export function getSystemVersion() {
-  return request<{ version: string; buildTime: string; appName: string }>({ method: "GET", url: "/system/version" });
+  return request<{ version: string; buildTime: string; appName: string }>({
+    method: "GET",
+    url: "/system/version",
+  });
 }
 
 export type DeletedRecord = {
@@ -489,13 +617,22 @@ export type DeletedRecord = {
 };
 
 export function listDeletedRecords() {
-  return request<DeletedRecord[]>({ method: "GET", url: "/system/deleted-records" });
+  return request<DeletedRecord[]>({
+    method: "GET",
+    url: "/system/deleted-records",
+  });
 }
 
 export function approveDeletedRecord(id: string) {
-  return request<void>({ method: "POST", url: `/system/deleted-records/${id}/approve` });
+  return request<void>({
+    method: "POST",
+    url: `/system/deleted-records/${id}/approve`,
+  });
 }
 
 export function restoreDeletedRecord(id: string) {
-  return request<void>({ method: "POST", url: `/system/deleted-records/${id}/restore` });
+  return request<void>({
+    method: "POST",
+    url: `/system/deleted-records/${id}/restore`,
+  });
 }

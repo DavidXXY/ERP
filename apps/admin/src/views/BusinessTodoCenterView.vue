@@ -11,7 +11,9 @@
         <a-space>
           <a-button @click="go('/office/notifications')">消息中心</a-button>
           <a-button @click="resetFilters">重置筛选</a-button>
-          <a-button type="primary" :loading="loading" @click="loadData">刷新待办</a-button>
+          <a-button type="primary" :loading="loading" @click="loadData"
+            >刷新待办</a-button
+          >
         </a-space>
       </div>
 
@@ -48,7 +50,9 @@
         <a-card :bordered="false" class="command-card">
           <div class="command-title">{{ card.title }}</div>
           <div class="command-count">{{ card.count }}</div>
-          <a-typography-text type="secondary">{{ card.description }}</a-typography-text>
+          <a-typography-text type="secondary">{{
+            card.description
+          }}</a-typography-text>
         </a-card>
       </a-col>
     </a-row>
@@ -57,10 +61,20 @@
       <template #title>统一待办队列</template>
       <template #extra>
         <a-space wrap>
-          <a-input-search v-model:value="keyword" allow-clear placeholder="搜索客户、项目、单号、说明" style="width: 260px" />
+          <a-input-search
+            v-model:value="keyword"
+            allow-clear
+            placeholder="搜索客户、项目、单号、说明"
+            style="width: 260px"
+          />
           <a-select v-model:value="moduleFilter" style="width: 150px">
             <a-select-option value="ALL">全部模块</a-select-option>
-            <a-select-option v-for="item in moduleOptions" :key="item.value" :value="item.value">{{ item.label }}</a-select-option>
+            <a-select-option
+              v-for="item in moduleOptions"
+              :key="item.value"
+              :value="item.value"
+              >{{ item.label }}</a-select-option
+            >
           </a-select>
           <a-select v-model:value="priorityFilter" style="width: 130px">
             <a-select-option value="ALL">全部优先级</a-select-option>
@@ -103,10 +117,14 @@
             <a-tag>{{ record.moduleName }}</a-tag>
           </template>
           <template v-else-if="column.key === 'priority'">
-            <a-tag :color="priorityColor(record.priority)">{{ priorityLabel(record.priority) }}</a-tag>
+            <a-tag :color="priorityColor(record.priority)">{{
+              priorityLabel(record.priority)
+            }}</a-tag>
           </template>
           <template v-else-if="column.key === 'status'">
-            <a-tag :color="statusColor(record.status)">{{ statusLabel(record.status) }}</a-tag>
+            <a-tag :color="statusColor(record.status)">{{
+              statusLabel(record.status)
+            }}</a-tag>
           </template>
           <template v-else-if="column.key === 'amount'">
             {{ record.amount ? formatCurrency(record.amount) : "-" }}
@@ -126,7 +144,11 @@
               >
                 一键生成
               </a-button>
-              <a-button type="link" size="small" @click.stop="openTodoDetail(record)">
+              <a-button
+                type="link"
+                size="small"
+                @click.stop="openTodoDetail(record)"
+              >
                 查看详情
               </a-button>
             </a-space>
@@ -139,21 +161,37 @@
       <template v-if="selectedTodo">
         <a-space direction="vertical" size="middle" style="width: 100%">
           <a-descriptions bordered size="small" :column="2">
-            <a-descriptions-item label="事项" :span="2">{{ selectedTodo.title }}</a-descriptions-item>
-            <a-descriptions-item label="说明" :span="2">{{ selectedTodo.subject || "-" }}</a-descriptions-item>
+            <a-descriptions-item label="事项" :span="2">{{
+              selectedTodo.title
+            }}</a-descriptions-item>
+            <a-descriptions-item label="说明" :span="2">{{
+              selectedTodo.subject || "-"
+            }}</a-descriptions-item>
             <a-descriptions-item label="模块">
               <a-tag>{{ selectedTodo.moduleName }}</a-tag>
             </a-descriptions-item>
             <a-descriptions-item label="优先级">
-              <a-tag :color="priorityColor(selectedTodo.priority)">{{ priorityLabel(selectedTodo.priority) }}</a-tag>
+              <a-tag :color="priorityColor(selectedTodo.priority)">{{
+                priorityLabel(selectedTodo.priority)
+              }}</a-tag>
             </a-descriptions-item>
             <a-descriptions-item label="状态">
-              <a-tag :color="statusColor(selectedTodo.status)">{{ statusLabel(selectedTodo.status) }}</a-tag>
+              <a-tag :color="statusColor(selectedTodo.status)">{{
+                statusLabel(selectedTodo.status)
+              }}</a-tag>
             </a-descriptions-item>
-            <a-descriptions-item label="责任人">{{ selectedTodo.owner || "-" }}</a-descriptions-item>
-            <a-descriptions-item label="金额">{{ selectedTodo.amount ? formatCurrency(selectedTodo.amount) : "-" }}</a-descriptions-item>
-            <a-descriptions-item label="到期/时间">{{ selectedTodo.dueDate ? formatDate(selectedTodo.dueDate) : "-" }}</a-descriptions-item>
-            <a-descriptions-item label="推荐动作" :span="2">{{ selectedTodo.action }}</a-descriptions-item>
+            <a-descriptions-item label="责任人">{{
+              selectedTodo.owner || "-"
+            }}</a-descriptions-item>
+            <a-descriptions-item label="金额">{{
+              selectedTodo.amount ? formatCurrency(selectedTodo.amount) : "-"
+            }}</a-descriptions-item>
+            <a-descriptions-item label="到期/时间">{{
+              selectedTodo.dueDate ? formatDate(selectedTodo.dueDate) : "-"
+            }}</a-descriptions-item>
+            <a-descriptions-item label="推荐动作" :span="2">{{
+              selectedTodo.action
+            }}</a-descriptions-item>
           </a-descriptions>
 
           <a-alert
@@ -173,7 +211,11 @@
               一键生成
             </a-button>
             <a-button type="primary" @click="handleTodoAction(selectedTodo)">
-              {{ isOfficeApprovalTodo(selectedTodo) ? "打开审批详情" : "进入业务页面" }}
+              {{
+                isOfficeApprovalTodo(selectedTodo)
+                  ? "打开审批详情"
+                  : "进入业务页面"
+              }}
             </a-button>
             <a-button @click="detailOpen = false">关闭</a-button>
           </a-space>
@@ -181,7 +223,12 @@
       </template>
     </a-drawer>
 
-    <ApprovalCenterView ref="approvalCenterRef" embedded drawer-only @changed="loadData" />
+    <ApprovalCenterView
+      ref="approvalCenterRef"
+      embedded
+      drawer-only
+      @changed="loadData"
+    />
   </div>
 </template>
 
@@ -191,9 +238,21 @@ import { useRouter } from "vue-router";
 import { message } from "ant-design-vue";
 import { createApproval, getOfficeWorkbench } from "@/api/office";
 import { listRiskItems } from "@/api/risk";
-import { createFollowUp, listContracts, listOpportunities, listQuotes } from "@/api/crm";
-import { listFinancePayables, listFinanceReceivables, listPaymentApplications } from "@/api/finance";
-import { listProcurementMatching, listPurchaseRequests } from "@/api/procurement";
+import {
+  createFollowUp,
+  listContracts,
+  listOpportunities,
+  listQuotes,
+} from "@/api/crm";
+import {
+  listFinancePayables,
+  listFinanceReceivables,
+  listPaymentApplications,
+} from "@/api/finance";
+import {
+  listProcurementMatching,
+  listPurchaseRequests,
+} from "@/api/procurement";
 import { createProject, listProjectProfitability } from "@/api/project";
 import { useAuthStore } from "@/stores/auth";
 import ApprovalCenterView from "@/views/office/ApprovalCenterView.vue";
@@ -286,9 +345,18 @@ const moduleOptions = computed(() => {
 const filteredTodos = computed(() => {
   const text = keyword.value.trim().toLowerCase();
   return todos.value.filter((item) => {
-    if (moduleFilter.value !== "ALL" && normalizeModuleCode(item.module) !== moduleFilter.value) return false;
-    if (priorityFilter.value !== "ALL" && item.priority !== priorityFilter.value) return false;
-    if (statusFilter.value !== "ALL" && item.status !== statusFilter.value) return false;
+    if (
+      moduleFilter.value !== "ALL" &&
+      normalizeModuleCode(item.module) !== moduleFilter.value
+    )
+      return false;
+    if (
+      priorityFilter.value !== "ALL" &&
+      item.priority !== priorityFilter.value
+    )
+      return false;
+    if (statusFilter.value !== "ALL" && item.status !== statusFilter.value)
+      return false;
     if (!text) return true;
     return [item.title, item.subject, item.owner, item.action, item.moduleName]
       .filter(Boolean)
@@ -300,21 +368,31 @@ function normalizeModuleCode(value?: string) {
   return (value || "").trim().toUpperCase();
 }
 
-const highCount = computed(() => filteredTodos.value.filter((item) => item.priority === "HIGH").length);
-const overdueCount = computed(() => filteredTodos.value.filter((item) => item.status === "OVERDUE").length);
-const totalExposure = computed(() => filteredTodos.value.reduce((sum, item) => sum + (item.amount || 0), 0));
+const highCount = computed(
+  () => filteredTodos.value.filter((item) => item.priority === "HIGH").length,
+);
+const overdueCount = computed(
+  () => filteredTodos.value.filter((item) => item.status === "OVERDUE").length,
+);
+const totalExposure = computed(() =>
+  filteredTodos.value.reduce((sum, item) => sum + (item.amount || 0), 0),
+);
 
 const commandCards = computed(() => [
   {
     key: "unassigned",
     title: "待认领/责任待定",
-    count: filteredTodos.value.filter((item) => !item.owner || item.owner === "待认领").length,
+    count: filteredTodos.value.filter(
+      (item) => !item.owner || item.owner === "待认领",
+    ).length,
     description: "优先补齐责任人，避免闭环断点。",
   },
   {
     key: "today",
     title: "7日内到期",
-    count: filteredTodos.value.filter((item) => daysUntil(item.dueDate) >= 0 && daysUntil(item.dueDate) <= 7).length,
+    count: filteredTodos.value.filter(
+      (item) => daysUntil(item.dueDate) >= 0 && daysUntil(item.dueDate) <= 7,
+    ).length,
     description: "提前处理审批、回款、交付和续约节点。",
   },
   {
@@ -326,7 +404,8 @@ const commandCards = computed(() => [
   {
     key: "amount",
     title: "大额事项",
-    count: filteredTodos.value.filter((item) => (item.amount || 0) >= 100000).length,
+    count: filteredTodos.value.filter((item) => (item.amount || 0) >= 100000)
+      .length,
     description: "优先处理影响现金流和项目利润的事项。",
   },
 ]);
@@ -340,52 +419,75 @@ async function loadData() {
     collect("统一风险", async () => {
       const items = await listRiskItems();
       items
-        .filter((item) => !["CLOSED", "IGNORED"].includes(item.workflow?.status || ""))
-        .forEach((item) => next.push({
-          key: `risk-${item.key}`,
-          module: item.module || "RISK",
-          moduleName: item.moduleName || "风险",
-          title: item.title,
-          subject: item.subject || item.description,
-          priority: normalizePriority(item.severity),
-          status: item.status === "OVERDUE" || item.slaOverdue ? "OVERDUE" : item.workflow?.status === "PROCESSING" ? "PROCESSING" : "OPEN",
-          owner: item.workflow?.owner || "待认领",
-          amount: item.amount,
-          dueDate: item.dueAt || item.date,
-          route: item.route || "/risk-center",
-          action: item.workflow?.note || item.description || "进入风险中心处理",
-        }));
+        .filter(
+          (item) =>
+            !["CLOSED", "IGNORED"].includes(item.workflow?.status || ""),
+        )
+        .forEach((item) =>
+          next.push({
+            key: `risk-${item.key}`,
+            module: item.module || "RISK",
+            moduleName: item.moduleName || "风险",
+            title: item.title,
+            subject: item.subject || item.description,
+            priority: normalizePriority(item.severity),
+            status:
+              item.status === "OVERDUE" || item.slaOverdue
+                ? "OVERDUE"
+                : item.workflow?.status === "PROCESSING"
+                  ? "PROCESSING"
+                  : "OPEN",
+            owner: item.workflow?.owner || "待认领",
+            amount: item.amount,
+            dueDate: item.dueAt || item.date,
+            route: item.route || "/risk-center",
+            action:
+              item.workflow?.note || item.description || "进入风险中心处理",
+          }),
+        );
     }),
     collect("OA待办", async () => {
       const workbench = await getOfficeWorkbench();
-      workbench.todos.forEach((item) => next.push({
-        key: `office-todo-${item.type}-${item.id}`,
-        module: "OFFICE",
-        moduleName: "OA协同",
-        title: item.title,
-        subject: item.subtitle,
-        priority: normalizePriority(item.priority),
-        status: item.status === "APPROVED" || item.status === "REJECTED" ? "DONE" : isOverdue(item.createdAt, 2) ? "OVERDUE" : "OPEN",
-        owner: "当前审批人",
-        amount: item.amount,
-        dueDate: item.createdAt,
-        route: item.route || "/workbench/todos",
-        action: item.status === "APPROVED" || item.status === "REJECTED" ? "查看已处理审批" : "处理审批或协同事项",
-        entityId: item.id,
-      }));
-      workbench.warnings.forEach((item) => next.push({
-        key: `office-warning-${item.type}-${item.id}`,
-        module: "OFFICE",
-        moduleName: "OA协同",
-        title: item.title,
-        subject: item.content,
-        priority: normalizePriority(item.severity),
-        status: "OPEN",
-        owner: "业务负责人",
-        dueDate: item.createdAt,
-        route: item.route || "/office/notifications",
-        action: "查看预警并确认处理方案",
-      }));
+      workbench.todos.forEach((item) =>
+        next.push({
+          key: `office-todo-${item.type}-${item.id}`,
+          module: "OFFICE",
+          moduleName: "OA协同",
+          title: item.title,
+          subject: item.subtitle,
+          priority: normalizePriority(item.priority),
+          status:
+            item.status === "APPROVED" || item.status === "REJECTED"
+              ? "DONE"
+              : isOverdue(item.createdAt, 2)
+                ? "OVERDUE"
+                : "OPEN",
+          owner: "当前审批人",
+          amount: item.amount,
+          dueDate: item.createdAt,
+          route: item.route || "/workbench/todos",
+          action:
+            item.status === "APPROVED" || item.status === "REJECTED"
+              ? "查看已处理审批"
+              : "处理审批或协同事项",
+          entityId: item.id,
+        }),
+      );
+      workbench.warnings.forEach((item) =>
+        next.push({
+          key: `office-warning-${item.type}-${item.id}`,
+          module: "OFFICE",
+          moduleName: "OA协同",
+          title: item.title,
+          subject: item.content,
+          priority: normalizePriority(item.severity),
+          status: "OPEN",
+          owner: "业务负责人",
+          dueDate: item.createdAt,
+          route: item.route || "/office/notifications",
+          action: "查看预警并确认处理方案",
+        }),
+      );
     }),
     collect("CRM", async () => {
       const [opportunities, quotes, contracts] = await Promise.all([
@@ -395,91 +497,114 @@ async function loadData() {
       ]);
       opportunities
         .filter((item) => !["WON", "LOST"].includes(item.stage))
-        .filter((item) => !item.nextActionAt || daysUntil(item.nextActionAt) < 0 || daysSince(item.updatedAt) > 14)
-        .forEach((item) => next.push({
-          key: `crm-opportunity-${item.id}`,
-          module: "CRM",
-          moduleName: "CRM",
-          title: "商机跟进卡点",
-          subject: `${item.customerName} · ${item.needSummary}`,
-          priority: item.expectedAmount >= 100000 ? "HIGH" : "MEDIUM",
-          status: !item.nextActionAt || daysUntil(item.nextActionAt) < 0 ? "OVERDUE" : "OPEN",
-          owner: item.ownerName,
-          amount: item.expectedAmount,
-          dueDate: item.nextActionAt || item.updatedAt,
-          route: `/crm/opportunities/${item.id}`,
-          action: "生成跟进任务并补齐下一步动作",
-          automation: {
-            type: "CREATE_FOLLOW_UP",
-            customerId: item.customerId || "",
-            customerName: item.customerName,
-            opportunityId: item.id,
-            opportunityCode: item.code,
-            ownerName: item.ownerName,
-            subject: "商机超期跟进",
-            content: `商机 ${item.code || item.needSummary} 已出现跟进卡点，请确认客户需求、下一步动作和预计成交日期。`,
-            nextAction: "确认客户意向并更新商机阶段",
-          },
-        }));
+        .filter(
+          (item) =>
+            !item.nextActionAt ||
+            daysUntil(item.nextActionAt) < 0 ||
+            daysSince(item.updatedAt) > 14,
+        )
+        .forEach((item) =>
+          next.push({
+            key: `crm-opportunity-${item.id}`,
+            module: "CRM",
+            moduleName: "CRM",
+            title: "商机跟进卡点",
+            subject: `${item.customerName} · ${item.needSummary}`,
+            priority: item.expectedAmount >= 100000 ? "HIGH" : "MEDIUM",
+            status:
+              !item.nextActionAt || daysUntil(item.nextActionAt) < 0
+                ? "OVERDUE"
+                : "OPEN",
+            owner: item.ownerName,
+            amount: item.expectedAmount,
+            dueDate: item.nextActionAt || item.updatedAt,
+            route: `/crm/opportunities/${item.id}`,
+            action: "生成跟进任务并补齐下一步动作",
+            automation: {
+              type: "CREATE_FOLLOW_UP",
+              customerId: item.customerId || "",
+              customerName: item.customerName,
+              opportunityId: item.id,
+              opportunityCode: item.code,
+              ownerName: item.ownerName,
+              subject: "商机超期跟进",
+              content: `商机 ${item.code || item.needSummary} 已出现跟进卡点，请确认客户需求、下一步动作和预计成交日期。`,
+              nextAction: "确认客户意向并更新商机阶段",
+            },
+          }),
+        );
       quotes
         .filter((item) => item.status === "PENDING_APPROVAL")
-        .forEach((item) => next.push({
-          key: `crm-quote-${item.id}`,
-          module: "CRM",
-          moduleName: "CRM",
-          title: "报价待审批",
-          subject: `${item.customerName} · ${item.serviceScope}`,
-          priority: item.amount >= 100000 || daysSince(item.updatedAt) > 3 ? "HIGH" : "MEDIUM",
-          status: daysSince(item.updatedAt) > 3 ? "OVERDUE" : "OPEN",
-          owner: item.lastApproverName || "审批人",
-          amount: item.amount,
-          dueDate: item.updatedAt,
-          route: `/crm/quotes/${item.id}`,
-          action: "校验毛利和折扣权限后审批",
-        }));
+        .forEach((item) =>
+          next.push({
+            key: `crm-quote-${item.id}`,
+            module: "CRM",
+            moduleName: "CRM",
+            title: "报价待审批",
+            subject: `${item.customerName} · ${item.serviceScope}`,
+            priority:
+              item.amount >= 100000 || daysSince(item.updatedAt) > 3
+                ? "HIGH"
+                : "MEDIUM",
+            status: daysSince(item.updatedAt) > 3 ? "OVERDUE" : "OPEN",
+            owner: item.lastApproverName || "审批人",
+            amount: item.amount,
+            dueDate: item.updatedAt,
+            route: `/crm/quotes/${item.id}`,
+            action: "校验毛利和折扣权限后审批",
+          }),
+        );
       contracts
-        .filter((item) => item.status === "ACTIVE" && daysUntil(item.startDate) <= 0)
-        .forEach((item) => next.push({
-          key: `crm-contract-project-${item.id}`,
-          module: "PROJECT",
-          moduleName: "项目管理",
-          title: "合同生效待转项目",
-          subject: `${item.customerName} · ${item.projectName}`,
-          priority: item.amount >= 100000 ? "HIGH" : "MEDIUM",
-          status: daysSince(item.startDate) > 3 ? "OVERDUE" : "OPEN",
-          owner: "项目经理",
-          amount: item.amount,
-          dueDate: item.startDate,
-          route: `/crm/contracts/${item.id}`,
-          action: "生成项目草稿并带入合同信息",
-          automation: {
-            type: "CREATE_PROJECT_DRAFT",
-            contractId: item.id,
-            customerId: item.customerId,
-            customerName: item.customerName,
-            projectName: item.projectName,
-            contractCode: item.code,
-            contractAmount: item.amount,
-            startDate: item.startDate,
-            endDate: item.endDate,
-          },
-        }));
+        .filter(
+          (item) => item.status === "ACTIVE" && daysUntil(item.startDate) <= 0,
+        )
+        .forEach((item) =>
+          next.push({
+            key: `crm-contract-project-${item.id}`,
+            module: "PROJECT",
+            moduleName: "项目管理",
+            title: "合同生效待转项目",
+            subject: `${item.customerName} · ${item.projectName}`,
+            priority: item.amount >= 100000 ? "HIGH" : "MEDIUM",
+            status: daysSince(item.startDate) > 3 ? "OVERDUE" : "OPEN",
+            owner: "项目经理",
+            amount: item.amount,
+            dueDate: item.startDate,
+            route: `/crm/contracts/${item.id}`,
+            action: "生成项目草稿并带入合同信息",
+            automation: {
+              type: "CREATE_PROJECT_DRAFT",
+              contractId: item.id,
+              customerId: item.customerId,
+              customerName: item.customerName,
+              projectName: item.projectName,
+              contractCode: item.code,
+              contractAmount: item.amount,
+              startDate: item.startDate,
+              endDate: item.endDate,
+            },
+          }),
+        );
       contracts
-        .filter((item) => item.status !== "CLOSED" && daysUntil(item.endDate) <= 30)
-        .forEach((item) => next.push({
-          key: `crm-contract-${item.id}`,
-          module: "CRM",
-          moduleName: "CRM",
-          title: daysUntil(item.endDate) < 0 ? "合同已到期" : "合同即将到期",
-          subject: `${item.customerName} · ${item.projectName}`,
-          priority: daysUntil(item.endDate) < 0 ? "HIGH" : "MEDIUM",
-          status: daysUntil(item.endDate) < 0 ? "OVERDUE" : "OPEN",
-          owner: "客户经理",
-          amount: item.amount,
-          dueDate: item.endDate,
-          route: `/crm/contracts/${item.id}`,
-          action: "确认续约、关闭或转项目计划",
-        }));
+        .filter(
+          (item) => item.status !== "CLOSED" && daysUntil(item.endDate) <= 30,
+        )
+        .forEach((item) =>
+          next.push({
+            key: `crm-contract-${item.id}`,
+            module: "CRM",
+            moduleName: "CRM",
+            title: daysUntil(item.endDate) < 0 ? "合同已到期" : "合同即将到期",
+            subject: `${item.customerName} · ${item.projectName}`,
+            priority: daysUntil(item.endDate) < 0 ? "HIGH" : "MEDIUM",
+            status: daysUntil(item.endDate) < 0 ? "OVERDUE" : "OPEN",
+            owner: "客户经理",
+            amount: item.amount,
+            dueDate: item.endDate,
+            route: `/crm/contracts/${item.id}`,
+            action: "确认续约、关闭或转项目计划",
+          }),
+        );
     }),
     collect("财务资金", async () => {
       const [receivables, payables, payments] = await Promise.all([
@@ -488,62 +613,93 @@ async function loadData() {
         listPaymentApplications(),
       ]);
       receivables
-        .filter((item) => item.status !== "SETTLED" && (item.status === "OVERDUE" || daysUntil(item.dueDate) <= 7))
-        .forEach((item) => next.push({
-          key: `finance-receivable-${item.id}`,
-          module: "FINANCE",
-          moduleName: "财务资金",
-          title: item.status === "OVERDUE" ? "应收逾期" : "应收临期",
-          subject: `${item.customerName} · ${item.contractCode || item.sourceNo}`,
-          priority: item.status === "OVERDUE" || item.outstandingAmount >= 100000 ? "HIGH" : "MEDIUM",
-          status: item.status === "OVERDUE" || daysUntil(item.dueDate) < 0 ? "OVERDUE" : "OPEN",
-          owner: "财务应收",
-          amount: item.outstandingAmount,
-          dueDate: item.dueDate,
-          route: "/finance/receivables",
-          action: item.status === "OVERDUE" || daysUntil(item.dueDate) < 0 ? "生成催收记录并推动回款" : "登记催收、开票或回款",
-          automation: item.status === "OVERDUE" || daysUntil(item.dueDate) < 0 ? {
-            type: "CREATE_FOLLOW_UP",
-            customerId: item.customerId,
-            customerName: item.customerName,
-            ownerName: "财务应收",
-            subject: "逾期应收催收",
-            content: `应收 ${item.code || item.sourceNo} 已逾期，未收金额 ${formatCurrency(item.outstandingAmount)}，请跟进付款计划和预计回款日期。`,
-            nextAction: "联系客户确认付款计划",
-          } : undefined,
-        }));
+        .filter(
+          (item) =>
+            item.status !== "SETTLED" &&
+            (item.status === "OVERDUE" || daysUntil(item.dueDate) <= 7),
+        )
+        .forEach((item) =>
+          next.push({
+            key: `finance-receivable-${item.id}`,
+            module: "FINANCE",
+            moduleName: "财务资金",
+            title: item.status === "OVERDUE" ? "应收逾期" : "应收临期",
+            subject: `${item.customerName} · ${item.contractCode || item.sourceNo}`,
+            priority:
+              item.status === "OVERDUE" || item.outstandingAmount >= 100000
+                ? "HIGH"
+                : "MEDIUM",
+            status:
+              item.status === "OVERDUE" || daysUntil(item.dueDate) < 0
+                ? "OVERDUE"
+                : "OPEN",
+            owner: "财务应收",
+            amount: item.outstandingAmount,
+            dueDate: item.dueDate,
+            route: "/finance/receivables",
+            action:
+              item.status === "OVERDUE" || daysUntil(item.dueDate) < 0
+                ? "生成催收记录并推动回款"
+                : "登记催收、开票或回款",
+            automation:
+              item.status === "OVERDUE" || daysUntil(item.dueDate) < 0
+                ? {
+                    type: "CREATE_FOLLOW_UP",
+                    customerId: item.customerId,
+                    customerName: item.customerName,
+                    ownerName: "财务应收",
+                    subject: "逾期应收催收",
+                    content: `应收 ${item.code || item.sourceNo} 已逾期，未收金额 ${formatCurrency(item.outstandingAmount)}，请跟进付款计划和预计回款日期。`,
+                    nextAction: "联系客户确认付款计划",
+                  }
+                : undefined,
+          }),
+        );
       payables
-        .filter((item) => item.status !== "PAID" && item.status !== "CANCELLED" && (item.overdue || daysUntil(item.dueDate) <= 7))
-        .forEach((item) => next.push({
-          key: `finance-payable-${item.id}`,
-          module: "FINANCE",
-          moduleName: "财务资金",
-          title: item.overdue ? "应付逾期" : "应付临期",
-          subject: `${item.supplierName} · ${item.orderCode}`,
-          priority: item.overdue || item.outstandingAmount >= 100000 ? "HIGH" : "MEDIUM",
-          status: item.overdue || daysUntil(item.dueDate) < 0 ? "OVERDUE" : "OPEN",
-          owner: "财务应付",
-          amount: item.outstandingAmount,
-          dueDate: item.dueDate,
-          route: "/finance/payables",
-          action: "确认付款计划或发起付款申请",
-        }));
+        .filter(
+          (item) =>
+            item.status !== "PAID" &&
+            item.status !== "CANCELLED" &&
+            (item.overdue || daysUntil(item.dueDate) <= 7),
+        )
+        .forEach((item) =>
+          next.push({
+            key: `finance-payable-${item.id}`,
+            module: "FINANCE",
+            moduleName: "财务资金",
+            title: item.overdue ? "应付逾期" : "应付临期",
+            subject: `${item.supplierName} · ${item.orderCode}`,
+            priority:
+              item.overdue || item.outstandingAmount >= 100000
+                ? "HIGH"
+                : "MEDIUM",
+            status:
+              item.overdue || daysUntil(item.dueDate) < 0 ? "OVERDUE" : "OPEN",
+            owner: "财务应付",
+            amount: item.outstandingAmount,
+            dueDate: item.dueDate,
+            route: "/finance/payables",
+            action: "确认付款计划或发起付款申请",
+          }),
+        );
       payments
         .filter((item) => item.status === "PENDING_APPROVAL")
-        .forEach((item) => next.push({
-          key: `finance-payment-${item.id}`,
-          module: "FINANCE",
-          moduleName: "财务资金",
-          title: "付款申请待审批",
-          subject: `${item.supplierName} · ${item.purpose}`,
-          priority: item.requestedAmount >= 100000 ? "HIGH" : "MEDIUM",
-          status: isOverdue(item.requestedDate, 2) ? "OVERDUE" : "OPEN",
-          owner: item.applicantName,
-          amount: item.requestedAmount,
-          dueDate: item.requestedDate,
-          route: "/finance/payment-applications",
-          action: "审批后安排付款执行",
-        }));
+        .forEach((item) =>
+          next.push({
+            key: `finance-payment-${item.id}`,
+            module: "FINANCE",
+            moduleName: "财务资金",
+            title: "付款申请待审批",
+            subject: `${item.supplierName} · ${item.purpose}`,
+            priority: item.requestedAmount >= 100000 ? "HIGH" : "MEDIUM",
+            status: isOverdue(item.requestedDate, 2) ? "OVERDUE" : "OPEN",
+            owner: item.applicantName,
+            amount: item.requestedAmount,
+            dueDate: item.requestedDate,
+            route: "/finance/payment-applications",
+            action: "审批后安排付款执行",
+          }),
+        );
     }),
     collect("供应链采购", async () => {
       const [requests, matching] = await Promise.all([
@@ -551,67 +707,85 @@ async function loadData() {
         listProcurementMatching(),
       ]);
       requests.content
-        .filter((item) => item.status === "SUBMITTED" || item.approvalStatus === "PENDING")
-        .forEach((item) => next.push({
-          key: `procurement-request-${item.id}`,
-          module: "PROCUREMENT",
-          moduleName: "供应链采购",
-          title: "采购申请待审批",
-          subject: `${item.partName || item.materialName} · ${item.costTargetName || item.reason}`,
-          priority: (item.totalAmount || 0) >= 100000 ? "HIGH" : "MEDIUM",
-          status: isOverdue(item.expectedDate || item.requiredDate, 0) ? "OVERDUE" : "OPEN",
-          owner: item.requesterName || item.applicantName || "采购审批人",
-          amount: item.totalAmount,
-          dueDate: item.expectedDate || item.requiredDate,
-          route: "/procurement/requests",
-          action: "审批请购并确认预算归集对象",
-        }));
+        .filter(
+          (item) =>
+            item.status === "SUBMITTED" || item.approvalStatus === "PENDING",
+        )
+        .forEach((item) =>
+          next.push({
+            key: `procurement-request-${item.id}`,
+            module: "PROCUREMENT",
+            moduleName: "供应链采购",
+            title: "采购申请待审批",
+            subject: `${item.partName || item.materialName} · ${item.costTargetName || item.reason}`,
+            priority: (item.totalAmount || 0) >= 100000 ? "HIGH" : "MEDIUM",
+            status: isOverdue(item.expectedDate || item.requiredDate, 0)
+              ? "OVERDUE"
+              : "OPEN",
+            owner: item.requesterName || item.applicantName || "采购审批人",
+            amount: item.totalAmount,
+            dueDate: item.expectedDate || item.requiredDate,
+            route: "/procurement/requests",
+            action: "审批请购并确认预算归集对象",
+          }),
+        );
       matching
         .filter((item) => item.matchStatus !== "MATCHED")
-        .forEach((item) => next.push({
-          key: `procurement-match-${item.orderId}`,
-          module: "PROCUREMENT",
-          moduleName: "供应链采购",
-          title: "三单匹配差异",
-          subject: `${item.supplierName || "供应商"} · ${item.partName}`,
-          priority: item.matchStatus === "AMOUNT_MISMATCH" ? "HIGH" : "MEDIUM",
-          status: "OPEN",
-          owner: "采购/财务",
-          amount: Math.max(item.orderAmount, item.receiptAmount, item.payableAmount, item.paidAmount),
-          route: "/procurement/p2p",
-          action: item.riskMessage || "核对订单、入库、应付和付款差异",
-        }));
+        .forEach((item) =>
+          next.push({
+            key: `procurement-match-${item.orderId}`,
+            module: "PROCUREMENT",
+            moduleName: "供应链采购",
+            title: "三单匹配差异",
+            subject: `${item.supplierName || "供应商"} · ${item.partName}`,
+            priority:
+              item.matchStatus === "AMOUNT_MISMATCH" ? "HIGH" : "MEDIUM",
+            status: "OPEN",
+            owner: "采购/财务",
+            amount: Math.max(
+              item.orderAmount,
+              item.receiptAmount,
+              item.payableAmount,
+              item.paidAmount,
+            ),
+            route: "/procurement/p2p",
+            action: item.riskMessage || "核对订单、入库、应付和付款差异",
+          }),
+        );
     }),
     collect("项目管理", async () => {
       const projects = await listProjectProfitability();
       projects
         .filter((item) => item.riskLevel !== "LOW")
-        .forEach((item) => next.push({
-          key: `project-profit-${item.projectId}`,
-          module: "PROJECT",
-          moduleName: "项目管理",
-          title: "项目预算/利润预警",
-          subject: `${item.projectName} · ${item.riskMessage}`,
-          priority: item.riskLevel === "HIGH" ? "HIGH" : "MEDIUM",
-          status: item.riskLevel === "HIGH" ? "OVERDUE" : "OPEN",
-          owner: "项目经理",
-          amount: Math.max(item.actualCost, item.budgetAmount),
-          route: "/projects/budget",
-          action: "生成预算调整申请并锁定成本风险",
-          automation: {
-            type: "CREATE_BUDGET_ADJUST_APPROVAL",
-            projectCode: item.projectCode,
-            projectName: item.projectName,
-            amount: Math.max(0, item.actualCost - item.budgetAmount),
-            reason: item.riskMessage,
-          },
-        }));
+        .forEach((item) =>
+          next.push({
+            key: `project-profit-${item.projectId}`,
+            module: "PROJECT",
+            moduleName: "项目管理",
+            title: "项目预算/利润预警",
+            subject: `${item.projectName} · ${item.riskMessage}`,
+            priority: item.riskLevel === "HIGH" ? "HIGH" : "MEDIUM",
+            status: item.riskLevel === "HIGH" ? "OVERDUE" : "OPEN",
+            owner: "项目经理",
+            amount: Math.max(item.actualCost, item.budgetAmount),
+            route: "/projects/budget",
+            action: "生成预算调整申请并锁定成本风险",
+            automation: {
+              type: "CREATE_BUDGET_ADJUST_APPROVAL",
+              projectCode: item.projectCode,
+              projectName: item.projectName,
+              amount: Math.max(0, item.actualCost - item.budgetAmount),
+              reason: item.riskMessage,
+            },
+          }),
+        );
     }),
   ]);
 
   todos.value = dedupe(next).sort(sortTodos);
   loading.value = false;
-  if (!todos.value.length && !loadErrors.value.length) message.success("当前没有待处理事项");
+  if (!todos.value.length && !loadErrors.value.length)
+    message.success("当前没有待处理事项");
 }
 
 async function collect(label: string, loader: () => Promise<void>) {
@@ -632,9 +806,11 @@ function dedupe(items: BusinessTodo[]) {
 function sortTodos(a: BusinessTodo, b: BusinessTodo) {
   const statusRank = { OVERDUE: 0, OPEN: 1, PROCESSING: 2, DONE: 3 };
   const priorityRank = { HIGH: 0, MEDIUM: 1, LOW: 2 };
-  return statusRank[a.status] - statusRank[b.status]
-    || priorityRank[a.priority] - priorityRank[b.priority]
-    || daysUntil(a.dueDate) - daysUntil(b.dueDate);
+  return (
+    statusRank[a.status] - statusRank[b.status] ||
+    priorityRank[a.priority] - priorityRank[b.priority] ||
+    daysUntil(a.dueDate) - daysUntil(b.dueDate)
+  );
 }
 
 function normalizePriority(value?: string): Priority {
@@ -685,7 +861,11 @@ function openTodoDetail(record: BusinessTodo) {
 }
 
 function isOfficeApprovalTodo(record: BusinessTodo) {
-  return normalizeModuleCode(record.module) === "OFFICE" && (record.route.includes("/office/approvals") || record.route.includes("tab=approvals"));
+  return (
+    normalizeModuleCode(record.module) === "OFFICE" &&
+    (record.route.includes("/office/approvals") ||
+      record.route.includes("tab=approvals"))
+  );
 }
 
 function handleTodoAction(record: BusinessTodo) {
@@ -738,11 +918,31 @@ async function runAutomation(record: BusinessTodo) {
         plannedEndDate: record.automation.endDate,
         contractId: record.automation.contractId,
         budgetItems: [
-          { category: "LABOR", plannedAmount: amount * 0.2, remark: "自动承接合同-人工预算" },
-          { category: "MATERIAL", plannedAmount: amount * 0.45, remark: "自动承接合同-材料预算" },
-          { category: "SUBCONTRACT", plannedAmount: amount * 0.2, remark: "自动承接合同-外包预算" },
-          { category: "TRAVEL", plannedAmount: amount * 0.05, remark: "自动承接合同-差旅预算" },
-          { category: "OTHER", plannedAmount: amount * 0.1, remark: "自动承接合同-其他预算" },
+          {
+            category: "LABOR",
+            plannedAmount: amount * 0.2,
+            remark: "自动承接合同-人工预算",
+          },
+          {
+            category: "MATERIAL",
+            plannedAmount: amount * 0.45,
+            remark: "自动承接合同-材料预算",
+          },
+          {
+            category: "SUBCONTRACT",
+            plannedAmount: amount * 0.2,
+            remark: "自动承接合同-外包预算",
+          },
+          {
+            category: "TRAVEL",
+            plannedAmount: amount * 0.05,
+            remark: "自动承接合同-差旅预算",
+          },
+          {
+            category: "OTHER",
+            plannedAmount: amount * 0.1,
+            remark: "自动承接合同-其他预算",
+          },
         ],
       });
       message.success("已生成项目草稿");
@@ -773,7 +973,11 @@ function todayText() {
 }
 
 function formatCurrency(value: number) {
-  return new Intl.NumberFormat("zh-CN", { style: "currency", currency: "CNY", maximumFractionDigits: 0 }).format(value);
+  return new Intl.NumberFormat("zh-CN", {
+    style: "currency",
+    currency: "CNY",
+    maximumFractionDigits: 0,
+  }).format(value);
 }
 
 function formatDate(value: string) {
@@ -789,11 +993,22 @@ function priorityLabel(value: Priority) {
 }
 
 function statusColor(value: TodoStatus) {
-  return value === "OVERDUE" ? "red" : value === "PROCESSING" ? "blue" : value === "DONE" ? "green" : "gold";
+  return value === "OVERDUE"
+    ? "red"
+    : value === "PROCESSING"
+      ? "blue"
+      : value === "DONE"
+        ? "green"
+        : "gold";
 }
 
 function statusLabel(value: TodoStatus) {
-  return { OVERDUE: "已超时", PROCESSING: "处理中", OPEN: "待处理", DONE: "已处理" }[value];
+  return {
+    OVERDUE: "已超时",
+    PROCESSING: "处理中",
+    OPEN: "待处理",
+    DONE: "已处理",
+  }[value];
 }
 
 onMounted(loadData);

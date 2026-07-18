@@ -2,6 +2,8 @@ package com.company.ops.api.modules.procurement.domain;
 
 import com.company.ops.api.common.domain.BaseEntity;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
+import com.company.ops.api.common.security.EncryptedStringConverter;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -57,7 +59,8 @@ public class Supplier extends BaseEntity {
   @Column(name = "bank_name", length = 120)
   private String bankName;
 
-  @Column(name = "bank_account", length = 120)
+  @Convert(converter = EncryptedStringConverter.class)
+  @Column(name = "bank_account", length = 512)
   private String bankAccount;
 
   @Column(name = "admission_status", length = 40)

@@ -1,6 +1,10 @@
 import { request, http } from "./http";
 import type { Approval } from "./office";
-import type { EmployeeContract, EmployeeDetail, PersonnelCertificate } from "./qualification";
+import type {
+  EmployeeContract,
+  EmployeeDetail,
+  PersonnelCertificate,
+} from "./qualification";
 
 // ====== Types ======
 
@@ -138,7 +142,12 @@ export interface HrAnalytics {
   educationDistribution: Array<{ name: string; count: number }>;
   statusDistribution: Array<{ name: string; count: number }>;
   organizationDistribution: Array<{ name: string; count: number }>;
-  recentLifecycles: Array<{ date: string; employeeName: string; type: string; detail: string }>;
+  recentLifecycles: Array<{
+    date: string;
+    employeeName: string;
+    type: string;
+    detail: string;
+  }>;
 }
 
 // ====== Employee Detail Extras ======
@@ -150,13 +159,24 @@ export interface EmployeeDetailExtras {
 
 // ====== Education ======
 export function listEducations(employeeId: string) {
-  return request<EducationRecord[]>({ method: "GET", url: `/hr/employees/${employeeId}/educations` });
+  return request<EducationRecord[]>({
+    method: "GET",
+    url: `/hr/employees/${employeeId}/educations`,
+  });
 }
 export function createEducation(employeeId: string, data: EducationPayload) {
-  return request<EducationRecord>({ method: "POST", url: `/hr/employees/${employeeId}/educations`, data });
+  return request<EducationRecord>({
+    method: "POST",
+    url: `/hr/employees/${employeeId}/educations`,
+    data,
+  });
 }
 export function updateEducation(id: string, data: EducationPayload) {
-  return request<EducationRecord>({ method: "PUT", url: `/hr/educations/${id}`, data });
+  return request<EducationRecord>({
+    method: "PUT",
+    url: `/hr/educations/${id}`,
+    data,
+  });
 }
 export function deleteEducation(id: string) {
   return request<void>({ method: "DELETE", url: `/hr/educations/${id}` });
@@ -164,13 +184,27 @@ export function deleteEducation(id: string) {
 
 // ====== Work Experience ======
 export function listWorkExperiences(employeeId: string) {
-  return request<WorkExperienceRecord[]>({ method: "GET", url: `/hr/employees/${employeeId}/work-experiences` });
+  return request<WorkExperienceRecord[]>({
+    method: "GET",
+    url: `/hr/employees/${employeeId}/work-experiences`,
+  });
 }
-export function createWorkExperience(employeeId: string, data: WorkExperiencePayload) {
-  return request<WorkExperienceRecord>({ method: "POST", url: `/hr/employees/${employeeId}/work-experiences`, data });
+export function createWorkExperience(
+  employeeId: string,
+  data: WorkExperiencePayload,
+) {
+  return request<WorkExperienceRecord>({
+    method: "POST",
+    url: `/hr/employees/${employeeId}/work-experiences`,
+    data,
+  });
 }
 export function updateWorkExperience(id: string, data: WorkExperiencePayload) {
-  return request<WorkExperienceRecord>({ method: "PUT", url: `/hr/work-experiences/${id}`, data });
+  return request<WorkExperienceRecord>({
+    method: "PUT",
+    url: `/hr/work-experiences/${id}`,
+    data,
+  });
 }
 export function deleteWorkExperience(id: string) {
   return request<void>({ method: "DELETE", url: `/hr/work-experiences/${id}` });
@@ -178,46 +212,87 @@ export function deleteWorkExperience(id: string) {
 
 // ====== Emergency Contact ======
 export function listEmergencyContacts(employeeId: string) {
-  return request<EmergencyContactRecord[]>({ method: "GET", url: `/hr/employees/${employeeId}/emergency-contacts` });
+  return request<EmergencyContactRecord[]>({
+    method: "GET",
+    url: `/hr/employees/${employeeId}/emergency-contacts`,
+  });
 }
-export function createEmergencyContact(employeeId: string, data: EmergencyContactPayload) {
-  return request<EmergencyContactRecord>({ method: "POST", url: `/hr/employees/${employeeId}/emergency-contacts`, data });
+export function createEmergencyContact(
+  employeeId: string,
+  data: EmergencyContactPayload,
+) {
+  return request<EmergencyContactRecord>({
+    method: "POST",
+    url: `/hr/employees/${employeeId}/emergency-contacts`,
+    data,
+  });
 }
-export function updateEmergencyContact(id: string, data: EmergencyContactPayload) {
-  return request<EmergencyContactRecord>({ method: "PUT", url: `/hr/emergency-contacts/${id}`, data });
+export function updateEmergencyContact(
+  id: string,
+  data: EmergencyContactPayload,
+) {
+  return request<EmergencyContactRecord>({
+    method: "PUT",
+    url: `/hr/emergency-contacts/${id}`,
+    data,
+  });
 }
 export function deleteEmergencyContact(id: string) {
-  return request<void>({ method: "DELETE", url: `/hr/emergency-contacts/${id}` });
+  return request<void>({
+    method: "DELETE",
+    url: `/hr/emergency-contacts/${id}`,
+  });
 }
 
 // ====== Lifecycle ======
 export function listEmployeeLifecycles(employeeId: string) {
-  return request<LifecycleRecord[]>({ method: "GET", url: `/hr/employees/${employeeId}/lifecycles` });
+  return request<LifecycleRecord[]>({
+    method: "GET",
+    url: `/hr/employees/${employeeId}/lifecycles`,
+  });
 }
 export function listAllLifecycles() {
   return request<LifecycleRecord[]>({ method: "GET", url: "/hr/lifecycles" });
 }
 export function createLifecycle(employeeId: string, data: LifecyclePayload) {
-  return request<LifecycleRecord>({ method: "POST", url: `/hr/employees/${employeeId}/lifecycles`, data });
+  return request<LifecycleRecord>({
+    method: "POST",
+    url: `/hr/employees/${employeeId}/lifecycles`,
+    data,
+  });
 }
 export function approveLifecycle(id: string, data: ApprovePayload) {
-  return request<LifecycleRecord>({ method: "POST", url: `/hr/lifecycles/${id}/approve`, data });
+  return request<LifecycleRecord>({
+    method: "POST",
+    url: `/hr/lifecycles/${id}/approve`,
+    data,
+  });
 }
 
 // ====== Leave ======
 export function listEmployeeLeaves(employeeId: string) {
-  return request<LeaveRecord[]>({ method: "GET", url: `/hr/employees/${employeeId}/leaves` });
+  return request<LeaveRecord[]>({
+    method: "GET",
+    url: `/hr/employees/${employeeId}/leaves`,
+  });
 }
 export function listAllLeaves() {
   return request<LeaveRecord[]>({ method: "GET", url: "/hr/leaves" });
 }
 export function createLeave(employeeId: string, data: LeavePayload) {
-  return request<LeaveRecord>({ method: "POST", url: `/hr/employees/${employeeId}/leaves`, data });
+  return request<LeaveRecord>({
+    method: "POST",
+    url: `/hr/employees/${employeeId}/leaves`,
+    data,
+  });
 }
 export function approveLeave(id: string, data: ApprovePayload) {
-  return request<LeaveRecord>({ method: "POST", url: `/hr/leaves/${id}/approve`, data });
+  return request<LeaveRecord>({
+    method: "POST",
+    url: `/hr/leaves/${id}/approve`,
+    data,
+  });
 }
-
 
 // ====== Leave Balance ======
 export interface LeaveBalanceRecord {
@@ -245,61 +320,96 @@ export function getHrAnalytics() {
 
 // ====== Leave Balance ======
 export function listEmployeeLeaveBalances(employeeId: string) {
-  return request<LeaveBalanceRecord[]>({ method: "GET", url: `/hr/employees/${employeeId}/leave-balances` });
+  return request<LeaveBalanceRecord[]>({
+    method: "GET",
+    url: `/hr/employees/${employeeId}/leave-balances`,
+  });
 }
 export function listAllLeaveBalances() {
-  return request<LeaveBalanceRecord[]>({ method: "GET", url: "/hr/leave-balances" });
+  return request<LeaveBalanceRecord[]>({
+    method: "GET",
+    url: "/hr/leave-balances",
+  });
 }
 export function setLeaveBalance(employeeId: string, data: LeaveBalancePayload) {
-  return request<LeaveBalanceRecord>({ method: "POST", url: `/hr/employees/${employeeId}/leave-balances`, data });
+  return request<LeaveBalanceRecord>({
+    method: "POST",
+    url: `/hr/employees/${employeeId}/leave-balances`,
+    data,
+  });
 }
 export function initLeaveBalances(employeeId: string) {
-  return request<void>({ method: "POST", url: `/hr/employees/${employeeId}/init-leave-balances` });
+  return request<void>({
+    method: "POST",
+    url: `/hr/employees/${employeeId}/init-leave-balances`,
+  });
 }
 
 // ====== Excel Import/Export ======
 export async function exportEmployeesExcel() {
-  const response = await http.get<Blob>("/hr/export/employees", { responseType: "blob" });
+  const response = await http.get<Blob>("/hr/export/employees", {
+    responseType: "blob",
+  });
   const url = URL.createObjectURL(response.data);
   const anchor = document.createElement("a");
-  anchor.href = url; anchor.download = "hr-employees.xlsx";
-  anchor.click(); URL.revokeObjectURL(url);
+  anchor.href = url;
+  anchor.download = "hr-employees.xlsx";
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 export async function downloadImportTemplate() {
-  const response = await http.get<Blob>("/hr/export/template", { responseType: "blob" });
+  const response = await http.get<Blob>("/hr/export/template", {
+    responseType: "blob",
+  });
   const url = URL.createObjectURL(response.data);
   const anchor = document.createElement("a");
-  anchor.href = url; anchor.download = "hr-import-template.xlsx";
-  anchor.click(); URL.revokeObjectURL(url);
+  anchor.href = url;
+  anchor.download = "hr-import-template.xlsx";
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 export async function downloadLeaveBalanceTemplate() {
-  const response = await http.get<Blob>("/hr/export/leave-balance-template", { responseType: "blob" });
+  const response = await http.get<Blob>("/hr/export/leave-balance-template", {
+    responseType: "blob",
+  });
   const url = URL.createObjectURL(response.data);
   const anchor = document.createElement("a");
-  anchor.href = url; anchor.download = "leave-balance-template.xlsx";
-  anchor.click(); URL.revokeObjectURL(url);
+  anchor.href = url;
+  anchor.download = "leave-balance-template.xlsx";
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 export function importLeaveBalancesExcel(file: File, operatorName?: string) {
   const form = new FormData();
   form.append("file", file);
   if (operatorName) form.append("operatorName", operatorName);
-  return request<{ success: number; fail: number; errors: string[] }>({ method: "POST", url: "/hr/import/leave-balances", data: form });
+  return request<{ success: number; fail: number; errors: string[] }>({
+    method: "POST",
+    url: "/hr/import/leave-balances",
+    data: form,
+  });
 }
 
 export function importEmployeesExcel(file: File, operatorName?: string) {
   const form = new FormData();
   form.append("file", file);
   if (operatorName) form.append("operatorName", operatorName);
-  return request<{ success: number; fail: number; errors: string[] }>({ method: "POST", url: "/hr/import/employees", data: form });
+  return request<{ success: number; fail: number; errors: string[] }>({
+    method: "POST",
+    url: "/hr/import/employees",
+    data: form,
+  });
 }
-
 
 // ====== Self-Service ======
 export function getSelfProfile() {
   return request<EmployeeDetail>({ method: "GET", url: "/hr/self/profile" });
 }
 export function getSelfLeaveBalances() {
-  return request<LeaveBalanceRecord[]>({ method: "GET", url: "/hr/self/leave-balances" });
+  return request<LeaveBalanceRecord[]>({
+    method: "GET",
+    url: "/hr/self/leave-balances",
+  });
 }
 export function getSelfLeaves() {
   return request<LeaveRecord[]>({ method: "GET", url: "/hr/self/leaves" });
@@ -309,19 +419,34 @@ export function createSelfLeave(data: LeavePayload) {
 }
 
 export function getSelfEducations() {
-  return request<EducationRecord[]>({ method: "GET", url: "/hr/self/educations" });
+  return request<EducationRecord[]>({
+    method: "GET",
+    url: "/hr/self/educations",
+  });
 }
 export function getSelfWorkExperiences() {
-  return request<WorkExperienceRecord[]>({ method: "GET", url: "/hr/self/work-experiences" });
+  return request<WorkExperienceRecord[]>({
+    method: "GET",
+    url: "/hr/self/work-experiences",
+  });
 }
 export function getSelfEmergencyContacts() {
-  return request<EmergencyContactRecord[]>({ method: "GET", url: "/hr/self/emergency-contacts" });
+  return request<EmergencyContactRecord[]>({
+    method: "GET",
+    url: "/hr/self/emergency-contacts",
+  });
 }
 export function getSelfCertificates() {
-  return request<PersonnelCertificate[]>({ method: "GET", url: "/hr/self/certificates" });
+  return request<PersonnelCertificate[]>({
+    method: "GET",
+    url: "/hr/self/certificates",
+  });
 }
 export function getSelfContracts() {
-  return request<EmployeeContract[]>({ method: "GET", url: "/hr/self/contracts" });
+  return request<EmployeeContract[]>({
+    method: "GET",
+    url: "/hr/self/contracts",
+  });
 }
 
 export interface TodoItem {
@@ -341,6 +466,17 @@ export function getSelfApprovals() {
   return request<Approval[]>({ method: "GET", url: "/hr/self/approvals" });
 }
 
-export function processSelfApproval(id: string, data: { decision: "APPROVED" | "REJECTED"; comment: string; approverName: string }) {
-  return request<Approval>({ method: "POST", url: `/hr/self/approvals/${id}/process`, data });
+export function processSelfApproval(
+  id: string,
+  data: {
+    decision: "APPROVED" | "REJECTED";
+    comment: string;
+    approverName: string;
+  },
+) {
+  return request<Approval>({
+    method: "POST",
+    url: `/hr/self/approvals/${id}/process`,
+    data,
+  });
 }

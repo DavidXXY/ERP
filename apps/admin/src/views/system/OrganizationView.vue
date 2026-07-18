@@ -6,18 +6,32 @@
         <p>维护公司、部门和团队层级，组织归属将直接影响账号的数据访问范围。</p>
       </div>
       <a-space>
-        <a-button @click="loadData"><template #icon><ReloadOutlined /></template>刷新</a-button>
-        <a-button v-if="auth.can('system:organization:create')" type="primary" @click="openCreateModal()">
+        <a-button @click="loadData"
+          ><template #icon><ReloadOutlined /></template>刷新</a-button
+        >
+        <a-button
+          v-if="auth.can('system:organization:create')"
+          type="primary"
+          @click="openCreateModal()"
+        >
           <template #icon><PlusOutlined /></template>新增组织
         </a-button>
       </a-space>
     </header>
 
     <section class="metric-band">
-      <div><span>组织总数</span><strong>{{ flatOrganizations.length }}</strong></div>
-      <div><span>部门与团队</span><strong>{{ operatingUnitCount }}</strong></div>
-      <div><span>启用组织</span><strong>{{ activeOrganizationCount }}</strong></div>
-      <div><span>已归属员工</span><strong>{{ assignedEmployeeCount }}</strong></div>
+      <div>
+        <span>组织总数</span><strong>{{ flatOrganizations.length }}</strong>
+      </div>
+      <div>
+        <span>部门与团队</span><strong>{{ operatingUnitCount }}</strong>
+      </div>
+      <div>
+        <span>启用组织</span><strong>{{ activeOrganizationCount }}</strong>
+      </div>
+      <div>
+        <span>已归属员工</span><strong>{{ assignedEmployeeCount }}</strong>
+      </div>
     </section>
 
     <div class="organization-workspace">
@@ -41,7 +55,9 @@
             <template #title="{ dataRef }">
               <div class="tree-node" :class="{ disabled: !dataRef.enabled }">
                 <span class="tree-node-name">{{ dataRef.name }}</span>
-                <span class="tree-node-count">{{ dataRef.totalEmployeeCount }}</span>
+                <span class="tree-node-count">{{
+                  dataRef.totalEmployeeCount
+                }}</span>
               </div>
             </template>
           </a-tree>
@@ -63,47 +79,93 @@
           <div>
             <div class="title-line">
               <h3>{{ selectedOrganization.name }}</h3>
-              <a-tag :color="getTypeColor(selectedOrganization.type)">{{ getTypeName(selectedOrganization.type) }}</a-tag>
-              <a-tag :color="selectedOrganization.enabled ? 'green' : 'default'">
+              <a-tag :color="getTypeColor(selectedOrganization.type)">{{
+                getTypeName(selectedOrganization.type)
+              }}</a-tag>
+              <a-tag
+                :color="selectedOrganization.enabled ? 'green' : 'default'"
+              >
                 {{ selectedOrganization.enabled ? "启用" : "停用" }}
               </a-tag>
             </div>
             <p>{{ selectedOrganization.fullPath }}</p>
           </div>
           <a-space wrap>
-            <a-button v-if="auth.can('system:organization:create')" @click="openCreateModal(selectedOrganization.id)">
+            <a-button
+              v-if="auth.can('system:organization:create')"
+              @click="openCreateModal(selectedOrganization.id)"
+            >
               <template #icon><PlusOutlined /></template>新增下级
             </a-button>
-            <a-button v-if="auth.can('system:organization:update')" @click="openEditModal(selectedOrganization)">
+            <a-button
+              v-if="auth.can('system:organization:update')"
+              @click="openEditModal(selectedOrganization)"
+            >
               <template #icon><EditOutlined /></template>编辑
             </a-button>
             <a-popconfirm
-              v-if="auth.can('system:organization:delete') && selectedOrganization.code !== 'ROOT'"
+              v-if="
+                auth.can('system:organization:delete') &&
+                selectedOrganization.code !== 'ROOT'
+              "
               title="删除前必须先移出下级组织和成员，确认删除？"
               ok-text="确定"
               cancel-text="取消"
               @confirm="handleDelete(selectedOrganization.id)"
             >
-              <a-button danger><template #icon><DeleteOutlined /></template>删除</a-button>
+              <a-button danger
+                ><template #icon><DeleteOutlined /></template>删除</a-button
+              >
             </a-popconfirm>
           </a-space>
         </div>
 
         <div class="detail-metrics">
-          <div><span>直属员工</span><strong>{{ selectedOrganization.directEmployeeCount }}</strong></div>
-          <div><span>含下级员工</span><strong>{{ selectedOrganization.totalEmployeeCount }}</strong></div>
-          <div><span>登录账号</span><strong>{{ selectedOrganization.totalUserCount }}</strong></div>
-          <div><span>直属下级</span><strong>{{ selectedOrganization.childCount }}</strong></div>
+          <div>
+            <span>直属员工</span
+            ><strong>{{ selectedOrganization.directEmployeeCount }}</strong>
+          </div>
+          <div>
+            <span>含下级员工</span
+            ><strong>{{ selectedOrganization.totalEmployeeCount }}</strong>
+          </div>
+          <div>
+            <span>登录账号</span
+            ><strong>{{ selectedOrganization.totalUserCount }}</strong>
+          </div>
+          <div>
+            <span>直属下级</span
+            ><strong>{{ selectedOrganization.childCount }}</strong>
+          </div>
         </div>
 
-        <a-descriptions class="org-descriptions" bordered :column="2" size="small">
-          <a-descriptions-item label="组织代码">{{ selectedOrganization.code }}</a-descriptions-item>
-          <a-descriptions-item label="排序">{{ selectedOrganization.sortOrder }}</a-descriptions-item>
-          <a-descriptions-item label="负责人">{{ selectedOrganization.leaderName || "未设置" }}</a-descriptions-item>
-          <a-descriptions-item label="联系电话">{{ selectedOrganization.phone || "未设置" }}</a-descriptions-item>
-          <a-descriptions-item label="上级组织">{{ selectedOrganization.parentName || "无" }}</a-descriptions-item>
-          <a-descriptions-item label="更新时间">{{ formatDateTime(selectedOrganization.updatedAt) }}</a-descriptions-item>
-          <a-descriptions-item label="说明" :span="2">{{ selectedOrganization.description || "暂无说明" }}</a-descriptions-item>
+        <a-descriptions
+          class="org-descriptions"
+          bordered
+          :column="2"
+          size="small"
+        >
+          <a-descriptions-item label="组织代码">{{
+            selectedOrganization.code
+          }}</a-descriptions-item>
+          <a-descriptions-item label="排序">{{
+            selectedOrganization.sortOrder
+          }}</a-descriptions-item>
+          <a-descriptions-item label="负责人">{{
+            selectedOrganization.leaderName || "未设置"
+          }}</a-descriptions-item>
+          <a-descriptions-item label="联系电话">{{
+            selectedOrganization.phone || "未设置"
+          }}</a-descriptions-item>
+          <a-descriptions-item label="上级组织">{{
+            selectedOrganization.parentName || "无"
+          }}</a-descriptions-item>
+          <a-descriptions-item label="更新时间">{{
+            formatDateTime(selectedOrganization.updatedAt)
+          }}</a-descriptions-item>
+          <a-descriptions-item label="说明" :span="2">{{
+            selectedOrganization.description || "暂无说明"
+          }}</a-descriptions-item>
         </a-descriptions>
 
         <div class="subsection-heading">
@@ -138,7 +200,10 @@
             <a-button @click="openHumanResources">人事管理</a-button>
           </div>
           <a-spin :spinning="organizationEmployeesLoading">
-            <div v-if="organizationEmployees.length" class="organization-employee-list">
+            <div
+              v-if="organizationEmployees.length"
+              class="organization-employee-list"
+            >
               <button
                 v-for="employee in organizationEmployees"
                 :key="employee.id"
@@ -148,19 +213,34 @@
               >
                 <span>
                   <strong>{{ employee.name }}</strong>
-                  <small>{{ employee.workNo || '未登记工号' }} · {{ employee.position || '未设置岗位' }}</small>
+                  <small
+                    >{{ employee.workNo || "未登记工号" }} ·
+                    {{ employee.position || "未设置岗位" }}</small
+                  >
                 </span>
-                <a-tag :color="employee.employmentStatus === 'ACTIVE' ? 'green' : 'default'">
-                  {{ employee.employmentStatus === 'ACTIVE' ? '在职' : '非在职' }}
+                <a-tag
+                  :color="
+                    employee.employmentStatus === 'ACTIVE' ? 'green' : 'default'
+                  "
+                >
+                  {{
+                    employee.employmentStatus === "ACTIVE" ? "在职" : "非在职"
+                  }}
                 </a-tag>
               </button>
             </div>
-            <a-empty v-else-if="!organizationEmployeesLoading" description="该组织暂无直属员工" :image="simpleImage" />
+            <a-empty
+              v-else-if="!organizationEmployeesLoading"
+              description="该组织暂无直属员工"
+              :image="simpleImage"
+            />
           </a-spin>
         </template>
       </section>
 
-      <section v-else class="empty-detail"><a-empty description="请选择组织查看详情" /></section>
+      <section v-else class="empty-detail">
+        <a-empty description="请选择组织查看详情" />
+      </section>
     </div>
 
     <a-drawer
@@ -183,7 +263,9 @@
           <template #title="{ dataRef }">
             <div class="tree-node" :class="{ disabled: !dataRef.enabled }">
               <span class="tree-node-name">{{ dataRef.name }}</span>
-              <span class="tree-node-count">{{ dataRef.totalEmployeeCount }}</span>
+              <span class="tree-node-count">{{
+                dataRef.totalEmployeeCount
+              }}</span>
             </div>
           </template>
         </a-tree>
@@ -199,16 +281,32 @@
       @ok="handleModalOk"
       @cancel="closeModal"
     >
-      <a-form ref="formRef" :model="formState" :rules="formRules" layout="vertical">
+      <a-form
+        ref="formRef"
+        :model="formState"
+        :rules="formRules"
+        layout="vertical"
+      >
         <a-row :gutter="16">
           <a-col :xs="24" :md="12">
-            <a-form-item label="组织代码" name="code"><a-input v-model:value="formState.code" :disabled="isEdit" placeholder="例如：DEPT_SALES" /></a-form-item>
+            <a-form-item label="组织代码" name="code"
+              ><a-input
+                v-model:value="formState.code"
+                :disabled="isEdit"
+                placeholder="例如：DEPT_SALES"
+            /></a-form-item>
           </a-col>
           <a-col :xs="24" :md="12">
-            <a-form-item label="组织名称" name="name"><a-input v-model:value="formState.name" placeholder="例如：销售部" /></a-form-item>
+            <a-form-item label="组织名称" name="name"
+              ><a-input
+                v-model:value="formState.name"
+                placeholder="例如：销售部"
+            /></a-form-item>
           </a-col>
           <a-col :xs="24" :md="8">
-            <a-form-item label="组织类型" name="type"><a-select v-model:value="formState.type" :options="typeOptions" /></a-form-item>
+            <a-form-item label="组织类型" name="type"
+              ><a-select v-model:value="formState.type" :options="typeOptions"
+            /></a-form-item>
           </a-col>
           <a-col :xs="24" :md="10">
             <a-form-item label="上级组织">
@@ -218,24 +316,51 @@
                 allow-clear
                 tree-default-expand-all
                 placeholder="作为根组织"
-                :field-names="{ label: 'name', value: 'id', children: 'children' }"
+                :field-names="{
+                  label: 'name',
+                  value: 'id',
+                  children: 'children',
+                }"
               />
             </a-form-item>
           </a-col>
           <a-col :xs="24" :md="6">
-            <a-form-item label="排序"><a-input-number v-model:value="formState.sortOrder" :min="0" class="full-input" /></a-form-item>
+            <a-form-item label="排序"
+              ><a-input-number
+                v-model:value="formState.sortOrder"
+                :min="0"
+                class="full-input"
+            /></a-form-item>
           </a-col>
           <a-col :xs="24" :md="12">
-            <a-form-item label="负责人"><a-input v-model:value="formState.leaderName" placeholder="负责人姓名" /></a-form-item>
+            <a-form-item label="负责人"
+              ><a-input
+                v-model:value="formState.leaderName"
+                placeholder="负责人姓名"
+            /></a-form-item>
           </a-col>
           <a-col :xs="24" :md="12">
-            <a-form-item label="联系电话"><a-input v-model:value="formState.phone" placeholder="办公电话或手机号" /></a-form-item>
+            <a-form-item label="联系电话"
+              ><a-input
+                v-model:value="formState.phone"
+                placeholder="办公电话或手机号"
+            /></a-form-item>
           </a-col>
           <a-col :span="24">
-            <a-form-item label="组织说明"><a-textarea v-model:value="formState.description" :rows="3" placeholder="职责、业务范围或管理说明" /></a-form-item>
+            <a-form-item label="组织说明"
+              ><a-textarea
+                v-model:value="formState.description"
+                :rows="3"
+                placeholder="职责、业务范围或管理说明"
+            /></a-form-item>
           </a-col>
           <a-col :span="24">
-            <a-form-item label="启用状态"><a-switch v-model:checked="formState.enabled" checked-children="启用" un-checked-children="停用" /></a-form-item>
+            <a-form-item label="启用状态"
+              ><a-switch
+                v-model:checked="formState.enabled"
+                checked-children="启用"
+                un-checked-children="停用"
+            /></a-form-item>
           </a-col>
         </a-row>
       </a-form>
@@ -264,7 +389,10 @@ import {
   type OrganizationResponse,
 } from "@/api/system";
 import { useAuthStore } from "@/stores/auth";
-import { listQualificationEmployees, type QualificationEmployee } from "@/api/qualification";
+import {
+  listQualificationEmployees,
+  type QualificationEmployee,
+} from "@/api/qualification";
 
 const auth = useAuthStore();
 const router = useRouter();
@@ -274,8 +402,16 @@ const typeOptions = [
   { label: "部门", value: "DEPARTMENT" },
   { label: "团队", value: "TEAM" },
 ];
-const typeMap: Record<string, string> = { COMPANY: "公司", DEPARTMENT: "部门", TEAM: "团队" };
-const typeColorMap: Record<string, string> = { COMPANY: "red", DEPARTMENT: "blue", TEAM: "green" };
+const typeMap: Record<string, string> = {
+  COMPANY: "公司",
+  DEPARTMENT: "部门",
+  TEAM: "团队",
+};
+const typeColorMap: Record<string, string> = {
+  COMPANY: "red",
+  DEPARTMENT: "blue",
+  TEAM: "green",
+};
 const organizations = ref<OrganizationResponse[]>([]);
 const flatOrganizations = ref<OrganizationResponse[]>([]);
 const loading = ref(false);
@@ -295,15 +431,29 @@ const formRules = {
   type: [{ required: true, message: "请选择组织类型" }],
 };
 
-const selectedOrganization = computed(() => findOrganization(organizations.value, selectedId.value));
+const selectedOrganization = computed(() =>
+  findOrganization(organizations.value, selectedId.value),
+);
 const parentOrganization = computed(() => {
   const parentId = selectedOrganization.value?.parentId;
   return parentId ? findOrganization(organizations.value, parentId) : undefined;
 });
-const operatingUnitCount = computed(() => flatOrganizations.value.filter((item) => item.type !== "COMPANY").length);
-const activeOrganizationCount = computed(() => flatOrganizations.value.filter((item) => item.enabled).length);
-const assignedEmployeeCount = computed(() => flatOrganizations.value.reduce((sum, item) => sum + Number(item.directEmployeeCount || 0), 0));
-const parentTreeOptions = computed(() => filterParentOptions(organizations.value, isEdit.value ? editId.value : ""));
+const operatingUnitCount = computed(
+  () =>
+    flatOrganizations.value.filter((item) => item.type !== "COMPANY").length,
+);
+const activeOrganizationCount = computed(
+  () => flatOrganizations.value.filter((item) => item.enabled).length,
+);
+const assignedEmployeeCount = computed(() =>
+  flatOrganizations.value.reduce(
+    (sum, item) => sum + Number(item.directEmployeeCount || 0),
+    0,
+  ),
+);
+const parentTreeOptions = computed(() =>
+  filterParentOptions(organizations.value, isEdit.value ? editId.value : ""),
+);
 
 onMounted(loadData);
 watch(selectedId, loadOrganizationEmployees);
@@ -315,7 +465,10 @@ async function loadData() {
       listOrganizationsApi(),
       listOrganizationsFlatApi(),
     ]);
-    if (!selectedId.value || !flatOrganizations.value.some((item) => item.id === selectedId.value)) {
+    if (
+      !selectedId.value ||
+      !flatOrganizations.value.some((item) => item.id === selectedId.value)
+    ) {
       selectedId.value = organizations.value[0]?.id || "";
     }
   } catch (error) {
@@ -346,7 +499,8 @@ async function loadOrganizationEmployees(organizationId: string) {
   organizationEmployeesLoading.value = true;
   try {
     const result = await listQualificationEmployees({ organizationId });
-    if (selectedId.value === organizationId) organizationEmployees.value = result;
+    if (selectedId.value === organizationId)
+      organizationEmployees.value = result;
   } catch (error) {
     organizationEmployees.value = [];
     message.error(error instanceof Error ? error.message : "加载组织员工失败");
@@ -356,7 +510,10 @@ async function loadOrganizationEmployees(organizationId: string) {
 }
 
 function openHumanResources() {
-  router.push({ path: "/hr", query: { tab: "employees", organizationId: selectedId.value } });
+  router.push({
+    path: "/hr",
+    query: { tab: "employees", organizationId: selectedId.value },
+  });
 }
 
 function openCreateModal(parentId?: string) {
@@ -406,7 +563,10 @@ async function handleModalOk() {
       await updateOrganizationApi(editId.value, payload);
       message.success("组织信息已更新");
     } else {
-      const created = await createOrganizationApi({ ...payload, code: formState.code });
+      const created = await createOrganizationApi({
+        ...payload,
+        code: formState.code,
+      });
       selectedId.value = created.id;
       message.success("组织已创建");
     }
@@ -444,7 +604,10 @@ function initialForm(parentId?: string) {
   };
 }
 
-function findOrganization(items: OrganizationResponse[], id: string): OrganizationResponse | undefined {
+function findOrganization(
+  items: OrganizationResponse[],
+  id: string,
+): OrganizationResponse | undefined {
   for (const item of items) {
     if (item.id === id) return item;
     const child = findOrganization(item.children || [], id);
@@ -453,10 +616,16 @@ function findOrganization(items: OrganizationResponse[], id: string): Organizati
   return undefined;
 }
 
-function filterParentOptions(items: OrganizationResponse[], excludedId: string): OrganizationResponse[] {
+function filterParentOptions(
+  items: OrganizationResponse[],
+  excludedId: string,
+): OrganizationResponse[] {
   return items
     .filter((item) => item.id !== excludedId)
-    .map((item) => ({ ...item, children: filterParentOptions(item.children || [], excludedId) }));
+    .map((item) => ({
+      ...item,
+      children: filterParentOptions(item.children || [], excludedId),
+    }));
 }
 
 function getTypeName(type: string) {

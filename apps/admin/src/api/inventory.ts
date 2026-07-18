@@ -1,7 +1,12 @@
 import { request } from "./http";
 import { type ProjectStage } from "./project";
 
-export type StockMovementType = "INBOUND" | "OUTBOUND" | "RETURN" | "SCRAP" | "ADJUSTMENT";
+export type StockMovementType =
+  | "INBOUND"
+  | "OUTBOUND"
+  | "RETURN"
+  | "SCRAP"
+  | "ADJUSTMENT";
 
 export type InventoryPart = {
   id: string;
@@ -42,7 +47,10 @@ export type CreateStockMovementPayload = {
   remark?: string;
 };
 
-export type InventoryIssueStatus = "POSTED" | "PARTIAL_RETURNED" | "FULLY_RETURNED";
+export type InventoryIssueStatus =
+  | "POSTED"
+  | "PARTIAL_RETURNED"
+  | "FULLY_RETURNED";
 
 export type MaterialIssueLine = {
   id: string;
@@ -128,19 +136,36 @@ export function listInventoryParts() {
 }
 
 export function listReplenishmentSuggestions() {
-  return request<ReplenishmentSuggestion[]>({ method: "GET", url: "/inventory/replenishment-suggestions" });
+  return request<ReplenishmentSuggestion[]>({
+    method: "GET",
+    url: "/inventory/replenishment-suggestions",
+  });
 }
 
 export function createInventoryPart(payload: CreateInventoryPartPayload) {
-  return request<InventoryPart>({ method: "POST", url: "/inventory/parts", data: payload });
+  return request<InventoryPart>({
+    method: "POST",
+    url: "/inventory/parts",
+    data: payload,
+  });
 }
 
 export function listStockMovements(partId: string) {
-  return request<StockMovement[]>({ method: "GET", url: `/inventory/parts/${partId}/movements` });
+  return request<StockMovement[]>({
+    method: "GET",
+    url: `/inventory/parts/${partId}/movements`,
+  });
 }
 
-export function createStockMovement(partId: string, payload: CreateStockMovementPayload) {
-  return request<InventoryPart>({ method: "POST", url: `/inventory/parts/${partId}/movements`, data: payload });
+export function createStockMovement(
+  partId: string,
+  payload: CreateStockMovementPayload,
+) {
+  return request<InventoryPart>({
+    method: "POST",
+    url: `/inventory/parts/${partId}/movements`,
+    data: payload,
+  });
 }
 
 export function listMaterialIssues() {
@@ -148,17 +173,39 @@ export function listMaterialIssues() {
 }
 
 export function listInventoryProjectOptions() {
-  return request<InventoryProjectOption[]>({ method: "GET", url: "/inventory/eligible-projects" });
+  return request<InventoryProjectOption[]>({
+    method: "GET",
+    url: "/inventory/eligible-projects",
+  });
 }
 
 export function createMaterialIssue(payload: CreateMaterialIssuePayload) {
-  return request<MaterialIssue>({ method: "POST", url: "/inventory/issues", data: payload });
+  return request<MaterialIssue>({
+    method: "POST",
+    url: "/inventory/issues",
+    data: payload,
+  });
 }
 
 export function listMaterialReturns() {
-  return request<MaterialReturn[]>({ method: "GET", url: "/inventory/returns" });
+  return request<MaterialReturn[]>({
+    method: "GET",
+    url: "/inventory/returns",
+  });
 }
 
-export function createMaterialReturn(issueId: string, payload: { code: string; returnDate: string; handlerName: string; lines: Array<{ issueLineId: string; quantity: number }> }) {
-  return request<MaterialReturn>({ method: "POST", url: `/inventory/issues/${issueId}/returns`, data: payload });
+export function createMaterialReturn(
+  issueId: string,
+  payload: {
+    code: string;
+    returnDate: string;
+    handlerName: string;
+    lines: Array<{ issueLineId: string; quantity: number }>;
+  },
+) {
+  return request<MaterialReturn>({
+    method: "POST",
+    url: `/inventory/issues/${issueId}/returns`,
+    data: payload,
+  });
 }

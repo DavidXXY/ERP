@@ -1,0 +1,10 @@
+alter table crm_quote_plans add column if not exists tax_rate numeric(5,2) not null default 13.00;
+alter table crm_quote_revisions add column if not exists tax_rate numeric(5,2) not null default 13.00;
+alter table crm_service_contracts add column if not exists tax_rate numeric(5,2) not null default 13.00;
+alter table procurement_purchase_requests add column if not exists unit_price numeric(14,2) not null default 0.00;
+alter table procurement_purchase_requests add column if not exists tax_rate numeric(5,2) not null default 13.00;
+alter table procurement_purchase_requests add column if not exists total_amount numeric(14,2) not null default 0.00;
+update procurement_purchase_requests set total_amount = quantity * unit_price where total_amount = 0 and unit_price > 0;
+alter table procurement_purchase_orders add column if not exists tax_rate numeric(5,2) not null default 13.00;
+alter table procurement_goods_receipts add column if not exists tax_rate numeric(5,2) not null default 13.00;
+alter table fin_procurement_payables add column if not exists tax_rate numeric(5,2) not null default 13.00;

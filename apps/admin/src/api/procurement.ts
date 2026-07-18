@@ -2,9 +2,21 @@ import { request } from "./http";
 import { type PageResponse } from "./system";
 
 export type SupplierRiskStatus = "NORMAL" | "WATCHLIST" | "BLOCKED";
-export type PurchaseRequestStatus = "DRAFT" | "SUBMITTED" | "APPROVED" | "ORDERED" | "RECEIVED" | "CANCELLED";
+export type PurchaseRequestStatus =
+  | "DRAFT"
+  | "SUBMITTED"
+  | "APPROVED"
+  | "ORDERED"
+  | "RECEIVED"
+  | "CANCELLED";
 export type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED";
-export type PurchaseOrderStatus = "DRAFT" | "ORDERED" | "PARTIAL_RECEIVED" | "RECEIVED" | "CLOSED" | "CANCELLED";
+export type PurchaseOrderStatus =
+  | "DRAFT"
+  | "ORDERED"
+  | "PARTIAL_RECEIVED"
+  | "RECEIVED"
+  | "CLOSED"
+  | "CANCELLED";
 export type ProcurementCostType = "PROJECT" | "DEPARTMENT";
 
 export type ProcurementCostTargetOption = {
@@ -232,29 +244,49 @@ export type ReceivePurchaseOrderResult = {
   currentStockQty: number;
 };
 
-
 export function listSuppliers(page?: number, size?: number) {
-  return request<PageResponse<Supplier>>({ method: "GET", url: "/procurement/suppliers", params: { page, size } });
+  return request<PageResponse<Supplier>>({
+    method: "GET",
+    url: "/procurement/suppliers",
+    params: { page, size },
+  });
 }
 
 export function createSupplier(payload: CreateSupplierPayload) {
-  return request<Supplier>({ method: "POST", url: "/procurement/suppliers", data: payload });
+  return request<Supplier>({
+    method: "POST",
+    url: "/procurement/suppliers",
+    data: payload,
+  });
 }
 
 export function updateSupplier(id: string, payload: CreateSupplierPayload) {
-  return request<Supplier>({ method: "PUT", url: `/procurement/suppliers/${id}`, data: payload });
+  return request<Supplier>({
+    method: "PUT",
+    url: `/procurement/suppliers/${id}`,
+    data: payload,
+  });
 }
 
 export function listProcurementCostTargets() {
-  return request<ProcurementCostTargetOptions>({ method: "GET", url: "/procurement/cost-targets" });
+  return request<ProcurementCostTargetOptions>({
+    method: "GET",
+    url: "/procurement/cost-targets",
+  });
 }
 
 export function listProcurementCostAllocations() {
-  return request<ProcurementCostAllocation[]>({ method: "GET", url: "/procurement/cost-allocations" });
+  return request<ProcurementCostAllocation[]>({
+    method: "GET",
+    url: "/procurement/cost-allocations",
+  });
 }
 
 export function listProcurementMatching() {
-  return request<ProcurementMatching[]>({ method: "GET", url: "/procurement/matching" });
+  return request<ProcurementMatching[]>({
+    method: "GET",
+    url: "/procurement/matching",
+  });
 }
 
 export function listPurchaseRequests(params?: {
@@ -265,19 +297,41 @@ export function listPurchaseRequests(params?: {
   page?: number;
   size?: number;
 }) {
-  return request<PageResponse<PurchaseRequest>>({ method: "GET", url: "/procurement/requests", params });
+  return request<PageResponse<PurchaseRequest>>({
+    method: "GET",
+    url: "/procurement/requests",
+    params,
+  });
 }
 
 export function createPurchaseRequest(payload: CreatePurchaseRequestPayload) {
-  return request<PurchaseRequest>({ method: "POST", url: "/procurement/requests", data: payload });
+  return request<PurchaseRequest>({
+    method: "POST",
+    url: "/procurement/requests",
+    data: payload,
+  });
 }
 
-export function processPurchaseRequestApproval(id: string, payload: { decision: ApprovalStatus; comment: string; approverName: string }) {
-  return request<PurchaseRequest>({ method: "POST", url: `/procurement/requests/${id}/approval`, data: payload });
+export function processPurchaseRequestApproval(
+  id: string,
+  payload: { decision: ApprovalStatus; comment: string; approverName: string },
+) {
+  return request<PurchaseRequest>({
+    method: "POST",
+    url: `/procurement/requests/${id}/approval`,
+    data: payload,
+  });
 }
 
-export function updatePurchaseRequest(id: string, payload: CreatePurchaseRequestPayload) {
-  return request<PurchaseRequest>({ method: "PUT", url: `/procurement/requests/${id}`, data: payload });
+export function updatePurchaseRequest(
+  id: string,
+  payload: CreatePurchaseRequestPayload,
+) {
+  return request<PurchaseRequest>({
+    method: "PUT",
+    url: `/procurement/requests/${id}`,
+    data: payload,
+  });
 }
 
 export function listPurchaseOrders(params?: {
@@ -287,25 +341,55 @@ export function listPurchaseOrders(params?: {
   page?: number;
   size?: number;
 }) {
-  return request<PageResponse<PurchaseOrder>>({ method: "GET", url: "/procurement/orders", params });
+  return request<PageResponse<PurchaseOrder>>({
+    method: "GET",
+    url: "/procurement/orders",
+    params,
+  });
 }
 
 export function createPurchaseOrder(payload: CreatePurchaseOrderPayload) {
-  return request<PurchaseOrder>({ method: "POST", url: "/procurement/orders", data: payload });
+  return request<PurchaseOrder>({
+    method: "POST",
+    url: "/procurement/orders",
+    data: payload,
+  });
 }
 
 export function cancelPurchaseOrder(id: string) {
-  return request<PurchaseOrder>({ method: "POST", url: `/procurement/orders/${id}/cancel` });
+  return request<PurchaseOrder>({
+    method: "POST",
+    url: `/procurement/orders/${id}/cancel`,
+  });
 }
 
-export function receivePurchaseOrder(id: string, payload: { quantity: number; receivedDate: string; deliveryNo: string; receiverName: string; payableDueDate: string }) {
-  return request<ReceivePurchaseOrderResult>({ method: "POST", url: `/procurement/orders/${id}/receipts`, data: payload });
+export function receivePurchaseOrder(
+  id: string,
+  payload: {
+    quantity: number;
+    receivedDate: string;
+    deliveryNo: string;
+    receiverName: string;
+    payableDueDate: string;
+  },
+) {
+  return request<ReceivePurchaseOrderResult>({
+    method: "POST",
+    url: `/procurement/orders/${id}/receipts`,
+    data: payload,
+  });
 }
 
 export function listGoodsReceipts() {
-  return request<GoodsReceipt[]>({ method: "GET", url: "/procurement/receipts" });
+  return request<GoodsReceipt[]>({
+    method: "GET",
+    url: "/procurement/receipts",
+  });
 }
 
 export function listProcurementPayables() {
-  return request<ProcurementPayable[]>({ method: "GET", url: "/procurement/payables" });
+  return request<ProcurementPayable[]>({
+    method: "GET",
+    url: "/procurement/payables",
+  });
 }

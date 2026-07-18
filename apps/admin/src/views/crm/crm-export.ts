@@ -9,9 +9,15 @@ function escapeCsv(value: string | number | undefined | null): string {
   return str;
 }
 
-export function downloadCsv(filename: string, headers: string[], rows: string[][]) {
+export function downloadCsv(
+  filename: string,
+  headers: string[],
+  rows: string[][],
+) {
   const bom = "\uFEFF";
-  const csv = bom + [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+  const csv =
+    bom +
+    [headers, ...rows].map((row) => row.map(escapeCsv).join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;bom" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -23,38 +29,74 @@ export function downloadCsv(filename: string, headers: string[], rows: string[][
 
 // Reusable column builder helpers
 export function customerRowToCsv(r: {
-  name: string; code?: string; industry: string; level: string;
-  ownerName: string; contactCount: number; primaryContact?: string;
-  paymentHabit?: string; riskStatus: string;
+  name: string;
+  code?: string;
+  industry: string;
+  level: string;
+  ownerName: string;
+  contactCount: number;
+  primaryContact?: string;
+  paymentHabit?: string;
+  riskStatus: string;
 }): string[] {
   return [
-    r.code || "", r.name, r.industry, levelLabel(r.level),
-    r.ownerName, String(r.contactCount), r.primaryContact || "",
-    r.paymentHabit || "", riskLabel(r.riskStatus),
+    r.code || "",
+    r.name,
+    r.industry,
+    levelLabel(r.level),
+    r.ownerName,
+    String(r.contactCount),
+    r.primaryContact || "",
+    r.paymentHabit || "",
+    riskLabel(r.riskStatus),
   ];
 }
 
 export function receivableRowToCsv(r: {
-  code?: string; customerName: string; sourceNo?: string;
-  amount: number; outstandingAmount: number; dueDate?: string;
-  status: string; invoiceNo?: string;
+  code?: string;
+  customerName: string;
+  sourceNo?: string;
+  amount: number;
+  outstandingAmount: number;
+  dueDate?: string;
+  status: string;
+  invoiceNo?: string;
 }): string[] {
   return [
-    r.code || "", r.customerName, r.sourceNo || "",
-    String(r.amount), String(r.outstandingAmount),
-    r.dueDate || "", receivableStatusLabel(r.status), r.invoiceNo || "",
+    r.code || "",
+    r.customerName,
+    r.sourceNo || "",
+    String(r.amount),
+    String(r.outstandingAmount),
+    r.dueDate || "",
+    receivableStatusLabel(r.status),
+    r.invoiceNo || "",
   ];
 }
 
 export function contractRowToCsv(r: {
-  code?: string; customerName: string; projectName: string;
-  contractType: string; amount: number; netAmount?: number; taxRate?: number; startDate?: string;
-  endDate?: string; salesOwnerName?: string; status: string;
+  code?: string;
+  customerName: string;
+  projectName: string;
+  contractType: string;
+  amount: number;
+  netAmount?: number;
+  taxRate?: number;
+  startDate?: string;
+  endDate?: string;
+  salesOwnerName?: string;
+  status: string;
 }): string[] {
   return [
-    r.code || "", r.customerName, r.projectName, r.contractType,
-    String(r.amount), String(r.netAmount ?? calcNetAmount(r.amount, r.taxRate)),
-    r.startDate || "", r.endDate || "", r.salesOwnerName || "",
+    r.code || "",
+    r.customerName,
+    r.projectName,
+    r.contractType,
+    String(r.amount),
+    String(r.netAmount ?? calcNetAmount(r.amount, r.taxRate)),
+    r.startDate || "",
+    r.endDate || "",
+    r.salesOwnerName || "",
     contractStatusLabel(r.status),
   ];
 }
@@ -73,8 +115,25 @@ function riskLabel(v: string) {
   return { NORMAL: "正常", OVERDUE: "逾期", RENEWAL_RISK: "续约风险" }[v] || v;
 }
 function receivableStatusLabel(v: string) {
-  return { INVOICE_PENDING: "待开票", PAYMENT_PENDING: "待回款", SETTLED: "已核销", OVERDUE: "逾期" }[v] || v;
+  return (
+    {
+      INVOICE_PENDING: "待开票",
+      PAYMENT_PENDING: "待回款",
+      SETTLED: "已核销",
+      OVERDUE: "逾期",
+    }[v] || v
+  );
 }
 function contractStatusLabel(v: string) {
-  return { PENDING_APPROVAL: "合同审批中", PENDING_SEAL: "待双方盖章", SEAL_APPROVAL: "盖章件审批中", ACTIVE: "履约中", RENEWAL_PENDING: "待续约", OVERDUE_RISK: "履约风险", CLOSED: "已关闭" }[v] || v;
+  return (
+    {
+      PENDING_APPROVAL: "合同审批中",
+      PENDING_SEAL: "待双方盖章",
+      SEAL_APPROVAL: "盖章件审批中",
+      ACTIVE: "履约中",
+      RENEWAL_PENDING: "待续约",
+      OVERDUE_RISK: "履约风险",
+      CLOSED: "已关闭",
+    }[v] || v
+  );
 }

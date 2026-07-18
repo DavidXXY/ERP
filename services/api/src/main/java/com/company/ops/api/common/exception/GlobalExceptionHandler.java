@@ -13,11 +13,25 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
   private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+  @ExceptionHandler(RateLimitException.class)
+  public ResponseEntity<ApiResponse<Void>> handleRateLimit(RateLimitException exception) {
+    return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+        .header("Retry-After", "900")
+        .body(ApiResponse.fail(exception.getMessage()));
+  }
+
+  @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+  public ResponseEntity<ApiResponse<Void>> handleOptimisticLock(ObjectOptimisticLockingFailureException exception) {
+    return ResponseEntity.status(HttpStatus.CONFLICT)
+        .body(ApiResponse.fail("数据已被其他用户修改，请刷新后重试"));
+  }
 
   @ExceptionHandler(BusinessException.class)
   public ResponseEntity<ApiResponse<Void>> handleBusinessException(BusinessException exception) {

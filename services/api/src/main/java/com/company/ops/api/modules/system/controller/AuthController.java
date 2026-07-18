@@ -6,6 +6,7 @@ import com.company.ops.api.modules.system.dto.LoginResponse;
 import com.company.ops.api.modules.system.security.UserPrincipal;
 import com.company.ops.api.modules.system.service.AuthService;
 import jakarta.validation.Valid;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -26,8 +27,8 @@ public class AuthController {
   }
 
   @PostMapping("/login")
-  public ApiResponse<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
-    return ApiResponse.ok(authService.login(request));
+  public ApiResponse<LoginResponse> login(@Valid @RequestBody LoginRequest request, HttpServletRequest servletRequest) {
+    return ApiResponse.ok(authService.login(request, servletRequest.getRemoteAddr()));
   }
 
   @GetMapping("/me")

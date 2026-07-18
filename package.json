@@ -32,15 +32,19 @@
     "data:backup": "bash scripts/backup-data.sh",
     "test-bot": "node scripts/test-bot.js",
     "test-bot:fix": "node scripts/test-bot.js --fix",
-    "preview": "npm run admin:preview"
+    "preview": "npm run admin:preview",
+    "test": "npm --workspace apps/admin run test",
+    "lint": "npm --workspace apps/admin run lint",
+    "format:check": "npm --workspace apps/admin run format:check",
+    "verify": "npm run lint && npm run format:check && npm run test && npm --workspace apps/admin run typecheck && npm run build"
   },
   "dependencies": {
-    "@vitejs/plugin-react": "latest",
-    "lucide-react": "latest",
-    "react": "latest",
-    "react-dom": "latest",
+    "@vitejs/plugin-react": "6.0.3",
+    "lucide-react": "1.21.0",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
     "typescript": "5.5.4",
-    "vite": "latest"
+    "vite": "8.1.0"
   },
   "devDependencies": {
     "@types/node": "^26.0.1",

@@ -15,6 +15,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 public class UserPrincipal implements UserDetails {
 
   private final UUID id;
+  private final String tenantId;
   private final String username;
   private final String displayName;
   private final String password;
@@ -28,6 +29,7 @@ public class UserPrincipal implements UserDetails {
 
   public UserPrincipal(SystemUser user) {
     this.id = user.getId();
+    this.tenantId = user.getTenantId();
     this.username = user.getUsername();
     this.displayName = user.getDisplayName();
     this.password = user.getPasswordHash();
@@ -54,6 +56,10 @@ public class UserPrincipal implements UserDetails {
 
   public UUID id() {
     return id;
+  }
+
+  public String tenantId() {
+    return tenantId;
   }
 
   public String displayName() {

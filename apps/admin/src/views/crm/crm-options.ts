@@ -26,7 +26,9 @@ export const followUpTypeOptions = [
 ] as const;
 
 export function opportunityStageLabel(value: OpportunityStage) {
-  return opportunityStageOptions.find((item) => item.value === value)?.label || value;
+  return (
+    opportunityStageOptions.find((item) => item.value === value)?.label || value
+  );
 }
 
 export function opportunityStageColor(value: OpportunityStage) {
@@ -114,7 +116,9 @@ export function receivableStatusColor(value: ReceivableStatus) {
 }
 
 export function followUpTypeLabel(value: FollowUpType) {
-  return followUpTypeOptions.find((item) => item.value === value)?.label || value;
+  return (
+    followUpTypeOptions.find((item) => item.value === value)?.label || value
+  );
 }
 
 export function followUpTypeColor(value: FollowUpType) {

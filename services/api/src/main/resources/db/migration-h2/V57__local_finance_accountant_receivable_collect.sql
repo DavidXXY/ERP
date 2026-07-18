@@ -1,0 +1,1 @@
+insert into sys_role_permissions(role_id,permission_id) select r.id,p.id from sys_roles r join sys_permissions p on p.tenant_id=r.tenant_id where r.code='FINANCE_ACCOUNTANT' and p.code in ('finance:receivable:collect','crm:receivable:settle') and not exists(select 1 from sys_role_permissions x where x.role_id=r.id and x.permission_id=p.id);

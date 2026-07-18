@@ -7,6 +7,8 @@ import jakarta.persistence.Id;
 import jakarta.persistence.MappedSuperclass;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Version;
+import org.hibernate.annotations.TenantId;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
@@ -18,7 +20,8 @@ public abstract class BaseEntity {
   private UUID id;
 
   @Column(name = "tenant_id", nullable = false, length = 64)
-  private String tenantId = "default";
+  @TenantId
+  private String tenantId;
 
   @Column(name = "created_at", nullable = false)
   private OffsetDateTime createdAt;
@@ -31,6 +34,10 @@ public abstract class BaseEntity {
 
   @Column(name = "updated_by", length = 64)
   private String updatedBy;
+
+  @Version
+  @Column(name = "version", nullable = false)
+  private long version;
 
   @PrePersist
   protected void prePersist() {
@@ -91,5 +98,8 @@ public abstract class BaseEntity {
   public void setUpdatedBy(String updatedBy) {
     this.updatedBy = updatedBy;
   }
-}
 
+  public long getVersion() {
+    return version;
+  }
+}

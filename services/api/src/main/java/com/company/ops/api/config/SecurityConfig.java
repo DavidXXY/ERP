@@ -2,9 +2,12 @@ package com.company.ops.api.config;
 
 import com.company.ops.api.modules.system.security.JwtAuthenticationFilter;
 import java.util.List;
+import java.util.Arrays;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.Customizer;
@@ -25,9 +28,14 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 public class SecurityConfig {
 
   private final JwtAuthenticationFilter jwtAuthenticationFilter;
+  private final String allowedOrigins;
 
-  public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
+  public SecurityConfig(
+      JwtAuthenticationFilter jwtAuthenticationFilter,
+      @Value("${ops.security.allowed-origins:http://localhost:5174,http://127.0.0.1:5174}") String allowedOrigins
+  ) {
     this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+    this.allowedOrigins = allowedOrigins;
   }
 
   @Bean
@@ -36,9 +44,14 @@ public class SecurityConfig {
         .csrf(AbstractHttpConfigurer::disable)
         .cors(Customizer.withDefaults())
         .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+        .exceptionHandling(errors -> errors
+            .authenticationEntryPoint((request, response, exception) ->
+                response.sendError(HttpStatus.UNAUTHORIZED.value(), "未登录"))
+            .accessDeniedHandler((request, response, exception) ->
+                response.sendError(HttpStatus.FORBIDDEN.value(), "没有权限访问该资源")))
         .authorizeHttpRequests(auth -> auth
             .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-            .requestMatchers("/api/auth/login", "/api/auth/me").permitAll()
+            .requestMatchers("/api/auth/login").permitAll()
             .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
             .requestMatchers("/api-docs/**").permitAll()
             .requestMatchers("/qualification-files/**").authenticated()
@@ -61,18 +74,10 @@ public class SecurityConfig {
   @Bean
   public CorsConfigurationSource corsConfigurationSource() {
     CorsConfiguration configuration = new CorsConfiguration();
-    configuration.setAllowedOriginPatterns(List.of(
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:5174",
-        "http://127.0.0.1:5174",
-        "http://localhost:5175",
-        "http://127.0.0.1:5175",
-        "http://localhost:8088",
-        "http://127.0.0.1:8088",
-        "http://10.10.10.111:88",
-        "http://oa.davidxi.com:88"
-    ));
+    configuration.setAllowedOriginPatterns(Arrays.stream(allowedOrigins.split(","))
+        .map(String::trim)
+        .filter(value -> !value.isBlank())
+        .toList());
     configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
     configuration.setAllowedHeaders(List.of("*"));
     configuration.setAllowCredentials(true);

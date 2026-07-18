@@ -2,11 +2,43 @@ import { http, request } from "./http";
 
 export type CustomerLevel = "STRATEGIC" | "KEY" | "NORMAL";
 export type RiskStatus = "NORMAL" | "OVERDUE" | "RENEWAL_RISK";
-export type ContractStatus = "PENDING_APPROVAL" | "PENDING_SEAL" | "SEAL_APPROVAL" | "ACTIVE" | "RENEWAL_PENDING" | "OVERDUE_RISK" | "CLOSED";
-export type ReceivableStatus = "INVOICE_PENDING" | "PAYMENT_PENDING" | "SETTLED" | "OVERDUE";
-export type OpportunityStage = "LEAD" | "QUALIFIED" | "SOLUTION" | "QUOTATION" | "NEGOTIATION" | "WON" | "LOST";
-export type QuoteStatus = "DRAFT" | "COST_REQUESTED" | "COSTING" | "COST_APPROVED" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED" | "CUSTOMER_ACCEPTED" | "CUSTOMER_DECLINED" | "CONVERTED";
-export type QuoteCostStatus = "REQUESTED" | "SUBMITTED" | "APPROVED" | "REJECTED";
+export type ContractStatus =
+  | "PENDING_APPROVAL"
+  | "PENDING_SEAL"
+  | "SEAL_APPROVAL"
+  | "ACTIVE"
+  | "RENEWAL_PENDING"
+  | "OVERDUE_RISK"
+  | "CLOSED";
+export type ReceivableStatus =
+  | "INVOICE_PENDING"
+  | "PAYMENT_PENDING"
+  | "SETTLED"
+  | "OVERDUE";
+export type OpportunityStage =
+  | "LEAD"
+  | "QUALIFIED"
+  | "SOLUTION"
+  | "QUOTATION"
+  | "NEGOTIATION"
+  | "WON"
+  | "LOST";
+export type QuoteStatus =
+  | "DRAFT"
+  | "COST_REQUESTED"
+  | "COSTING"
+  | "COST_APPROVED"
+  | "PENDING_APPROVAL"
+  | "APPROVED"
+  | "REJECTED"
+  | "CUSTOMER_ACCEPTED"
+  | "CUSTOMER_DECLINED"
+  | "CONVERTED";
+export type QuoteCostStatus =
+  | "REQUESTED"
+  | "SUBMITTED"
+  | "APPROVED"
+  | "REJECTED";
 export type ApprovalDecision = "APPROVED" | "REJECTED";
 export type QuoteCustomerDecision = "ACCEPTED" | "DECLINED";
 export type FollowUpType = "VISIT" | "PHONE" | "CALLBACK" | "COMPLAINT";
@@ -500,20 +532,40 @@ export function listOpportunities() {
   return request<Opportunity[]>({ method: "GET", url: "/crm/opportunities" });
 }
 
-
 export function getOpportunity(id: string) {
-  return request<Opportunity>({ method: "GET", url: "/crm/opportunities/" + id });
+  return request<Opportunity>({
+    method: "GET",
+    url: "/crm/opportunities/" + id,
+  });
 }
 
-export function updateOpportunity(id: string, payload: CreateOpportunityPayload) {
-  return request<Opportunity>({ method: "PUT", url: "/crm/opportunities/" + id, data: payload });
+export function updateOpportunity(
+  id: string,
+  payload: CreateOpportunityPayload,
+) {
+  return request<Opportunity>({
+    method: "PUT",
+    url: "/crm/opportunities/" + id,
+    data: payload,
+  });
 }
 export function createOpportunity(payload: CreateOpportunityPayload) {
-  return request<Opportunity>({ method: "POST", url: "/crm/opportunities", data: payload });
+  return request<Opportunity>({
+    method: "POST",
+    url: "/crm/opportunities",
+    data: payload,
+  });
 }
 
-export function advanceOpportunity(id: string, payload: AdvanceOpportunityPayload) {
-  return request<Opportunity>({ method: "POST", url: `/crm/opportunities/${id}/advance`, data: payload });
+export function advanceOpportunity(
+  id: string,
+  payload: AdvanceOpportunityPayload,
+) {
+  return request<Opportunity>({
+    method: "POST",
+    url: `/crm/opportunities/${id}/advance`,
+    data: payload,
+  });
 }
 
 export function listQuotes() {
@@ -521,47 +573,94 @@ export function listQuotes() {
 }
 
 export function createQuote(payload: CreateQuotePayload) {
-  return request<QuotePlan>({ method: "POST", url: "/crm/quotes", data: payload });
+  return request<QuotePlan>({
+    method: "POST",
+    url: "/crm/quotes",
+    data: payload,
+  });
 }
 
 export function updateQuote(id: string, payload: UpdateQuotePayload) {
-  return request<QuotePlan>({ method: "PUT", url: `/crm/quotes/${id}`, data: payload });
+  return request<QuotePlan>({
+    method: "PUT",
+    url: `/crm/quotes/${id}`,
+    data: payload,
+  });
 }
 
 export function listQuoteRevisions(id: string) {
-  return request<QuoteRevision[]>({ method: "GET", url: `/crm/quotes/${id}/revisions` });
+  return request<QuoteRevision[]>({
+    method: "GET",
+    url: `/crm/quotes/${id}/revisions`,
+  });
 }
 
 export function requestQuoteCost(id: string, payload: RequestQuoteCostPayload) {
-  return request<QuoteCostRequest>({ method: "POST", url: `/crm/quotes/${id}/cost-requests`, data: payload });
+  return request<QuoteCostRequest>({
+    method: "POST",
+    url: `/crm/quotes/${id}/cost-requests`,
+    data: payload,
+  });
 }
 
 export function listQuoteCostRequests(id: string) {
-  return request<QuoteCostRequest[]>({ method: "GET", url: `/crm/quotes/${id}/cost-requests` });
+  return request<QuoteCostRequest[]>({
+    method: "GET",
+    url: `/crm/quotes/${id}/cost-requests`,
+  });
 }
 
 export function submitQuoteCost(id: string, payload: SubmitQuoteCostPayload) {
-  return request<QuoteCostRequest>({ method: "PUT", url: `/crm/quote-cost-requests/${id}`, data: payload });
+  return request<QuoteCostRequest>({
+    method: "PUT",
+    url: `/crm/quote-cost-requests/${id}`,
+    data: payload,
+  });
 }
 
 export function approveQuoteCost(id: string, payload: ApproveQuoteCostPayload) {
-  return request<QuoteCostRequest>({ method: "POST", url: `/crm/quote-cost-requests/${id}/approval`, data: payload });
+  return request<QuoteCostRequest>({
+    method: "POST",
+    url: `/crm/quote-cost-requests/${id}/approval`,
+    data: payload,
+  });
 }
 
 export function submitQuote(id: string) {
-  return request<QuotePlan>({ method: "POST", url: `/crm/quotes/${id}/submit` });
+  return request<QuotePlan>({
+    method: "POST",
+    url: `/crm/quotes/${id}/submit`,
+  });
 }
 
-export function processQuoteApproval(id: string, payload: ProcessQuoteApprovalPayload) {
-  return request<QuotePlan>({ method: "POST", url: `/crm/quotes/${id}/approval`, data: payload });
+export function processQuoteApproval(
+  id: string,
+  payload: ProcessQuoteApprovalPayload,
+) {
+  return request<QuotePlan>({
+    method: "POST",
+    url: `/crm/quotes/${id}/approval`,
+    data: payload,
+  });
 }
 
-export function processQuoteCustomerResult(id: string, payload: ProcessQuoteCustomerResultPayload) {
-  return request<QuotePlan>({ method: "POST", url: `/crm/quotes/${id}/customer-result`, data: payload });
+export function processQuoteCustomerResult(
+  id: string,
+  payload: ProcessQuoteCustomerResultPayload,
+) {
+  return request<QuotePlan>({
+    method: "POST",
+    url: `/crm/quotes/${id}/customer-result`,
+    data: payload,
+  });
 }
 
 export function convertQuote(id: string, payload: ConvertQuotePayload) {
-  return request<QuoteConversionResult>({ method: "POST", url: `/crm/quotes/${id}/convert`, data: payload });
+  return request<QuoteConversionResult>({
+    method: "POST",
+    url: `/crm/quotes/${id}/convert`,
+    data: payload,
+  });
 }
 
 export function listContracts() {
@@ -569,15 +668,29 @@ export function listContracts() {
 }
 
 export function getContract(id: string) {
-  return request<ServiceContract>({ method: "GET", url: "/crm/contracts/" + id });
+  return request<ServiceContract>({
+    method: "GET",
+    url: "/crm/contracts/" + id,
+  });
 }
 
 export function approveContract(id: string, payload: ApprovalActionPayload) {
-  return request<ServiceContract>({ method: "POST", url: `/crm/contracts/${id}/approval`, data: payload });
+  return request<ServiceContract>({
+    method: "POST",
+    url: `/crm/contracts/${id}/approval`,
+    data: payload,
+  });
 }
 
-export function submitSignedDocumentApproval(id: string, payload: ApprovalActionPayload) {
-  return request<ServiceContract>({ method: "POST", url: `/crm/contracts/${id}/signed-doc-approval`, data: payload });
+export function submitSignedDocumentApproval(
+  id: string,
+  payload: ApprovalActionPayload,
+) {
+  return request<ServiceContract>({
+    method: "POST",
+    url: `/crm/contracts/${id}/signed-doc-approval`,
+    data: payload,
+  });
 }
 
 export function listFollowUps() {
@@ -585,7 +698,11 @@ export function listFollowUps() {
 }
 
 export function createFollowUp(payload: CreateFollowUpPayload) {
-  return request<FollowUp>({ method: "POST", url: "/crm/follow-ups", data: payload });
+  return request<FollowUp>({
+    method: "POST",
+    url: "/crm/follow-ups",
+    data: payload,
+  });
 }
 
 export function listRenewals() {
@@ -616,16 +733,42 @@ export function deleteFollowUp(id: string) {
   return request<void>({ method: "DELETE", url: "/crm/follow-ups/" + id });
 }
 
-export function registerReceivableInvoice(id: string, payload: { invoiceNo: string; invoiceDate: string }) {
-  return request<Receivable>({ method: "POST", url: `/crm/receivables/${id}/invoice`, data: payload });
+export function registerReceivableInvoice(
+  id: string,
+  payload: { invoiceNo: string; invoiceDate: string },
+) {
+  return request<Receivable>({
+    method: "POST",
+    url: `/crm/receivables/${id}/invoice`,
+    data: payload,
+  });
 }
 
-export function applyReceivableInvoice(id: string, payload: { applicantName: string; remark?: string }) {
-  return request<Receivable>({ method: "POST", url: `/crm/receivables/${id}/invoice-request`, data: payload });
+export function applyReceivableInvoice(
+  id: string,
+  payload: { applicantName: string; remark?: string },
+) {
+  return request<Receivable>({
+    method: "POST",
+    url: `/crm/receivables/${id}/invoice-request`,
+    data: payload,
+  });
 }
 
-export function recordReceivableReceipt(id: string, payload: { amount: number; receivedDate: string; referenceNo: string; recorderName: string }) {
-  return request<Receivable>({ method: "POST", url: `/crm/receivables/${id}/receipts`, data: payload });
+export function recordReceivableReceipt(
+  id: string,
+  payload: {
+    amount: number;
+    receivedDate: string;
+    referenceNo: string;
+    recorderName: string;
+  },
+) {
+  return request<Receivable>({
+    method: "POST",
+    url: `/crm/receivables/${id}/receipts`,
+    data: payload,
+  });
 }
 
 export function listCustomerProfiles() {
@@ -646,16 +789,30 @@ export type CrmAttachment = {
 };
 
 export function listAttachments(entityType: string, entityId: string) {
-  return request<CrmAttachment[]>({ method: "GET", url: "/crm/attachments", params: { entityType, entityId } });
+  return request<CrmAttachment[]>({
+    method: "GET",
+    url: "/crm/attachments",
+    params: { entityType, entityId },
+  });
 }
 
-export function uploadAttachment(entityType: string, entityId: string, attachmentType: string | undefined, file: File) {
+export function uploadAttachment(
+  entityType: string,
+  entityId: string,
+  attachmentType: string | undefined,
+  file: File,
+) {
   const formData = new FormData();
   formData.append("entityType", entityType);
   formData.append("entityId", entityId);
   if (attachmentType) formData.append("attachmentType", attachmentType);
   formData.append("file", file);
-  return request<CrmAttachment>({ method: "POST", url: "/crm/attachments/upload", data: formData, headers: { "Content-Type": "multipart/form-data" } });
+  return request<CrmAttachment>({
+    method: "POST",
+    url: "/crm/attachments/upload",
+    data: formData,
+    headers: { "Content-Type": "multipart/form-data" },
+  });
 }
 
 export function deleteAttachment(id: string) {
@@ -667,7 +824,10 @@ export function getAttachmentDownloadUrl(id: string): string {
 }
 
 export async function downloadAttachment(item: CrmAttachment) {
-  const response = await http.get<Blob>(`/crm/attachments/${item.id}/download`, { responseType: "blob" });
+  const response = await http.get<Blob>(
+    `/crm/attachments/${item.id}/download`,
+    { responseType: "blob" },
+  );
   const url = URL.createObjectURL(response.data);
   const anchor = document.createElement("a");
   anchor.href = url;
@@ -677,7 +837,10 @@ export async function downloadAttachment(item: CrmAttachment) {
 }
 
 export async function openAttachment(item: CrmAttachment) {
-  const response = await http.get<Blob>(`/crm/attachments/${item.id}/download`, { responseType: "blob" });
+  const response = await http.get<Blob>(
+    `/crm/attachments/${item.id}/download`,
+    { responseType: "blob" },
+  );
   const type = response.data.type || item.mimeType || "";
   const url = URL.createObjectURL(response.data);
   if (type.startsWith("image/") || type === "application/pdf") {
@@ -749,62 +912,97 @@ export type ApprovalActionPayload = {
   comment: string;
 };
 
-export function createContractChange(contractId: string, payload: CreateContractChangePayload) {
+export function createContractChange(
+  contractId: string,
+  payload: CreateContractChangePayload,
+) {
   return request<ContractChangeResponse>({
-    method: "POST", url: `/crm/contracts/${contractId}/changes`, data: payload,
+    method: "POST",
+    url: `/crm/contracts/${contractId}/changes`,
+    data: payload,
   });
 }
 
-export function approveContractChange(changeId: string, payload: ApprovalActionPayload) {
+export function approveContractChange(
+  changeId: string,
+  payload: ApprovalActionPayload,
+) {
   return request<ContractChangeResponse>({
-    method: "POST", url: `/crm/contract-changes/${changeId}/approve`, data: payload,
+    method: "POST",
+    url: `/crm/contract-changes/${changeId}/approve`,
+    data: payload,
   });
 }
 
-export function rejectContractChange(changeId: string, payload: ApprovalActionPayload) {
+export function rejectContractChange(
+  changeId: string,
+  payload: ApprovalActionPayload,
+) {
   return request<ContractChangeResponse>({
-    method: "POST", url: `/crm/contract-changes/${changeId}/reject`, data: payload,
+    method: "POST",
+    url: `/crm/contract-changes/${changeId}/reject`,
+    data: payload,
   });
 }
 
 export function listContractChanges(contractId: string) {
   return request<ContractChangeResponse[]>({
-    method: "GET", url: `/crm/contracts/${contractId}/changes`,
+    method: "GET",
+    url: `/crm/contracts/${contractId}/changes`,
   });
 }
-
 
 // ====== Excel Export ======
 export async function exportCustomersExcel() {
   const { http } = await import("./http");
-  const response = await http.get<Blob>("/crm/export/customers", { responseType: "blob" });
+  const response = await http.get<Blob>("/crm/export/customers", {
+    responseType: "blob",
+  });
   const url = URL.createObjectURL(response.data);
   const anchor = document.createElement("a");
-  anchor.href = url; anchor.download = "crm-customers.xlsx";
-  anchor.click(); URL.revokeObjectURL(url);
+  anchor.href = url;
+  anchor.download = "crm-customers.xlsx";
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 
 export async function exportContractsExcel() {
   const { http } = await import("./http");
-  const response = await http.get<Blob>("/crm/export/contracts", { responseType: "blob" });
+  const response = await http.get<Blob>("/crm/export/contracts", {
+    responseType: "blob",
+  });
   const url = URL.createObjectURL(response.data);
   const anchor = document.createElement("a");
-  anchor.href = url; anchor.download = "crm-contracts.xlsx";
-  anchor.click(); URL.revokeObjectURL(url);
+  anchor.href = url;
+  anchor.download = "crm-contracts.xlsx";
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 
 // ====== Import ======
 export function importCustomersExcel(file: File) {
-  const form = new FormData(); form.append("file", file);
-  return request<{ success: number; fail: number; errors: string[] }>({ method: "POST", url: "/crm/customers/import", data: form });
+  const form = new FormData();
+  form.append("file", file);
+  return request<{ success: number; fail: number; errors: string[] }>({
+    method: "POST",
+    url: "/crm/customers/import",
+    data: form,
+  });
 }
 
 // ====== Batch Delete ======
 export function batchDeleteCustomers(ids: string[]) {
-  return request<void>({ method: "POST", url: "/crm/customers/batch-delete", data: ids });
+  return request<void>({
+    method: "POST",
+    url: "/crm/customers/batch-delete",
+    data: ids,
+  });
 }
 
 // ====== Contract Renewal ======
 export function renewContract(id: string) {
-  return request<QuotePlan>({ method: "POST", url: `/crm/contracts/${id}/renew` });
+  return request<QuotePlan>({
+    method: "POST",
+    url: `/crm/contracts/${id}/renew`,
+  });
 }

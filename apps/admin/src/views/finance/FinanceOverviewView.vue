@@ -1,32 +1,99 @@
 <template>
   <div class="page-stack">
     <a-card title="资金总览">
-      <template #extra><a-button :loading="loading" @click="loadData"><template #icon><ReloadOutlined /></template>刷新</a-button></template>
-      <a-alert v-if="errorMessage" class="section-alert" type="warning" show-icon :message="errorMessage" />
+      <template #extra
+        ><a-button :loading="loading" @click="loadData"
+          ><template #icon><ReloadOutlined /></template>刷新</a-button
+        ></template
+      >
+      <a-alert
+        v-if="errorMessage"
+        class="section-alert"
+        type="warning"
+        show-icon
+        :message="errorMessage"
+      />
 
       <a-row :gutter="[16, 20]" class="metric-row">
-        <a-col :xs="12" :lg="6"><a-statistic title="应收总额" :value="overview.receivableAmount" :formatter="moneyFormatter" /></a-col>
-        <a-col :xs="12" :lg="6"><a-statistic title="已回款" :value="overview.receivedAmount" :formatter="moneyFormatter" /></a-col>
-        <a-col :xs="12" :lg="6"><a-statistic title="待收金额" :value="overview.receivableOutstanding" :formatter="moneyFormatter" /></a-col>
-        <a-col :xs="12" :lg="6"><a-statistic title="逾期应收" :value="overview.receivableOverdue" :formatter="moneyFormatter" :value-style="dangerStyle(overview.receivableOverdue)" /></a-col>
-        <a-col :xs="12" :lg="6"><a-statistic title="应付总额" :value="overview.payableAmount" :formatter="moneyFormatter" /></a-col>
-        <a-col :xs="12" :lg="6"><a-statistic title="已付款" :value="overview.paidAmount" :formatter="moneyFormatter" /></a-col>
-        <a-col :xs="12" :lg="6"><a-statistic title="待付金额" :value="overview.payableOutstanding" :formatter="moneyFormatter" /></a-col>
-        <a-col :xs="12" :lg="6"><a-statistic title="逾期应付" :value="overview.payableOverdue" :formatter="moneyFormatter" :value-style="dangerStyle(overview.payableOverdue)" /></a-col>
+        <a-col :xs="12" :lg="6"
+          ><a-statistic
+            title="应收总额"
+            :value="overview.receivableAmount"
+            :formatter="moneyFormatter"
+        /></a-col>
+        <a-col :xs="12" :lg="6"
+          ><a-statistic
+            title="已回款"
+            :value="overview.receivedAmount"
+            :formatter="moneyFormatter"
+        /></a-col>
+        <a-col :xs="12" :lg="6"
+          ><a-statistic
+            title="待收金额"
+            :value="overview.receivableOutstanding"
+            :formatter="moneyFormatter"
+        /></a-col>
+        <a-col :xs="12" :lg="6"
+          ><a-statistic
+            title="逾期应收"
+            :value="overview.receivableOverdue"
+            :formatter="moneyFormatter"
+            :value-style="dangerStyle(overview.receivableOverdue)"
+        /></a-col>
+        <a-col :xs="12" :lg="6"
+          ><a-statistic
+            title="应付总额"
+            :value="overview.payableAmount"
+            :formatter="moneyFormatter"
+        /></a-col>
+        <a-col :xs="12" :lg="6"
+          ><a-statistic
+            title="已付款"
+            :value="overview.paidAmount"
+            :formatter="moneyFormatter"
+        /></a-col>
+        <a-col :xs="12" :lg="6"
+          ><a-statistic
+            title="待付金额"
+            :value="overview.payableOutstanding"
+            :formatter="moneyFormatter"
+        /></a-col>
+        <a-col :xs="12" :lg="6"
+          ><a-statistic
+            title="逾期应付"
+            :value="overview.payableOverdue"
+            :formatter="moneyFormatter"
+            :value-style="dangerStyle(overview.payableOverdue)"
+        /></a-col>
       </a-row>
 
       <a-descriptions bordered :column="2" size="middle">
-        <a-descriptions-item label="资金净流入"><strong :class="{ 'text-danger': overview.netCashInflow < 0 }">{{ formatMoney(overview.netCashInflow) }}</strong></a-descriptions-item>
-        <a-descriptions-item label="待审批付款申请"><a-tag color="orange">{{ overview.pendingPaymentApplications }} 笔</a-tag></a-descriptions-item>
-        <a-descriptions-item label="应收回款率"><a-progress :percent="receivableRate" size="small" /></a-descriptions-item>
-        <a-descriptions-item label="应付付款率"><a-progress :percent="payableRate" size="small" /></a-descriptions-item>
+        <a-descriptions-item label="资金净流入"
+          ><strong :class="{ 'text-danger': overview.netCashInflow < 0 }">{{
+            formatMoney(overview.netCashInflow)
+          }}</strong></a-descriptions-item
+        >
+        <a-descriptions-item label="待审批付款申请"
+          ><a-tag color="orange"
+            >{{ overview.pendingPaymentApplications }} 笔</a-tag
+          ></a-descriptions-item
+        >
+        <a-descriptions-item label="应收回款率"
+          ><a-progress :percent="receivableRate" size="small"
+        /></a-descriptions-item>
+        <a-descriptions-item label="应付付款率"
+          ><a-progress :percent="payableRate" size="small"
+        /></a-descriptions-item>
       </a-descriptions>
 
       <section class="finance-control-grid">
         <div class="finance-panel">
           <div class="panel-heading">
             <h3>未来现金流</h3>
-            <a-tag :color="forecastTotal.net >= 0 ? 'green' : 'red'">{{ forecastTotal.net >= 0 ? '净流入' : '净流出' }} {{ formatMoney(Math.abs(forecastTotal.net)) }}</a-tag>
+            <a-tag :color="forecastTotal.net >= 0 ? 'green' : 'red'"
+              >{{ forecastTotal.net >= 0 ? "净流入" : "净流出" }}
+              {{ formatMoney(Math.abs(forecastTotal.net)) }}</a-tag
+            >
           </div>
           <div class="forecast-grid">
             <button
@@ -37,8 +104,13 @@
               @click="openForecast(bucket.key)"
             >
               <span>{{ bucket.label }}</span>
-              <strong :class="{ 'text-danger': bucket.net < 0 }">{{ formatMoney(bucket.net) }}</strong>
-              <small>应收 {{ formatMoney(bucket.receivable) }} / 应付 {{ formatMoney(bucket.payable) }}</small>
+              <strong :class="{ 'text-danger': bucket.net < 0 }">{{
+                formatMoney(bucket.net)
+              }}</strong>
+              <small
+                >应收 {{ formatMoney(bucket.receivable) }} / 应付
+                {{ formatMoney(bucket.payable) }}</small
+              >
             </button>
           </div>
         </div>
@@ -63,7 +135,9 @@
       <section class="finance-panel risk-panel">
         <div class="panel-heading">
           <h3>财务风险事项</h3>
-          <a-button size="small" @click="router.push('/risk-center')">进入风险中心</a-button>
+          <a-button size="small" @click="router.push('/risk-center')"
+            >进入风险中心</a-button
+          >
         </div>
         <div class="risk-list">
           <button
@@ -77,19 +151,34 @@
             <span>{{ item.title }}</span>
             <strong>{{ item.value }}</strong>
           </button>
-          <a-empty v-if="riskItems.length === 0" :image="simpleImage" description="暂无高优先级财务风险" />
+          <a-empty
+            v-if="riskItems.length === 0"
+            :image="simpleImage"
+            description="暂无高优先级财务风险"
+          />
         </div>
       </section>
 
-      <section v-if="auth.can('finance:ledger:view')" class="finance-panel reconciliation-panel">
+      <section
+        v-if="auth.can('finance:ledger:view')"
+        class="finance-panel reconciliation-panel"
+      >
         <div class="panel-heading">
           <h3>业务与总账一致性</h3>
-          <a-button size="small" @click="router.push('/finance/ledger')">打开总账</a-button>
+          <a-button size="small" @click="router.push('/finance/ledger')"
+            >打开总账</a-button
+          >
         </div>
         <div class="reconciliation-grid">
-          <div v-for="item in reconciliationItems" :key="item.key" class="reconciliation-card">
+          <div
+            v-for="item in reconciliationItems"
+            :key="item.key"
+            class="reconciliation-card"
+          >
             <span>{{ item.label }}</span>
-            <strong :class="{ 'text-danger': item.diff !== 0 }">{{ formatMoney(Math.abs(item.diff)) }}</strong>
+            <strong :class="{ 'text-danger': item.diff !== 0 }">{{
+              formatMoney(Math.abs(item.diff))
+            }}</strong>
             <small>{{ item.hint }}</small>
           </div>
         </div>
@@ -103,9 +192,22 @@
       </section>
 
       <a-space wrap class="overview-actions">
-        <a-button v-if="auth.can('finance:receivable:view')" @click="router.push('/finance/receivables')">查看应收</a-button>
-        <a-button v-if="auth.can('finance:payable:view')" @click="router.push('/finance/payables')">查看应付</a-button>
-        <a-button v-if="auth.can('finance:payable:view')" type="primary" @click="router.push('/finance/payment-applications')">处理付款申请</a-button>
+        <a-button
+          v-if="auth.can('finance:receivable:view')"
+          @click="router.push('/finance/receivables')"
+          >查看应收</a-button
+        >
+        <a-button
+          v-if="auth.can('finance:payable:view')"
+          @click="router.push('/finance/payables')"
+          >查看应付</a-button
+        >
+        <a-button
+          v-if="auth.can('finance:payable:view')"
+          type="primary"
+          @click="router.push('/finance/payment-applications')"
+          >处理付款申请</a-button
+        >
       </a-space>
     </a-card>
   </div>
@@ -117,7 +219,15 @@ import { Empty } from "ant-design-vue";
 import { useRouter } from "vue-router";
 import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
 import type { Receivable } from "@/api/crm";
-import { getFinanceOverview, listFinancePayables, listFinanceReceivables, listPaymentApplications, type FinanceOverview, type FinancePayable, type PaymentApplication } from "@/api/finance";
+import {
+  getFinanceOverview,
+  listFinancePayables,
+  listFinanceReceivables,
+  listPaymentApplications,
+  type FinanceOverview,
+  type FinancePayable,
+  type PaymentApplication,
+} from "@/api/finance";
 import { listVouchers, type AccountingVoucher } from "@/api/ledger";
 import { useAuthStore } from "@/stores/auth";
 
@@ -131,14 +241,20 @@ const payables = ref<FinancePayable[]>([]);
 const applications = ref<PaymentApplication[]>([]);
 const vouchers = ref<AccountingVoucher[]>([]);
 const simpleImage = Empty.PRESENTED_IMAGE_SIMPLE;
-const receivableRate = computed(() => ratio(overview.receivedAmount, overview.receivableAmount));
-const payableRate = computed(() => ratio(overview.paidAmount, overview.payableAmount));
+const receivableRate = computed(() =>
+  ratio(overview.receivedAmount, overview.receivableAmount),
+);
+const payableRate = computed(() =>
+  ratio(overview.paidAmount, overview.payableAmount),
+);
 const forecastBuckets = computed(() => [
   buildForecastBucket("d7", "未来7天", 7),
   buildForecastBucket("d30", "未来30天", 30),
   buildForecastBucket("d60", "未来60天", 60),
 ]);
-const forecastTotal = computed(() => forecastBuckets.value[2] ?? { net: 0, receivable: 0, payable: 0 });
+const forecastTotal = computed(
+  () => forecastBuckets.value[2] ?? { net: 0, receivable: 0, payable: 0 },
+);
 const agingBuckets = computed(() => [
   buildAgingBucket("current", "未到期", Number.NEGATIVE_INFINITY, -1),
   buildAgingBucket("d1", "逾期1-30天", 1, 30),
@@ -156,14 +272,62 @@ const riskItems = computed(() => {
     .filter((item) => item.status === "PENDING_APPROVAL")
     .reduce((sum, item) => sum + Number(item.requestedAmount || 0), 0);
   const largeApplication = applications.value
-    .filter((item) => item.status === "PENDING_APPROVAL" || item.status === "APPROVED")
-    .sort((a, b) => Number(b.requestedAmount || 0) - Number(a.requestedAmount || 0))[0];
+    .filter(
+      (item) =>
+        item.status === "PENDING_APPROVAL" || item.status === "APPROVED",
+    )
+    .sort(
+      (a, b) => Number(b.requestedAmount || 0) - Number(a.requestedAmount || 0),
+    )[0];
   return [
-    overdueReceivable > 0 ? { key: "ar", level: "高", color: "red", title: "逾期应收待催收", value: formatMoney(overdueReceivable), route: "/finance/receivables" } : null,
-    overduePayable > 0 ? { key: "ap", level: "中", color: "orange", title: "逾期应付待安排", value: formatMoney(overduePayable), route: "/finance/payables" } : null,
-    pendingAmount > 0 ? { key: "pending", level: "中", color: "blue", title: "付款申请待审批", value: formatMoney(pendingAmount), route: "/finance/payment-applications" } : null,
-    largeApplication ? { key: "large", level: "关注", color: "purple", title: `大额付款 ${largeApplication.supplierName || largeApplication.payableCode}`, value: formatMoney(largeApplication.requestedAmount), route: "/finance/payment-applications" } : null,
-  ].filter(Boolean) as Array<{ key: string; level: string; color: string; title: string; value: string; route: string }>;
+    overdueReceivable > 0
+      ? {
+          key: "ar",
+          level: "高",
+          color: "red",
+          title: "逾期应收待催收",
+          value: formatMoney(overdueReceivable),
+          route: "/finance/receivables",
+        }
+      : null,
+    overduePayable > 0
+      ? {
+          key: "ap",
+          level: "中",
+          color: "orange",
+          title: "逾期应付待安排",
+          value: formatMoney(overduePayable),
+          route: "/finance/payables",
+        }
+      : null,
+    pendingAmount > 0
+      ? {
+          key: "pending",
+          level: "中",
+          color: "blue",
+          title: "付款申请待审批",
+          value: formatMoney(pendingAmount),
+          route: "/finance/payment-applications",
+        }
+      : null,
+    largeApplication
+      ? {
+          key: "large",
+          level: "关注",
+          color: "purple",
+          title: `大额付款 ${largeApplication.supplierName || largeApplication.payableCode}`,
+          value: formatMoney(largeApplication.requestedAmount),
+          route: "/finance/payment-applications",
+        }
+      : null,
+  ].filter(Boolean) as Array<{
+    key: string;
+    level: string;
+    color: string;
+    title: string;
+    value: string;
+    route: string;
+  }>;
 });
 const ledgerReceiptAmount = computed(() => voucherAmountByType("RECEIPT"));
 const ledgerPaymentAmount = computed(() => voucherAmountByType("PAYMENT"));
@@ -171,70 +335,133 @@ const reconciliationItems = computed(() => [
   {
     key: "receipt",
     label: "回款入账差额",
-    diff: roundMoney(Number(overview.receivedAmount || 0) - ledgerReceiptAmount.value),
+    diff: roundMoney(
+      Number(overview.receivedAmount || 0) - ledgerReceiptAmount.value,
+    ),
     hint: `业务 ${formatMoney(overview.receivedAmount)} / 总账 ${formatMoney(ledgerReceiptAmount.value)}`,
   },
   {
     key: "payment",
     label: "付款入账差额",
-    diff: roundMoney(Number(overview.paidAmount || 0) - ledgerPaymentAmount.value),
+    diff: roundMoney(
+      Number(overview.paidAmount || 0) - ledgerPaymentAmount.value,
+    ),
     hint: `业务 ${formatMoney(overview.paidAmount)} / 总账 ${formatMoney(ledgerPaymentAmount.value)}`,
   },
   {
     key: "cash",
     label: "净流量差额",
-    diff: roundMoney(Number(overview.netCashInflow || 0) - (ledgerReceiptAmount.value - ledgerPaymentAmount.value)),
+    diff: roundMoney(
+      Number(overview.netCashInflow || 0) -
+        (ledgerReceiptAmount.value - ledgerPaymentAmount.value),
+    ),
     hint: "业务净流入 vs 总账现金流",
   },
 ]);
-const reconciliationAlerts = computed(() => reconciliationItems.value
-  .filter((item) => item.diff !== 0)
-  .map((item) => `${item.label} ${formatMoney(Math.abs(item.diff))}`));
+const reconciliationAlerts = computed(() =>
+  reconciliationItems.value
+    .filter((item) => item.diff !== 0)
+    .map((item) => `${item.label} ${formatMoney(Math.abs(item.diff))}`),
+);
 
 onMounted(loadData);
 
 async function loadData() {
-  loading.value = true; errorMessage.value = "";
+  loading.value = true;
+  errorMessage.value = "";
   try {
-    const [overviewData, receivableData, payableData, applicationData] = await Promise.all([
-      getFinanceOverview(),
-      auth.can("finance:receivable:view") ? listFinanceReceivables() : Promise.resolve([]),
-      auth.can("finance:payable:view") ? listFinancePayables() : Promise.resolve([]),
-      auth.can("finance:payable:view") ? listPaymentApplications() : Promise.resolve([]),
-    ]);
-    vouchers.value = auth.can("finance:ledger:view") ? await listVouchers() : [];
+    const [overviewData, receivableData, payableData, applicationData] =
+      await Promise.all([
+        getFinanceOverview(),
+        auth.can("finance:receivable:view")
+          ? listFinanceReceivables()
+          : Promise.resolve([]),
+        auth.can("finance:payable:view")
+          ? listFinancePayables()
+          : Promise.resolve([]),
+        auth.can("finance:payable:view")
+          ? listPaymentApplications()
+          : Promise.resolve([]),
+      ]);
+    vouchers.value = auth.can("finance:ledger:view")
+      ? await listVouchers()
+      : [];
     Object.assign(overview, overviewData);
     receivables.value = receivableData;
     payables.value = payableData;
     applications.value = applicationData;
+  } catch (error) {
+    errorMessage.value =
+      error instanceof Error ? error.message : "资金数据加载失败";
+  } finally {
+    loading.value = false;
   }
-  catch (error) { errorMessage.value = error instanceof Error ? error.message : "资金数据加载失败"; }
-  finally { loading.value = false; }
 }
-function emptyOverview(): FinanceOverview { return { receivableAmount: 0, receivedAmount: 0, receivableOutstanding: 0, receivableOverdue: 0, payableAmount: 0, paidAmount: 0, payableOutstanding: 0, payableOverdue: 0, netCashInflow: 0, pendingPaymentApplications: 0 }; }
-function ratio(value: number, total: number) { return total > 0 ? Math.min(100, Math.round(value / total * 100)) : 0; }
-function dangerStyle(value: number) { return value > 0 ? { color: "#cf1322" } : {}; }
+function emptyOverview(): FinanceOverview {
+  return {
+    receivableAmount: 0,
+    receivedAmount: 0,
+    receivableOutstanding: 0,
+    receivableOverdue: 0,
+    payableAmount: 0,
+    paidAmount: 0,
+    payableOutstanding: 0,
+    payableOverdue: 0,
+    netCashInflow: 0,
+    pendingPaymentApplications: 0,
+  };
+}
+function ratio(value: number, total: number) {
+  return total > 0 ? Math.min(100, Math.round((value / total) * 100)) : 0;
+}
+function dangerStyle(value: number) {
+  return value > 0 ? { color: "#cf1322" } : {};
+}
 function voucherAmountByType(type: string) {
   return vouchers.value
     .filter((item) => item.status === "POSTED" && item.bizType === type)
     .reduce((sum, item) => sum + Number(item.totalDebit || 0), 0);
 }
-function roundMoney(value: number) { return Math.round(value * 100) / 100; }
+function roundMoney(value: number) {
+  return Math.round(value * 100) / 100;
+}
 function buildForecastBucket(key: string, label: string, days: number) {
   const receivable = receivables.value
     .filter((item) => isOpenReceivable(item) && isDueWithin(item.dueDate, days))
     .reduce((sum, item) => sum + Number(item.outstandingAmount || 0), 0);
   const payable = payables.value
-    .filter((item) => item.status !== "PAID" && item.status !== "CANCELLED" && isDueWithin(item.dueDate, days))
-    .reduce((sum, item) => sum + Number(item.availableAmount || item.outstandingAmount || 0), 0);
+    .filter(
+      (item) =>
+        item.status !== "PAID" &&
+        item.status !== "CANCELLED" &&
+        isDueWithin(item.dueDate, days),
+    )
+    .reduce(
+      (sum, item) =>
+        sum + Number(item.availableAmount || item.outstandingAmount || 0),
+      0,
+    );
   return { key, label, receivable, payable, net: receivable - payable };
 }
-function buildAgingBucket(key: string, label: string, minDays: number, maxDays: number) {
+function buildAgingBucket(
+  key: string,
+  label: string,
+  minDays: number,
+  maxDays: number,
+) {
   const receivable = receivables.value
-    .filter((item) => isOpenReceivable(item) && inAgingBucket(item.dueDate, minDays, maxDays))
+    .filter(
+      (item) =>
+        isOpenReceivable(item) && inAgingBucket(item.dueDate, minDays, maxDays),
+    )
     .reduce((sum, item) => sum + Number(item.outstandingAmount || 0), 0);
   const payable = payables.value
-    .filter((item) => item.status !== "PAID" && item.status !== "CANCELLED" && inAgingBucket(item.dueDate, minDays, maxDays))
+    .filter(
+      (item) =>
+        item.status !== "PAID" &&
+        item.status !== "CANCELLED" &&
+        inAgingBucket(item.dueDate, minDays, maxDays),
+    )
     .reduce((sum, item) => sum + Number(item.outstandingAmount || 0), 0);
   return { key, label, receivable, payable };
 }
@@ -242,7 +469,9 @@ function openForecast(key: string) {
   if (key === "d7" || key === "d30") router.push("/finance/receivables");
   else router.push("/finance/payables");
 }
-function isOpenReceivable(item: Receivable) { return item.status !== "SETTLED" && Number(item.outstandingAmount || 0) > 0; }
+function isOpenReceivable(item: Receivable) {
+  return item.status !== "SETTLED" && Number(item.outstandingAmount || 0) > 0;
+}
 function isDueWithin(value: string, days: number) {
   const diff = daysFromToday(value);
   return diff <= days;
@@ -251,7 +480,9 @@ function inAgingBucket(value: string, minDays: number, maxDays: number) {
   const overdue = daysOverdue(value);
   return overdue >= minDays && overdue <= maxDays;
 }
-function daysOverdue(value: string) { return Math.max(0, -daysFromToday(value)); }
+function daysOverdue(value: string) {
+  return Math.max(0, -daysFromToday(value));
+}
 function daysFromToday(value: string) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -259,8 +490,17 @@ function daysFromToday(value: string) {
   target.setHours(0, 0, 0, 0);
   return Math.ceil((target.getTime() - today.getTime()) / 86400000);
 }
-function formatMoney(value: number) { return new Intl.NumberFormat("zh-CN", { style: "currency", currency: "CNY", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value || 0); }
-function moneyFormatter(value: number | string) { return formatMoney(Number(value)); }
+function formatMoney(value: number) {
+  return new Intl.NumberFormat("zh-CN", {
+    style: "currency",
+    currency: "CNY",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value || 0);
+}
+function moneyFormatter(value: number | string) {
+  return formatMoney(Number(value));
+}
 </script>
 
 <style scoped>

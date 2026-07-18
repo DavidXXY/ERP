@@ -76,28 +76,54 @@ export function getPersonalOverviewApi() {
   return request<PersonalOverview>({ method: "GET", url: "/personal" });
 }
 
-export function updateMyProfileApi(data: { displayName: string; phone?: string; email?: string }) {
-  return request<PersonalAccount>({ method: "PUT", url: "/personal/profile", data });
+export function updateMyProfileApi(data: {
+  displayName: string;
+  phone?: string;
+  email?: string;
+}) {
+  return request<PersonalAccount>({
+    method: "PUT",
+    url: "/personal/profile",
+    data,
+  });
 }
 
-export function changeMyPasswordApi(data: { currentPassword: string; newPassword: string }) {
+export function changeMyPasswordApi(data: {
+  currentPassword: string;
+  newPassword: string;
+}) {
   return request<void>({ method: "PUT", url: "/personal/password", data });
 }
 
 export function createMyCertificateApi(data: MyCertificatePayload) {
-  return request<MyCertificate>({ method: "POST", url: "/personal/certificates", data });
+  return request<MyCertificate>({
+    method: "POST",
+    url: "/personal/certificates",
+    data,
+  });
 }
 
 export function updateMyCertificateApi(id: string, data: MyCertificatePayload) {
-  return request<MyCertificate>({ method: "PUT", url: `/personal/certificates/${id}`, data });
+  return request<MyCertificate>({
+    method: "PUT",
+    url: `/personal/certificates/${id}`,
+    data,
+  });
 }
 
 export function deleteMyCertificateApi(id: string) {
-  return request<void>({ method: "DELETE", url: `/personal/certificates/${id}` });
+  return request<void>({
+    method: "DELETE",
+    url: `/personal/certificates/${id}`,
+  });
 }
 
 export function uploadMyAttachmentApi(file: File) {
   const form = new FormData();
   form.append("file", file);
-  return request<Attachment>({ method: "POST", url: "/personal/attachments", data: form });
+  return request<Attachment>({
+    method: "POST",
+    url: "/personal/attachments",
+    data: form,
+  });
 }

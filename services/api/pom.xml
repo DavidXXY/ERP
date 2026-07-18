@@ -22,12 +22,28 @@
     <jjwt.version>0.12.6</jjwt.version>
     <minio.version>8.5.17</minio.version>
     <springdoc.version>2.8.0</springdoc.version>
+    <shedlock.version>6.3.0</shedlock.version>
   </properties>
 
   <dependencies>
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.micrometer</groupId>
+      <artifactId>micrometer-registry-prometheus</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+    <dependency>
+      <groupId>net.javacrumbs.shedlock</groupId>
+      <artifactId>shedlock-spring</artifactId>
+      <version>${shedlock.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>net.javacrumbs.shedlock</groupId>
+      <artifactId>shedlock-provider-jdbc-template</artifactId>
+      <version>${shedlock.version}</version>
     </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>

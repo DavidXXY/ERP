@@ -6,23 +6,41 @@
         <p>权限点定义系统中的查看、编辑、审批和执行能力，并由角色统一授权。</p>
       </div>
       <a-space>
-        <a-button @click="loadData"><template #icon><ReloadOutlined /></template>刷新</a-button>
-        <a-button v-if="auth.can('system:permission:create')" type="primary" @click="openCreateModal">
+        <a-button @click="loadData"
+          ><template #icon><ReloadOutlined /></template>刷新</a-button
+        >
+        <a-button
+          v-if="auth.can('system:permission:create')"
+          type="primary"
+          @click="openCreateModal"
+        >
           <template #icon><PlusOutlined /></template>新增权限
         </a-button>
       </a-space>
     </header>
 
     <section class="metric-band">
-      <div><span>权限总数</span><strong>{{ permissions.length }}</strong></div>
-      <div><span>业务模块</span><strong>{{ moduleOptions.length - 1 }}</strong></div>
-      <div><span>已被角色使用</span><strong>{{ usedPermissionCount }}</strong></div>
-      <div><span>自定义权限</span><strong>{{ customPermissionCount }}</strong></div>
+      <div>
+        <span>权限总数</span><strong>{{ permissions.length }}</strong>
+      </div>
+      <div>
+        <span>业务模块</span><strong>{{ moduleOptions.length - 1 }}</strong>
+      </div>
+      <div>
+        <span>已被角色使用</span><strong>{{ usedPermissionCount }}</strong>
+      </div>
+      <div>
+        <span>自定义权限</span><strong>{{ customPermissionCount }}</strong>
+      </div>
     </section>
 
     <section class="permission-content">
       <div class="table-toolbar">
-        <a-input v-model:value="keyword" allow-clear placeholder="搜索权限名称或代码" />
+        <a-input
+          v-model:value="keyword"
+          allow-clear
+          placeholder="搜索权限名称或代码"
+        />
         <a-select v-model:value="moduleFilter" :options="moduleOptions" />
       </div>
 
@@ -31,7 +49,11 @@
         :data-source="filteredPermissions"
         :loading="loading"
         row-key="id"
-        :pagination="{ pageSize: 20, showSizeChanger: true, showTotal: (total: number) => `共 ${total} 条` }"
+        :pagination="{
+          pageSize: 20,
+          showSizeChanger: true,
+          showTotal: (total: number) => `共 ${total} 条`,
+        }"
         :scroll="{ x: 920 }"
       >
         <template #bodyCell="{ column, record }">
@@ -51,19 +73,37 @@
           <template v-else-if="column.key === 'roleCount'">
             <strong>{{ record.roleCount }}</strong> 个角色
           </template>
-          <template v-else-if="column.key === 'createdAt'">{{ formatDateTime(record.createdAt) }}</template>
+          <template v-else-if="column.key === 'createdAt'">{{
+            formatDateTime(record.createdAt)
+          }}</template>
           <template v-else-if="column.key === 'action'">
             <a-space>
-              <a-button v-if="auth.can('system:permission:update')" size="small" type="link" @click="openEditModal(record)">编辑</a-button>
+              <a-button
+                v-if="auth.can('system:permission:update')"
+                size="small"
+                type="link"
+                @click="openEditModal(record)"
+                >编辑</a-button
+              >
               <a-popconfirm
                 v-if="auth.can('system:permission:delete') && !record.builtIn"
-                :title="record.roleCount ? `该权限仍被 ${record.roleCount} 个角色使用` : '确定删除该权限？'"
+                :title="
+                  record.roleCount
+                    ? `该权限仍被 ${record.roleCount} 个角色使用`
+                    : '确定删除该权限？'
+                "
                 ok-text="确定"
                 cancel-text="取消"
                 :disabled="record.roleCount > 0"
                 @confirm="handleDelete(record.id)"
               >
-                <a-button size="small" type="link" danger :disabled="record.roleCount > 0">删除</a-button>
+                <a-button
+                  size="small"
+                  type="link"
+                  danger
+                  :disabled="record.roleCount > 0"
+                  >删除</a-button
+                >
               </a-popconfirm>
             </a-space>
           </template>
@@ -86,13 +126,34 @@
         show-icon
         message="系统内置权限只允许调整显示名称和所属模块，权限代码不会改变。"
       />
-      <a-form ref="formRef" :model="formState" :rules="formRules" layout="vertical">
+      <a-form
+        ref="formRef"
+        :model="formState"
+        :rules="formRules"
+        layout="vertical"
+      >
         <a-form-item label="权限代码" name="code">
-          <a-input v-model:value="formState.code" :disabled="isEdit" placeholder="例如：project:budget:approve" />
+          <a-input
+            v-model:value="formState.code"
+            :disabled="isEdit"
+            placeholder="例如：project:budget:approve"
+          />
         </a-form-item>
-        <a-form-item label="权限名称" name="name"><a-input v-model:value="formState.name" placeholder="例如：项目预算审批" /></a-form-item>
-        <a-form-item label="所属模块" name="module"><a-input v-model:value="formState.module" placeholder="例如：project" /></a-form-item>
-        <a-alert type="warning" show-icon message="新权限创建后不会自动授予任何角色，需要在角色管理中完成授权。" />
+        <a-form-item label="权限名称" name="name"
+          ><a-input
+            v-model:value="formState.name"
+            placeholder="例如：项目预算审批"
+        /></a-form-item>
+        <a-form-item label="所属模块" name="module"
+          ><a-input
+            v-model:value="formState.module"
+            placeholder="例如：project"
+        /></a-form-item>
+        <a-alert
+          type="warning"
+          show-icon
+          message="新权限创建后不会自动授予任何角色，需要在角色管理中完成授权。"
+        />
       </a-form>
     </a-modal>
   </div>
@@ -137,16 +198,46 @@ const columns = [
   { title: "操作", key: "action", width: 140, fixed: "right" },
 ];
 const moduleLabels: Record<string, string> = {
-  system: "系统设置", dashboard: "经营驾驶舱", crm: "CRM", procurement: "供应链采购",
-  project: "项目管理", inventory: "库存管理", workforce: "人事管理",
-  qualification: "资质管理", office: "OA协同", finance: "财务资金", bi: "经营分析",
+  system: "系统设置",
+  dashboard: "经营驾驶舱",
+  crm: "CRM",
+  procurement: "供应链采购",
+  project: "项目管理",
+  inventory: "库存管理",
+  workforce: "人事管理",
+  qualification: "资质管理",
+  office: "OA协同",
+  finance: "财务资金",
+  bi: "经营分析",
 };
 const actionLabels: Record<string, string> = {
-  view: "查看", create: "新增", update: "编辑", delete: "删除", approve: "审批", submit: "提交",
-  execute: "执行", settle: "核销", invoice: "开票", receive: "收货", issue: "领用", return: "归还",
-  close: "关闭", assign: "派工", complete: "验收", publish: "发布", reset: "重置", apply: "申请",
-  collect: "回款", generate: "生成", accept: "验收", manage: "维护", process: "处理", upload: "上传",
-  convert: "转合同", "customer-result": "客户结果", "reset-password": "重置密码",
+  view: "查看",
+  create: "新增",
+  update: "编辑",
+  delete: "删除",
+  approve: "审批",
+  submit: "提交",
+  execute: "执行",
+  settle: "核销",
+  invoice: "开票",
+  receive: "收货",
+  issue: "领用",
+  return: "归还",
+  close: "关闭",
+  assign: "派工",
+  complete: "验收",
+  publish: "发布",
+  reset: "重置",
+  apply: "申请",
+  collect: "回款",
+  generate: "生成",
+  accept: "验收",
+  manage: "维护",
+  process: "处理",
+  upload: "上传",
+  convert: "转合同",
+  "customer-result": "客户结果",
+  "reset-password": "重置密码",
 };
 
 const moduleOptions = computed(() => [
@@ -158,13 +249,21 @@ const moduleOptions = computed(() => [
 const filteredPermissions = computed(() => {
   const normalized = keyword.value.trim().toLowerCase();
   return permissions.value.filter((permission) => {
-    const moduleMatches = moduleFilter.value === "ALL" || permission.module === moduleFilter.value;
-    const keywordMatches = !normalized || permission.name.toLowerCase().includes(normalized) || permission.code.toLowerCase().includes(normalized);
+    const moduleMatches =
+      moduleFilter.value === "ALL" || permission.module === moduleFilter.value;
+    const keywordMatches =
+      !normalized ||
+      permission.name.toLowerCase().includes(normalized) ||
+      permission.code.toLowerCase().includes(normalized);
     return moduleMatches && keywordMatches;
   });
 });
-const usedPermissionCount = computed(() => permissions.value.filter((item) => item.roleCount > 0).length);
-const customPermissionCount = computed(() => permissions.value.filter((item) => !item.builtIn).length);
+const usedPermissionCount = computed(
+  () => permissions.value.filter((item) => item.roleCount > 0).length,
+);
+const customPermissionCount = computed(
+  () => permissions.value.filter((item) => !item.builtIn).length,
+);
 
 onMounted(loadData);
 
@@ -191,7 +290,11 @@ function openEditModal(record: PermissionResponse) {
   isEdit.value = true;
   editId.value = record.id;
   editingPermission.value = record;
-  Object.assign(formState, { code: record.code, name: record.name, module: record.module });
+  Object.assign(formState, {
+    code: record.code,
+    name: record.name,
+    module: record.module,
+  });
   modalVisible.value = true;
 }
 
@@ -205,7 +308,10 @@ async function handleModalOk() {
     await formRef.value?.validate();
     modalLoading.value = true;
     if (isEdit.value) {
-      await updatePermissionApi(editId.value, { name: formState.name, module: formState.module });
+      await updatePermissionApi(editId.value, {
+        name: formState.name,
+        module: formState.module,
+      });
       message.success("权限信息已更新");
     } else {
       await createPermissionApi({ ...formState });

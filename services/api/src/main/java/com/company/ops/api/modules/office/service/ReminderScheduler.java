@@ -15,6 +15,7 @@ import java.util.UUID;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 
 @Service
 public class ReminderScheduler {
@@ -23,6 +24,7 @@ public class ReminderScheduler {
   private final InventoryPartRepository parts; private final SystemNotificationRepository notifications; private final OfficeService officeService;
   public ReminderScheduler(EquipmentAssetRepository equipment,EmployeeCertificateRepository certificates,ServiceContractRepository contracts,ReceivableRepository receivables,InventoryPartRepository parts,SystemNotificationRepository notifications,OfficeService officeService){this.equipment=equipment;this.certificates=certificates;this.contracts=contracts;this.receivables=receivables;this.parts=parts;this.notifications=notifications;this.officeService=officeService;}
   @Scheduled(cron="${ops.reminders.cron:0 15 1 * * *}") @Transactional
+  @SchedulerLock(name = "officeReminderRefresh", lockAtLeastFor = "PT1M", lockAtMostFor = "PT30M")
   public int refresh(){LocalDate today=LocalDate.now();int count=0;
     for(var item:equipment.findAllByOrderByNextMaintenanceDateAsc())if(item.getStatus()!=EquipmentStatus.RETIRED&&item.getNextMaintenanceDate()!=null&&!item.getNextMaintenanceDate().isAfter(today.plusDays(7)))count+=create("EQUIPMENT_DUE:"+item.getId()+":"+item.getNextMaintenanceDate(),"EQUIPMENT","设备服务到期",item.getCode()+" · "+item.getName()+" · "+item.getNextMaintenanceDate(),"EQUIPMENT",item.getId());
     for(var item:certificates.findAllByOrderByExpiryDateAsc())if(!item.getExpiryDate().isBefore(today)&&!item.getExpiryDate().isAfter(today.plusDays(30)))count+=create("CERTIFICATE_EXPIRY:"+item.getId()+":"+item.getExpiryDate(),"CERTIFICATE","人员证书即将到期",item.getCertificateType()+" · "+item.getCertificateNo()+" · "+item.getExpiryDate(),"CERTIFICATE",item.getId());

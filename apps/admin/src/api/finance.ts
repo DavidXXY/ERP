@@ -14,7 +14,11 @@ export type FinanceOverview = {
   pendingPaymentApplications: number;
 };
 
-export type FinancePayableStatus = "PENDING" | "PARTIAL_PAID" | "PAID" | "CANCELLED";
+export type FinancePayableStatus =
+  | "PENDING"
+  | "PARTIAL_PAID"
+  | "PAID"
+  | "CANCELLED";
 
 export type FinancePayable = {
   id: string;
@@ -33,7 +37,11 @@ export type FinancePayable = {
   overdue: boolean;
 };
 
-export type PaymentApplicationStatus = "PENDING_APPROVAL" | "APPROVED" | "REJECTED" | "PAID";
+export type PaymentApplicationStatus =
+  | "PENDING_APPROVAL"
+  | "APPROVED"
+  | "REJECTED"
+  | "PAID";
 export type PaymentMethod = "BANK_TRANSFER" | "CHECK" | "CASH" | "OTHER";
 
 export type PaymentApplication = {
@@ -113,15 +121,37 @@ export function listFinanceReceivables() {
 }
 
 export function getFinanceReceivableDetail(id: string) {
-  return request<FinanceReceivableDetail>({ method: "GET", url: `/finance/receivables/${id}` });
+  return request<FinanceReceivableDetail>({
+    method: "GET",
+    url: `/finance/receivables/${id}`,
+  });
 }
 
-export function registerFinanceInvoice(id: string, payload: { invoiceNo: string; invoiceDate: string }) {
-  return request<Receivable>({ method: "POST", url: `/finance/receivables/${id}/invoice`, data: payload });
+export function registerFinanceInvoice(
+  id: string,
+  payload: { invoiceNo: string; invoiceDate: string },
+) {
+  return request<Receivable>({
+    method: "POST",
+    url: `/finance/receivables/${id}/invoice`,
+    data: payload,
+  });
 }
 
-export function recordFinanceReceipt(id: string, payload: { amount: number; receivedDate: string; referenceNo: string; recorderName: string }) {
-  return request<Receivable>({ method: "POST", url: `/finance/receivables/${id}/receipts`, data: payload });
+export function recordFinanceReceipt(
+  id: string,
+  payload: {
+    amount: number;
+    receivedDate: string;
+    referenceNo: string;
+    recorderName: string;
+  },
+) {
+  return request<Receivable>({
+    method: "POST",
+    url: `/finance/receivables/${id}/receipts`,
+    data: payload,
+  });
 }
 
 export function listFinancePayables() {
@@ -129,19 +159,57 @@ export function listFinancePayables() {
 }
 
 export function listPaymentApplications() {
-  return request<PaymentApplication[]>({ method: "GET", url: "/finance/payment-applications" });
+  return request<PaymentApplication[]>({
+    method: "GET",
+    url: "/finance/payment-applications",
+  });
 }
 
-export function createPaymentApplication(payload: { code: string; payableId: string; requestedAmount: number; requestedDate: string; applicantName: string; purpose: string }) {
-  return request<PaymentApplication>({ method: "POST", url: "/finance/payment-applications", data: payload });
+export function createPaymentApplication(payload: {
+  code: string;
+  payableId: string;
+  requestedAmount: number;
+  requestedDate: string;
+  applicantName: string;
+  purpose: string;
+}) {
+  return request<PaymentApplication>({
+    method: "POST",
+    url: "/finance/payment-applications",
+    data: payload,
+  });
 }
 
-export function processPaymentApplication(id: string, payload: { decision: "APPROVED" | "REJECTED"; comment: string; approverName: string }) {
-  return request<PaymentApplication>({ method: "POST", url: `/finance/payment-applications/${id}/approval`, data: payload });
+export function processPaymentApplication(
+  id: string,
+  payload: {
+    decision: "APPROVED" | "REJECTED";
+    comment: string;
+    approverName: string;
+  },
+) {
+  return request<PaymentApplication>({
+    method: "POST",
+    url: `/finance/payment-applications/${id}/approval`,
+    data: payload,
+  });
 }
 
-export function executePayment(id: string, payload: { paymentCode: string; paidDate: string; paymentMethod: PaymentMethod; bankReference: string; payerName: string }) {
-  return request<PaymentRecord>({ method: "POST", url: `/finance/payment-applications/${id}/payment`, data: payload });
+export function executePayment(
+  id: string,
+  payload: {
+    paymentCode: string;
+    paidDate: string;
+    paymentMethod: PaymentMethod;
+    bankReference: string;
+    payerName: string;
+  },
+) {
+  return request<PaymentRecord>({
+    method: "POST",
+    url: `/finance/payment-applications/${id}/payment`,
+    data: payload,
+  });
 }
 
 export function listPaymentRecords() {

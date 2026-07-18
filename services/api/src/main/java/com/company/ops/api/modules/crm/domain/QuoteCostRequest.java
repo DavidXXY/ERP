@@ -39,8 +39,14 @@ public class QuoteCostRequest extends BaseEntity {
   @Column(name = "labor_cost", nullable = false, precision = 14, scale = 2)
   private BigDecimal laborCost = BigDecimal.ZERO;
 
+  @Column(name = "labor_tax_rate", nullable = false, precision = 5, scale = 2)
+  private BigDecimal laborTaxRate = BigDecimal.valueOf(6);
+
   @Column(name = "material_cost", nullable = false, precision = 14, scale = 2)
   private BigDecimal materialCost = BigDecimal.ZERO;
+
+  @Column(name = "material_tax_rate", nullable = false, precision = 5, scale = 2)
+  private BigDecimal materialTaxRate = BigDecimal.valueOf(13);
 
   @Column(name = "subcontract_cost", nullable = false, precision = 14, scale = 2)
   private BigDecimal subcontractCost = BigDecimal.ZERO;
@@ -56,6 +62,9 @@ public class QuoteCostRequest extends BaseEntity {
 
   @Column(name = "equipment_cost", nullable = false, precision = 14, scale = 2)
   private BigDecimal equipmentCost = BigDecimal.ZERO;
+
+  @Column(name = "equipment_tax_rate", nullable = false, precision = 5, scale = 2)
+  private BigDecimal equipmentTaxRate = BigDecimal.valueOf(13);
 
   @Column(name = "risk_reserve", nullable = false, precision = 14, scale = 2)
   private BigDecimal riskReserve = BigDecimal.ZERO;
@@ -151,12 +160,28 @@ public class QuoteCostRequest extends BaseEntity {
     this.laborCost = laborCost;
   }
 
+  public BigDecimal getLaborTaxRate() {
+    return laborTaxRate;
+  }
+
+  public void setLaborTaxRate(BigDecimal laborTaxRate) {
+    this.laborTaxRate = laborTaxRate;
+  }
+
   public BigDecimal getMaterialCost() {
     return materialCost;
   }
 
   public void setMaterialCost(BigDecimal materialCost) {
     this.materialCost = materialCost;
+  }
+
+  public BigDecimal getMaterialTaxRate() {
+    return materialTaxRate;
+  }
+
+  public void setMaterialTaxRate(BigDecimal materialTaxRate) {
+    this.materialTaxRate = materialTaxRate;
   }
 
   public BigDecimal getSubcontractCost() {
@@ -189,6 +214,14 @@ public class QuoteCostRequest extends BaseEntity {
 
   public void setEquipmentCost(BigDecimal equipmentCost) {
     this.equipmentCost = equipmentCost;
+  }
+
+  public BigDecimal getEquipmentTaxRate() {
+    return equipmentTaxRate;
+  }
+
+  public void setEquipmentTaxRate(BigDecimal equipmentTaxRate) {
+    this.equipmentTaxRate = equipmentTaxRate;
   }
 
   public BigDecimal getRiskReserve() {

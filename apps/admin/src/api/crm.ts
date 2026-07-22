@@ -401,6 +401,7 @@ export type Receivable = {
   customerName: string;
   contractId?: string;
   contractCode: string;
+  contractName: string;
   code?: string;
   sourceNo: string;
   amount: number;
@@ -411,6 +412,15 @@ export type Receivable = {
   invoiceRequestedBy?: string;
   invoiceRequestedAt?: string;
   invoiceRequestRemark?: string;
+  invoiceRequestStatus?:
+    | "NOT_REQUESTED"
+    | "PENDING_APPROVAL"
+    | "APPROVED"
+    | "REJECTED"
+    | "INVOICED";
+  invoiceReviewedBy?: string;
+  invoiceReviewedAt?: string;
+  invoiceReviewComment?: string;
   settledAmount: number;
   outstandingAmount: number;
   status: ReceivableStatus;

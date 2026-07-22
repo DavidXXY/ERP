@@ -19,6 +19,7 @@ import com.company.ops.api.modules.crm.domain.QuoteRevision;
 import com.company.ops.api.modules.crm.domain.QuoteStatus;
 import com.company.ops.api.modules.crm.domain.Receivable;
 import com.company.ops.api.modules.crm.domain.ReceivableStatus;
+import com.company.ops.api.modules.crm.domain.InvoiceRequestStatus;
 import com.company.ops.api.modules.crm.domain.ReceivableReceipt;
 import com.company.ops.api.modules.crm.domain.ServiceContract;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.AdvanceOpportunityRequest;
@@ -43,6 +44,7 @@ import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.QuoteRevisionRespon
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ReceivableResponse;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.RecordReceiptRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.RegisterInvoiceRequest;
+import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ReviewInvoiceRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.RequestQuoteCostRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.RenewalResponse;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.SubmitQuoteCostRequest;
@@ -561,7 +563,7 @@ public class CrmOperationsService {
 
   @Transactional
   public ReceivableResponse applyInvoice(UUID id, ApplyInvoiceRequest request) {
-    Receivable receivable = receivableRepository.findById(id)
+    Receivable receivable = receivableRepository.findByIdForUpdate(id)
         .orElseThrow(() -> new BusinessException("应收单不存在"));
     if (receivable.getStatus() == ReceivableStatus.SETTLED) {
       throw new BusinessException("已核销应收不能申请开票");
@@ -569,20 +571,46 @@ public class CrmOperationsService {
     if (hasText(receivable.getInvoiceNo())) {
       throw new BusinessException("该应收已登记发票");
     }
-    if (receivable.isInvoiceRequested()) {
+    if (receivable.getInvoiceRequestStatus() == InvoiceRequestStatus.PENDING_APPROVAL
+        || receivable.getInvoiceRequestStatus() == InvoiceRequestStatus.APPROVED) {
       throw new BusinessException("该应收已提交开票申请，请勿重复提交");
     }
     receivable.setInvoiceRequested(true);
     receivable.setInvoiceRequestedBy(request.applicantName());
     receivable.setInvoiceRequestedAt(OffsetDateTime.now());
     receivable.setInvoiceRequestRemark(request.remark());
+    receivable.setInvoiceRequestStatus(InvoiceRequestStatus.PENDING_APPROVAL);
+    receivable.setInvoiceReviewedBy(null);
+    receivable.setInvoiceReviewedAt(null);
+    receivable.setInvoiceReviewComment(null);
     Receivable saved = receivableRepository.save(receivable);
     return mapReceivable(saved);
   }
 
   @Transactional
+  public ReceivableResponse reviewInvoice(UUID id, ReviewInvoiceRequest request) {
+    Receivable receivable = receivableRepository.findByIdForUpdate(id)
+        .orElseThrow(() -> new BusinessException("应收单不存在"));
+    if (receivable.getInvoiceRequestStatus() != InvoiceRequestStatus.PENDING_APPROVAL) {
+      throw new BusinessException("只有待审核的开票申请可以处理");
+    }
+    String decision = request.decision().trim().toUpperCase();
+    if (!decision.equals("APPROVED") && !decision.equals("REJECTED")) {
+      throw new BusinessException("审核结论只能为通过或驳回");
+    }
+    if (decision.equals("REJECTED") && (request.comment() == null || request.comment().isBlank())) {
+      throw new BusinessException("驳回时必须填写原因");
+    }
+    receivable.setInvoiceRequestStatus(InvoiceRequestStatus.valueOf(decision));
+    receivable.setInvoiceReviewedBy(request.reviewerName());
+    receivable.setInvoiceReviewedAt(OffsetDateTime.now());
+    receivable.setInvoiceReviewComment(request.comment());
+    return mapReceivable(receivableRepository.save(receivable));
+  }
+
+  @Transactional
   public ReceivableResponse registerInvoice(UUID id, RegisterInvoiceRequest request) {
-    Receivable receivable = receivableRepository.findById(id)
+    Receivable receivable = receivableRepository.findByIdForUpdate(id)
         .orElseThrow(() -> new BusinessException("应收单不存在"));
     if (receivable.getStatus() == ReceivableStatus.SETTLED) {
       throw new BusinessException("已核销应收不能登记发票");
@@ -590,11 +618,12 @@ public class CrmOperationsService {
     if (receivable.getInvoiceNo() != null && !receivable.getInvoiceNo().isBlank()) {
       throw new BusinessException("该应收已登记发票");
     }
-    if (!receivable.isInvoiceRequested()) {
-      throw new BusinessException("请先由业务侧发起开票申请");
+    if (receivable.getInvoiceRequestStatus() != InvoiceRequestStatus.APPROVED) {
+      throw new BusinessException("开票申请审核通过后才能登记发票");
     }
     receivable.setInvoiceNo(request.invoiceNo());
     receivable.setInvoiceDate(request.invoiceDate());
+    receivable.setInvoiceRequestStatus(InvoiceRequestStatus.INVOICED);
     receivable.setStatus(receivable.getDueDate().isBefore(LocalDate.now())
         ? ReceivableStatus.OVERDUE
         : ReceivableStatus.PAYMENT_PENDING);
@@ -1255,6 +1284,9 @@ public class CrmOperationsService {
         item.getContractId() == null || contracts.get(item.getContractId()) == null
             ? item.getSourceNo()
             : contracts.get(item.getContractId()).getCode(),
+        item.getContractId() == null || contracts.get(item.getContractId()) == null
+            ? "未关联合同"
+            : contracts.get(item.getContractId()).getProjectName(),
         item.getCode(),
         item.getSourceNo(),
         item.getAmount(),
@@ -1265,6 +1297,10 @@ public class CrmOperationsService {
         item.getInvoiceRequestedBy(),
         item.getInvoiceRequestedAt(),
         item.getInvoiceRequestRemark(),
+        item.getInvoiceRequestStatus().name(),
+        item.getInvoiceReviewedBy(),
+        item.getInvoiceReviewedAt(),
+        item.getInvoiceReviewComment(),
         defaultAmount(item.getSettledAmount()),
         outstandingAmount(item),
         item.getStatus()

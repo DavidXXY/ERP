@@ -86,6 +86,75 @@
         /></a-descriptions-item>
       </a-descriptions>
 
+      <section class="finance-panel monthly-panel">
+        <div class="panel-heading monthly-heading">
+          <div>
+            <h3>月度收支</h3>
+            <p>按实际入账日期统计每月收入与支出</p>
+          </div>
+          <a-select v-model:value="selectedYear" class="year-select">
+            <a-select-option
+              v-for="year in availableYears"
+              :key="year"
+              :value="year"
+            >
+              {{ year }} 年
+            </a-select-option>
+          </a-select>
+        </div>
+        <div class="annual-summary">
+          <div>
+            <span>年度收入</span
+            ><strong class="income-text">{{
+              formatMoney(annualTotals.income)
+            }}</strong>
+          </div>
+          <div>
+            <span>年度支出</span
+            ><strong class="expense-text">{{
+              formatMoney(annualTotals.expense)
+            }}</strong>
+          </div>
+          <div>
+            <span>年度净额</span
+            ><strong
+              :class="annualTotals.net < 0 ? 'expense-text' : 'income-text'"
+              >{{ formatMoney(annualTotals.net) }}</strong
+            >
+          </div>
+        </div>
+        <div v-if="auth.can('finance:ledger:view')" class="monthly-table">
+          <div class="monthly-row monthly-table-head">
+            <span>月份</span><span>收支趋势</span><span>收入</span
+            ><span>支出</span><span>净额</span>
+          </div>
+          <div
+            v-for="item in monthlyFinance"
+            :key="item.month"
+            class="monthly-row"
+          >
+            <strong>{{ item.month }}月</strong>
+            <div class="month-bars" aria-hidden="true">
+              <i class="income-bar" :style="{ width: `${item.incomeRate}%` }" />
+              <i
+                class="expense-bar"
+                :style="{ width: `${item.expenseRate}%` }"
+              />
+            </div>
+            <span class="income-text">{{ formatMoney(item.income) }}</span>
+            <span class="expense-text">{{ formatMoney(item.expense) }}</span>
+            <strong :class="item.net < 0 ? 'expense-text' : 'income-text'">{{
+              formatMoney(item.net)
+            }}</strong>
+          </div>
+        </div>
+        <a-empty
+          v-else
+          :image="simpleImage"
+          description="需要总账查看权限才能查看月度收支"
+        />
+      </section>
+
       <section class="finance-control-grid">
         <div class="finance-panel">
           <div class="panel-heading">
@@ -240,6 +309,7 @@ const receivables = ref<Receivable[]>([]);
 const payables = ref<FinancePayable[]>([]);
 const applications = ref<PaymentApplication[]>([]);
 const vouchers = ref<AccountingVoucher[]>([]);
+const selectedYear = ref(new Date().getFullYear());
 const simpleImage = Empty.PRESENTED_IMAGE_SIMPLE;
 const receivableRate = computed(() =>
   ratio(overview.receivedAmount, overview.receivableAmount),
@@ -247,6 +317,54 @@ const receivableRate = computed(() =>
 const payableRate = computed(() =>
   ratio(overview.paidAmount, overview.payableAmount),
 );
+const availableYears = computed(() => {
+  const years = new Set(
+    vouchers.value.map((item) => Number(item.voucherDate.slice(0, 4))),
+  );
+  years.add(new Date().getFullYear());
+  return [...years].filter(Boolean).sort((a, b) => b - a);
+});
+const monthlyFinance = computed(() => {
+  const months = Array.from({ length: 12 }, (_, index) => ({
+    month: index + 1,
+    income: 0,
+    expense: 0,
+  }));
+  vouchers.value
+    .filter(
+      (item) =>
+        item.status === "POSTED" &&
+        Number(item.voucherDate.slice(0, 4)) === selectedYear.value,
+    )
+    .forEach((item) => {
+      const month = Number(item.voucherDate.slice(5, 7)) - 1;
+      if (item.bizType === "RECEIPT")
+        months[month].income += Number(item.totalDebit || 0);
+      if (item.bizType === "PAYMENT")
+        months[month].expense += Number(item.totalDebit || 0);
+    });
+  const maximum = Math.max(
+    1,
+    ...months.flatMap((item) => [item.income, item.expense]),
+  );
+  return months.map((item) => ({
+    ...item,
+    net: item.income - item.expense,
+    incomeRate: (item.income / maximum) * 100,
+    expenseRate: (item.expense / maximum) * 100,
+  }));
+});
+const annualTotals = computed(() => {
+  const income = monthlyFinance.value.reduce(
+    (sum, item) => sum + item.income,
+    0,
+  );
+  const expense = monthlyFinance.value.reduce(
+    (sum, item) => sum + item.expense,
+    0,
+  );
+  return { income, expense, net: income - expense };
+});
 const forecastBuckets = computed(() => [
   buildForecastBucket("d7", "未来7天", 7),
   buildForecastBucket("d30", "未来30天", 30),
@@ -517,6 +635,102 @@ function moneyFormatter(value: number | string) {
   background: #fff;
 }
 
+.monthly-panel {
+  margin-top: 18px;
+}
+
+.monthly-heading p {
+  margin: 4px 0 0;
+  color: #667085;
+  font-size: 12px;
+}
+
+.year-select {
+  width: 120px;
+}
+
+.annual-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.annual-summary > div {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 12px 14px;
+  border-radius: 6px;
+  background: #f8fafc;
+}
+
+.annual-summary span,
+.monthly-table-head {
+  color: #667085;
+  font-size: 12px;
+}
+
+.annual-summary strong {
+  font-size: 20px;
+}
+
+.monthly-table {
+  overflow-x: auto;
+}
+
+.monthly-row {
+  display: grid;
+  grid-template-columns: 52px minmax(180px, 1fr) repeat(
+      3,
+      minmax(112px, 0.55fr)
+    );
+  align-items: center;
+  gap: 16px;
+  min-width: 720px;
+  padding: 9px 8px;
+  border-bottom: 1px solid #eef2f7;
+  text-align: right;
+}
+
+.monthly-row > :first-child,
+.monthly-row > :nth-child(2) {
+  text-align: left;
+}
+
+.monthly-table-head {
+  padding-top: 0;
+  font-weight: 500;
+}
+
+.month-bars {
+  display: flex;
+  height: 16px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+}
+
+.month-bars i {
+  display: block;
+  min-width: 2px;
+  height: 5px;
+  border-radius: 3px;
+}
+
+.income-bar {
+  background: #52c41a;
+}
+.expense-bar {
+  background: #ff7875;
+}
+.income-text {
+  color: #237804;
+}
+.expense-text {
+  color: #cf1322;
+}
+
 .panel-heading {
   display: flex;
   align-items: center;
@@ -664,6 +878,10 @@ function moneyFormatter(value: number | string) {
   .finance-control-grid,
   .forecast-grid,
   .reconciliation-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .annual-summary {
     grid-template-columns: 1fr;
   }
 }

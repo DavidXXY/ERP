@@ -4,6 +4,7 @@ import com.company.ops.api.common.api.ApiResponse;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ReceivableResponse;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.RecordReceiptRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.RegisterInvoiceRequest;
+import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ReviewInvoiceRequest;
 import com.company.ops.api.modules.crm.service.CrmOperationsService;
 import com.company.ops.api.modules.finance.dto.CreatePaymentApplicationRequest;
 import com.company.ops.api.modules.finance.dto.ExecutePaymentRequest;
@@ -67,6 +68,15 @@ public class FinanceController {
       @Valid @RequestBody RegisterInvoiceRequest request
   ) {
     return ApiResponse.ok(crmOperationsService.registerInvoice(id, request));
+  }
+
+  @PostMapping("/receivables/{id}/invoice-review")
+  @PreAuthorize("hasAuthority('finance:receivable:invoice')")
+  public ApiResponse<ReceivableResponse> reviewInvoice(
+      @PathVariable UUID id,
+      @Valid @RequestBody ReviewInvoiceRequest request
+  ) {
+    return ApiResponse.ok(crmOperationsService.reviewInvoice(id, request));
   }
 
   @PostMapping("/receivables/{id}/receipts")

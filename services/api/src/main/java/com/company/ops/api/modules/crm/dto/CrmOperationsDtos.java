@@ -323,6 +323,7 @@ public final class CrmOperationsDtos {
       String customerName,
       UUID contractId,
       String contractCode,
+      String contractName,
       String code,
       String sourceNo,
       BigDecimal amount,
@@ -333,6 +334,10 @@ public final class CrmOperationsDtos {
       String invoiceRequestedBy,
       OffsetDateTime invoiceRequestedAt,
       String invoiceRequestRemark,
+      String invoiceRequestStatus,
+      String invoiceReviewedBy,
+      OffsetDateTime invoiceReviewedAt,
+      String invoiceReviewComment,
       BigDecimal settledAmount,
       BigDecimal outstandingAmount,
       ReceivableStatus status
@@ -348,6 +353,13 @@ public final class CrmOperationsDtos {
   public record RegisterInvoiceRequest(
       @NotBlank @Size(max = 80) String invoiceNo,
       @NotNull LocalDate invoiceDate
+  ) {
+  }
+
+  public record ReviewInvoiceRequest(
+      @NotBlank String decision,
+      @NotBlank @Size(max = 80) String reviewerName,
+      @Size(max = 500) String comment
   ) {
   }
 

@@ -65,3 +65,23 @@ alter table system_notifications add column if not exists version bigint not nul
 alter table work_order_materials add column if not exists version bigint not null default 0;
 alter table work_order_status_logs add column if not exists version bigint not null default 0;
 alter table work_orders add column if not exists version bigint not null default 0;
+
+-- Safety net for every BaseEntity table, including modules added after this list was created.
+do $$
+declare table_name text;
+begin
+  for table_name in
+    select c.table_name
+    from information_schema.columns c
+    where c.table_schema = current_schema()
+      and c.column_name = 'tenant_id'
+      and exists (
+        select 1 from information_schema.columns id_col
+        where id_col.table_schema = c.table_schema
+          and id_col.table_name = c.table_name
+          and id_col.column_name = 'id'
+      )
+  loop
+    execute format('alter table %I add column if not exists version bigint not null default 0', table_name);
+  end loop;
+end $$;

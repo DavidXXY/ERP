@@ -9,6 +9,12 @@
           >
         </a-space>
       </template>
+      <a-alert
+        class="section-alert"
+        type="info"
+        show-icon
+        message="财务处理顺序：先审核开票申请；审核通过后，再登记正式发票号码和日期。"
+      />
       <a-row :gutter="[16, 16]" class="metric-row">
         <a-col :xs="12" :lg="6"
           ><a-statistic
@@ -111,9 +117,12 @@
             >
             <span class="table-subtitle">{{ record.customerName }}</span>
           </template>
-          <template v-else-if="column.key === 'contract'">{{
-            record.contractCode || "-"
-          }}</template>
+          <template v-else-if="column.key === 'contract'">
+            <strong>{{ record.contractName || "未命名合同" }}</strong>
+            <span class="table-subtitle"
+              >合同编号：{{ record.contractCode || "-" }}</span
+            >
+          </template>
           <template v-else-if="column.key === 'amount'"
             ><strong>{{ formatMoney(record.amount) }}</strong
             ><span class="table-subtitle"
@@ -122,20 +131,24 @@
             ></template
           >
           <template v-else-if="column.key === 'invoice'">
-            {{
-              record.invoiceNo ||
-              (record.invoiceRequested ? "待财务开票" : "未申请开票")
-            }}
+            <a-tag :color="invoiceStatusColor(record)">{{
+              invoiceStatusLabel(record)
+            }}</a-tag>
             <span v-if="record.invoiceDate" class="table-subtitle">{{
-              record.invoiceDate
+              record.invoiceNo + " · " + record.invoiceDate
             }}</span>
-            <span v-else-if="record.invoiceRequested" class="table-subtitle">
+            <span
+              v-else-if="record.invoiceRequestStatus === 'PENDING_APPROVAL'"
+              class="table-subtitle"
+            >
               {{ record.invoiceRequestedBy || "业务侧" }} ·
               {{ formatDateTime(record.invoiceRequestedAt) }}
             </span>
-            <span v-if="record.invoiceRequestRemark" class="table-subtitle">{{
-              record.invoiceRequestRemark
-            }}</span>
+            <span
+              v-if="record.invoiceRequestStatus === 'REJECTED'"
+              class="table-subtitle text-danger"
+              >{{ record.invoiceReviewComment || "已驳回" }}</span
+            >
           </template>
           <template v-else-if="column.key === 'aging'">
             <a-tag :color="priorityColor(record)">{{
@@ -156,19 +169,34 @@
               <a-button
                 v-if="
                   auth.can('finance:receivable:invoice') &&
-                  record.invoiceRequested &&
+                  record.invoiceRequestStatus === 'PENDING_APPROVAL' &&
                   !record.invoiceNo &&
                   record.status !== 'SETTLED'
                 "
                 type="link"
                 size="small"
+                @click="openReview(record)"
+                >审核申请</a-button
+              >
+              <a-button
+                v-if="
+                  auth.can('finance:receivable:invoice') &&
+                  record.invoiceRequestStatus === 'APPROVED' &&
+                  !record.invoiceNo
+                "
+                type="primary"
+                size="small"
                 @click="openInvoice(record)"
-                >处理开票</a-button
+                >登记发票</a-button
               >
               <a-tag
-                v-else-if="!record.invoiceNo && record.status !== 'SETTLED'"
+                v-else-if="
+                  (!record.invoiceRequestStatus ||
+                    record.invoiceRequestStatus === 'NOT_REQUESTED') &&
+                  record.status !== 'SETTLED'
+                "
                 color="default"
-                >待申请</a-tag
+                >业务未申请</a-tag
               >
               <a-button
                 v-if="
@@ -204,15 +232,26 @@
               <a-button
                 v-if="
                   auth.can('finance:receivable:invoice') &&
-                  detail.receivable.invoiceRequested &&
+                  detail.receivable.invoiceRequestStatus ===
+                    'PENDING_APPROVAL' &&
                   !detail.receivable.invoiceNo &&
                   detail.receivable.status !== 'SETTLED'
                 "
                 type="primary"
-                @click="openInvoice(detail.receivable)"
+                @click="openReview(detail.receivable)"
               >
-                处理开票
+                审核开票申请
               </a-button>
+              <a-button
+                v-if="
+                  auth.can('finance:receivable:invoice') &&
+                  detail.receivable.invoiceRequestStatus === 'APPROVED' &&
+                  !detail.receivable.invoiceNo
+                "
+                type="primary"
+                @click="openInvoice(detail.receivable)"
+                >登记发票</a-button
+              >
               <a-button
                 v-if="
                   auth.can('finance:receivable:collect') &&
@@ -251,10 +290,11 @@
                 statusLabel(detail.receivable.status)
               }}</a-tag></a-descriptions-item
             >
-            <a-descriptions-item label="开票状态">{{
-              detail.receivable.invoiceNo ||
-              (detail.receivable.invoiceRequested ? "待财务开票" : "未申请开票")
-            }}</a-descriptions-item>
+            <a-descriptions-item label="开票状态"
+              ><a-tag :color="invoiceStatusColor(detail.receivable)">{{
+                invoiceStatusLabel(detail.receivable)
+              }}</a-tag></a-descriptions-item
+            >
             <a-descriptions-item
               v-if="detail.receivable.invoiceRequested"
               label="申请信息"
@@ -264,6 +304,17 @@
               {{ formatDateTime(detail.receivable.invoiceRequestedAt) }}
               <span v-if="detail.receivable.invoiceRequestRemark">
                 · {{ detail.receivable.invoiceRequestRemark }}</span
+              >
+            </a-descriptions-item>
+            <a-descriptions-item
+              v-if="detail.receivable.invoiceReviewedAt"
+              label="审核结果"
+              :span="2"
+            >
+              {{ detail.receivable.invoiceReviewedBy }} ·
+              {{ formatDateTime(detail.receivable.invoiceReviewedAt) }}
+              <span v-if="detail.receivable.invoiceReviewComment">
+                · {{ detail.receivable.invoiceReviewComment }}</span
               >
             </a-descriptions-item>
           </a-descriptions>
@@ -351,8 +402,56 @@
     </a-modal>
 
     <a-modal
+      v-model:open="reviewOpen"
+      title="审核开票申请"
+      :confirm-loading="saving"
+      @ok="handleReview"
+    >
+      <a-alert
+        v-if="selectedItem"
+        class="section-alert"
+        type="info"
+        :message="`${selectedItem.code} · ${selectedItem.customerName} · ${formatMoney(selectedItem.amount)}`"
+        :description="
+          selectedItem.invoiceRequestRemark || '业务侧未填写申请说明'
+        "
+      />
+      <a-form
+        ref="reviewFormRef"
+        :model="reviewForm"
+        :rules="reviewRules"
+        layout="vertical"
+      >
+        <a-form-item label="审核结论" name="decision">
+          <a-radio-group v-model:value="reviewForm.decision">
+            <a-radio value="APPROVED">通过</a-radio>
+            <a-radio value="REJECTED">驳回</a-radio>
+          </a-radio-group>
+        </a-form-item>
+        <a-form-item label="审核人" name="reviewerName"
+          ><a-input v-model:value="reviewForm.reviewerName"
+        /></a-form-item>
+        <a-form-item
+          label="审核意见"
+          name="comment"
+          :required="reviewForm.decision === 'REJECTED'"
+        >
+          <a-textarea
+            v-model:value="reviewForm.comment"
+            :rows="3"
+            :placeholder="
+              reviewForm.decision === 'REJECTED'
+                ? '驳回时必须填写原因'
+                : '可填写审核说明'
+            "
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <a-modal
       v-model:open="invoiceOpen"
-      title="登记开票"
+      title="登记正式发票"
       :confirm-loading="saving"
       @ok="handleInvoice"
     >
@@ -440,6 +539,7 @@ import {
   listFinanceReceivables,
   recordFinanceReceipt,
   registerFinanceInvoice,
+  reviewFinanceInvoice,
   type FinanceReceivableDetail,
 } from "@/api/finance";
 import { useAuthStore } from "@/stores/auth";
@@ -453,6 +553,7 @@ const saving = ref(false);
 const detailOpen = ref(false);
 const detailLoading = ref(false);
 const invoiceOpen = ref(false);
+const reviewOpen = ref(false);
 const receiptOpen = ref(false);
 const selectedItem = ref<Receivable | null>(null);
 const detail = ref<FinanceReceivableDetail | null>(null);
@@ -460,8 +561,14 @@ const keyword = ref("");
 const statusFilter = ref<ReceivableStatus>();
 const priorityFilter = ref<string>();
 const invoiceFormRef = ref();
+const reviewFormRef = ref();
 const receiptFormRef = ref();
 const invoiceForm = reactive({ invoiceNo: "", invoiceDate: today() });
+const reviewForm = reactive<{
+  decision: "APPROVED" | "REJECTED";
+  reviewerName: string;
+  comment: string;
+}>({ decision: "APPROVED", reviewerName: "", comment: "" });
 const receiptForm = reactive({
   amount: 0,
   receivedDate: today(),
@@ -481,7 +588,7 @@ const priorityOptions = [
 ];
 const columns = [
   { title: "应收单 / 客户", key: "receivable", width: 240 },
-  { title: "合同编号", key: "contract", width: 170 },
+  { title: "合同名称 / 编号", key: "contract", width: 260 },
   { title: "来源单号", dataIndex: "sourceNo", width: 170 },
   { title: "应收 / 回款", key: "amount", width: 260 },
   { title: "开票信息", key: "invoice", width: 180 },
@@ -494,6 +601,18 @@ const invoiceRules = {
   invoiceNo: [{ required: true, message: "请输入发票号码" }],
   invoiceDate: [{ required: true }],
 };
+const reviewRules = {
+  decision: [{ required: true }],
+  reviewerName: [{ required: true, message: "请输入审核人" }],
+  comment: [
+    {
+      validator: (_rule: unknown, value: string) =>
+        reviewForm.decision === "REJECTED" && !value?.trim()
+          ? Promise.reject(new Error("驳回时必须填写原因"))
+          : Promise.resolve(),
+    },
+  ],
+};
 const receiptRules = {
   amount: [{ required: true, message: "请输入回款金额" }],
   receivedDate: [{ required: true }],
@@ -504,7 +623,7 @@ const filteredItems = computed(() =>
   items.value.filter((item) => {
     const term = keyword.value.trim().toLowerCase();
     const text =
-      `${item.code} ${item.contractCode || ""} ${item.customerName}`.toLowerCase();
+      `${item.code} ${item.contractCode || ""} ${item.contractName || ""} ${item.customerName}`.toLowerCase();
     return (
       (!statusFilter.value || item.status === statusFilter.value) &&
       (!priorityFilter.value || priorityLevel(item) === priorityFilter.value) &&
@@ -627,6 +746,15 @@ function openInvoice(item: Receivable) {
   Object.assign(invoiceForm, { invoiceNo: "", invoiceDate: today() });
   invoiceOpen.value = true;
 }
+function openReview(item: Receivable) {
+  selectedItem.value = item;
+  Object.assign(reviewForm, {
+    decision: "APPROVED",
+    reviewerName: auth.user?.displayName || "",
+    comment: "",
+  });
+  reviewOpen.value = true;
+}
 function openReceipt(item: Receivable) {
   selectedItem.value = item;
   Object.assign(receiptForm, {
@@ -659,6 +787,28 @@ async function handleInvoice() {
     await refreshDetail(result.id);
   } catch (error) {
     message.error(error instanceof Error ? error.message : "开票登记失败");
+  } finally {
+    saving.value = false;
+  }
+}
+async function handleReview() {
+  await reviewFormRef.value?.validate();
+  if (!selectedItem.value) return;
+  saving.value = true;
+  try {
+    const result = await reviewFinanceInvoice(selectedItem.value.id, {
+      ...reviewForm,
+    });
+    reviewOpen.value = false;
+    message.success(
+      reviewForm.decision === "APPROVED"
+        ? "审核已通过，请继续登记正式发票"
+        : "申请已驳回，业务侧可修改后重新提交",
+    );
+    await loadData();
+    await refreshDetail(result.id);
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "开票审核失败");
   } finally {
     saving.value = false;
   }
@@ -696,6 +846,25 @@ function formatDateTime(value?: string) {
   return value
     ? new Date(value).toLocaleString("zh-CN", { hour12: false })
     : "-";
+}
+function invoiceStatusLabel(item: Receivable) {
+  if (item.invoiceNo || item.invoiceRequestStatus === "INVOICED")
+    return "已开票";
+  return {
+    PENDING_APPROVAL: "待审核",
+    APPROVED: "已通过，待开票",
+    REJECTED: "已驳回",
+    NOT_REQUESTED: "未申请",
+  }[item.invoiceRequestStatus || "NOT_REQUESTED"];
+}
+function invoiceStatusColor(item: Receivable) {
+  return {
+    INVOICED: "green",
+    PENDING_APPROVAL: "blue",
+    APPROVED: "cyan",
+    REJECTED: "red",
+    NOT_REQUESTED: "default",
+  }[item.invoiceNo ? "INVOICED" : item.invoiceRequestStatus || "NOT_REQUESTED"];
 }
 function valueOrDash(value?: string) {
   return value && value.trim() ? value : "-";

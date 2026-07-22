@@ -138,6 +138,21 @@ export function registerFinanceInvoice(
   });
 }
 
+export function reviewFinanceInvoice(
+  id: string,
+  payload: {
+    decision: "APPROVED" | "REJECTED";
+    reviewerName: string;
+    comment?: string;
+  },
+) {
+  return request<Receivable>({
+    method: "POST",
+    url: `/finance/receivables/${id}/invoice-review`,
+    data: payload,
+  });
+}
+
 export function recordFinanceReceipt(
   id: string,
   payload: {

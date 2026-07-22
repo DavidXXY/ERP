@@ -51,6 +51,19 @@ public class Receivable extends BaseEntity {
   @Column(name = "invoice_request_remark", length = 500)
   private String invoiceRequestRemark;
 
+  @Enumerated(EnumType.STRING)
+  @Column(name = "invoice_request_status", nullable = false, length = 32)
+  private InvoiceRequestStatus invoiceRequestStatus = InvoiceRequestStatus.NOT_REQUESTED;
+
+  @Column(name = "invoice_reviewed_by", length = 80)
+  private String invoiceReviewedBy;
+
+  @Column(name = "invoice_reviewed_at")
+  private OffsetDateTime invoiceReviewedAt;
+
+  @Column(name = "invoice_review_comment", length = 500)
+  private String invoiceReviewComment;
+
   @Column(name = "settled_amount", nullable = false, precision = 14, scale = 2)
   private BigDecimal settledAmount = BigDecimal.ZERO;
 
@@ -161,6 +174,15 @@ public class Receivable extends BaseEntity {
   public void setInvoiceRequestRemark(String invoiceRequestRemark) {
     this.invoiceRequestRemark = invoiceRequestRemark;
   }
+
+  public InvoiceRequestStatus getInvoiceRequestStatus() { return invoiceRequestStatus; }
+  public void setInvoiceRequestStatus(InvoiceRequestStatus status) { this.invoiceRequestStatus = status; }
+  public String getInvoiceReviewedBy() { return invoiceReviewedBy; }
+  public void setInvoiceReviewedBy(String value) { this.invoiceReviewedBy = value; }
+  public OffsetDateTime getInvoiceReviewedAt() { return invoiceReviewedAt; }
+  public void setInvoiceReviewedAt(OffsetDateTime value) { this.invoiceReviewedAt = value; }
+  public String getInvoiceReviewComment() { return invoiceReviewComment; }
+  public void setInvoiceReviewComment(String value) { this.invoiceReviewComment = value; }
 
   public BigDecimal getSettledAmount() {
     return settledAmount;

@@ -312,6 +312,7 @@ public class FinanceService {
         customer == null ? null : customer.getName(),
         receivable.getContractId(),
         contract == null ? receivable.getSourceNo() : contract.getCode(),
+        contract == null ? "未关联合同" : contract.getProjectName(),
         receivable.getCode(),
         receivable.getSourceNo(),
         amount(receivable.getAmount()),
@@ -322,6 +323,10 @@ public class FinanceService {
         receivable.getInvoiceRequestedBy(),
         receivable.getInvoiceRequestedAt(),
         receivable.getInvoiceRequestRemark(),
+        receivable.getInvoiceRequestStatus().name(),
+        receivable.getInvoiceReviewedBy(),
+        receivable.getInvoiceReviewedAt(),
+        receivable.getInvoiceReviewComment(),
         amount(receivable.getSettledAmount()),
         outstandingAmount(receivable),
         receivable.getStatus()

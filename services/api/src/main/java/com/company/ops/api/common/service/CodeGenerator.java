@@ -22,6 +22,7 @@ public class CodeGenerator {
     Map.entry("RETURN_ORDER", "TL"),
     Map.entry("SUPPLIER", "GYS"),
     Map.entry("PURCHASE_REQUEST", "CG"),
+    Map.entry("PURCHASE_REQUEST_BATCH", "CGPC"),
     Map.entry("PURCHASE_ORDER", "CGDD"),
     Map.entry("RECEIPT", "RKD"),
     Map.entry("RECEIVABLE", "YS"),

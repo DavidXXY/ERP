@@ -16,6 +16,8 @@ public interface PurchaseRequestRepository extends JpaRepository<PurchaseRequest
 
   List<PurchaseRequest> findAllByOrderByCreatedAtDesc();
 
+  List<PurchaseRequest> findByBatchIdOrderByLineNoAsc(UUID batchId);
+
   Page<PurchaseRequest> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
   @Query("""

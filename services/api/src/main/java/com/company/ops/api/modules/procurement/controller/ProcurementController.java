@@ -5,6 +5,7 @@ import com.company.ops.api.modules.procurement.dto.CreatePurchaseOrderRequest;
 import com.company.ops.api.modules.procurement.dto.CreatePurchaseRequestRequest;
 import com.company.ops.api.modules.procurement.dto.CreateSupplierRequest;
 import com.company.ops.api.modules.procurement.dto.GoodsReceiptResponse;
+import com.company.ops.api.modules.procurement.dto.ImportPurchaseRequestBatchResponse;
 import com.company.ops.api.modules.procurement.dto.ProcessPurchaseRequestApprovalRequest;
 import com.company.ops.api.modules.procurement.dto.ProcurementCostAllocationResponse;
 import com.company.ops.api.modules.procurement.dto.ProcurementCostTargetOptionsResponse;
@@ -14,6 +15,7 @@ import com.company.ops.api.modules.procurement.dto.PurchaseOrderResponse;
 import com.company.ops.api.modules.procurement.dto.PurchaseRequestResponse;
 import com.company.ops.api.modules.procurement.dto.ReceivePurchaseOrderRequest;
 import com.company.ops.api.modules.procurement.dto.ReceivePurchaseOrderResult;
+import com.company.ops.api.modules.procurement.dto.ReviewSupplierAdmissionRequest;
 import com.company.ops.api.modules.procurement.domain.PurchaseRequestStatus;
 import com.company.ops.api.modules.procurement.domain.ApprovalStatus;
 import com.company.ops.api.modules.procurement.domain.ProcurementCostType;
@@ -37,8 +39,10 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/procurement")
@@ -72,6 +76,15 @@ public class ProcurementController {
       @Valid @RequestBody CreateSupplierRequest request
   ) {
     return ApiResponse.ok(procurementService.updateSupplier(id, request));
+  }
+
+  @PostMapping("/suppliers/{id}/admission/review")
+  @PreAuthorize("hasAuthority('procurement:request:approve')")
+  public ApiResponse<SupplierResponse> reviewSupplierAdmission(
+      @PathVariable UUID id,
+      @Valid @RequestBody ReviewSupplierAdmissionRequest request
+  ) {
+    return ApiResponse.ok(procurementService.reviewSupplierAdmission(id, request));
   }
 
   @GetMapping("/cost-targets")
@@ -116,6 +129,21 @@ public class ProcurementController {
     return ApiResponse.ok(procurementService.createPurchaseRequest(request));
   }
 
+  @PostMapping("/requests/import")
+  @ResponseStatus(HttpStatus.CREATED)
+  @PreAuthorize("hasAuthority('procurement:purchase:create')")
+  public ApiResponse<ImportPurchaseRequestBatchResponse> importPurchaseRequestBatch(
+      @RequestPart("file") MultipartFile file,
+      @RequestParam String batchName,
+      @RequestParam ProcurementCostType costType,
+      @RequestParam(required = false) UUID projectId,
+      @RequestParam(required = false) UUID departmentId,
+      @RequestParam(required = false) String sharedReason
+  ) {
+    return ApiResponse.ok(procurementService.importPurchaseRequestBatch(
+        file, batchName, costType, projectId, departmentId, sharedReason));
+  }
+
   @PostMapping("/requests/{id}/approval")
   @PreAuthorize("hasAuthority('procurement:request:approve') and @approvalFlowSecurity.canApprove('PURCHASE')")
   public ApiResponse<PurchaseRequestResponse> processRequestApproval(
@@ -123,6 +151,15 @@ public class ProcurementController {
       @Valid @RequestBody ProcessPurchaseRequestApprovalRequest request
   ) {
     return ApiResponse.ok(procurementService.processRequestApproval(id, request));
+  }
+
+  @PostMapping("/request-batches/{batchId}/approval")
+  @PreAuthorize("hasAuthority('procurement:request:approve') and @approvalFlowSecurity.canApprove('PURCHASE')")
+  public ApiResponse<List<PurchaseRequestResponse>> processRequestBatchApproval(
+      @PathVariable UUID batchId,
+      @Valid @RequestBody ProcessPurchaseRequestApprovalRequest request
+  ) {
+    return ApiResponse.ok(procurementService.processRequestBatchApproval(batchId, request));
   }
 
   @PutMapping("/requests/{id}")

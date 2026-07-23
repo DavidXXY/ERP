@@ -49,6 +49,10 @@ export type Supplier = {
   bankName?: string;
   bankAccount?: string;
   admissionStatus?: string;
+  admissionSubmittedAt?: string;
+  admissionReviewedAt?: string;
+  admissionReviewerName?: string;
+  admissionReviewComment?: string;
   remark?: string;
   riskStatus: SupplierRiskStatus;
   contractedAmount: number;
@@ -59,6 +63,10 @@ export type Supplier = {
 
 export type PurchaseRequest = {
   id: string;
+  batchId: string;
+  batchCode: string;
+  batchName?: string;
+  lineNo: number;
   code?: string;
   requesterName: string;
   applicantName?: string;
@@ -171,6 +179,15 @@ export type CreatePurchaseRequestPayload = {
   departmentId?: string;
 };
 
+export type ImportPurchaseRequestBatchResult = {
+  batchId: string;
+  batchCode: string;
+  batchName: string;
+  totalLines: number;
+  totalAmount: number;
+  items: PurchaseRequest[];
+};
+
 export type CreatePurchaseOrderPayload = {
   code?: string;
   supplierId: string;
@@ -275,15 +292,62 @@ export type ReceivePurchaseOrderResult = {
   costAllocation: ProcurementCostAllocation | null;
   currentStockQty: number;
 };
-export type ProcurementInquiry = { id:string; code:string; requestId:string; title:string; deadline?:string; status:"OPEN"|"AWARDED"|"CLOSED"; createdByName:string; sourcingMethod:string; minQuoteCount:number; exceptionReason?:string; selectedQuoteId?:string; selectionReason?:string; selectedByName?:string; selectedAt?:string; quotes:SupplierQuotation[] };
+export type ProcurementInquiryRequestLine = {
+  requestId: string;
+  requestCode?: string;
+  batchCode?: string;
+  partName?: string;
+  requestedQty: number;
+  costTargetName?: string;
+  expectedDate?: string;
+};
+export type ProcurementInquiry = { id:string; code:string; requestId:string; requestIds?:string[]; requestCount?:number; totalRequestedQty?:number; requestLines?:ProcurementInquiryRequestLine[]; partName?:string; title:string; deadline?:string; status:"OPEN"|"AWARDED"|"CLOSED"; createdByName:string; sourcingMethod:string; minQuoteCount:number; exceptionReason?:string; selectedQuoteId?:string; selectionReason?:string; selectedByName?:string; selectedAt?:string; quotes:SupplierQuotation[] };
+
+export type ProcurementPurchasePoolItem = {
+  requestId: string;
+  requestCode: string;
+  batchId: string;
+  batchCode: string;
+  batchName?: string;
+  lineNo: number;
+  requesterName: string;
+  requestedQuantity: number;
+  orderedQuantity: number;
+  remainingQuantity: number;
+  estimatedUnitPrice: number;
+  estimatedAmount: number;
+  taxRate: number;
+  expectedDate?: string;
+  costType: ProcurementCostType;
+  costTargetId?: string;
+  costTargetCode: string;
+  costTargetName: string;
+  reason?: string;
+  approvedAt?: string;
+};
+export type ProcurementPurchasePoolGroup = {
+  groupKey: string;
+  partId?: string;
+  partCode?: string;
+  partName: string;
+  requestCount: number;
+  costTargetCount: number;
+  totalRemainingQuantity: number;
+  totalEstimatedAmount: number;
+  earliestExpectedDate?: string;
+  items: ProcurementPurchasePoolItem[];
+};
+export type ProcurementPurchasePool = {
+  totalGroups: number;
+  totalRequests: number;
+  totalRemainingQuantity: number;
+  totalEstimatedAmount: number;
+  groups: ProcurementPurchasePoolGroup[];
+};
 export type SupplierQuotation = { id:string; supplierId:string; supplierName:string; unitPrice:number; taxRate:number; deliveryDate?:string; paymentTerms?:string; remark?:string; selected:boolean; currency:string; freightAmount:number; otherCostAmount:number; technicalScore:number; commercialScore:number; totalScore:number; validUntil?:string };
 export type ProcurementReturnOrder = { id:string; code:string; orderId:string; receiptId:string; supplierId:string; quantity:number; amount:number; reason:string; returnDate:string; handlerName:string; status:string; replacementQty:number; creditAmount:number; claimAmount:number; correctiveAction?:string; supplierResponse?:string; completedAt?:string };
 export type SupplierInvoice = { id:string; code:string; invoiceNo:string; orderId:string; supplierId:string; payableId?:string; receiptId?:string; amount:number; matchedAmount:number; taxRate:number; invoiceDate:string; status:string; matchStatus:"MATCHED"|"MISMATCH"; differenceAmount:number; approvalStatus:string; verificationStatus:string; attachmentDocumentId?:string; remark?:string };
 
-export type ProcurementContract = { id:string; contractNo:string; name:string; supplierId:string; amount:number; currency:string; startDate?:string; endDate?:string; paymentTerms?:string; status:string; approvalStatus:string; versionNo:number; parentContractId?:string; changeReason?:string; submittedByName?:string; submittedAt?:string; approvedByName?:string; approvalComment?:string; approvedAt?:string; remark?:string };
-export type SupplierChangeRequest = { id:string; supplierId:string; changeType:string; proposedAdmissionStatus?:string; proposedRiskStatus?:string; proposedBankName?:string; proposedBankAccount?:string; proposedSettlementTerms?:string; reason:string; status:string; requestedByName:string; reviewedByName?:string; reviewComment?:string; reviewedAt?:string };
-export type SupplierPerformanceReview = { id:string; supplierId:string; reviewPeriod:string; onTimeRate:number; qualityRate:number; invoiceMatchRate:number; responseScore:number; totalScore:number; grade:string; reviewerName:string; improvementAction?:string; status:string };
-export type ProcurementCollaborationEvent = { id:string; supplierId:string; orderId?:string; eventType:string; referenceNo?:string; eventDate:string; promisedDate?:string; quantity?:number; status:string; content?:string; createdByName:string };
 
 export function listSuppliers(page?: number, size?: number) {
   return request<PageResponse<Supplier>>({
@@ -305,6 +369,17 @@ export function updateSupplier(id: string, payload: CreateSupplierPayload) {
   return request<Supplier>({
     method: "PUT",
     url: `/procurement/suppliers/${id}`,
+    data: payload,
+  });
+}
+
+export function reviewSupplierAdmission(
+  id: string,
+  payload: { decision: "APPROVED" | "REJECTED"; comment?: string },
+) {
+  return request<Supplier>({
+    method: "POST",
+    url: `/procurement/suppliers/${id}/admission/review`,
     data: payload,
   });
 }
@@ -353,6 +428,28 @@ export function createPurchaseRequest(payload: CreatePurchaseRequestPayload) {
   });
 }
 
+export function importPurchaseRequestBatch(data: {
+  file: File;
+  batchName: string;
+  costType: ProcurementCostType;
+  projectId?: string;
+  departmentId?: string;
+  sharedReason?: string;
+}) {
+  const form = new FormData();
+  form.append("file", data.file);
+  form.append("batchName", data.batchName);
+  form.append("costType", data.costType);
+  if (data.projectId) form.append("projectId", data.projectId);
+  if (data.departmentId) form.append("departmentId", data.departmentId);
+  if (data.sharedReason) form.append("sharedReason", data.sharedReason);
+  return request<ImportPurchaseRequestBatchResult>({
+    method: "POST",
+    url: "/procurement/requests/import",
+    data: form,
+  });
+}
+
 export function processPurchaseRequestApproval(
   id: string,
   payload: { decision: ApprovalStatus; comment: string; approverName: string },
@@ -360,6 +457,17 @@ export function processPurchaseRequestApproval(
   return request<PurchaseRequest>({
     method: "POST",
     url: `/procurement/requests/${id}/approval`,
+    data: payload,
+  });
+}
+
+export function processPurchaseRequestBatchApproval(
+  batchId: string,
+  payload: { decision: ApprovalStatus; comment: string; approverName: string },
+) {
+  return request<PurchaseRequest[]>({
+    method: "POST",
+    url: `/procurement/request-batches/${batchId}/approval`,
     data: payload,
   });
 }
@@ -448,6 +556,8 @@ export function registerPurchaseArrival(id:string,payload:{quantity:number;recei
 export function inspectGoodsReceipt(id:string,payload:{qualifiedQty:number;rejectedQty:number;inspectorName:string;comment?:string;payableDueDate:string}){return request<any>({method:"POST",url:`/procurement/receipts/${id}/inspection`,data:payload});}
 export function listProcurementInquiries(){return request<ProcurementInquiry[]>({method:"GET",url:"/procurement/inquiries"});}
 export function createProcurementInquiry(payload:{requestId:string;title:string;deadline?:string;createdByName:string;sourcingMethod?:string;minQuoteCount?:number;exceptionReason?:string}){return request<ProcurementInquiry>({method:"POST",url:"/procurement/inquiries",data:payload});}
+export function listProcurementPurchasePool(){return request<ProcurementPurchasePool>({method:"GET",url:"/procurement/purchase-pool"});}
+export function createConsolidatedProcurementInquiry(payload:{requestIds:string[];title:string;deadline?:string;sourcingMethod?:string;minQuoteCount?:number;exceptionReason?:string}){return request<ProcurementInquiry>({method:"POST",url:"/procurement/purchase-pool/inquiries",data:payload});}
 export function addSupplierQuotation(id:string,payload:{supplierId:string;unitPrice:number;taxRate:number;deliveryDate?:string;paymentTerms?:string;remark?:string;currency?:string;freightAmount?:number;otherCostAmount?:number;technicalScore?:number;commercialScore?:number;validUntil?:string}){return request<SupplierQuotation>({method:"POST",url:`/procurement/inquiries/${id}/quotes`,data:payload});}
 export function selectSupplierQuotation(id:string,quoteId:string,payload:{operatorName:string;reason:string}){return request<ProcurementInquiry>({method:"POST",url:`/procurement/inquiries/${id}/quotes/${quoteId}/select`,data:payload});}
 export function listProcurementReturns(){return request<ProcurementReturnOrder[]>({method:"GET",url:"/procurement/returns"});}
@@ -455,17 +565,3 @@ export function listSupplierInvoices(){return request<SupplierInvoice[]>({method
 export function createSupplierInvoice(payload:{orderId:string;invoiceNo:string;amount:number;taxRate:number;invoiceDate:string;remark?:string;payableId?:string;receiptId?:string;clientRequestId?:string;attachmentDocumentId?:string}){return request<SupplierInvoice>({method:"POST",url:"/procurement/supplier-invoices",data:payload});}
 export function reviewSupplierInvoice(id:string,payload:{decision:"APPROVED"|"REJECTED";reviewerName:string;comment?:string}){return request<SupplierInvoice>({method:"POST",url:`/procurement/supplier-invoices/${id}/review`,data:payload});}
 export function resolveProcurementReturn(id:string,payload:{replacementQty?:number;creditAmount?:number;claimAmount?:number;correctiveAction?:string;supplierResponse?:string;handlerName:string}){return request<ProcurementReturnOrder>({method:"POST",url:`/procurement/returns/${id}/resolve`,data:payload});}
-
-export function listProcurementContracts(){return request<ProcurementContract[]>({method:"GET",url:"/procurement/governance/contracts"});}
-export function createProcurementContract(payload:Omit<ProcurementContract,"id"|"status"|"approvalStatus"|"versionNo">){return request<ProcurementContract>({method:"POST",url:"/procurement/governance/contracts",data:payload});}
-export function submitProcurementContract(id:string){return request<ProcurementContract>({method:"POST",url:`/procurement/governance/contracts/${id}/submit`});}
-export function reviewProcurementContract(id:string,payload:{decision:"APPROVED"|"REJECTED";comment?:string}){return request<ProcurementContract>({method:"POST",url:`/procurement/governance/contracts/${id}/review`,data:payload});}
-export function amendProcurementContract(id:string,payload:{amount:number;startDate?:string;endDate?:string;paymentTerms?:string;changeReason:string;remark?:string}){return request<ProcurementContract>({method:"POST",url:`/procurement/governance/contracts/${id}/amend`,data:payload});}
-export function listSupplierChanges(){return request<SupplierChangeRequest[]>({method:"GET",url:"/procurement/governance/supplier-changes"});}
-export function createSupplierChange(payload:{supplierId:string;changeType:string;proposedAdmissionStatus?:string;proposedRiskStatus?:string;proposedBankName?:string;proposedBankAccount?:string;proposedSettlementTerms?:string;reason:string}){return request<SupplierChangeRequest>({method:"POST",url:"/procurement/governance/supplier-changes",data:payload});}
-export function reviewSupplierChange(id:string,payload:{decision:"APPROVED"|"REJECTED";comment?:string}){return request<SupplierChangeRequest>({method:"POST",url:`/procurement/governance/supplier-changes/${id}/review`,data:payload});}
-export function listSupplierPerformanceReviews(){return request<SupplierPerformanceReview[]>({method:"GET",url:"/procurement/governance/supplier-reviews"});}
-export function calculateSupplierPerformance(payload:{supplierId:string;reviewPeriod:string;responseScore?:number;improvementAction?:string}){return request<SupplierPerformanceReview>({method:"POST",url:"/procurement/governance/supplier-reviews/calculate",data:payload});}
-export function listProcurementCollaborationEvents(){return request<ProcurementCollaborationEvent[]>({method:"GET",url:"/procurement/governance/collaboration-events"});}
-export function createProcurementCollaborationEvent(payload:{supplierId:string;orderId?:string;eventType:string;referenceNo?:string;eventDate:string;promisedDate?:string;quantity?:number;status?:string;content?:string}){return request<ProcurementCollaborationEvent>({method:"POST",url:"/procurement/governance/collaboration-events",data:payload});}
-export function convertReplenishmentToRequest(payload:{partId:string;quantity:number;unitPrice?:number;expectedDate?:string;costType:ProcurementCostType;projectId?:string;departmentId?:string;reason?:string}){return request<PurchaseRequest>({method:"POST",url:"/procurement/governance/replenishment/convert",data:payload});}

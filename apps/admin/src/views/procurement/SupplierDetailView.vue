@@ -11,7 +11,11 @@
     back-to="/procurement/suppliers"
     :status-label="admissionLabel(supplier?.admissionStatus)"
     :status-color="
-      supplier?.admissionStatus === 'APPROVED' ? 'green' : 'orange'
+      supplier?.admissionStatus === 'APPROVED'
+        ? 'green'
+        : supplier?.admissionStatus === 'REJECTED'
+          ? 'red'
+          : 'orange'
     "
     :risk-label="riskLabel(supplier?.riskStatus)"
     :risk-color="
@@ -27,6 +31,7 @@
     <template #actions>
       <a-button
         type="primary"
+        :disabled="supplier?.admissionStatus !== 'APPROVED'"
         @click="router.push(`/procurement/requests?supplierId=${supplierId}`)"
         >发起采购</a-button
       >
@@ -110,6 +115,14 @@
               </a-descriptions>
             </a-col>
           </a-row>
+          <a-alert
+            v-if="supplier.admissionStatus !== 'APPROVED'"
+            class="section-gap"
+            type="info"
+            show-icon
+            message="供应商尚未通过准入审批"
+            description="请返回供应商列表完成资料补充与准入审批；审批通过前不能参与询价、签约或采购下单。"
+          />
           <a-alert
             v-if="profileCompleteness < 80"
             class="section-gap"

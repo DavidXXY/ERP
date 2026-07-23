@@ -3,6 +3,7 @@ package com.company.ops.api.modules.procurement.dto;
 import com.company.ops.api.modules.procurement.domain.SupplierRiskStatus;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 public record SupplierResponse(
@@ -24,6 +25,10 @@ public record SupplierResponse(
     String bankName,
     String bankAccount,
     String admissionStatus,
+    OffsetDateTime admissionSubmittedAt,
+    OffsetDateTime admissionReviewedAt,
+    String admissionReviewerName,
+    String admissionReviewComment,
     String remark,
     SupplierRiskStatus riskStatus,
     BigDecimal contractedAmount,

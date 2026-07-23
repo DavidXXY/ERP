@@ -14,6 +14,18 @@ import java.util.UUID;
 @Table(name = "procurement_purchase_requests")
 public class PurchaseRequest extends BaseEntity {
 
+  @Column(name = "batch_id", nullable = false)
+  private UUID batchId;
+
+  @Column(name = "batch_code", nullable = false, length = 64)
+  private String batchCode;
+
+  @Column(name = "batch_name", length = 180)
+  private String batchName;
+
+  @Column(name = "line_no", nullable = false)
+  private Integer lineNo = 1;
+
   @Column(nullable = false, length = 64)
   private String code;
 
@@ -73,6 +85,38 @@ public class PurchaseRequest extends BaseEntity {
 
   @Column(name = "source_reference", length = 120)
   private String sourceReference;
+
+  public UUID getBatchId() {
+    return batchId;
+  }
+
+  public void setBatchId(UUID batchId) {
+    this.batchId = batchId;
+  }
+
+  public String getBatchCode() {
+    return batchCode;
+  }
+
+  public void setBatchCode(String batchCode) {
+    this.batchCode = batchCode;
+  }
+
+  public String getBatchName() {
+    return batchName;
+  }
+
+  public void setBatchName(String batchName) {
+    this.batchName = batchName;
+  }
+
+  public Integer getLineNo() {
+    return lineNo;
+  }
+
+  public void setLineNo(Integer lineNo) {
+    this.lineNo = lineNo;
+  }
 
   public String getCode() {
     return code;

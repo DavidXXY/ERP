@@ -9,6 +9,7 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 
 @Entity
 @Table(name = "procurement_suppliers")
@@ -65,6 +66,18 @@ public class Supplier extends BaseEntity {
 
   @Column(name = "admission_status", length = 40)
   private String admissionStatus;
+
+  @Column(name = "admission_submitted_at")
+  private OffsetDateTime admissionSubmittedAt;
+
+  @Column(name = "admission_reviewed_at")
+  private OffsetDateTime admissionReviewedAt;
+
+  @Column(name = "admission_reviewer_name", length = 80)
+  private String admissionReviewerName;
+
+  @Column(name = "admission_review_comment", length = 500)
+  private String admissionReviewComment;
 
   @Column(name = "remark", length = 1000)
   private String remark;
@@ -164,6 +177,30 @@ public class Supplier extends BaseEntity {
   public String getAdmissionStatus() { return admissionStatus; }
 
   public void setAdmissionStatus(String admissionStatus) { this.admissionStatus = admissionStatus; }
+
+  public OffsetDateTime getAdmissionSubmittedAt() { return admissionSubmittedAt; }
+
+  public void setAdmissionSubmittedAt(OffsetDateTime admissionSubmittedAt) {
+    this.admissionSubmittedAt = admissionSubmittedAt;
+  }
+
+  public OffsetDateTime getAdmissionReviewedAt() { return admissionReviewedAt; }
+
+  public void setAdmissionReviewedAt(OffsetDateTime admissionReviewedAt) {
+    this.admissionReviewedAt = admissionReviewedAt;
+  }
+
+  public String getAdmissionReviewerName() { return admissionReviewerName; }
+
+  public void setAdmissionReviewerName(String admissionReviewerName) {
+    this.admissionReviewerName = admissionReviewerName;
+  }
+
+  public String getAdmissionReviewComment() { return admissionReviewComment; }
+
+  public void setAdmissionReviewComment(String admissionReviewComment) {
+    this.admissionReviewComment = admissionReviewComment;
+  }
 
   public String getRemark() { return remark; }
 

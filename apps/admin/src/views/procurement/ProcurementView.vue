@@ -512,6 +512,13 @@
         :rules="supplierRules"
         layout="vertical"
       >
+        <a-alert
+          type="info"
+          show-icon
+          message="新增后自动进入待准入审批"
+          description="请在供应商页面补齐工商、资质、税务和银行资料；审批通过后才能参与采购。"
+          class="section-alert"
+        />
         <a-row :gutter="16">
           <a-col :xs="24" :md="16"
             ><a-form-item label="供应商名称" name="name"
@@ -1396,7 +1403,7 @@ async function handleCreateSupplier() {
   try {
     await createSupplier({ ...supplierForm });
     supplierOpen.value = false;
-    message.success("供应商已新增");
+    message.success("供应商已新增并提交准入审批");
     await loadData();
   } catch (error) {
     message.error(error instanceof Error ? error.message : "供应商新增失败");

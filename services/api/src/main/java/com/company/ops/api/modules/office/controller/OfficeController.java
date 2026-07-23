@@ -101,28 +101,36 @@ public class OfficeController {
     if (size < 1 || size > 100) { size = 20; }
     return ApiResponse.ok(service.listDocuments(bizType, bizId, page, size));
   }
-  @GetMapping("/documents/by-biz") @PreAuthorize("hasAuthority('office:document:view')")
+  @GetMapping("/documents/by-biz")
+  @PreAuthorize("hasAuthority('office:document:view') or (hasAuthority('procurement:view') and @officeDocumentSecurity.isProcurementBizType(#bizType))")
   public ApiResponse<List<DocumentResponse>> documentsByBiz(
       @RequestParam String bizType, @RequestParam(required = false) UUID bizId) {
     return ApiResponse.ok(service.listDocumentsByBiz(bizType, bizId));
   }
-  @GetMapping("/documents/count") @PreAuthorize("hasAuthority('office:document:view')")
+  @GetMapping("/documents/count")
+  @PreAuthorize("hasAuthority('office:document:view') or (hasAuthority('procurement:view') and @officeDocumentSecurity.isProcurementBizType(#bizType))")
   public ApiResponse<Long> documentCount(
       @RequestParam String bizType, @RequestParam(required = false) UUID bizId) {
     return ApiResponse.ok(service.getDocumentCount(bizType, bizId));
   }
-  @PostMapping(value = "/documents", consumes = MediaType.MULTIPART_FORM_DATA_VALUE) @ResponseStatus(HttpStatus.CREATED) @PreAuthorize("hasAuthority('office:document:upload')")
+  @PostMapping(value = "/documents", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  @ResponseStatus(HttpStatus.CREATED)
+  @PreAuthorize("hasAuthority('office:document:upload') or (hasAuthority('procurement:purchase:create') and @officeDocumentSecurity.isProcurementBizType(#bizType))")
   public ApiResponse<DocumentResponse> upload(@RequestParam String bizType, @RequestParam(required = false) UUID bizId, @RequestPart MultipartFile file) { return ApiResponse.ok(service.storeDocument(bizType, bizId, file)); }
-  @PostMapping(value = "/documents/batch", consumes = MediaType.MULTIPART_FORM_DATA_VALUE) @ResponseStatus(HttpStatus.CREATED) @PreAuthorize("hasAuthority('office:document:upload')")
+  @PostMapping(value = "/documents/batch", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  @ResponseStatus(HttpStatus.CREATED)
+  @PreAuthorize("hasAuthority('office:document:upload') or (hasAuthority('procurement:purchase:create') and @officeDocumentSecurity.isProcurementBizType(#bizType))")
   public ApiResponse<List<DocumentResponse>> uploadBatch(@RequestParam String bizType, @RequestParam(required = false) UUID bizId, @RequestPart List<MultipartFile> files) { return ApiResponse.ok(service.storeDocuments(bizType, bizId, files)); }
-  @GetMapping("/documents/{id}/download") @PreAuthorize("hasAuthority('office:document:view')")
+  @GetMapping("/documents/{id}/download")
+  @PreAuthorize("hasAuthority('office:document:view') or (hasAuthority('procurement:view') and @officeDocumentSecurity.isProcurementDocument(#id))")
   public ResponseEntity<Resource> download(@PathVariable UUID id) {
     DocumentFile item = service.requireDocument(id); Resource resource = service.loadDocument(item);
     return ResponseEntity.ok().contentType(item.getContentType() == null ? MediaType.APPLICATION_OCTET_STREAM : MediaType.parseMediaType(item.getContentType()))
         .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment().filename(item.getFileName(), StandardCharsets.UTF_8).build().toString())
         .body(resource);
   }
-  @GetMapping("/documents/{id}/preview") @PreAuthorize("hasAuthority('office:document:view')")
+  @GetMapping("/documents/{id}/preview")
+  @PreAuthorize("hasAuthority('office:document:view') or (hasAuthority('procurement:view') and @officeDocumentSecurity.isProcurementDocument(#id))")
   public ResponseEntity<Resource> preview(@PathVariable UUID id) {
     DocumentFile item = service.requireDocument(id); Resource resource = service.loadDocumentForPreview(item);
     String contentType = item.getContentType() != null && (item.getContentType().startsWith("image/") || item.getContentType().equals("application/pdf"))

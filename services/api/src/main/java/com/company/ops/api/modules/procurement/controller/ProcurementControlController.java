@@ -5,6 +5,8 @@ import com.company.ops.api.modules.procurement.domain.GoodsReceipt;
 import com.company.ops.api.modules.procurement.domain.ProcurementReturnOrder;
 import com.company.ops.api.modules.procurement.domain.SupplierInvoice;
 import com.company.ops.api.modules.procurement.dto.ProcurementControlDtos.*;
+import com.company.ops.api.modules.procurement.dto.CreateConsolidatedInquiryRequest;
+import com.company.ops.api.modules.procurement.dto.ProcurementPurchasePoolResponse;
 import com.company.ops.api.modules.procurement.dto.ReceivePurchaseOrderRequest;
 import com.company.ops.api.modules.procurement.service.ProcurementControlService;
 import jakarta.validation.Valid;
@@ -27,6 +29,20 @@ public class ProcurementControlController {
   @PreAuthorize("hasAuthority('procurement:view')")
   public ApiResponse<List<Map<String, Object>>> inquiries() {
     return ApiResponse.ok(service.listInquiries());
+  }
+
+  @GetMapping("/purchase-pool")
+  @PreAuthorize("hasAuthority('procurement:view')")
+  public ApiResponse<ProcurementPurchasePoolResponse> purchasePool() {
+    return ApiResponse.ok(service.purchasePool());
+  }
+
+  @PostMapping("/purchase-pool/inquiries")
+  @PreAuthorize("hasAuthority('procurement:purchase:create')")
+  public ApiResponse<Map<String, Object>> createConsolidatedInquiry(
+      @Valid @RequestBody CreateConsolidatedInquiryRequest request
+  ) {
+    return ApiResponse.ok(service.createConsolidatedInquiry(request));
   }
 
   @PostMapping("/inquiries")

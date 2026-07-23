@@ -10,6 +10,10 @@ import java.util.UUID;
 
 public record PurchaseRequestResponse(
     UUID id,
+    UUID batchId,
+    String batchCode,
+    String batchName,
+    Integer lineNo,
     String code,
     String requesterName,
     UUID partId,

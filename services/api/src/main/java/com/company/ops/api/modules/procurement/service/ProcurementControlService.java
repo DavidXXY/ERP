@@ -8,6 +8,8 @@ import com.company.ops.api.modules.inventory.repository.InventoryPartRepository;
 import com.company.ops.api.modules.inventory.repository.StockMovementRepository;
 import com.company.ops.api.modules.procurement.domain.*;
 import com.company.ops.api.modules.procurement.dto.ProcurementControlDtos.*;
+import com.company.ops.api.modules.procurement.dto.CreateConsolidatedInquiryRequest;
+import com.company.ops.api.modules.procurement.dto.ProcurementPurchasePoolResponse;
 import com.company.ops.api.modules.procurement.dto.ReceivePurchaseOrderRequest;
 import com.company.ops.api.modules.procurement.repository.*;
 import com.company.ops.api.modules.system.security.UserPrincipal;
@@ -16,10 +18,16 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +35,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ProcurementControlService {
   private final ProcurementInquiryRepository inquiries;
+  private final ProcurementInquiryRequestRepository inquiryRequests;
   private final SupplierQuotationRepository quotes;
   private final PurchaseRequestRepository requests;
   private final SupplierRepository suppliers;
@@ -38,9 +47,11 @@ public class ProcurementControlService {
   private final ProcurementCostAllocationRepository costs;
   private final ProcurementReturnOrderRepository returns;
   private final SupplierInvoiceRepository invoices;
+  private final PurchaseRequestApprovalRecordRepository requestApprovals;
 
   public ProcurementControlService(
       ProcurementInquiryRepository inquiries,
+      ProcurementInquiryRequestRepository inquiryRequests,
       SupplierQuotationRepository quotes,
       PurchaseRequestRepository requests,
       SupplierRepository suppliers,
@@ -51,9 +62,11 @@ public class ProcurementControlService {
       ProcurementPayableRepository payables,
       ProcurementCostAllocationRepository costs,
       ProcurementReturnOrderRepository returns,
-      SupplierInvoiceRepository invoices
+      SupplierInvoiceRepository invoices,
+      PurchaseRequestApprovalRecordRepository requestApprovals
   ) {
     this.inquiries = inquiries;
+    this.inquiryRequests = inquiryRequests;
     this.quotes = quotes;
     this.requests = requests;
     this.suppliers = suppliers;
@@ -65,11 +78,176 @@ public class ProcurementControlService {
     this.costs = costs;
     this.returns = returns;
     this.invoices = invoices;
+    this.requestApprovals = requestApprovals;
   }
 
   @Transactional(readOnly = true)
   public List<Map<String, Object>> listInquiries() {
     return inquiries.findAllByOrderByCreatedAtDesc().stream().map(this::inquiryView).toList();
+  }
+
+  @Transactional(readOnly = true)
+  public ProcurementPurchasePoolResponse purchasePool() {
+    List<PurchaseRequest> approved = requests.findAllByOrderByCreatedAtDesc().stream()
+        .filter(item -> item.getApprovalStatus() == ApprovalStatus.APPROVED)
+        .filter(item -> item.getStatus() == PurchaseRequestStatus.APPROVED)
+        .toList();
+    Map<UUID, ProcurementInquiry> inquiryMap = inquiries.findAll().stream()
+        .collect(Collectors.toMap(ProcurementInquiry::getId, item -> item));
+    Set<UUID> activeInquiryRequestIds = inquiryRequests.findAll().stream()
+        .filter(link -> {
+          ProcurementInquiry inquiry = inquiryMap.get(link.getInquiryId());
+          return inquiry != null
+              && ("OPEN".equals(inquiry.getStatus()) || "AWARDED".equals(inquiry.getStatus()));
+        })
+        .map(ProcurementInquiryRequest::getRequestId)
+        .collect(Collectors.toSet());
+    Map<UUID, BigDecimal> orderedByRequest = orders.findAll().stream()
+        .filter(order -> order.getRequestId() != null)
+        .filter(order -> order.getStatus() != PurchaseOrderStatus.CANCELLED)
+        .collect(Collectors.groupingBy(
+            PurchaseOrder::getRequestId,
+            Collectors.reducing(BigDecimal.ZERO, PurchaseOrder::getOrderedQty, this::add)));
+    Map<UUID, InventoryPart> partMap = parts.findAllById(
+        approved.stream().map(PurchaseRequest::getPartId)
+            .filter(java.util.Objects::nonNull).distinct().toList()
+    ).stream().collect(Collectors.toMap(InventoryPart::getId, item -> item));
+
+    Map<String, List<ProcurementPurchasePoolResponse.Item>> grouped = new LinkedHashMap<>();
+    Map<String, PurchaseRequest> groupSources = new HashMap<>();
+    for (PurchaseRequest request : approved) {
+      if (activeInquiryRequestIds.contains(request.getId())) continue;
+      BigDecimal ordered = valueOr(orderedByRequest.get(request.getId()), BigDecimal.ZERO);
+      BigDecimal remaining = valueOr(request.getQuantity(), BigDecimal.ZERO).subtract(ordered);
+      if (remaining.compareTo(BigDecimal.ZERO) <= 0) continue;
+      InventoryPart part = request.getPartId() == null ? null : partMap.get(request.getPartId());
+      BigDecimal estimatedUnitPrice = valueOr(request.getUnitPrice(), BigDecimal.ZERO);
+      if (estimatedUnitPrice.compareTo(BigDecimal.ZERO) == 0 && part != null) {
+        estimatedUnitPrice = valueOr(part.getUnitCost(), BigDecimal.ZERO);
+      }
+      String groupKey = sourcingGroupKey(request);
+      groupSources.putIfAbsent(groupKey, request);
+      PurchaseRequestApprovalRecord approval = requestApprovals
+          .findFirstByRequestIdOrderByDecidedAtDesc(request.getId()).orElse(null);
+      grouped.computeIfAbsent(groupKey, ignored -> new ArrayList<>()).add(
+          new ProcurementPurchasePoolResponse.Item(
+              request.getId(), request.getCode(), request.getBatchId(), request.getBatchCode(),
+              request.getBatchName(), request.getLineNo(), request.getRequesterName(),
+              request.getQuantity(), ordered, remaining, estimatedUnitPrice,
+              remaining.multiply(estimatedUnitPrice), request.getTaxRate(),
+              request.getExpectedDate(), request.getCostType(),
+              request.getCostType() == ProcurementCostType.PROJECT
+                  ? request.getProjectId() : request.getDepartmentId(),
+              request.getCostTargetCode(), request.getCostTargetName(), request.getReason(),
+              approval == null ? request.getUpdatedAt() : approval.getDecidedAt()));
+    }
+
+    List<ProcurementPurchasePoolResponse.Group> groups = grouped.entrySet().stream()
+        .map(entry -> {
+          PurchaseRequest source = groupSources.get(entry.getKey());
+          InventoryPart part = source.getPartId() == null ? null : partMap.get(source.getPartId());
+          List<ProcurementPurchasePoolResponse.Item> items = entry.getValue().stream()
+              .sorted(Comparator.comparing(
+                  ProcurementPurchasePoolResponse.Item::expectedDate,
+                  Comparator.nullsLast(Comparator.naturalOrder())))
+              .toList();
+          BigDecimal totalQty = items.stream()
+              .map(ProcurementPurchasePoolResponse.Item::remainingQuantity)
+              .reduce(BigDecimal.ZERO, BigDecimal::add);
+          BigDecimal totalAmount = items.stream()
+              .map(ProcurementPurchasePoolResponse.Item::estimatedAmount)
+              .reduce(BigDecimal.ZERO, BigDecimal::add);
+          int targetCount = (int) items.stream()
+              .map(item -> item.costTargetId() == null
+                  ? item.costTargetCode() : item.costTargetId().toString())
+              .distinct().count();
+          LocalDate earliest = items.stream()
+              .map(ProcurementPurchasePoolResponse.Item::expectedDate)
+              .filter(java.util.Objects::nonNull).min(LocalDate::compareTo).orElse(null);
+          return new ProcurementPurchasePoolResponse.Group(
+              entry.getKey(), source.getPartId(), part == null ? null : part.getCode(),
+              source.getPartName(), items.size(), targetCount, totalQty, totalAmount,
+              earliest, items);
+        })
+        .sorted(Comparator.comparing(
+            ProcurementPurchasePoolResponse.Group::earliestExpectedDate,
+            Comparator.nullsLast(Comparator.naturalOrder())))
+        .toList();
+    return new ProcurementPurchasePoolResponse(
+        groups.size(),
+        groups.stream().mapToInt(ProcurementPurchasePoolResponse.Group::requestCount).sum(),
+        groups.stream().map(ProcurementPurchasePoolResponse.Group::totalRemainingQuantity)
+            .reduce(BigDecimal.ZERO, BigDecimal::add),
+        groups.stream().map(ProcurementPurchasePoolResponse.Group::totalEstimatedAmount)
+            .reduce(BigDecimal.ZERO, BigDecimal::add),
+        groups);
+  }
+
+  @Transactional
+  public Map<String, Object> createConsolidatedInquiry(
+      CreateConsolidatedInquiryRequest request
+  ) {
+    List<UUID> requestIds = request.requestIds().stream().distinct().toList();
+    List<PurchaseRequest> selected = requests.findAllById(requestIds);
+    if (selected.size() != requestIds.size()) {
+      throw new BusinessException("部分采购申请不存在，请刷新待采购清单");
+    }
+    if (selected.stream().anyMatch(item ->
+        item.getApprovalStatus() != ApprovalStatus.APPROVED
+            || item.getStatus() != PurchaseRequestStatus.APPROVED)) {
+      throw new BusinessException("只能选择已审批且尚未完成下单的采购申请");
+    }
+    Set<String> groupKeys = selected.stream().map(this::sourcingGroupKey).collect(Collectors.toSet());
+    if (groupKeys.size() != 1) {
+      throw new BusinessException("集中采购必须选择相同物料编码或相同物料名称的申请");
+    }
+    Set<UUID> activeRequestIds = activeInquiryRequestIds();
+    if (selected.stream().anyMatch(item -> activeRequestIds.contains(item.getId()))) {
+      throw new BusinessException("部分采购申请已进入询价，请刷新待采购清单");
+    }
+    Map<UUID, BigDecimal> orderedByRequest = orders.findAll().stream()
+        .filter(order -> order.getRequestId() != null)
+        .filter(order -> order.getStatus() != PurchaseOrderStatus.CANCELLED)
+        .collect(Collectors.groupingBy(
+            PurchaseOrder::getRequestId,
+            Collectors.reducing(BigDecimal.ZERO, PurchaseOrder::getOrderedQty, this::add)));
+    Map<UUID, BigDecimal> remainingByRequest = new LinkedHashMap<>();
+    for (PurchaseRequest item : selected) {
+      BigDecimal remaining = valueOr(item.getQuantity(), BigDecimal.ZERO)
+          .subtract(valueOr(orderedByRequest.get(item.getId()), BigDecimal.ZERO));
+      if (remaining.compareTo(BigDecimal.ZERO) <= 0) {
+        throw new BusinessException(item.getCode() + " 已无待采购数量");
+      }
+      remainingByRequest.put(item.getId(), remaining);
+    }
+
+    String method = defaultText(request.sourcingMethod(), "COMPETITIVE").toUpperCase();
+    int minQuotes = request.minQuoteCount() == null
+        ? ("SINGLE_SOURCE".equals(method) ? 1 : 3) : request.minQuoteCount();
+    validateSourcingRules(method, minQuotes, request.exceptionReason());
+    PurchaseRequest primary = selected.get(0);
+    ProcurementInquiry inquiry = new ProcurementInquiry();
+    inquiry.setCode("XJ-JC-" + LocalDate.now().toString().replace("-", "")
+        + "-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase());
+    inquiry.setRequestId(primary.getId());
+    inquiry.setTitle(request.title().trim());
+    inquiry.setDeadline(request.deadline());
+    inquiry.setCreatedByName(currentName());
+    inquiry.setStatus("OPEN");
+    inquiry.setSourcingMethod(method);
+    inquiry.setMinQuoteCount(minQuotes);
+    inquiry.setExceptionReason(request.exceptionReason());
+    ProcurementInquiry saved = inquiries.save(inquiry);
+
+    List<ProcurementInquiryRequest> links = selected.stream().map(item -> {
+      ProcurementInquiryRequest link = new ProcurementInquiryRequest();
+      link.setInquiryId(saved.getId());
+      link.setRequestId(item.getId());
+      link.setRequestedQty(remainingByRequest.get(item.getId()));
+      return link;
+    }).toList();
+    inquiryRequests.saveAll(links);
+    return inquiryView(saved);
   }
 
   @Transactional
@@ -79,15 +257,13 @@ public class ProcurementControlService {
     if (purchaseRequest.getApprovalStatus() != ApprovalStatus.APPROVED) {
       throw new BusinessException("采购申请审批通过后才能询价");
     }
+    if (activeInquiryRequestIds().contains(purchaseRequest.getId())) {
+      throw new BusinessException("该采购申请已进入询价");
+    }
     String method = defaultText(request.sourcingMethod(), "COMPETITIVE").toUpperCase();
     int minQuotes = request.minQuoteCount() == null ? ("SINGLE_SOURCE".equals(method) ? 1 : 3)
         : request.minQuoteCount();
-    if (minQuotes < 1) {
-      throw new BusinessException("最低报价数量必须大于零");
-    }
-    if ("SINGLE_SOURCE".equals(method) && isBlank(request.exceptionReason())) {
-      throw new BusinessException("单一来源采购必须填写例外原因");
-    }
+    validateSourcingRules(method, minQuotes, request.exceptionReason());
     ProcurementInquiry inquiry = new ProcurementInquiry();
     inquiry.setCode("XJ-" + System.currentTimeMillis());
     inquiry.setRequestId(purchaseRequest.getId());
@@ -98,7 +274,13 @@ public class ProcurementControlService {
     inquiry.setSourcingMethod(method);
     inquiry.setMinQuoteCount(minQuotes);
     inquiry.setExceptionReason(request.exceptionReason());
-    return inquiryView(inquiries.save(inquiry));
+    ProcurementInquiry saved = inquiries.save(inquiry);
+    ProcurementInquiryRequest link = new ProcurementInquiryRequest();
+    link.setInquiryId(saved.getId());
+    link.setRequestId(purchaseRequest.getId());
+    link.setRequestedQty(purchaseRequest.getQuantity());
+    inquiryRequests.save(link);
+    return inquiryView(saved);
   }
 
   @Transactional
@@ -440,10 +622,41 @@ public class ProcurementControlService {
   }
 
   private Map<String, Object> inquiryView(ProcurementInquiry inquiry) {
+    List<ProcurementInquiryRequest> links =
+        inquiryRequests.findByInquiryIdOrderByCreatedAtAsc(inquiry.getId());
+    if (links.isEmpty()) {
+      ProcurementInquiryRequest fallback = new ProcurementInquiryRequest();
+      fallback.setInquiryId(inquiry.getId());
+      fallback.setRequestId(inquiry.getRequestId());
+      PurchaseRequest source = requests.findById(inquiry.getRequestId()).orElse(null);
+      fallback.setRequestedQty(source == null ? BigDecimal.ZERO : source.getQuantity());
+      links = List.of(fallback);
+    }
+    Map<UUID, PurchaseRequest> requestMap = requests.findAllById(
+        links.stream().map(ProcurementInquiryRequest::getRequestId).toList()
+    ).stream().collect(Collectors.toMap(PurchaseRequest::getId, item -> item));
+    List<Map<String, Object>> requestLines = links.stream().map(link -> {
+      PurchaseRequest source = requestMap.get(link.getRequestId());
+      Map<String, Object> line = new LinkedHashMap<>();
+      line.put("requestId", link.getRequestId());
+      line.put("requestCode", source == null ? null : source.getCode());
+      line.put("batchCode", source == null ? null : source.getBatchCode());
+      line.put("partName", source == null ? null : source.getPartName());
+      line.put("requestedQty", link.getRequestedQty());
+      line.put("costTargetName", source == null ? null : source.getCostTargetName());
+      line.put("expectedDate", source == null ? null : source.getExpectedDate());
+      return line;
+    }).toList();
     Map<String, Object> view = new LinkedHashMap<>();
     view.put("id", inquiry.getId());
     view.put("code", inquiry.getCode());
     view.put("requestId", inquiry.getRequestId());
+    view.put("requestIds", links.stream().map(ProcurementInquiryRequest::getRequestId).toList());
+    view.put("requestCount", links.size());
+    view.put("totalRequestedQty", links.stream().map(ProcurementInquiryRequest::getRequestedQty)
+        .reduce(BigDecimal.ZERO, BigDecimal::add));
+    view.put("requestLines", requestLines);
+    view.put("partName", requestLines.isEmpty() ? null : requestLines.get(0).get("partName"));
     view.put("title", inquiry.getTitle());
     view.put("deadline", inquiry.getDeadline());
     view.put("status", inquiry.getStatus());
@@ -458,6 +671,39 @@ public class ProcurementControlService {
     view.put("quotes", quotes.findByInquiryIdOrderByUnitPriceAsc(inquiry.getId()).stream()
         .map(this::quoteView).toList());
     return view;
+  }
+
+  private Set<UUID> activeInquiryRequestIds() {
+    Map<UUID, ProcurementInquiry> inquiryMap = inquiries.findAll().stream()
+        .collect(Collectors.toMap(ProcurementInquiry::getId, item -> item));
+    return inquiryRequests.findAll().stream()
+        .filter(link -> {
+          ProcurementInquiry inquiry = inquiryMap.get(link.getInquiryId());
+          return inquiry != null
+              && ("OPEN".equals(inquiry.getStatus()) || "AWARDED".equals(inquiry.getStatus()));
+        })
+        .map(ProcurementInquiryRequest::getRequestId)
+        .collect(Collectors.toSet());
+  }
+
+  private String sourcingGroupKey(PurchaseRequest request) {
+    if (request.getPartId() != null) return "PART:" + request.getPartId();
+    String normalized = defaultText(request.getPartName(), "未命名物料")
+        .replaceAll("\\s+", "").toLowerCase(java.util.Locale.ROOT);
+    return "NAME:" + normalized;
+  }
+
+  private void validateSourcingRules(String method, int minQuotes, String exceptionReason) {
+    if (minQuotes < 1) {
+      throw new BusinessException("最低报价数量必须大于零");
+    }
+    if ("SINGLE_SOURCE".equals(method) && isBlank(exceptionReason)) {
+      throw new BusinessException("单一来源采购必须填写例外原因");
+    }
+  }
+
+  private BigDecimal add(BigDecimal left, BigDecimal right) {
+    return valueOr(left, BigDecimal.ZERO).add(valueOr(right, BigDecimal.ZERO));
   }
 
   private Map<String, Object> quoteView(SupplierQuotation quote) {

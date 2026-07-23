@@ -183,6 +183,12 @@ const rootRoutes: RouteRecordRaw[] = [
     meta: { title: "\u91c7\u8d2d\u7533\u8bf7", permission: "procurement:view" },
   },
   {
+    path: "procurement/purchase-pool",
+    name: "procurement-purchase-pool",
+    component: () => import("@/views/procurement/PurchasePoolView.vue"),
+    meta: { title: "待采购清单", permission: "procurement:view" },
+  },
+  {
     path: "procurement/orders",
     name: "procurement-orders",
     component: () => import("@/views/procurement/PurchaseOrdersView.vue"),
@@ -232,9 +238,7 @@ const rootRoutes: RouteRecordRaw[] = [
   },
   {
     path: "procurement/governance",
-    name: "procurement-governance",
-    component: () => import("@/views/procurement/ProcurementGovernanceView.vue"),
-    meta: { title: "供应采购治理", permission: "procurement:view" },
+    redirect: "/procurement/suppliers",
   },
   {
     path: "procurement/suppliers",

@@ -24,8 +24,8 @@
       <section class="supplier-score-panel">
         <div class="supplier-score-head">
           <div>
-            <h3>供应商准入与资料完整度</h3>
-            <p>营业执照、资质证书、税务与银行资料会影响准入评分和采购风险。</p>
+            <h3>供应商准入审批与资料完整度</h3>
+            <p>新建供应商自动进入待审批，通过准入审批后才可参与询价、签约和采购下单。</p>
           </div>
           <a-tag :color="watchSupplierCount ? 'orange' : 'green'"
             >关注 {{ watchSupplierCount }} 家</a-tag
@@ -51,7 +51,7 @@
         :loading="loading"
         :pagination="{ pageSize: 10 }"
         :row-key="(r: any) => r.id"
-        :scroll="{ x: 1380 }"
+        :scroll="{ x: 1580 }"
         :custom-row="
           (record: Supplier) => ({ onClick: () => openProfile(record) })
         "
@@ -129,6 +129,21 @@
             />
             <span class="table-subtitle">{{ supplierGrade(record) }}</span>
           </template>
+          <template v-else-if="column.key === 'admission'">
+            <a-tag :color="admissionColor(record.admissionStatus)">
+              {{ admissionLabel(record.admissionStatus) }}
+            </a-tag>
+            <span v-if="record.admissionReviewerName" class="table-subtitle">
+              {{ record.admissionReviewerName }} ·
+              {{ formatDateTime(record.admissionReviewedAt) }}
+            </span>
+            <span
+              v-else-if="record.admissionStatus === 'PENDING'"
+              class="table-subtitle"
+            >
+              等待审批
+            </span>
+          </template>
           <template v-else-if="column.key === 'status'">
             <a-tag
               :color="
@@ -159,6 +174,16 @@
               >
               <a-button type="link" size="small" @click="openDocuments(record)"
                 >档案</a-button
+              >
+              <a-button
+                v-if="
+                  record.admissionStatus === 'PENDING' &&
+                  auth.can('procurement:request:approve')
+                "
+                type="link"
+                size="small"
+                @click="openAdmissionReview(record)"
+                >准入审批</a-button
               >
             </a-space>
           </template>
@@ -233,12 +258,14 @@
                 v-model:value="form.qualificationValidTo"
                 type="date" /></a-form-item
           ></a-col>
-          <a-col :xs="24" :md="8"
-            ><a-form-item label="准入状态"
-              ><a-select
-                v-model:value="form.admissionStatus"
-                :options="admissionOptions" /></a-form-item
-          ></a-col>
+          <a-col :span="24">
+            <a-alert
+              type="info"
+              show-icon
+              message="保存后自动提交准入审批"
+              description="审批通过前，该供应商不会出现在询价、合同和采购订单的可用供应商列表中。"
+            />
+          </a-col>
           <a-col :span="24"
             ><a-form-item label="注册地址"
               ><a-input v-model:value="form.registeredAddress" /></a-form-item
@@ -293,6 +320,14 @@
               >资料档案</a-button
             >
             <a-button
+              v-if="
+                selectedSupplier.admissionStatus === 'PENDING' &&
+                auth.can('procurement:request:approve')
+              "
+              @click="openAdmissionReview(selectedSupplier)"
+              >准入审批</a-button
+            >
+            <a-button
               type="primary"
               @click="startSupplierEdit(selectedSupplier)"
               >编辑资料</a-button
@@ -321,8 +356,25 @@
             <a-descriptions-item label="供应商编码">{{
               selectedSupplier.code
             }}</a-descriptions-item>
-            <a-descriptions-item label="准入状态">{{
-              admissionLabel(selectedSupplier.admissionStatus)
+            <a-descriptions-item label="准入状态">
+              <a-tag
+                :color="admissionColor(selectedSupplier.admissionStatus)"
+                >{{
+                  admissionLabel(selectedSupplier.admissionStatus)
+                }}</a-tag
+              >
+            </a-descriptions-item>
+            <a-descriptions-item label="提交审批时间">{{
+              formatDateTime(selectedSupplier.admissionSubmittedAt) || "-"
+            }}</a-descriptions-item>
+            <a-descriptions-item label="审批人">{{
+              selectedSupplier.admissionReviewerName || "-"
+            }}</a-descriptions-item>
+            <a-descriptions-item label="审批时间">{{
+              formatDateTime(selectedSupplier.admissionReviewedAt) || "-"
+            }}</a-descriptions-item>
+            <a-descriptions-item label="审批意见" :span="2">{{
+              selectedSupplier.admissionReviewComment || "-"
             }}</a-descriptions-item>
             <a-descriptions-item label="统一社会信用代码">{{
               selectedSupplier.unifiedSocialCreditCode || "-"
@@ -498,12 +550,18 @@
                       v-model:value="form.qualificationValidTo"
                       type="date" /></a-form-item
                 ></a-col>
-                <a-col :xs="24" :md="8"
-                  ><a-form-item label="准入状态"
-                    ><a-select
-                      v-model:value="form.admissionStatus"
-                      :options="admissionOptions" /></a-form-item
-                ></a-col>
+                <a-col :xs="24" :md="8">
+                  <a-form-item label="准入状态">
+                    <a-tag
+                      :color="
+                        admissionColor(selectedSupplier.admissionStatus)
+                      "
+                    >
+                      {{ admissionLabel(selectedSupplier.admissionStatus) }}
+                    </a-tag>
+                    <span class="table-subtitle">准入状态只能通过审批变更</span>
+                  </a-form-item>
+                </a-col>
                 <a-col :span="24"
                   ><a-form-item label="注册地址"
                     ><a-input
@@ -548,6 +606,68 @@
         </a-form>
       </template>
     </a-drawer>
+
+    <a-modal
+      v-model:open="admissionReviewOpen"
+      title="供应商准入审批"
+      :confirm-loading="reviewing"
+      :ok-button-props="{
+        disabled:
+          reviewForm.decision === 'APPROVED' &&
+          !!reviewTarget &&
+          missingProfileItems(reviewTarget).length > 0,
+      }"
+      @ok="handleAdmissionReview"
+    >
+      <template v-if="reviewTarget">
+        <a-descriptions bordered :column="1" size="small">
+          <a-descriptions-item label="供应商">
+            {{ reviewTarget.name }}（{{ reviewTarget.code }}）
+          </a-descriptions-item>
+          <a-descriptions-item label="资料完整度">
+            {{ profileCompleteness(reviewTarget) }}%
+          </a-descriptions-item>
+          <a-descriptions-item label="待补资料">
+            {{
+              missingProfileItems(reviewTarget).length
+                ? missingProfileItems(reviewTarget).join("、")
+                : "无"
+            }}
+          </a-descriptions-item>
+        </a-descriptions>
+        <a-alert
+          v-if="missingProfileItems(reviewTarget).length"
+          class="profile-alert"
+          type="warning"
+          show-icon
+          message="资料未满足准入条件，暂不能审批通过；可以驳回并要求补充。"
+        />
+        <a-form layout="vertical" class="profile-alert">
+          <a-form-item label="审批结论">
+            <a-radio-group v-model:value="reviewForm.decision">
+              <a-radio value="APPROVED">审批通过</a-radio>
+              <a-radio value="REJECTED">驳回补充</a-radio>
+            </a-radio-group>
+          </a-form-item>
+          <a-form-item
+            :label="
+              reviewForm.decision === 'REJECTED' ? '驳回原因' : '审批意见'
+            "
+            required
+          >
+            <a-textarea
+              v-model:value="reviewForm.comment"
+              :rows="3"
+              :placeholder="
+                reviewForm.decision === 'REJECTED'
+                  ? '请说明需要补充或修正的资料'
+                  : '请输入审批意见'
+              "
+            />
+          </a-form-item>
+        </a-form>
+      </template>
+    </a-modal>
 
     <a-drawer v-model:open="documentOpen" width="820" title="供应商档案">
       <template v-if="selectedSupplier">
@@ -633,6 +753,7 @@ import {
   listSuppliers,
   listPurchaseOrders,
   createSupplier,
+  reviewSupplierAdmission,
   updateSupplier,
   type CreateSupplierPayload,
   type Supplier,
@@ -651,6 +772,7 @@ const auth = useAuthStore();
 const router = useRouter();
 const loading = ref(false);
 const saving = ref(false);
+const reviewing = ref(false);
 const documentsLoading = ref(false);
 const ordersLoading = ref(false);
 const suppliers = ref<Supplier[]>([]);
@@ -660,18 +782,18 @@ const selectedSupplier = ref<Supplier | null>(null);
 const createOpen = ref(false);
 const profileOpen = ref(false);
 const documentOpen = ref(false);
+const admissionReviewOpen = ref(false);
+const reviewTarget = ref<Supplier | null>(null);
+const reviewForm = reactive<{
+  decision: "APPROVED" | "REJECTED";
+  comment: string;
+}>({ decision: "APPROVED", comment: "供应商资料核验通过，同意准入" });
 const formRef = ref();
 const profileFormRef = ref();
 const supplierEditing = ref(false);
 const form = reactive<CreateSupplierPayload>(emptySupplierForm());
 
 const rules = { code: [{ required: true }], name: [{ required: true }] };
-const admissionOptions = [
-  { label: "待准入", value: "PENDING" },
-  { label: "已准入", value: "APPROVED" },
-  { label: "资料待补", value: "INCOMPLETE" },
-  { label: "暂停合作", value: "SUSPENDED" },
-];
 const riskOptions = [
   { label: "正常", value: "NORMAL" },
   { label: "关注", value: "WATCHLIST" },
@@ -696,8 +818,9 @@ const supplierColumns = [
   { title: "资料完整度", key: "profile", width: 180 },
   { title: "有效期", key: "validity", width: 170 },
   { title: "评分", key: "score", width: 160 },
-  { title: "状态", key: "status", width: 100 },
-  { title: "操作", key: "action", width: 130, fixed: "right" },
+  { title: "准入审批", key: "admission", width: 170 },
+  { title: "风险", key: "status", width: 100 },
+  { title: "操作", key: "action", width: 210, fixed: "right" },
 ];
 function formatMoney(value?: number) {
   return new Intl.NumberFormat("zh-CN", {
@@ -737,9 +860,9 @@ const supplierScoreCards = computed(() => [
     hint: "已建档供应商",
   },
   {
-    label: "资料完整",
-    value: `${suppliers.value.filter((item) => profileCompleteness(item) >= 80).length} 家`,
-    hint: "完整度80%以上",
+    label: "待准入审批",
+    value: `${suppliers.value.filter((item) => item.admissionStatus === "PENDING").length} 家`,
+    hint: "审批通过前不可采购",
   },
   {
     label: "到期预警",
@@ -778,7 +901,7 @@ async function handleCreate() {
   try {
     const created = await createSupplier({ ...form });
     createOpen.value = false;
-    message.success("供应商已创建，请继续上传营业执照和资质资料");
+    message.success("供应商已创建并提交准入审批，审批通过后方可使用");
     await loadData();
     openDocuments(created);
   } catch (error) {
@@ -858,6 +981,7 @@ async function saveSupplier() {
   await profileFormRef.value?.validate();
   saving.value = true;
   try {
+    const wasRejected = selectedSupplier.value.admissionStatus === "REJECTED";
     const saved = await updateSupplier(selectedSupplier.value.id, { ...form });
     selectedSupplier.value = saved;
     const index = suppliers.value.findIndex((item) => item.id === saved.id);
@@ -865,11 +989,62 @@ async function saveSupplier() {
       suppliers.value[index] = saved;
     }
     supplierEditing.value = false;
-    message.success("供应商资料已更新");
+    message.success(
+      saved.admissionStatus === "PENDING" && wasRejected
+        ? "供应商资料已更新并重新提交准入审批"
+        : "供应商资料已更新",
+    );
   } catch (error) {
     message.error(error instanceof Error ? error.message : "保存失败");
   } finally {
     saving.value = false;
+  }
+}
+
+function openAdmissionReview(record: Supplier) {
+  reviewTarget.value = record;
+  Object.assign(reviewForm, {
+    decision: missingProfileItems(record).length ? "REJECTED" : "APPROVED",
+    comment: missingProfileItems(record).length
+      ? `请补充：${missingProfileItems(record).join("、")}`
+      : "供应商资料核验通过，同意准入",
+  });
+  admissionReviewOpen.value = true;
+}
+
+async function handleAdmissionReview() {
+  if (!reviewTarget.value) return;
+  if (!reviewForm.comment.trim()) {
+    message.warning("请填写审批意见");
+    return;
+  }
+  if (
+    reviewForm.decision === "APPROVED" &&
+    missingProfileItems(reviewTarget.value).length
+  ) {
+    message.warning("供应商资料不完整，不能审批通过");
+    return;
+  }
+  reviewing.value = true;
+  try {
+    const reviewed = await reviewSupplierAdmission(reviewTarget.value.id, {
+      ...reviewForm,
+    });
+    admissionReviewOpen.value = false;
+    selectedSupplier.value =
+      selectedSupplier.value?.id === reviewed.id
+        ? reviewed
+        : selectedSupplier.value;
+    message.success(
+      reviewForm.decision === "APPROVED"
+        ? "供应商准入审批已通过，现在可以参与采购"
+        : "供应商准入已驳回，修改资料后会重新提交审批",
+    );
+    await loadData();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "准入审批失败");
+  } finally {
+    reviewing.value = false;
   }
 }
 
@@ -980,6 +1155,9 @@ function profileCompleteness(record: Supplier) {
 
 function missingProfileItems(record: Supplier) {
   const labels: Array<[keyof Supplier, string]> = [
+    ["category", "供应商类别"],
+    ["contactName", "联系人"],
+    ["phone", "联系电话"],
     ["unifiedSocialCreditCode", "信用代码"],
     ["legalRepresentative", "法人"],
     ["registeredAddress", "注册地址"],
@@ -1043,10 +1221,25 @@ function admissionLabel(value?: string) {
       {
         PENDING: "待准入",
         APPROVED: "已准入",
+        REJECTED: "已驳回",
         INCOMPLETE: "资料待补",
         SUSPENDED: "暂停合作",
       } as Record<string, string>
     )[value || ""] || "未设置准入"
+  );
+}
+
+function admissionColor(value?: string) {
+  return (
+    (
+      {
+        PENDING: "orange",
+        APPROVED: "green",
+        REJECTED: "red",
+        INCOMPLETE: "gold",
+        SUSPENDED: "red",
+      } as Record<string, string>
+    )[value || ""] || "default"
   );
 }
 
@@ -1104,7 +1297,7 @@ function formatDateTime(value?: string) {
 }
 .supplier-score-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 10px;
 }
 .supplier-score-card {

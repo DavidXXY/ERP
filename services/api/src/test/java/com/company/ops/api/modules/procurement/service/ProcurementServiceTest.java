@@ -20,10 +20,13 @@ import com.company.ops.api.modules.procurement.domain.PurchaseOrderStatus;
 import com.company.ops.api.modules.procurement.domain.Supplier;
 import com.company.ops.api.modules.procurement.domain.SupplierRiskStatus;
 import com.company.ops.api.modules.procurement.dto.CreatePurchaseRequestRequest;
+import com.company.ops.api.modules.procurement.dto.CreateSupplierRequest;
 import com.company.ops.api.modules.procurement.dto.ReceivePurchaseOrderRequest;
+import com.company.ops.api.modules.procurement.dto.ReviewSupplierAdmissionRequest;
 import com.company.ops.api.modules.procurement.repository.GoodsReceiptRepository;
 import com.company.ops.api.modules.procurement.repository.ProcurementCostAllocationRepository;
 import com.company.ops.api.modules.procurement.repository.ProcurementPayableRepository;
+import com.company.ops.api.modules.procurement.repository.ProcurementInquiryRequestRepository;
 import com.company.ops.api.modules.procurement.repository.PurchaseOrderRepository;
 import com.company.ops.api.modules.procurement.repository.PurchaseRequestApprovalRecordRepository;
 import com.company.ops.api.modules.procurement.repository.PurchaseRequestRepository;
@@ -58,6 +61,7 @@ class ProcurementServiceTest {
   @Mock private GoodsReceiptRepository receiptRepository;
   @Mock private ProcurementPayableRepository payableRepository;
   @Mock private ProcurementCostAllocationRepository costAllocationRepository;
+  @Mock private ProcurementInquiryRequestRepository inquiryRequestRepository;
   @Mock private InventoryPartRepository partRepository;
   @Mock private StockMovementRepository movementRepository;
   @Mock private ProjectRepository projectRepository;
@@ -79,6 +83,53 @@ class ProcurementServiceTest {
 
     assertThatThrownBy(() -> procurementService.createPurchaseRequest(request))
         .isInstanceOf(BusinessException.class);
+  }
+
+  @Test
+  void newSupplierAlwaysRequiresAdmissionApproval() {
+    when(supplierRepository.existsByCode("GYS-NEW")).thenReturn(false);
+    when(supplierRepository.save(any(Supplier.class)))
+        .thenAnswer(invocation -> invocation.getArgument(0));
+
+    var response = procurementService.createSupplier(
+        completeSupplierRequest("GYS-NEW", "APPROVED"));
+
+    assertThat(response.admissionStatus()).isEqualTo("PENDING");
+    assertThat(response.admissionSubmittedAt()).isNotNull();
+    assertThat(response.admissionReviewerName()).isNull();
+  }
+
+  @Test
+  void admissionReviewActivatesCompleteSupplier() {
+    Supplier supplier = new Supplier();
+    supplier.setId(UUID.randomUUID());
+    supplier.setCode("GYS-READY");
+    supplier.setName("Ready Supplier");
+    supplier.setCategory("Equipment");
+    supplier.setContactName("Contact");
+    supplier.setPhone("13800000000");
+    supplier.setSettlementTerms("Net 30");
+    supplier.setLegalRepresentative("Legal Representative");
+    supplier.setUnifiedSocialCreditCode("913100000000000000");
+    supplier.setRegisteredAddress("Shanghai");
+    supplier.setLicenseValidTo(LocalDate.now().plusYears(1));
+    supplier.setTaxpayerType("General");
+    supplier.setBankName("Bank");
+    supplier.setBankAccount("6222000000000000");
+    supplier.setAdmissionStatus("PENDING");
+    supplier.setRiskStatus(SupplierRiskStatus.NORMAL);
+    when(supplierRepository.findById(supplier.getId())).thenReturn(Optional.of(supplier));
+    when(supplierRepository.save(any(Supplier.class)))
+        .thenAnswer(invocation -> invocation.getArgument(0));
+    when(supplierRepository.findAll()).thenReturn(java.util.List.of(supplier));
+
+    var response = procurementService.reviewSupplierAdmission(
+        supplier.getId(),
+        new ReviewSupplierAdmissionRequest("APPROVED", "资料核验通过"));
+
+    assertThat(response.admissionStatus()).isEqualTo("APPROVED");
+    assertThat(response.admissionReviewedAt()).isNotNull();
+    assertThat(response.admissionReviewComment()).isEqualTo("资料核验通过");
   }
 
   @Test
@@ -174,5 +225,30 @@ class ProcurementServiceTest {
     part.setCode("WL-001");
     part.setName(name);
     return part;
+  }
+
+  private CreateSupplierRequest completeSupplierRequest(
+      String code, String requestedAdmissionStatus) {
+    return new CreateSupplierRequest(
+        code,
+        "New Supplier",
+        "Equipment",
+        "Contact",
+        "13800000000",
+        "Net 30",
+        "Legal Representative",
+        "913100000000000000",
+        "1000",
+        "Shanghai",
+        "Equipment supply",
+        LocalDate.now().plusYears(1),
+        null,
+        "General",
+        "Bank",
+        "6222000000000000",
+        requestedAdmissionStatus,
+        null,
+        SupplierRiskStatus.NORMAL
+    );
   }
 }

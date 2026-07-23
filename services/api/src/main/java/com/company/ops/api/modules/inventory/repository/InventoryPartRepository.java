@@ -16,6 +16,8 @@ public interface InventoryPartRepository extends JpaRepository<InventoryPart, UU
 
   boolean existsByCode(String code);
 
+  Optional<InventoryPart> findByCodeIgnoreCase(String code);
+
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select part from InventoryPart part where part.id = :id")
   Optional<InventoryPart> findByIdForUpdate(@Param("id") UUID id);

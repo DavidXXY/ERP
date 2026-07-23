@@ -102,9 +102,9 @@ import static com.company.ops.api.common.util.MoneyUtils.amount;
 public class OfficeService {
   private static final FilePolicy DOCUMENT_POLICY = new FilePolicy(
       20L * 1024 * 1024,
-      Set.of(".jpg", ".jpeg", ".png", ".webp", ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".txt", ".zip"),
+      Set.of(".jpg", ".jpeg", ".png", ".webp", ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".txt", ".zip", ".dwg", ".dxf"),
       "单个文件不能超过20MB",
-      "仅支持图片、PDF、Word、Excel、TXT 或 ZIP 档案",
+      "仅支持图片、PDF、Word、Excel、TXT、ZIP、DWG 或 DXF 档案",
       false
   );
   private final ApprovalRequestRepository approvalRepository;

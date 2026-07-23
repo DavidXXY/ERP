@@ -28,6 +28,7 @@ import com.company.ops.api.modules.procurement.dto.CreatePurchaseOrderRequest;
 import com.company.ops.api.modules.procurement.dto.CreatePurchaseRequestRequest;
 import com.company.ops.api.modules.procurement.dto.CreateSupplierRequest;
 import com.company.ops.api.modules.procurement.dto.GoodsReceiptResponse;
+import com.company.ops.api.modules.procurement.dto.ImportPurchaseRequestBatchResponse;
 import com.company.ops.api.modules.procurement.dto.ProcessPurchaseRequestApprovalRequest;
 import com.company.ops.api.modules.procurement.dto.ProcurementCostAllocationResponse;
 import com.company.ops.api.modules.procurement.dto.ProcurementCostTargetOptionResponse;
@@ -38,6 +39,7 @@ import com.company.ops.api.modules.procurement.dto.PurchaseOrderResponse;
 import com.company.ops.api.modules.procurement.dto.PurchaseRequestResponse;
 import com.company.ops.api.modules.procurement.dto.ReceivePurchaseOrderRequest;
 import com.company.ops.api.modules.procurement.dto.ReceivePurchaseOrderResult;
+import com.company.ops.api.modules.procurement.dto.ReviewSupplierAdmissionRequest;
 import com.company.ops.api.modules.procurement.dto.SupplierResponse;
 import com.company.ops.api.modules.procurement.repository.GoodsReceiptRepository;
 import com.company.ops.api.modules.procurement.repository.ProcurementPayableRepository;
@@ -49,6 +51,7 @@ import com.company.ops.api.modules.procurement.repository.SupplierRepository;
 import com.company.ops.api.modules.procurement.repository.SupplierInvoiceRepository;
 import com.company.ops.api.modules.procurement.repository.SupplierQuotationRepository;
 import com.company.ops.api.modules.procurement.repository.ProcurementInquiryRepository;
+import com.company.ops.api.modules.procurement.repository.ProcurementInquiryRequestRepository;
 import com.company.ops.api.modules.procurement.repository.ProcurementContractRepository;
 import com.company.ops.api.modules.project.domain.Project;
 import com.company.ops.api.modules.project.domain.ProjectApprovalStatus;
@@ -62,18 +65,31 @@ import com.company.ops.api.modules.system.domain.SystemOrganization;
 import com.company.ops.api.modules.system.repository.SystemOrganizationRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.DataFormatter;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.util.StringUtils;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.multipart.MultipartFile;
 import com.company.ops.api.modules.system.security.UserPrincipal;
 import static com.company.ops.api.common.util.MoneyUtils.amount;
 
@@ -95,6 +111,7 @@ public class ProcurementService {
   private final SystemOrganizationRepository organizationRepository;
   private final SupplierInvoiceRepository invoiceRepository;
   private final ProcurementInquiryRepository inquiryRepository;
+  private final ProcurementInquiryRequestRepository inquiryRequestRepository;
   private final SupplierQuotationRepository quoteRepository;
   private final ProcurementContractRepository contractRepository;
 
@@ -114,6 +131,7 @@ public class ProcurementService {
       SystemOrganizationRepository organizationRepository,
       SupplierInvoiceRepository invoiceRepository,
       ProcurementInquiryRepository inquiryRepository,
+      ProcurementInquiryRequestRepository inquiryRequestRepository,
       SupplierQuotationRepository quoteRepository,
       ProcurementContractRepository contractRepository
   ) {
@@ -132,6 +150,7 @@ public class ProcurementService {
     this.organizationRepository = organizationRepository;
     this.invoiceRepository = invoiceRepository;
     this.inquiryRepository = inquiryRepository;
+    this.inquiryRequestRepository = inquiryRequestRepository;
     this.quoteRepository = quoteRepository;
     this.contractRepository = contractRepository;
   }
@@ -160,6 +179,11 @@ public class ProcurementService {
     Supplier supplier = new Supplier();
     supplier.setCode(supplierCode);
     applySupplierRequest(supplier, request);
+    supplier.setAdmissionStatus("PENDING");
+    supplier.setAdmissionSubmittedAt(OffsetDateTime.now());
+    supplier.setAdmissionReviewedAt(null);
+    supplier.setAdmissionReviewerName(null);
+    supplier.setAdmissionReviewComment(null);
     return toSupplierResponse(supplierRepository.save(supplier), null);
   }
 
@@ -167,7 +191,51 @@ public class ProcurementService {
   public SupplierResponse updateSupplier(UUID id, CreateSupplierRequest request) {
     Supplier supplier = supplierRepository.findById(id)
         .orElseThrow(() -> new BusinessException("供应商不存在"));
+    boolean resubmitAdmission = "REJECTED".equals(supplier.getAdmissionStatus());
     applySupplierRequest(supplier, request);
+    if (resubmitAdmission) {
+      supplier.setAdmissionStatus("PENDING");
+      supplier.setAdmissionSubmittedAt(OffsetDateTime.now());
+      supplier.setAdmissionReviewedAt(null);
+      supplier.setAdmissionReviewerName(null);
+      supplier.setAdmissionReviewComment(null);
+    }
+    Supplier saved = supplierRepository.save(supplier);
+    return toSupplierResponse(saved, supplierFinancialSummaries().get(saved.getId()));
+  }
+
+  @Transactional
+  public SupplierResponse reviewSupplierAdmission(
+      UUID id, ReviewSupplierAdmissionRequest request) {
+    Supplier supplier = supplierRepository.findById(id)
+        .orElseThrow(() -> new BusinessException("供应商不存在"));
+    if (!"PENDING".equals(supplier.getAdmissionStatus())) {
+      throw new BusinessException("仅待审批供应商可以执行准入审批");
+    }
+    String decision = request.decision().trim().toUpperCase();
+    if (!"APPROVED".equals(decision) && !"REJECTED".equals(decision)) {
+      throw new BusinessException("准入审批结果仅支持通过或驳回");
+    }
+    if ("REJECTED".equals(decision) && !StringUtils.hasText(request.comment())) {
+      throw new BusinessException("驳回供应商准入时必须填写原因");
+    }
+    if ("APPROVED".equals(decision)) {
+      List<String> missing = missingAdmissionFields(supplier);
+      if (!missing.isEmpty()) {
+        throw new BusinessException("供应商资料不完整，请先补充：" + String.join("、", missing));
+      }
+      if (supplier.getLicenseValidTo().isBefore(java.time.LocalDate.now())) {
+        throw new BusinessException("营业执照已过期，不能通过准入审批");
+      }
+      if (supplier.getQualificationValidTo() != null
+          && supplier.getQualificationValidTo().isBefore(java.time.LocalDate.now())) {
+        throw new BusinessException("供应商资质已过期，不能通过准入审批");
+      }
+    }
+    supplier.setAdmissionStatus(decision);
+    supplier.setAdmissionReviewedAt(OffsetDateTime.now());
+    supplier.setAdmissionReviewerName(currentName());
+    supplier.setAdmissionReviewComment(request.comment());
     Supplier saved = supplierRepository.save(supplier);
     return toSupplierResponse(saved, supplierFinancialSummaries().get(saved.getId()));
   }
@@ -188,9 +256,24 @@ public class ProcurementService {
     supplier.setTaxpayerType(request.taxpayerType());
     supplier.setBankName(request.bankName());
     supplier.setBankAccount(request.bankAccount());
-    supplier.setAdmissionStatus(request.admissionStatus());
     supplier.setRemark(request.remark());
     supplier.setRiskStatus(request.riskStatus() == null ? SupplierRiskStatus.NORMAL : request.riskStatus());
+  }
+
+  private List<String> missingAdmissionFields(Supplier supplier) {
+    java.util.ArrayList<String> missing = new java.util.ArrayList<>();
+    if (!StringUtils.hasText(supplier.getCategory())) missing.add("供应商类别");
+    if (!StringUtils.hasText(supplier.getContactName())) missing.add("联系人");
+    if (!StringUtils.hasText(supplier.getPhone())) missing.add("联系电话");
+    if (!StringUtils.hasText(supplier.getUnifiedSocialCreditCode())) missing.add("统一社会信用代码");
+    if (!StringUtils.hasText(supplier.getLegalRepresentative())) missing.add("法定代表人");
+    if (!StringUtils.hasText(supplier.getRegisteredAddress())) missing.add("注册地址");
+    if (supplier.getLicenseValidTo() == null) missing.add("营业执照有效期");
+    if (!StringUtils.hasText(supplier.getTaxpayerType())) missing.add("纳税人类型");
+    if (!StringUtils.hasText(supplier.getBankName())) missing.add("开户银行");
+    if (!StringUtils.hasText(supplier.getBankAccount())) missing.add("银行账号");
+    if (!StringUtils.hasText(supplier.getSettlementTerms())) missing.add("结算条款");
+    return missing;
   }
 
   @Transactional(readOnly = true)
@@ -270,6 +353,11 @@ public class ProcurementService {
     validateProjectBudget(request.costType(), request.projectId(), requestAmount, null);
 
     PurchaseRequest purchaseRequest = new PurchaseRequest();
+    UUID batchId = UUID.randomUUID();
+    purchaseRequest.setBatchId(batchId);
+    purchaseRequest.setBatchCode(prCode);
+    purchaseRequest.setBatchName(partName);
+    purchaseRequest.setLineNo(1);
     purchaseRequest.setCode(prCode);
     purchaseRequest.setRequesterName(currentName());
     purchaseRequest.setPartId(request.partId());
@@ -288,6 +376,89 @@ public class ProcurementService {
     purchaseRequest.setStatus(PurchaseRequestStatus.SUBMITTED);
     purchaseRequest.setApprovalStatus(ApprovalStatus.PENDING);
     return toPurchaseRequestResponse(requestRepository.save(purchaseRequest));
+  }
+
+  @Transactional
+  public ImportPurchaseRequestBatchResponse importPurchaseRequestBatch(
+      MultipartFile file,
+      String batchName,
+      ProcurementCostType costType,
+      UUID projectId,
+      UUID departmentId,
+      String sharedReason
+  ) {
+    if (file == null || file.isEmpty()) {
+      throw new BusinessException("请选择要导入的 Excel 或 CSV 文件");
+    }
+    if (!StringUtils.hasText(batchName)) {
+      throw new BusinessException("请填写申请批次名称");
+    }
+    if (batchName.trim().length() > 180) {
+      throw new BusinessException("申请批次名称不能超过180个字符");
+    }
+    String fileName = file.getOriginalFilename() == null ? "" : file.getOriginalFilename();
+    String lowerName = fileName.toLowerCase();
+    if (!lowerName.endsWith(".xlsx") && !lowerName.endsWith(".xls")
+        && !lowerName.endsWith(".csv")) {
+      throw new BusinessException("仅支持 .xlsx、.xls 或 .csv 文件");
+    }
+    if (file.getSize() > 10L * 1024 * 1024) {
+      throw new BusinessException("导入文件不能超过10MB");
+    }
+
+    CostTarget costTarget = resolveCostTarget(costType, projectId, departmentId);
+    List<ImportedPurchaseLine> lines = lowerName.endsWith(".csv")
+        ? readCsvPurchaseLines(file)
+        : readExcelPurchaseLines(file);
+    if (lines.isEmpty()) {
+      throw new BusinessException("导入文件没有可用的采购明细");
+    }
+    if (lines.size() > 500) {
+      throw new BusinessException("一次最多导入500条采购明细");
+    }
+
+    BigDecimal batchAmount = lines.stream()
+        .map(line -> line.quantity().multiply(line.unitPrice()))
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
+    validateProjectBudget(costType, projectId, batchAmount, null);
+
+    UUID batchId = UUID.randomUUID();
+    String batchCode = codeGenerator.generate("PURCHASE_REQUEST_BATCH");
+    List<PurchaseRequest> entities = new ArrayList<>();
+    for (int index = 0; index < lines.size(); index++) {
+      ImportedPurchaseLine line = lines.get(index);
+      PurchaseRequest item = new PurchaseRequest();
+      item.setBatchId(batchId);
+      item.setBatchCode(batchCode);
+      item.setBatchName(batchName.trim());
+      item.setLineNo(index + 1);
+      item.setCode(codeGenerator.generate("PURCHASE_REQUEST"));
+      item.setRequesterName(currentName());
+      item.setPartId(line.part() == null ? null : line.part().getId());
+      item.setPartName(line.partName());
+      item.setQuantity(line.quantity());
+      item.setUnitPrice(line.unitPrice());
+      item.setTaxRate(line.taxRate());
+      item.setTotalAmount(line.quantity().multiply(line.unitPrice()));
+      item.setExpectedDate(line.expectedDate());
+      item.setReason(combineImportReason(sharedReason, line.reason(), line.technicalRequirement()));
+      item.setCostType(costType);
+      item.setProjectId(projectId);
+      item.setDepartmentId(departmentId);
+      item.setCostTargetCode(costTarget.code());
+      item.setCostTargetName(costTarget.name());
+      item.setStatus(PurchaseRequestStatus.SUBMITTED);
+      item.setApprovalStatus(ApprovalStatus.PENDING);
+      item.setSourceType("IMPORT");
+      item.setSourceReference(fileName.length() > 120 ? fileName.substring(fileName.length() - 120) : fileName);
+      entities.add(item);
+    }
+    List<PurchaseRequest> saved = requestRepository.saveAll(entities);
+    List<PurchaseRequestResponse> items = saved.stream()
+        .map(this::toPurchaseRequestResponse)
+        .toList();
+    return new ImportPurchaseRequestBatchResponse(
+        batchId, batchCode, batchName.trim(), items.size(), amount(batchAmount), items);
   }
 
   @Transactional
@@ -318,6 +489,45 @@ public class ProcurementService {
     record.setDecidedAt(OffsetDateTime.now());
     requestApprovalRepository.save(record);
     return toPurchaseRequestResponse(purchaseRequest);
+  }
+
+  @Transactional
+  public List<PurchaseRequestResponse> processRequestBatchApproval(
+      UUID batchId,
+      ProcessPurchaseRequestApprovalRequest request
+  ) {
+    if (request.decision() == ApprovalStatus.PENDING) {
+      throw new BusinessException("请选择通过或驳回");
+    }
+    List<PurchaseRequest> batch = requestRepository.findByBatchIdOrderByLineNoAsc(batchId);
+    if (batch.isEmpty()) {
+      throw new BusinessException("采购申请批次不存在");
+    }
+    List<PurchaseRequest> pending = batch.stream()
+        .filter(item -> item.getApprovalStatus() == ApprovalStatus.PENDING)
+        .toList();
+    if (pending.isEmpty()) {
+      throw new BusinessException("该批次没有待处理的采购明细");
+    }
+    String approverName = currentName();
+    OffsetDateTime decidedAt = OffsetDateTime.now();
+    for (PurchaseRequest item : pending) {
+      item.setApprovalStatus(request.decision());
+      item.setStatus(request.decision() == ApprovalStatus.APPROVED
+          ? PurchaseRequestStatus.APPROVED
+          : PurchaseRequestStatus.SUBMITTED);
+      PurchaseRequestApprovalRecord record = new PurchaseRequestApprovalRecord();
+      record.setRequestId(item.getId());
+      record.setDecision(request.decision());
+      record.setComment(request.comment());
+      record.setApproverName(approverName);
+      record.setDecidedAt(decidedAt);
+      requestApprovalRepository.save(record);
+    }
+    requestRepository.saveAll(pending);
+    return requestRepository.findByBatchIdOrderByLineNoAsc(batchId).stream()
+        .map(this::toPurchaseRequestResponse)
+        .toList();
   }
 
   @Transactional
@@ -421,7 +631,10 @@ public class ProcurementService {
     if (request.inquiryId() != null) {
       ProcurementInquiry inquiry = inquiryRepository.findById(request.inquiryId())
           .orElseThrow(() -> new BusinessException("询价单不存在"));
-      if (!inquiry.getRequestId().equals(purchaseRequest.getId())
+      boolean inquiryContainsRequest = inquiry.getRequestId().equals(purchaseRequest.getId())
+          || inquiryRequestRepository.existsByInquiryIdAndRequestId(
+              inquiry.getId(), purchaseRequest.getId());
+      if (!inquiryContainsRequest
           || !"AWARDED".equals(inquiry.getStatus()) || inquiry.getSelectedQuoteId() == null) {
         throw new BusinessException("询价单尚未完成定标或不属于该采购申请");
       }
@@ -705,6 +918,10 @@ public class ProcurementService {
         supplier.getBankName(),
         supplier.getBankAccount(),
         supplier.getAdmissionStatus(),
+        supplier.getAdmissionSubmittedAt(),
+        supplier.getAdmissionReviewedAt(),
+        supplier.getAdmissionReviewerName(),
+        supplier.getAdmissionReviewComment(),
         supplier.getRemark(),
         supplier.getRiskStatus(),
         financials.contractedAmount(),
@@ -808,6 +1025,10 @@ public class ProcurementService {
         .orElse(null);
     return new PurchaseRequestResponse(
         request.getId(),
+        request.getBatchId(),
+        request.getBatchCode(),
+        request.getBatchName(),
+        request.getLineNo(),
         request.getCode(),
         request.getRequesterName(),
         request.getPartId(),
@@ -1072,6 +1293,234 @@ public class ProcurementService {
     return value == null ? BigDecimal.valueOf(13) : value;
   }
 
+  private List<ImportedPurchaseLine> readExcelPurchaseLines(MultipartFile file) {
+    List<String> errors = new ArrayList<>();
+    List<ImportedPurchaseLine> lines = new ArrayList<>();
+    try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
+      Sheet sheet = workbook.getSheetAt(0);
+      DataFormatter formatter = new DataFormatter();
+      int headerRowIndex = findPurchaseImportHeader(sheet, formatter);
+      if (headerRowIndex < 0) {
+        throw new BusinessException("未找到导入表头，请使用系统提供的采购申请模板");
+      }
+      Map<String, Integer> columns = headerColumns(sheet.getRow(headerRowIndex), formatter);
+      validateImportColumns(columns);
+      for (int rowIndex = headerRowIndex + 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+        Row row = sheet.getRow(rowIndex);
+        if (row == null) continue;
+        Map<String, String> values = new java.util.HashMap<>();
+        columns.forEach((name, index) ->
+            values.put(name, formatter.formatCellValue(row.getCell(index)).trim()));
+        if (values.values().stream().allMatch(value -> !StringUtils.hasText(value))) continue;
+        try {
+          lines.add(parseImportedLine(rowIndex + 1, values));
+        } catch (BusinessException exception) {
+          errors.add("第" + (rowIndex + 1) + "行：" + exception.getMessage());
+        }
+      }
+    } catch (BusinessException exception) {
+      throw exception;
+    } catch (Exception exception) {
+      throw new BusinessException("采购明细文件读取失败：" + exception.getMessage());
+    }
+    throwIfImportErrors(errors);
+    return lines;
+  }
+
+  private List<ImportedPurchaseLine> readCsvPurchaseLines(MultipartFile file) {
+    List<String> errors = new ArrayList<>();
+    List<ImportedPurchaseLine> lines = new ArrayList<>();
+    try (BufferedReader reader = new BufferedReader(
+        new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
+      String headerLine = reader.readLine();
+      if (headerLine == null) return lines;
+      List<String> headers = parseCsvRow(headerLine.replace("\uFEFF", ""));
+      Map<String, Integer> columns = new java.util.HashMap<>();
+      for (int index = 0; index < headers.size(); index++) {
+        columns.put(normalizeImportHeader(headers.get(index)), index);
+      }
+      validateImportColumns(columns);
+      String line;
+      int rowNumber = 1;
+      while ((line = reader.readLine()) != null) {
+        rowNumber++;
+        if (!StringUtils.hasText(line)) continue;
+        List<String> cells = parseCsvRow(line);
+        Map<String, String> values = new java.util.HashMap<>();
+        columns.forEach((name, index) ->
+            values.put(name, index < cells.size() ? cells.get(index).trim() : ""));
+        if (values.values().stream().allMatch(value -> !StringUtils.hasText(value))) continue;
+        try {
+          lines.add(parseImportedLine(rowNumber, values));
+        } catch (BusinessException exception) {
+          errors.add("第" + rowNumber + "行：" + exception.getMessage());
+        }
+      }
+    } catch (IOException exception) {
+      throw new BusinessException("CSV 文件读取失败：" + exception.getMessage());
+    }
+    throwIfImportErrors(errors);
+    return lines;
+  }
+
+  private int findPurchaseImportHeader(Sheet sheet, DataFormatter formatter) {
+    int last = Math.min(sheet.getLastRowNum(), 15);
+    for (int rowIndex = 0; rowIndex <= last; rowIndex++) {
+      Row row = sheet.getRow(rowIndex);
+      if (row == null) continue;
+      for (Cell cell : row) {
+        if ("物料编码".equals(normalizeImportHeader(formatter.formatCellValue(cell)))) {
+          return rowIndex;
+        }
+      }
+    }
+    return -1;
+  }
+
+  private Map<String, Integer> headerColumns(Row row, DataFormatter formatter) {
+    Map<String, Integer> columns = new java.util.HashMap<>();
+    for (Cell cell : row) {
+      String name = normalizeImportHeader(formatter.formatCellValue(cell));
+      if (StringUtils.hasText(name)) columns.put(name, cell.getColumnIndex());
+    }
+    return columns;
+  }
+
+  private void validateImportColumns(Map<String, Integer> columns) {
+    if (!columns.containsKey("物料编码") || !columns.containsKey("物料名称")
+        || !columns.containsKey("数量") || !columns.containsKey("预计单价")
+        || !columns.containsKey("税率") || !columns.containsKey("期望到货日期")
+        || !columns.containsKey("采购原因") || !columns.containsKey("规格技术要求")) {
+      throw new BusinessException("导入列不完整，请下载并使用最新采购申请模板");
+    }
+  }
+
+  private String normalizeImportHeader(String value) {
+    if (value == null) return "";
+    return value.trim()
+        .replace("*", "")
+        .replace("（", "(")
+        .replace("）", ")")
+        .replaceAll("\\s+", "")
+        .replace("(%)", "")
+        .replace("%", "")
+        .replace("/", "");
+  }
+
+  private ImportedPurchaseLine parseImportedLine(int sourceRow, Map<String, String> values) {
+    String partCode = values.getOrDefault("物料编码", "");
+    String enteredName = values.getOrDefault("物料名称", "");
+    InventoryPart part = null;
+    if (StringUtils.hasText(partCode)) {
+      part = partRepository.findByCodeIgnoreCase(partCode.trim())
+          .orElseThrow(() -> new BusinessException("物料编码不存在：" + partCode));
+    }
+    String partName = part == null ? enteredName.trim() : part.getName();
+    if (!StringUtils.hasText(partName)) {
+      throw new BusinessException("物料编码和物料名称不能同时为空");
+    }
+    BigDecimal quantity = parseImportDecimal(values.get("数量"), "数量", true);
+    String priceText = values.get("预计单价");
+    BigDecimal unitPrice = StringUtils.hasText(priceText)
+        ? parseImportDecimal(priceText, "预计单价", false)
+        : part == null ? BigDecimal.ZERO : amount(part.getUnitCost());
+    BigDecimal taxRate = StringUtils.hasText(values.get("税率"))
+        ? parseImportDecimal(values.get("税率"), "税率", false)
+        : BigDecimal.valueOf(13);
+    if (taxRate.compareTo(BigDecimal.valueOf(100)) > 0) {
+      throw new BusinessException("税率不能超过100%");
+    }
+    LocalDate expectedDate = parseImportDate(values.get("期望到货日期"));
+    String technical = values.getOrDefault("规格技术要求", "").trim();
+    if (!StringUtils.hasText(technical) && part != null && StringUtils.hasText(part.getModel())) {
+      technical = part.getModel();
+    }
+    return new ImportedPurchaseLine(
+        sourceRow, part, partName, quantity, amount(unitPrice), taxRate,
+        expectedDate, values.getOrDefault("采购原因", "").trim(), technical);
+  }
+
+  private BigDecimal parseImportDecimal(String raw, String field, boolean positive) {
+    if (!StringUtils.hasText(raw)) {
+      throw new BusinessException(field + "不能为空");
+    }
+    try {
+      String normalized = raw.trim()
+          .replace(",", "")
+          .replace("￥", "")
+          .replace("¥", "")
+          .replace("%", "");
+      BigDecimal value = new BigDecimal(normalized);
+      if ((positive && value.compareTo(BigDecimal.ZERO) <= 0)
+          || (!positive && value.compareTo(BigDecimal.ZERO) < 0)) {
+        throw new BusinessException(field + (positive ? "必须大于0" : "不能小于0"));
+      }
+      return value;
+    } catch (NumberFormatException exception) {
+      throw new BusinessException(field + "格式不正确：" + raw);
+    }
+  }
+
+  private LocalDate parseImportDate(String raw) {
+    if (!StringUtils.hasText(raw)) {
+      throw new BusinessException("期望到货日期不能为空");
+    }
+    String normalized = raw.trim().replace(".", "-").replace("/", "-");
+    for (java.time.format.DateTimeFormatter formatter : List.of(
+        java.time.format.DateTimeFormatter.ISO_LOCAL_DATE,
+        java.time.format.DateTimeFormatter.ofPattern("yyyy-M-d"))) {
+      try {
+        return LocalDate.parse(normalized, formatter);
+      } catch (java.time.format.DateTimeParseException ignored) {
+        // Try the next supported date format.
+      }
+    }
+    throw new BusinessException("期望到货日期格式应为 yyyy-MM-dd");
+  }
+
+  private List<String> parseCsvRow(String line) {
+    List<String> cells = new ArrayList<>();
+    StringBuilder value = new StringBuilder();
+    boolean quoted = false;
+    for (int index = 0; index < line.length(); index++) {
+      char current = line.charAt(index);
+      if (current == '"') {
+        if (quoted && index + 1 < line.length() && line.charAt(index + 1) == '"') {
+          value.append('"');
+          index++;
+        } else {
+          quoted = !quoted;
+        }
+      } else if (current == ',' && !quoted) {
+        cells.add(value.toString());
+        value.setLength(0);
+      } else {
+        value.append(current);
+      }
+    }
+    cells.add(value.toString());
+    return cells;
+  }
+
+  private void throwIfImportErrors(List<String> errors) {
+    if (errors.isEmpty()) return;
+    String detail = errors.stream().limit(20).collect(Collectors.joining("；"));
+    if (errors.size() > 20) detail += "；另有" + (errors.size() - 20) + "处错误";
+    throw new BusinessException("导入校验失败，未写入任何数据：" + detail);
+  }
+
+  private String combineImportReason(String shared, String lineReason, String technical) {
+    List<String> parts = new ArrayList<>();
+    if (StringUtils.hasText(shared)) parts.add(shared.trim());
+    if (StringUtils.hasText(lineReason)) parts.add(lineReason.trim());
+    if (StringUtils.hasText(technical)) parts.add("规格/技术要求：" + technical.trim());
+    String combined = String.join("；", parts);
+    if (combined.length() > 300) {
+      throw new BusinessException("申请说明和规格要求合计不能超过300个字符");
+    }
+    return combined;
+  }
+
   private String currentName() {
     var authentication = SecurityContextHolder.getContext().getAuthentication();
     return authentication != null && authentication.getPrincipal() instanceof UserPrincipal principal
@@ -1079,4 +1528,16 @@ public class ProcurementService {
   }
 
   private record CostTarget(String code, String name) {}
+
+  private record ImportedPurchaseLine(
+      int sourceRow,
+      InventoryPart part,
+      String partName,
+      BigDecimal quantity,
+      BigDecimal unitPrice,
+      BigDecimal taxRate,
+      LocalDate expectedDate,
+      String reason,
+      String technicalRequirement
+  ) {}
 }

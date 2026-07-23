@@ -69,7 +69,7 @@ public class ProcurementGovernanceService {
 
   @Transactional
   public ProcurementContract createContract(CreateContract request) {
-    requireSupplier(request.supplierId());
+    requireApprovedSupplier(request.supplierId());
     ProcurementContract existing = contracts.findFirstByContractNoOrderByVersionNoDesc(request.contractNo())
         .orElse(null);
     if (existing != null) {
@@ -160,6 +160,10 @@ public class ProcurementGovernanceService {
   @Transactional
   public SupplierChangeRequest createSupplierChange(CreateSupplierChange request) {
     requireSupplier(request.supplierId());
+    if ("ADMISSION".equalsIgnoreCase(request.changeType())
+        || !blank(request.proposedAdmissionStatus())) {
+      throw new BusinessException("供应商准入请在供应商页面完成审批");
+    }
     if (supplierChanges.existsBySupplierIdAndStatus(request.supplierId(), "PENDING")) {
       throw new BusinessException("该供应商已有待审批变更");
     }
@@ -289,7 +293,7 @@ public class ProcurementGovernanceService {
 
   @Transactional
   public ProcurementCollaborationEvent createCollaborationEvent(CreateCollaborationEvent request) {
-    requireSupplier(request.supplierId());
+    requireApprovedSupplier(request.supplierId());
     if (request.orderId() != null) {
       PurchaseOrder order = orders.findById(request.orderId())
           .orElseThrow(() -> new BusinessException("采购订单不存在"));
@@ -342,6 +346,17 @@ public class ProcurementGovernanceService {
 
   private Supplier requireSupplier(UUID id) {
     return suppliers.findById(id).orElseThrow(() -> new BusinessException("供应商不存在"));
+  }
+
+  private Supplier requireApprovedSupplier(UUID id) {
+    Supplier supplier = requireSupplier(id);
+    if (!"APPROVED".equals(supplier.getAdmissionStatus())) {
+      throw new BusinessException("供应商准入审批通过后才可使用");
+    }
+    if (supplier.getRiskStatus() == SupplierRiskStatus.BLOCKED) {
+      throw new BusinessException("供应商已冻结，不能使用");
+    }
+    return supplier;
   }
 
   private String decision(String value) {

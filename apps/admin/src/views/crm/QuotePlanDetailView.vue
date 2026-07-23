@@ -193,6 +193,64 @@
             />
           </a-card>
 
+          <a-card title="价格治理与版本追溯" style="margin-top: 16px">
+            <a-row :gutter="[16, 16]">
+              <a-col :xs="24" :lg="9">
+                <a-descriptions bordered :column="1" size="small">
+                  <a-descriptions-item label="当前版本"
+                    >V{{ record.versionNo }}</a-descriptions-item
+                  >
+                  <a-descriptions-item label="成本覆盖">{{
+                    quoteMargin.cost > 0 ? "已完成成本测算" : "尚未形成成本依据"
+                  }}</a-descriptions-item>
+                  <a-descriptions-item label="毛利审批">{{
+                    quoteMargin.rate < 15
+                      ? "低于安全阈值，需重点审批"
+                      : "在建议安全线内"
+                  }}</a-descriptions-item>
+                  <a-descriptions-item label="客户反馈">{{
+                    record.customerComment ||
+                    (record.customerDecision
+                      ? "已登记客户结论"
+                      : "等待客户确认")
+                  }}</a-descriptions-item>
+                </a-descriptions>
+              </a-col>
+              <a-col :xs="24" :lg="15">
+                <a-table
+                  :columns="revisionColumns"
+                  :data-source="revisions"
+                  row-key="id"
+                  size="small"
+                  :pagination="{ pageSize: 5 }"
+                >
+                  <template #bodyCell="{ column, record: revision }">
+                    <template v-if="column.key === 'version'"
+                      ><a-tag>V{{ revision.versionNo }}</a-tag></template
+                    >
+                    <template v-else-if="column.key === 'amount'">{{
+                      formatMoney(revision.amount)
+                    }}</template>
+                    <template v-else-if="column.key === 'margin'"
+                      ><span
+                        :class="{
+                          'text-danger':
+                            Number(revision.grossMarginRate || 0) < 15,
+                        }"
+                        >{{
+                          Number(revision.grossMarginRate || 0).toFixed(1)
+                        }}%</span
+                      ></template
+                    >
+                    <template v-else-if="column.key === 'time'">{{
+                      formatDateTime(revision.revisedAt)
+                    }}</template>
+                  </template>
+                </a-table>
+              </a-col>
+            </a-row>
+          </a-card>
+
           <!-- Enhanced converted contract card -->
           <a-card
             v-if="record.convertedContractId"
@@ -372,11 +430,13 @@ import {
   getQuote,
   listContracts,
   listReceivables,
+  listQuoteRevisions,
   processQuoteApproval,
   type ApprovalDecision,
   type QuotePlan,
   type ServiceContract,
   type Receivable,
+  type QuoteRevision,
 } from "@/api/crm";
 import {
   formatMoney,
@@ -398,6 +458,7 @@ const auth = useAuthStore();
 const record = ref<QuotePlan | null>(null);
 const relatedContract = ref<ServiceContract | null>(null);
 const relatedReceivables = ref<Receivable[]>([]);
+const revisions = ref<QuoteRevision[]>([]);
 const loading = ref(true);
 const loadingContract = ref(false);
 const saving = ref(false);
@@ -426,6 +487,14 @@ const budgetColumns = [
   { title: "成本类型", dataIndex: "label", key: "label", width: 140 },
   { title: "预算金额", key: "amount", width: 140 },
   { title: "占报价比", key: "ratio", width: 120 },
+];
+const revisionColumns = [
+  { title: "版本", key: "version", width: 80 },
+  { title: "报价金额", key: "amount", width: 130 },
+  { title: "毛利率", key: "margin", width: 100 },
+  { title: "修订说明", dataIndex: "revisionNote" },
+  { title: "编辑人", dataIndex: "editorName", width: 100 },
+  { title: "修订时间", key: "time", width: 170 },
 ];
 
 const quoteMargin = computed(() => {
@@ -571,7 +640,10 @@ onMounted(loadData);
 async function loadData() {
   loading.value = true;
   try {
-    record.value = await getQuote(id);
+    [record.value, revisions.value] = await Promise.all([
+      getQuote(id),
+      listQuoteRevisions(id).catch(() => []),
+    ]);
     // Load related contract if converted
     if (record.value?.convertedContractId) {
       loadingContract.value = true;

@@ -43,7 +43,7 @@
             employee.entryDate || "-"
           }}</a-descriptions-item>
           <a-descriptions-item label="身份证号">{{
-            employee.idCard || "-"
+            maskedIdCard
           }}</a-descriptions-item>
           <a-descriptions-item label="手机号">{{
             employee.phone || "-"
@@ -220,6 +220,150 @@
                 </template>
               </template>
             </a-table>
+          </a-tab-pane>
+          <a-tab-pane key="contracts" :tab="`劳动合同 (${contracts.length})`">
+            <a-table
+              :data-source="contracts"
+              :columns="contractColumns"
+              row-key="id"
+              size="small"
+              :pagination="false"
+            >
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.key === 'status'"
+                  ><a-tag
+                    :color="
+                      record.status === 'ACTIVE'
+                        ? 'green'
+                        : record.status === 'EXPIRED'
+                          ? 'red'
+                          : 'orange'
+                    "
+                    >{{ record.status }}</a-tag
+                  ></template
+                >
+                <template v-else-if="column.key === 'days'"
+                  ><span
+                    :class="{
+                      'text-danger': Number(record.daysLeft || 999) < 30,
+                    }"
+                    >{{
+                      record.daysLeft == null ? "-" : `${record.daysLeft} 天`
+                    }}</span
+                  ></template
+                >
+              </template>
+            </a-table>
+          </a-tab-pane>
+          <a-tab-pane key="lifecycle" :tab="`入转调离 (${lifecycles.length})`">
+            <a-timeline v-if="lifecycles.length">
+              <a-timeline-item
+                v-for="item in lifecycles"
+                :key="item.id"
+                :color="
+                  item.status === 'APPROVED'
+                    ? 'green'
+                    : item.status === 'REJECTED'
+                      ? 'red'
+                      : 'blue'
+                "
+              >
+                <strong>{{ lifecycleLabel(item.lifecycleType) }}</strong> ·
+                {{ item.effectiveDate }}
+                <p>
+                  {{
+                    [item.fromOrganizationName, item.fromPosition]
+                      .filter(Boolean)
+                      .join(" / ") || "无原岗位"
+                  }}
+                  →
+                  {{
+                    [item.toOrganizationName, item.toPosition]
+                      .filter(Boolean)
+                      .join(" / ") || "无目标岗位"
+                  }}
+                </p>
+                <small
+                  >{{ item.reason || item.remark || "无说明" }} ·
+                  {{ item.approvedBy || "待审批" }}</small
+                >
+              </a-timeline-item>
+            </a-timeline>
+            <a-empty v-else description="暂无入转调离记录" />
+          </a-tab-pane>
+          <a-tab-pane key="leave" :tab="`请假考勤 (${leaves.length})`">
+            <a-table
+              :data-source="leaves"
+              :columns="leaveColumns"
+              row-key="id"
+              size="small"
+            >
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.key === 'type'">{{
+                  leaveTypeLabel(record.leaveType)
+                }}</template>
+                <template v-else-if="column.key === 'status'"
+                  ><a-tag
+                    :color="
+                      record.status === 'APPROVED'
+                        ? 'green'
+                        : record.status === 'REJECTED'
+                          ? 'red'
+                          : 'blue'
+                    "
+                    >{{ record.status }}</a-tag
+                  ></template
+                >
+              </template>
+            </a-table>
+          </a-tab-pane>
+          <a-tab-pane
+            key="projects"
+            :tab="`项目与负荷 (${managedProjects.length})`"
+          >
+            <a-alert
+              type="info"
+              show-icon
+              message="项目投入与资源负荷"
+              description="以下为该员工负责的项目；更细的工时和跨项目负荷可在跨部门协同中心查看。"
+              style="margin-bottom: 12px"
+            />
+            <a-table
+              :data-source="managedProjects"
+              :columns="projectColumns"
+              row-key="id"
+              size="small"
+            >
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.key === 'project'"
+                  ><a @click="$router.push(`/projects/${record.id}`)">{{
+                    record.code || record.name
+                  }}</a
+                  ><span class="table-subtitle">{{
+                    record.name
+                  }}</span></template
+                >
+                <template v-else-if="column.key === 'amount'">{{
+                  formatMoney(record.contractAmount)
+                }}</template>
+                <template v-else-if="column.key === 'progress'"
+                  ><a-progress :percent="record.progress" size="small"
+                /></template>
+              </template>
+            </a-table>
+          </a-tab-pane>
+          <a-tab-pane key="risk" tab="档案风险">
+            <a-list :data-source="employeeRisks" bordered>
+              <template #renderItem="{ item }"
+                ><a-list-item
+                  ><a-alert
+                    :type="item.type"
+                    show-icon
+                    :message="item.title"
+                    :description="item.description"
+                    style="width: 100%" /></a-list-item
+              ></template>
+            </a-list>
           </a-tab-pane>
         </a-tabs>
       </a-card>
@@ -401,13 +545,19 @@ import {
   createEmergencyContact,
   updateEmergencyContact,
   deleteEmergencyContact,
+  listEmployeeLifecycles,
+  listEmployeeLeaves,
   type EducationRecord,
   type EducationPayload,
   type WorkExperienceRecord,
   type WorkExperiencePayload,
   type EmergencyContactRecord,
   type EmergencyContactPayload,
+  type LifecycleRecord,
+  type LeaveRecord,
 } from "@/api/hr";
+import { listProjects, type Project } from "@/api/project";
+import type { EmployeeContract } from "@/api/qualification";
 
 const auth = useAuthStore();
 const route = useRoute();
@@ -424,6 +574,18 @@ const educations = ref<EducationRecord[]>([]);
 const workExperiences = ref<WorkExperienceRecord[]>([]);
 const emergencyContacts = ref<EmergencyContactRecord[]>([]);
 const certificates = ref<PersonnelCertificate[]>([]);
+const contracts = ref<EmployeeContract[]>([]);
+const lifecycles = ref<LifecycleRecord[]>([]);
+const leaves = ref<LeaveRecord[]>([]);
+const managedProjects = ref<Project[]>([]);
+const maskedIdCard = computed(() => {
+  const value = employee.value?.idCard || "";
+  if (!value) return "-";
+  if (canManage.value) return value;
+  return value.length > 8
+    ? `${value.slice(0, 4)}**********${value.slice(-4)}`
+    : "********";
+});
 
 // Education modal
 const educationModal = ref(false);
@@ -500,6 +662,75 @@ const certColumns = [
   { title: "有效期至", dataIndex: "validTo", width: 120 },
   { title: "状态", key: "status", width: 90 },
 ];
+const contractColumns = [
+  { title: "合同编号", dataIndex: "contractNo", width: 170 },
+  { title: "类型", dataIndex: "contractType", width: 130 },
+  { title: "签署日期", dataIndex: "signDate", width: 120 },
+  {
+    title: "合同周期",
+    customRender: ({ record }: any) =>
+      `${record.startDate} 至 ${record.endDate || "长期"}`,
+  },
+  { title: "剩余", key: "days", width: 100 },
+  { title: "状态", key: "status", width: 100 },
+];
+const leaveColumns = [
+  { title: "类型", key: "type", width: 120 },
+  { title: "开始日期", dataIndex: "startDate", width: 120 },
+  { title: "结束日期", dataIndex: "endDate", width: 120 },
+  { title: "天数", dataIndex: "totalDays", width: 90 },
+  { title: "原因", dataIndex: "reason" },
+  { title: "状态", key: "status", width: 100 },
+];
+const projectColumns = [
+  { title: "项目", key: "project", width: 260 },
+  { title: "客户", dataIndex: "customerName", width: 180 },
+  { title: "合同金额", key: "amount", width: 140 },
+  { title: "阶段", dataIndex: "stage", width: 120 },
+  { title: "进度", key: "progress", width: 180 },
+];
+const employeeRisks = computed(() => {
+  const risks: Array<{
+    type: "success" | "warning" | "error" | "info";
+    title: string;
+    description: string;
+  }> = [];
+  const expiring = certificates.value.filter(
+    (item) => item.status === "EXPIRING" || item.status === "EXPIRED",
+  );
+  if (expiring.length)
+    risks.push({
+      type: "warning",
+      title: `${expiring.length} 本证书临期或过期`,
+      description: expiring
+        .map((item) => `${item.name}(${item.validTo || "未维护有效期"})`)
+        .join("、"),
+    });
+  const contractRisk = contracts.value.filter(
+    (item) => item.daysLeft != null && item.daysLeft < 60,
+  );
+  if (contractRisk.length)
+    risks.push({
+      type: "warning",
+      title: "劳动合同即将到期",
+      description: contractRisk
+        .map((item) => `${item.contractNo} 剩余 ${item.daysLeft} 天`)
+        .join("、"),
+    });
+  if (!emergencyContacts.value.some((item) => item.primary))
+    risks.push({
+      type: "info",
+      title: "未设置主要紧急联系人",
+      description: "建议补充一位主要紧急联系人，便于紧急情况下联络。",
+    });
+  if (!risks.length)
+    risks.push({
+      type: "success",
+      title: "员工档案风险正常",
+      description: "劳动合同、人员证书和紧急联系人暂未发现异常。",
+    });
+  return risks;
+});
 
 const degreeOptions = [
   { value: "博士", label: "博士" },
@@ -559,6 +790,7 @@ async function loadData() {
   try {
     const emp = await getQualificationEmployee(employeeId.value);
     employee.value = emp.employee;
+    contracts.value = emp.contracts || [];
 
     // Load certificates and filter by employee
     const allCerts = await listPersonnelCertificates({});
@@ -567,14 +799,23 @@ async function loadData() {
     );
 
     // Load sub entities in parallel
-    const [eds, works, contacts] = await Promise.all([
-      listEducations(employeeId.value),
-      listWorkExperiences(employeeId.value),
-      listEmergencyContacts(employeeId.value),
-    ]);
+    const [eds, works, contacts, lifecycleRows, leaveRows, projectPage] =
+      await Promise.all([
+        listEducations(employeeId.value),
+        listWorkExperiences(employeeId.value),
+        listEmergencyContacts(employeeId.value),
+        listEmployeeLifecycles(employeeId.value),
+        listEmployeeLeaves(employeeId.value),
+        listProjects(0, 999),
+      ]);
     educations.value = eds;
     workExperiences.value = works;
     emergencyContacts.value = contacts;
+    lifecycles.value = lifecycleRows;
+    leaves.value = leaveRows;
+    managedProjects.value = projectPage.content.filter(
+      (item) => item.managerName === emp.employee.name,
+    );
   } catch (error: any) {
     message.error(error.message || "加载失败");
   } finally {
@@ -584,6 +825,42 @@ async function loadData() {
 
 function refresh() {
   loadData();
+}
+function lifecycleLabel(value: string) {
+  return (
+    (
+      {
+        ENTRY: "入职",
+        TRANSFER: "调动",
+        PROMOTION: "晋升",
+        POSITION_CHANGE: "转岗",
+        LEAVE: "离职",
+      } as Record<string, string>
+    )[value] || value
+  );
+}
+function leaveTypeLabel(value: string) {
+  return (
+    (
+      {
+        ANNUAL: "年假",
+        SICK: "病假",
+        PERSONAL: "事假",
+        MARRIAGE: "婚假",
+        MATERNITY: "产假",
+        PATERNITY: "陪产假",
+        COMPENSATORY: "调休",
+        OTHER: "其他",
+      } as Record<string, string>
+    )[value] || value
+  );
+}
+function formatMoney(value?: number) {
+  return new Intl.NumberFormat("zh-CN", {
+    style: "currency",
+    currency: "CNY",
+    maximumFractionDigits: 0,
+  }).format(Number(value || 0));
 }
 
 // Education

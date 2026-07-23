@@ -2,6 +2,7 @@ package com.company.ops.api.modules.crm.dto;
 
 import com.company.ops.api.modules.crm.domain.CustomerLevel;
 import com.company.ops.api.modules.crm.domain.RiskStatus;
+import java.math.BigDecimal;
 import java.util.UUID;
 
 public record CustomerSummaryResponse(
@@ -15,7 +16,9 @@ public record CustomerSummaryResponse(
     RiskStatus riskStatus,
     int contactCount,
     int siteCount,
-    String primaryContact
+    String primaryContact,
+    BigDecimal signedOrderAmount,
+    BigDecimal paidAmount,
+    BigDecimal pendingAmount
 ) {
 }
-

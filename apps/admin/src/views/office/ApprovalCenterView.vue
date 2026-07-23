@@ -163,7 +163,10 @@
                 auth.can('office:approval:process')
               "
             >
-              <a-button type="link" size="small" @click="openDetail(record)"
+              <a-button
+                type="link"
+                size="small"
+                @click="router.push(`/office/approvals/${record.id}`)"
                 >查看</a-button
               >
               <a-button type="link" size="small" @click="openProcess(record)"
@@ -198,7 +201,10 @@
               </a-popconfirm>
             </template>
             <template v-else-if="record._source === 'office'">
-              <a-button type="link" size="small" @click="openDetail(record)"
+              <a-button
+                type="link"
+                size="small"
+                @click="router.push(`/office/approvals/${record.id}`)"
                 >查看</a-button
               >
             </template>

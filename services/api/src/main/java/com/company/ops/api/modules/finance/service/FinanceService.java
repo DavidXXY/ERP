@@ -34,6 +34,7 @@ import com.company.ops.api.modules.procurement.domain.Supplier;
 import com.company.ops.api.modules.procurement.repository.ProcurementPayableRepository;
 import com.company.ops.api.modules.procurement.repository.PurchaseOrderRepository;
 import com.company.ops.api.modules.procurement.repository.SupplierRepository;
+import com.company.ops.api.modules.procurement.repository.SupplierInvoiceRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
@@ -46,6 +47,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.core.context.SecurityContextHolder;
+import com.company.ops.api.modules.system.security.UserPrincipal;
 import static com.company.ops.api.common.util.MoneyUtils.amount;
 
 @Service
@@ -65,6 +68,7 @@ public class FinanceService {
   private final PurchaseOrderRepository orderRepository;
   private final PaymentApplicationRepository applicationRepository;
   private final PaymentRecordRepository paymentRepository;
+  private final SupplierInvoiceRepository supplierInvoiceRepository;
   private final LedgerService ledgerService;
 
   public FinanceService(ReceivableRepository receivableRepository,
@@ -75,6 +79,7 @@ public class FinanceService {
       PurchaseOrderRepository orderRepository,
       PaymentApplicationRepository applicationRepository,
       PaymentRecordRepository paymentRepository,
+      SupplierInvoiceRepository supplierInvoiceRepository,
       LedgerService ledgerService,
                               CodeGenerator codeGenerator) {
     this.codeGenerator = codeGenerator;
@@ -86,6 +91,7 @@ public class FinanceService {
     this.orderRepository = orderRepository;
     this.applicationRepository = applicationRepository;
     this.paymentRepository = paymentRepository;
+    this.supplierInvoiceRepository = supplierInvoiceRepository;
     this.ledgerService = ledgerService;
   }
 
@@ -190,6 +196,18 @@ public class FinanceService {
     if (payable.getStatus() == PayableStatus.PAID || payable.getStatus() == PayableStatus.CANCELLED) {
       throw new BusinessException("当前应付单不能申请付款");
     }
+    BigDecimal matchedInvoiceAmount = supplierInvoiceRepository.findByOrderId(payable.getOrderId()).stream()
+        .filter(item -> "MATCHED".equals(item.getMatchStatus()))
+        .map(item -> amount(item.getAmount()))
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
+    BigDecimal orderPayableAmount = payableRepository.findAll().stream()
+        .filter(item -> item.getOrderId().equals(payable.getOrderId()))
+        .filter(item -> item.getStatus() != PayableStatus.CANCELLED)
+        .map(item -> amount(item.getAmount()))
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
+    if (matchedInvoiceAmount.compareTo(orderPayableAmount) < 0) {
+      throw new BusinessException("采购订单尚未完成供应商发票三单匹配，不能申请付款");
+    }
     BigDecimal outstanding = amount(payable.getAmount()).subtract(amount(payable.getPaidAmount()));
     BigDecimal reserved = reservedAmount(payable.getId());
     BigDecimal available = outstanding.subtract(reserved);
@@ -203,7 +221,7 @@ public class FinanceService {
     application.setSupplierId(payable.getSupplierId());
     application.setRequestedAmount(request.requestedAmount());
     application.setRequestedDate(request.requestedDate());
-    application.setApplicantName(request.applicantName());
+    application.setApplicantName(currentName());
     application.setPurpose(request.purpose());
     application.setStatus(PaymentApplicationStatus.PENDING_APPROVAL);
     PaymentApplication saved = applicationRepository.save(application);
@@ -227,7 +245,7 @@ public class FinanceService {
     }
     application.setStatus(request.decision());
     application.setApprovalComment(request.comment());
-    application.setApproverName(request.approverName());
+    application.setApproverName(currentName());
     application.setApprovedAt(OffsetDateTime.now());
     PaymentApplication saved = applicationRepository.save(application);
     ProcurementPayable payable = payableRepository.findById(saved.getPayableId()).orElse(null);
@@ -249,7 +267,10 @@ public class FinanceService {
     ProcurementPayable payable = payableRepository.findByIdForUpdate(application.getPayableId())
         .orElseThrow(() -> new BusinessException("应付单不存在"));
     BigDecimal outstanding = amount(payable.getAmount()).subtract(amount(payable.getPaidAmount()));
-    if (application.getRequestedAmount().compareTo(outstanding) > 0) {
+    if (request.amount().compareTo(application.getRequestedAmount()) > 0) {
+      throw new BusinessException("实际付款金额不能超过审批通过的申请金额");
+    }
+    if (request.amount().compareTo(outstanding) > 0) {
       throw new BusinessException("付款金额超过应付余额");
     }
 
@@ -258,14 +279,14 @@ public class FinanceService {
     payment.setApplicationId(application.getId());
     payment.setPayableId(payable.getId());
     payment.setSupplierId(application.getSupplierId());
-    payment.setAmount(application.getRequestedAmount());
+    payment.setAmount(request.amount());
     payment.setPaidDate(request.paidDate());
     payment.setPaymentMethod(request.paymentMethod());
     payment.setBankReference(request.bankReference());
-    payment.setPayerName(request.payerName());
+    payment.setPayerName(currentName());
     PaymentRecord savedPayment = paymentRepository.save(payment);
 
-    BigDecimal paidAmount = amount(payable.getPaidAmount()).add(application.getRequestedAmount());
+    BigDecimal paidAmount = amount(payable.getPaidAmount()).add(request.amount());
     payable.setPaidAmount(paidAmount);
     payable.setStatus(paidAmount.compareTo(payable.getAmount()) == 0
         ? PayableStatus.PAID
@@ -490,5 +511,11 @@ public class FinanceService {
 
   private BigDecimal amount(BigDecimal value) {
     return value == null ? BigDecimal.ZERO : value;
+  }
+
+  private String currentName() {
+    var authentication = SecurityContextHolder.getContext().getAuthentication();
+    return authentication != null && authentication.getPrincipal() instanceof UserPrincipal principal
+        ? principal.displayName() : "系统";
   }
 }

@@ -55,6 +55,9 @@ export type CustomerSummary = {
   contactCount: number;
   siteCount: number;
   primaryContact?: string;
+  signedOrderAmount: number;
+  paidAmount: number;
+  pendingAmount: number;
 };
 
 export type CustomerDetail = CustomerSummary & {

@@ -62,6 +62,21 @@ const rootRoutes: RouteRecordRaw[] = [
     },
   },
   {
+    path: "collaboration",
+    name: "collaboration-center",
+    component: () => import("@/views/CollaborationCenterView.vue"),
+    meta: {
+      title: "跨部门协同中心",
+      permissions: [
+        "dashboard:view",
+        "project:view",
+        "office:approval:view",
+        "procurement:view",
+        "finance:view",
+      ],
+    },
+  },
+  {
     path: "profile",
     name: "personal-settings",
     component: () => import("@/views/personal/PersonalSettingsView.vue"),
@@ -79,6 +94,12 @@ const rootRoutes: RouteRecordRaw[] = [
     name: "crm-customers",
     component: () => import("@/views/crm/CustomerPoolView.vue"),
     meta: { title: "\u5ba2\u6237\u6c60", permission: "crm:customer:view" },
+  },
+  {
+    path: "crm/customers/:id",
+    name: "crm-customer-detail",
+    component: () => import("@/views/crm/CustomerDetailView.vue"),
+    meta: { title: "客户全景详情", permission: "crm:customer:view" },
   },
   {
     path: "crm/opportunities",
@@ -168,6 +189,12 @@ const rootRoutes: RouteRecordRaw[] = [
     meta: { title: "\u91c7\u8d2d\u8ba2\u5355", permission: "procurement:view" },
   },
   {
+    path: "procurement/orders/:id",
+    name: "procurement-order-detail",
+    component: () => import("@/views/procurement/PurchaseOrderDetailView.vue"),
+    meta: { title: "采购订单详情", permission: "procurement:view" },
+  },
+  {
     path: "procurement/receipts",
     name: "procurement-receipts",
     component: () => import("@/views/procurement/GoodsReceiptsView.vue"),
@@ -198,10 +225,22 @@ const rootRoutes: RouteRecordRaw[] = [
     meta: { title: "P2P全流程", permission: "procurement:view" },
   },
   {
+    path: "procurement/controls",
+    name: "procurement-controls",
+    component: () => import("@/views/procurement/ProcurementControlView.vue"),
+    meta: { title: "采购控制中心", permission: "procurement:view" },
+  },
+  {
     path: "procurement/suppliers",
     name: "procurement-suppliers",
     component: () => import("@/views/procurement/SupplierManagementView.vue"),
     meta: { title: "供应商", permission: "procurement:view" },
+  },
+  {
+    path: "procurement/suppliers/:id",
+    name: "procurement-supplier-detail",
+    component: () => import("@/views/procurement/SupplierDetailView.vue"),
+    meta: { title: "供应商全景详情", permission: "procurement:view" },
   },
   // Projects
   { path: "projects", redirect: "/projects/list" },
@@ -210,6 +249,12 @@ const rootRoutes: RouteRecordRaw[] = [
     name: "projects-list",
     component: () => import("@/views/project/ProjectManagementView.vue"),
     meta: { title: "\u9879\u76ee\u5217\u8868", permission: "project:view" },
+  },
+  {
+    path: "projects/:id",
+    name: "project-detail",
+    component: () => import("@/views/project/ProjectDetailView.vue"),
+    meta: { title: "项目经营详情", permission: "project:view" },
   },
   {
     path: "projects/budget",
@@ -242,6 +287,12 @@ const rootRoutes: RouteRecordRaw[] = [
     name: "inventory-parts",
     component: () => import("@/views/inventory/PartsLedgerView.vue"),
     meta: { title: "\u5e93\u5b58\u53f0\u8d26", permission: "inventory:view" },
+  },
+  {
+    path: "inventory/parts/:id",
+    name: "inventory-part-detail",
+    component: () => import("@/views/inventory/InventoryPartDetailView.vue"),
+    meta: { title: "物料库存详情", permission: "inventory:view" },
   },
   {
     path: "inventory/issues",
@@ -369,6 +420,12 @@ const rootRoutes: RouteRecordRaw[] = [
   { path: "office", redirect: "/workbench/todos" },
   { path: "office/approvals", redirect: "/workbench/todos?tab=approvals" },
   {
+    path: "office/approvals/:id",
+    name: "office-approval-detail",
+    component: () => import("@/views/office/ApprovalDetailView.vue"),
+    meta: { title: "审批详情", permission: "office:approval:view" },
+  },
+  {
     path: "office/expenses",
     name: "office-expenses",
     component: () => import("@/views/office/ExpenseView.vue"),
@@ -431,6 +488,12 @@ const rootRoutes: RouteRecordRaw[] = [
     },
   },
   {
+    path: "finance/receivables/:id",
+    name: "finance-receivable-detail",
+    component: () => import("@/views/finance/FinanceReceivableDetailView.vue"),
+    meta: { title: "应收详情", permission: "finance:receivable:view" },
+  },
+  {
     path: "finance/payables",
     name: "finance-payables",
     component: () => import("@/views/finance/FinancePayableView.vue"),
@@ -440,11 +503,30 @@ const rootRoutes: RouteRecordRaw[] = [
     },
   },
   {
+    path: "finance/payables/:id",
+    name: "finance-payable-detail",
+    component: () => import("@/views/finance/FinancePayableDetailView.vue"),
+    meta: { title: "应付详情", permission: "finance:payable:view" },
+  },
+  {
     path: "finance/payment-applications",
     name: "finance-payment-applications",
     component: () => import("@/views/finance/PaymentApplicationView.vue"),
     meta: {
       title: "\u4ed8\u6b3e\u7533\u8bf7",
+      permissions: [
+        "finance:payable:view",
+        "finance:payment:approve",
+        "finance:payment:execute",
+      ],
+    },
+  },
+  {
+    path: "finance/payment-applications/:id",
+    name: "finance-payment-application-detail",
+    component: () => import("@/views/finance/PaymentApplicationDetailView.vue"),
+    meta: {
+      title: "付款申请详情",
       permissions: [
         "finance:payable:view",
         "finance:payment:approve",

@@ -75,6 +75,18 @@
             {{ record.contactName || "-" }}<br />
             <span class="table-subtitle">{{ record.phone || "" }}</span>
           </template>
+          <template v-else-if="column.key === 'contractedAmount'">
+            <strong>{{ formatMoney(record.contractedAmount) }}</strong>
+          </template>
+          <template v-else-if="column.key === 'payableAmount'">
+            <strong>{{ formatMoney(record.payableAmount) }}</strong>
+          </template>
+          <template v-else-if="column.key === 'paidAmount'">
+            <strong>{{ formatMoney(record.paidAmount) }}</strong>
+          </template>
+          <template v-else-if="column.key === 'outstandingAmount'">
+            <strong>{{ formatMoney(record.outstandingAmount) }}</strong>
+          </template>
           <template v-else-if="column.key === 'profile'">
             <a-progress
               :percent="profileCompleteness(record)"
@@ -138,6 +150,12 @@
             <a-space @click.stop>
               <a-button type="link" size="small" @click="openProfile(record)"
                 >资料</a-button
+              >
+              <a-button
+                type="link"
+                size="small"
+                @click="router.push(`/procurement/suppliers/${record.id}`)"
+                >全景详情</a-button
               >
               <a-button type="link" size="small" @click="openDocuments(record)"
                 >档案</a-button
@@ -342,6 +360,18 @@
             <a-descriptions-item label="结算条款">{{
               selectedSupplier.settlementTerms || "-"
             }}</a-descriptions-item>
+            <a-descriptions-item label="累计签约金额">{{
+              formatMoney(selectedSupplier.contractedAmount)
+            }}</a-descriptions-item>
+            <a-descriptions-item label="累计应付金额">{{
+              formatMoney(selectedSupplier.payableAmount)
+            }}</a-descriptions-item>
+            <a-descriptions-item label="累计已付金额">{{
+              formatMoney(selectedSupplier.paidAmount)
+            }}</a-descriptions-item>
+            <a-descriptions-item label="当前待付金额">{{
+              formatMoney(selectedSupplier.outstandingAmount)
+            }}</a-descriptions-item>
             <a-descriptions-item label="注册地址" :span="2">{{
               selectedSupplier.registeredAddress || "-"
             }}</a-descriptions-item>
@@ -359,6 +389,45 @@
             show-icon
             :message="`资料待完善：${missingProfileItems(selectedSupplier).join('、')}`"
           />
+          <a-divider>采购订单</a-divider>
+          <a-table
+            size="small"
+            :columns="supplierOrderColumns"
+            :data-source="supplierOrders"
+            :loading="ordersLoading"
+            :pagination="{ pageSize: 8 }"
+            row-key="id"
+            :scroll="{ x: 980 }"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'order'">
+                <strong>{{ record.code || "-" }}</strong>
+                <span class="table-subtitle">{{ record.partName || "-" }}</span>
+              </template>
+              <template v-else-if="column.key === 'target'">
+                {{ record.costTargetName || "-" }}
+                <span class="table-subtitle">{{
+                  record.costTargetCode || ""
+                }}</span>
+              </template>
+              <template v-else-if="column.key === 'amount'">
+                <strong>{{ formatMoney(record.orderAmount) }}</strong>
+                <span class="table-subtitle"
+                  >单价 {{ formatMoney(record.unitPrice) }}</span
+                >
+              </template>
+              <template v-else-if="column.key === 'receipt'">
+                {{ Number(record.receivedQty || 0) }} /
+                {{ Number(record.orderedQty || 0) }}
+              </template>
+              <template v-else-if="column.key === 'status'">
+                <a-tag :color="orderStatusColor(record.status)">{{
+                  orderStatusLabel(record.status)
+                }}</a-tag>
+              </template>
+            </template>
+            <template #emptyText>该供应商暂无采购订单</template>
+          </a-table>
         </template>
         <a-form
           v-else
@@ -562,10 +631,12 @@ import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
 import UploadOutlined from "@ant-design/icons-vue/UploadOutlined";
 import {
   listSuppliers,
+  listPurchaseOrders,
   createSupplier,
   updateSupplier,
   type CreateSupplierPayload,
   type Supplier,
+  type PurchaseOrder,
 } from "@/api/procurement";
 import {
   downloadDocument,
@@ -581,7 +652,9 @@ const router = useRouter();
 const loading = ref(false);
 const saving = ref(false);
 const documentsLoading = ref(false);
+const ordersLoading = ref(false);
 const suppliers = ref<Supplier[]>([]);
+const supplierOrders = ref<PurchaseOrder[]>([]);
 const supplierDocuments = ref<DocumentRecord[]>([]);
 const selectedSupplier = ref<Supplier | null>(null);
 const createOpen = ref(false);
@@ -616,16 +689,35 @@ const supplierColumns = [
   { title: "供应商", key: "supplier", width: 260 },
   { title: "工商信息", key: "license", width: 240 },
   { title: "联系人", key: "contact", width: 170 },
+  { title: "签约金额", key: "contractedAmount", width: 150 },
+  { title: "应付金额", key: "payableAmount", width: 150 },
+  { title: "已付金额", key: "paidAmount", width: 150 },
+  { title: "待付金额", key: "outstandingAmount", width: 150 },
   { title: "资料完整度", key: "profile", width: 180 },
   { title: "有效期", key: "validity", width: 170 },
   { title: "评分", key: "score", width: 160 },
   { title: "状态", key: "status", width: 100 },
   { title: "操作", key: "action", width: 130, fixed: "right" },
 ];
+function formatMoney(value?: number) {
+  return new Intl.NumberFormat("zh-CN", {
+    style: "currency",
+    currency: "CNY",
+    minimumFractionDigits: 2,
+  }).format(Number(value || 0));
+}
 const documentColumns = [
   { title: "文件", key: "file" },
   { title: "业务类型", dataIndex: "bizType", width: 120 },
   { title: "操作", key: "action", width: 130 },
+];
+const supplierOrderColumns = [
+  { title: "订单 / 物料", key: "order", width: 210 },
+  { title: "成本归属", key: "target", width: 210 },
+  { title: "订单金额", key: "amount", width: 170 },
+  { title: "收货数量", key: "receipt", width: 110 },
+  { title: "预计交付", dataIndex: "expectedDeliveryDate", width: 120 },
+  { title: "状态", key: "status", width: 100 },
 ];
 const watchSupplierCount = computed(
   () =>
@@ -696,11 +788,57 @@ async function handleCreate() {
   }
 }
 
-function openProfile(record: Supplier) {
+async function openProfile(record: Supplier) {
   selectedSupplier.value = record;
   supplierEditing.value = false;
   Object.assign(form, supplierToForm(record));
   profileOpen.value = true;
+  await loadSupplierOrders(record.id);
+}
+
+async function loadSupplierOrders(supplierId: string) {
+  ordersLoading.value = true;
+  supplierOrders.value = [];
+  try {
+    const result = await listPurchaseOrders({ page: 0, size: 999 });
+    supplierOrders.value = result.content.filter(
+      (order) => order.supplierId === supplierId,
+    );
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "采购订单加载失败");
+  } finally {
+    ordersLoading.value = false;
+  }
+}
+
+function orderStatusLabel(status: PurchaseOrder["status"]) {
+  return (
+    (
+      {
+        DRAFT: "草稿",
+        ORDERED: "已下单",
+        PARTIAL_RECEIVED: "部分收货",
+        RECEIVED: "已收货",
+        CLOSED: "已关闭",
+        CANCELLED: "已取消",
+      } as Record<string, string>
+    )[status] || status
+  );
+}
+
+function orderStatusColor(status: PurchaseOrder["status"]) {
+  return (
+    (
+      {
+        DRAFT: "default",
+        ORDERED: "blue",
+        PARTIAL_RECEIVED: "orange",
+        RECEIVED: "green",
+        CLOSED: "cyan",
+        CANCELLED: "red",
+      } as Record<string, string>
+    )[status] || "default"
+  );
 }
 
 function startSupplierEdit(record: Supplier) {

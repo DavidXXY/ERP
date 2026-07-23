@@ -112,7 +112,7 @@
             <a-button
               type="link"
               class="cell-link"
-              @click="openDetail(record)"
+              @click="router.push(`/finance/receivables/${record.id}`)"
               >{{ record.code }}</a-button
             >
             <span class="table-subtitle">{{ record.customerName }}</span>
@@ -163,7 +163,10 @@
           >
           <template v-else-if="column.key === 'action'">
             <a-space size="small">
-              <a-button type="link" size="small" @click="openDetail(record)"
+              <a-button
+                type="link"
+                size="small"
+                @click="router.push(`/finance/receivables/${record.id}`)"
                 >详情</a-button
               >
               <a-button

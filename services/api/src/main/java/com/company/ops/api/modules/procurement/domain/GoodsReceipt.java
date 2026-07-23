@@ -6,6 +6,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
@@ -41,6 +42,13 @@ public class GoodsReceipt extends BaseEntity {
 
   @Column(name = "receiver_name", nullable = false, length = 80)
   private String receiverName;
+  @Column(name="inspection_status",nullable=false,length=32) private String inspectionStatus="PENDING";
+  @Column(name="qualified_qty") private BigDecimal qualifiedQty;
+  @Column(name="rejected_qty",nullable=false) private BigDecimal rejectedQty=BigDecimal.ZERO;
+  @Column(name="inspector_name",length=80) private String inspectorName;
+  @Column(name="inspection_comment",length=500) private String inspectionComment;
+  @Column(name="inspected_at") private OffsetDateTime inspectedAt;
+  @Column(name="payable_due_date") private LocalDate payableDueDate;
 
   public String getCode() {
     return code;
@@ -121,4 +129,11 @@ public class GoodsReceipt extends BaseEntity {
   public void setReceiverName(String receiverName) {
     this.receiverName = receiverName;
   }
+  public String getInspectionStatus(){return inspectionStatus;} public void setInspectionStatus(String v){inspectionStatus=v;}
+  public BigDecimal getQualifiedQty(){return qualifiedQty;} public void setQualifiedQty(BigDecimal v){qualifiedQty=v;}
+  public BigDecimal getRejectedQty(){return rejectedQty;} public void setRejectedQty(BigDecimal v){rejectedQty=v;}
+  public String getInspectorName(){return inspectorName;} public void setInspectorName(String v){inspectorName=v;}
+  public String getInspectionComment(){return inspectionComment;} public void setInspectionComment(String v){inspectionComment=v;}
+  public OffsetDateTime getInspectedAt(){return inspectedAt;} public void setInspectedAt(OffsetDateTime v){inspectedAt=v;}
+  public LocalDate getPayableDueDate(){return payableDueDate;} public void setPayableDueDate(LocalDate v){payableDueDate=v;}
 }

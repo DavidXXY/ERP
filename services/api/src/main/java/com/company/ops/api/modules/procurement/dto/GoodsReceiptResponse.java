@@ -3,6 +3,7 @@ package com.company.ops.api.modules.procurement.dto;
 import com.company.ops.api.modules.procurement.domain.ProcurementCostType;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 public record GoodsReceiptResponse(
@@ -22,6 +23,12 @@ public record GoodsReceiptResponse(
     ProcurementCostType costType,
     UUID costTargetId,
     String costTargetCode,
-    String costTargetName
+    String costTargetName,
+    String inspectionStatus,
+    BigDecimal qualifiedQty,
+    BigDecimal rejectedQty,
+    String inspectorName,
+    String inspectionComment,
+    OffsetDateTime inspectedAt
 ) {
 }

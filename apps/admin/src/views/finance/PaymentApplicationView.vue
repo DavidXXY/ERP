@@ -101,7 +101,10 @@
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'application'">
-            <strong>{{ record.code }}</strong>
+            <a
+              @click="router.push(`/finance/payment-applications/${record.id}`)"
+              ><strong>{{ record.code }}</strong></a
+            >
             <span class="table-subtitle"
               >申请日期 {{ record.requestedDate }}</span
             >
@@ -280,7 +283,7 @@
         v-if="selectedApplication"
         class="section-alert"
         type="warning"
-        :message="`${selectedApplication.code} · ${selectedApplication.supplierName} · 本次付款 ${formatMoney(selectedApplication.requestedAmount)}`"
+        :message="`${selectedApplication.code} · ${selectedApplication.supplierName} · 审批金额 ${formatMoney(selectedApplication.requestedAmount)}`"
       />
       <a-alert
         v-if="
@@ -310,6 +313,15 @@
               ><a-input v-model:value="paymentForm.paymentCode" /></a-form-item
           ></a-col>
           <a-col :xs="24" :md="12"
+            ><a-form-item label="实际付款金额" name="amount"
+              ><a-input-number
+                v-model:value="paymentForm.amount"
+                :min="0.01"
+                :max="selectedApplication?.requestedAmount"
+                :precision="2"
+                class="full-input" /></a-form-item
+          ></a-col>
+          <a-col :xs="24" :md="12"
             ><a-form-item label="付款日期" name="paidDate"
               ><a-input
                 v-model:value="paymentForm.paidDate"
@@ -337,6 +349,7 @@
 </template>
 
 <script setup lang="ts">
+import { useRouter } from "vue-router";
 import { computed, onMounted, reactive, ref } from "vue";
 import { message } from "ant-design-vue";
 import AuditOutlined from "@ant-design/icons-vue/AuditOutlined";
@@ -361,6 +374,7 @@ import ApprovalProgressFlow, {
 type ApprovalDecision = "APPROVED" | "REJECTED";
 
 const auth = useAuthStore();
+const router = useRouter();
 const applications = ref<PaymentApplication[]>([]);
 const payments = ref<PaymentRecord[]>([]);
 const selectedApplication = ref<PaymentApplication | null>(null);
@@ -380,12 +394,14 @@ const approvalForm = reactive<{
 }>({ decision: "APPROVED", comment: "同意付款", approverName: "" });
 const paymentForm = reactive<{
   paymentCode: string;
+  amount: number;
   paidDate: string;
   paymentMethod: PaymentMethod;
   bankReference: string;
   payerName: string;
 }>({
   paymentCode: "",
+  amount: 0,
   paidDate: today(),
   paymentMethod: "BANK_TRANSFER",
   bankReference: "",
@@ -436,6 +452,14 @@ const approvalRules = {
 };
 const paymentRules = {
   paymentCode: [{ required: true, message: "请输入付款单号" }],
+  amount: [
+    {
+      required: true,
+      type: "number",
+      min: 0.01,
+      message: "请输入实际付款金额",
+    },
+  ],
   paidDate: [{ required: true }],
   paymentMethod: [{ required: true }],
   bankReference: [{ required: true, message: "请输入银行流水或付款凭证号" }],
@@ -565,6 +589,7 @@ function openPayment(item: PaymentApplication) {
   selectedApplication.value = item;
   Object.assign(paymentForm, {
     paymentCode: generateCode("FK"),
+    amount: Number(item.requestedAmount || 0),
     paidDate: today(),
     paymentMethod: "BANK_TRANSFER",
     bankReference: "",

@@ -436,6 +436,101 @@
     </a-card>
 
     <a-tabs v-model:activeKey="contractTabKey" style="margin-top: 16px">
+      <a-tab-pane key="fulfillment" tab="履约、验收与续约">
+        <a-row :gutter="[16, 16]">
+          <a-col :xs="24" :lg="10">
+            <a-descriptions bordered :column="1" size="small" title="履约概况">
+              <a-descriptions-item label="承接项目">
+                <a
+                  v-if="relatedProject"
+                  @click="router.push(`/projects/${relatedProject.id}`)"
+                  >{{ relatedProject.code }} · {{ relatedProject.name }}</a
+                >
+                <span v-else>尚未承接项目</span>
+              </a-descriptions-item>
+              <a-descriptions-item label="项目阶段">{{
+                relatedProject?.stage || "-"
+              }}</a-descriptions-item>
+              <a-descriptions-item label="项目进度"
+                ><a-progress
+                  v-if="relatedProject"
+                  :percent="relatedProject.progress"
+                  size="small"
+                /><span v-else>-</span></a-descriptions-item
+              >
+              <a-descriptions-item label="合同周期"
+                >{{ record?.startDate }} 至
+                {{ record?.endDate }}</a-descriptions-item
+              >
+              <a-descriptions-item label="距离到期"
+                ><span
+                  :class="{
+                    'text-danger':
+                      contractDaysLeft >= 0 && contractDaysLeft < 30,
+                  }"
+                  >{{
+                    contractDaysLeft < 0 ? "已到期" : `${contractDaysLeft} 天`
+                  }}</span
+                ></a-descriptions-item
+              >
+              <a-descriptions-item label="质保截止">{{
+                relatedProject?.warrantyEndDate || "-"
+              }}</a-descriptions-item>
+            </a-descriptions>
+          </a-col>
+          <a-col :xs="24" :lg="14">
+            <a-steps
+              direction="vertical"
+              size="small"
+              :current="fulfillmentStep"
+            >
+              <a-step
+                title="合同审批与盖章"
+                :description="
+                  record?.status === 'PENDING_APPROVAL'
+                    ? '等待合同审批'
+                    : '已完成合同审批'
+                "
+              />
+              <a-step
+                title="项目承接与预算"
+                :description="
+                  relatedProject
+                    ? `${relatedProject.code} · 预算 ${formatMoney(relatedProject.budgetAmount)}`
+                    : '等待合同生效后承接'
+                "
+              />
+              <a-step
+                title="交付与验收"
+                :description="
+                  relatedProject
+                    ? `当前阶段 ${relatedProject.stage}，进度 ${relatedProject.progress}%`
+                    : '尚未进入项目执行'
+                "
+              />
+              <a-step
+                title="开票与回款"
+                :description="`回款率 ${collectionRate}%，待回款 ${formatMoney(outstandingTotal)}`"
+              />
+              <a-step
+                title="质保与续约"
+                :description="
+                  contractDaysLeft >= 0 && contractDaysLeft <= 90
+                    ? '已进入续约关注窗口'
+                    : '等待履约完成'
+                "
+              />
+            </a-steps>
+          </a-col>
+        </a-row>
+        <a-alert
+          v-if="contractDaysLeft >= 0 && contractDaysLeft <= 90"
+          type="warning"
+          show-icon
+          message="合同即将进入续约窗口"
+          :description="`距离到期 ${contractDaysLeft} 天，请提前确认客户满意度、未结应收、质保责任和续签报价。`"
+        />
+      </a-tab-pane>
       <a-tab-pane key="approval" tab="审批件">
         <template #extra>
           <a-upload
@@ -765,6 +860,24 @@ const editRules = {
   amount: [{ required: true, message: "请输入合同金额" }],
 };
 const id = route.params.id as string;
+const contractDaysLeft = computed(() => {
+  if (!record.value?.endDate) return -1;
+  return Math.ceil(
+    (new Date(record.value.endDate).getTime() - Date.now()) / 86400000,
+  );
+});
+const fulfillmentStep = computed(() => {
+  if (record.value?.status === "PENDING_APPROVAL") return 0;
+  if (!relatedProject.value) return 1;
+  if (
+    !["FINAL_ACCEPTANCE", "WARRANTY", "CLOSED"].includes(
+      relatedProject.value.stage,
+    )
+  )
+    return 2;
+  if (outstandingTotal.value > 0) return 3;
+  return 4;
+});
 
 onMounted(loadData);
 onMounted(loadAttachments);

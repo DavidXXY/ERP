@@ -73,6 +73,49 @@
           </a-row>
         </a-card>
 
+        <a-card title="商机经营诊断" style="margin-top: 16px">
+          <a-row :gutter="[16, 16]">
+            <a-col
+              v-for="item in healthMetrics"
+              :key="item.label"
+              :xs="12"
+              :md="6"
+            >
+              <a-statistic
+                :title="item.label"
+                :value="item.value"
+                :suffix="item.suffix"
+                :value-style="{ color: item.color }"
+              />
+            </a-col>
+          </a-row>
+          <a-alert
+            style="margin-top: 12px"
+            :type="opportunityHealth.type"
+            show-icon
+            :message="opportunityHealth.title"
+            :description="opportunityHealth.description"
+          />
+          <a-space wrap style="margin-top: 12px">
+            <a-button
+              v-if="record.customerId"
+              @click="router.push(`/crm/customers/${record.customerId}`)"
+              >查看客户全景</a-button
+            >
+            <a-button
+              v-if="relatedQuote"
+              @click="router.push(`/crm/quotes/${relatedQuote.id}`)"
+              >查看报价版本</a-button
+            >
+            <a-button
+              v-if="auth.can('crm:followup:create')"
+              type="primary"
+              @click="openCreateFollowUp"
+              >安排下一次跟进</a-button
+            >
+          </a-space>
+        </a-card>
+
         <a-card
           v-if="record?.stage === 'LOST' && lostFollowUp"
           title="丢单信息"
@@ -398,6 +441,84 @@ const actionOverdue = computed(() =>
       record.value.nextActionAt < new Date().toISOString().slice(0, 10),
   ),
 );
+const lastFollowUpDays = computed(() => {
+  const latest = [...followUps.value].sort((a, b) =>
+    String(b.followedAt).localeCompare(String(a.followedAt)),
+  )[0]?.followedAt;
+  return latest
+    ? Math.max(
+        0,
+        Math.floor((Date.now() - new Date(latest).getTime()) / 86400000),
+      )
+    : 999;
+});
+const weightedAmount = computed(
+  () =>
+    (Number(record.value?.expectedAmount || 0) *
+      Number(record.value?.probability || 0)) /
+    100,
+);
+const healthMetrics = computed(() => [
+  {
+    label: "加权金额",
+    value: Math.round(weightedAmount.value / 10000),
+    suffix: "万元",
+    color: "#1677ff",
+  },
+  {
+    label: "成功概率",
+    value: record.value?.probability || 0,
+    suffix: "%",
+    color: Number(record.value?.probability || 0) < 30 ? "#cf1322" : "#389e0d",
+  },
+  {
+    label: "跟进次数",
+    value: followUps.value.length,
+    suffix: "次",
+    color: "#722ed1",
+  },
+  {
+    label: "距上次跟进",
+    value: lastFollowUpDays.value === 999 ? "-" : lastFollowUpDays.value,
+    suffix: lastFollowUpDays.value === 999 ? "" : "天",
+    color: lastFollowUpDays.value > 7 ? "#d46b08" : "#389e0d",
+  },
+]);
+const opportunityHealth = computed(() => {
+  if (record.value?.stage === "LOST")
+    return {
+      type: "error" as const,
+      title: "商机已丢失",
+      description:
+        lostFollowUp.value?.content || "建议补充丢单原因、竞争对手和复盘结论。",
+    };
+  if (actionOverdue.value)
+    return {
+      type: "warning" as const,
+      title: "下一步动作已逾期",
+      description: `计划动作“${record.value?.nextAction || "未填写"}”需要立即重新安排负责人和完成时间。`,
+    };
+  if (lastFollowUpDays.value > 7)
+    return {
+      type: "warning" as const,
+      title: "商机长时间未跟进",
+      description: `距最近一次有效沟通已 ${lastFollowUpDays.value} 天，建议确认客户决策人、竞争态势和下一步承诺。`,
+    };
+  if (
+    !relatedQuote.value &&
+    ["QUOTATION", "NEGOTIATION"].includes(record.value?.stage || "")
+  )
+    return {
+      type: "warning" as const,
+      title: "报价阶段尚未形成报价单",
+      description: "建议补充成本测算、价格权限和付款节点后发起报价审批。",
+    };
+  return {
+    type: "success" as const,
+    title: "商机推进正常",
+    description: "下一步动作、跟进节奏和销售阶段暂未发现明显异常。",
+  };
+});
 
 onMounted(loadData);
 

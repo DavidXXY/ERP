@@ -1,6 +1,7 @@
 package com.company.ops.api.modules.procurement.dto;
 
 import com.company.ops.api.modules.procurement.domain.SupplierRiskStatus;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
 
@@ -24,5 +25,9 @@ public record SupplierResponse(
     String bankAccount,
     String admissionStatus,
     String remark,
-    SupplierRiskStatus riskStatus
+    SupplierRiskStatus riskStatus,
+    BigDecimal contractedAmount,
+    BigDecimal payableAmount,
+    BigDecimal paidAmount,
+    BigDecimal outstandingAmount
 ) {}

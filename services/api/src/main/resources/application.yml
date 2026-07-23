@@ -60,7 +60,7 @@ ops:
   security:
     jwt-secret: ${JWT_SECRET:ops-erp-local-development-secret-please-change}
     jwt-expire-minutes: ${JWT_EXPIRE_MINUTES:720}
-    allowed-origins: ${ALLOWED_ORIGINS:http://localhost:5174,http://127.0.0.1:5174}
+    allowed-origins: ${ALLOWED_ORIGINS:http://localhost:5174,http://127.0.0.1:5174,http://localhost:8088,http://127.0.0.1:8088}
     login-max-attempts: ${LOGIN_MAX_ATTEMPTS:5}
     login-lock-minutes: ${LOGIN_LOCK_MINUTES:15}
     data-encryption-key: ${DATA_ENCRYPTION_KEY:ops-erp-local-data-encryption-key-change-me}

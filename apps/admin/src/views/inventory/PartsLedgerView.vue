@@ -19,13 +19,15 @@
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'name'"
-            ><strong>{{ record.partName }}</strong
+            ><a @click="router.push(`/inventory/parts/${record.id}`)"
+              ><strong>{{ record.partName || record.name }}</strong></a
             ><span class="table-subtitle"
-              >{{ record.partCode }} · {{ record.spec || "" }}</span
+              >{{ record.partCode || record.code }} ·
+              {{ record.spec || record.model || "" }}</span
             ></template
           >
           <template v-else-if="column.key === 'stock'"
-            >{{ record.quantity
+            >{{ record.quantity ?? record.stockQty
             }}<span class="table-subtitle">{{
               record.unit || ""
             }}</span></template
@@ -33,10 +35,16 @@
           <template v-else-if="column.key === 'status'"
             ><a-tag
               :color="
-                record.quantity <= (record.safetyStock || 0) ? 'red' : 'green'
+                (record.quantity ?? record.stockQty) <=
+                (record.safetyStock ?? record.safetyQty ?? 0)
+                  ? 'red'
+                  : 'green'
               "
               >{{
-                record.quantity <= (record.safetyStock || 0) ? "低库存" : "正常"
+                (record.quantity ?? record.stockQty) <=
+                (record.safetyStock ?? record.safetyQty ?? 0)
+                  ? "低库存"
+                  : "正常"
               }}</a-tag
             ></template
           >
@@ -44,7 +52,10 @@
             formatMoney(record.unitCost)
           }}</template>
           <template v-else-if="column.key === 'value'">{{
-            formatMoney((record.unitCost || 0) * (record.quantity || 0))
+            formatMoney(
+              (record.unitCost || 0) *
+                (record.quantity ?? record.stockQty ?? 0),
+            )
           }}</template>
         </template>
       </a-table>

@@ -105,14 +105,20 @@
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'payable'"
-            ><strong>{{ record.code }}</strong
+            ><a @click="router.push(`/finance/payables/${record.id}`)"
+              ><strong>{{ record.code }}</strong></a
             ><span class="table-subtitle"
               >采购单 {{ record.orderCode }}</span
             ></template
           >
-          <template v-else-if="column.key === 'supplier'">{{
-            record.supplierName
-          }}</template>
+          <template v-else-if="column.key === 'supplier'"
+            ><a
+              @click="
+                router.push(`/procurement/suppliers/${record.supplierId}`)
+              "
+              >{{ record.supplierName }}</a
+            ></template
+          >
           <template v-else-if="column.key === 'amount'"
             ><strong>{{ formatMoney(record.amount) }}</strong
             ><span class="table-subtitle"
@@ -221,6 +227,7 @@
 </template>
 
 <script setup lang="ts">
+import { useRouter } from "vue-router";
 import { computed, onMounted, reactive, ref } from "vue";
 import { message } from "ant-design-vue";
 import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
@@ -234,6 +241,7 @@ import { useAuthStore } from "@/stores/auth";
 import { downloadCsv } from "@/utils/csv";
 
 const auth = useAuthStore();
+const router = useRouter();
 const items = ref<FinancePayable[]>([]);
 const selectedItem = ref<FinancePayable | null>(null);
 const loading = ref(false);

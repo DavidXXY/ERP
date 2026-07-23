@@ -14,13 +14,13 @@ public class RiskScheduler {
 
   @Scheduled(cron = "${ops.risk.snapshot-cron:0 35 1 * * *}")
   @SchedulerLock(name = "riskSnapshotDaily", lockAtLeastFor = "PT1M", lockAtMostFor = "PT30M")
-  public int snapshotDaily() {
-    return riskCenterService.snapshotToday();
+  public void snapshotDaily() {
+    riskCenterService.snapshotToday();
   }
 
   @Scheduled(cron = "${ops.risk.escalation-cron:0 10 * * * *}")
   @SchedulerLock(name = "riskEscalationScan", lockAtLeastFor = "PT1M", lockAtMostFor = "PT30M")
-  public int scanEscalations() {
-    return riskCenterService.escalateOverdue();
+  public void scanEscalations() {
+    riskCenterService.escalateOverdue();
   }
 }

@@ -77,6 +77,12 @@
             record.createdAt?.slice(0, 10) ||
             "-"
           }}</template>
+          <template v-else-if="column.key === 'action'">
+            <a-space><a-button type="link" size="small" @click="router.push(`/procurement/orders/${record.id}`)">详情</a-button>
+            <a-button v-if="record.status==='DRAFT'&&record.approvalStatus==='PENDING'" type="link" size="small" @click="handleSubmit(record)">提交审批</a-button>
+            <a-button v-if="record.status==='DRAFT'&&record.approvalStatus==='PENDING'&&auth.can('procurement:request:approve')" type="link" size="small" @click="handleApproval(record,'APPROVED')">审批通过</a-button>
+            <a-button v-if="record.status==='DRAFT'&&record.approvalStatus==='PENDING'&&auth.can('procurement:request:approve')" danger type="link" size="small" @click="handleApproval(record,'REJECTED')">驳回</a-button></a-space>
+          </template>
         </template>
       </a-table>
     </a-card>
@@ -88,7 +94,7 @@ import { useRouter } from "vue-router";
 import { message } from "ant-design-vue";
 import PlusOutlined from "@ant-design/icons-vue/PlusOutlined";
 import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
-import { listPurchaseOrders, type PurchaseOrder } from "@/api/procurement";
+import { listPurchaseOrders, submitPurchaseOrder, approvePurchaseOrder, type PurchaseOrder } from "@/api/procurement";
 import { useAuthStore } from "@/stores/auth";
 const auth = useAuthStore();
 const router = useRouter();
@@ -103,7 +109,10 @@ const orderColumns = [
   { title: "金额", key: "amount", width: 140 },
   { title: "状态", key: "status", width: 130 },
   { title: "下单日期", key: "date", width: 120 },
+  { title: "操作", key: "action", width: 280, fixed: "right" },
 ];
+async function handleSubmit(record:PurchaseOrder){try{await submitPurchaseOrder(record.id);message.success("订单已提交审批");await loadData()}catch(e){message.error(e instanceof Error?e.message:"提交失败")}}
+async function handleApproval(record:PurchaseOrder,decision:"APPROVED"|"REJECTED"){try{await approvePurchaseOrder(record.id,{decision,approverName:auth.user?.displayName||"审批人",comment:decision==="APPROVED"?"同意采购订单":"采购订单驳回"});message.success(decision==="APPROVED"?"订单审批通过，可以登记到货":"订单已驳回");await loadData()}catch(e){message.error(e instanceof Error?e.message:"审批失败")}}
 onMounted(loadData);
 async function loadData() {
   loading.value = true;

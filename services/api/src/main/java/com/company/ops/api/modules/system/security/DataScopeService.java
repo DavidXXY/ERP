@@ -47,6 +47,21 @@ public class DataScopeService {
     return principal != null && principal.permissions().contains(authority);
   }
 
+  @Transactional(readOnly = true)
+  public boolean canViewOrganization(UUID organizationId) {
+    UserPrincipal principal = principal();
+    if (principal == null) return false;
+    if (principal.dataScopes().contains("ALL")) return true;
+    if (organizationId == null) return false;
+    SystemUser user = userRepository.findById(principal.id()).orElse(null);
+    if (user != null && user.getOrganization() != null) {
+      UUID current = user.getOrganization().getId();
+      if ((principal.dataScopes().contains("DEPT") || principal.dataScopes().contains("DEPARTMENT")) && current.equals(organizationId)) return true;
+      if (principal.dataScopes().contains("DEPT_AND_SUB") && organizationAndDescendantIds(current).contains(organizationId)) return true;
+    }
+    return principal.dataScopes().contains("CUSTOM") && principal.dataScopeOrganizationIds().contains(organizationId);
+  }
+
   protected Set<String> visibleDisplayNames(UserPrincipal principal) {
     Set<UUID> userIds = visibleUserIds(principal);
     if (userIds.isEmpty()) return Set.of(principal.displayName());

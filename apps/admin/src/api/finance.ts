@@ -214,6 +214,7 @@ export function executePayment(
   id: string,
   payload: {
     paymentCode: string;
+    amount: number;
     paidDate: string;
     paymentMethod: PaymentMethod;
     bankReference: string;

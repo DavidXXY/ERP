@@ -5,8 +5,14 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 find_local_java_home() {
   local java_bin
+  local system_java_home
+  if [[ -n "${JAVA_HOME:-}" && -x "${JAVA_HOME}/bin/java" ]] \
+      && "${JAVA_HOME}/bin/java" -version >/dev/null 2>&1; then
+    echo "$JAVA_HOME"
+    return 0
+  fi
   java_bin="$(find "$ROOT_DIR/.dev/tools" -path "*/Contents/Home/bin/java" -type f 2>/dev/null | head -n 1 || true)"
-  if [[ -n "$java_bin" ]]; then
+  if [[ -n "$java_bin" ]] && "$java_bin" -version >/dev/null 2>&1; then
     dirname "$(dirname "$java_bin")"
     return 0
   fi
@@ -14,18 +20,26 @@ find_local_java_home() {
     /usr/libexec/java_home -v 17
     return 0
   fi
+  java_bin="$(command -v java 2>/dev/null || true)"
+  if [[ -n "$java_bin" ]] && "$java_bin" -version >/dev/null 2>&1; then
+    system_java_home="$("$java_bin" -XshowSettings:properties -version 2>&1 | sed -n 's/^[[:space:]]*java.home = //p' | head -n 1)"
+    if [[ -n "$system_java_home" && -d "$system_java_home" ]]; then
+      echo "$system_java_home"
+      return 0
+    fi
+  fi
   return 1
 }
 
 find_maven() {
   local local_mvn
-  local_mvn="$(find "$ROOT_DIR/.dev/tools" -path "*/bin/mvn" -type f 2>/dev/null | head -n 1 || true)"
-  if [[ -n "$local_mvn" ]]; then
-    echo "$local_mvn"
+  if command -v mvn >/dev/null 2>&1 && mvn -version >/dev/null 2>&1; then
+    command -v mvn
     return 0
   fi
-  if command -v mvn >/dev/null 2>&1; then
-    command -v mvn
+  local_mvn="$(find "$ROOT_DIR/.dev/tools" -path "*/bin/mvn" -type f 2>/dev/null | head -n 1 || true)"
+  if [[ -n "$local_mvn" ]] && "$local_mvn" -version >/dev/null 2>&1; then
+    echo "$local_mvn"
     return 0
   fi
   return 1

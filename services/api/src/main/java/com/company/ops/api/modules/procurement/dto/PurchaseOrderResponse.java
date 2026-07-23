@@ -2,6 +2,8 @@ package com.company.ops.api.modules.procurement.dto;
 
 import com.company.ops.api.modules.procurement.domain.ProcurementCostType;
 import com.company.ops.api.modules.procurement.domain.PurchaseOrderStatus;
+import com.company.ops.api.modules.procurement.domain.ApprovalStatus;
+import java.time.OffsetDateTime;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
@@ -25,5 +27,9 @@ public record PurchaseOrderResponse(
     UUID costTargetId,
     String costTargetCode,
     String costTargetName,
-    PurchaseOrderStatus status
+    PurchaseOrderStatus status,
+    ApprovalStatus approvalStatus,
+    String approvalComment,
+    String approverName,
+    OffsetDateTime approvedAt
 ) {}

@@ -167,7 +167,7 @@
               <a-button
                 type="link"
                 class="table-link"
-                @click="openDetail(record)"
+                @click="router.push(`/projects/${record.id}`)"
                 >{{ record.name }}</a-button
               >
               <span class="table-subtitle"
@@ -215,7 +215,10 @@
             </template>
             <template v-else-if="column.key === 'action'">
               <a-space size="small">
-                <a-button type="link" size="small" @click="openDetail(record)"
+                <a-button
+                  type="link"
+                  size="small"
+                  @click="router.push(`/projects/${record.id}`)"
                   >详情</a-button
                 >
                 <a-popconfirm
@@ -1175,7 +1178,7 @@ import { computed, onMounted, reactive, ref, watch } from "vue";
 import { message } from "ant-design-vue";
 import PlusOutlined from "@ant-design/icons-vue/PlusOutlined";
 import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { listCustomers, type CustomerSummary } from "@/api/crm";
 import {
   listProjects,
@@ -1211,6 +1214,7 @@ import BusinessTraceTimeline from "@/components/business/BusinessTraceTimeline.v
 
 const auth = useAuthStore();
 const route = useRoute();
+const router = useRouter();
 const projects = ref<Project[]>([]);
 const profitabilityRows = ref<ProjectProfitability[]>([]);
 const detailCache = ref<Record<string, ProjectDetail>>({});

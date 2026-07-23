@@ -38,6 +38,11 @@
           <span>业务待办中心</span>
         </a-menu-item>
 
+        <a-menu-item v-if="canAccessCollaboration" key="/collaboration">
+          <template #icon><ApartmentOutlined /></template>
+          <span>跨部门协同中心</span>
+        </a-menu-item>
+
         <a-sub-menu v-if="canAccessCrm" key="crm">
           <template #icon><TeamOutlined /></template>
           <template #title>CRM</template>
@@ -80,6 +85,7 @@
           <template #title>供应链采购</template>
           <a-menu-item key="/procurement/requests">采购申请</a-menu-item>
           <a-menu-item key="/procurement/orders">采购订单</a-menu-item>
+          <a-menu-item key="/procurement/controls">询价·质检·发票</a-menu-item>
           <a-menu-item key="/procurement/receipts">到货入库</a-menu-item>
           <a-menu-item key="/procurement/costs">成本归集</a-menu-item>
           <a-menu-item key="/procurement/payables">采购应付</a-menu-item>
@@ -324,6 +330,7 @@ import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import DashboardOutlined from "@ant-design/icons-vue/DashboardOutlined";
 import CalendarOutlined from "@ant-design/icons-vue/CalendarOutlined";
+import ApartmentOutlined from "@ant-design/icons-vue/ApartmentOutlined";
 import FileDoneOutlined from "@ant-design/icons-vue/FileDoneOutlined";
 import InboxOutlined from "@ant-design/icons-vue/InboxOutlined";
 import MenuFoldOutlined from "@ant-design/icons-vue/MenuFoldOutlined";
@@ -442,6 +449,15 @@ const canAccessBusinessTodos = computed(() =>
     "project:view",
     "finance:receivable:view",
     "finance:payable:view",
+  ].some((permission) => auth.can(permission)),
+);
+const canAccessCollaboration = computed(() =>
+  [
+    "dashboard:view",
+    "project:view",
+    "office:approval:view",
+    "procurement:view",
+    "finance:view",
   ].some((permission) => auth.can(permission)),
 );
 const canAccessHumanResources = computed(() =>

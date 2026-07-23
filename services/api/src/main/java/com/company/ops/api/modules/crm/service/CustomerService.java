@@ -67,9 +67,33 @@ public class CustomerService {
 
   @Transactional(readOnly = true)
   public List<CustomerSummaryResponse> listCustomers() {
+    Map<UUID, BigDecimal> signedOrderAmounts = contractRepository.findAll().stream()
+        .collect(java.util.stream.Collectors.groupingBy(
+            contract -> contract.getCustomerId(),
+            java.util.stream.Collectors.reducing(BigDecimal.ZERO, contract -> amount(contract.getAmount()), BigDecimal::add)
+        ));
+    Map<UUID, BigDecimal> paidAmounts = receivableRepository.findAll().stream()
+        .collect(java.util.stream.Collectors.groupingBy(
+            receivable -> receivable.getCustomerId(),
+            java.util.stream.Collectors.reducing(BigDecimal.ZERO, receivable -> amount(receivable.getSettledAmount()), BigDecimal::add)
+        ));
+    Map<UUID, BigDecimal> pendingAmounts = receivableRepository.findAll().stream()
+        .collect(java.util.stream.Collectors.groupingBy(
+            receivable -> receivable.getCustomerId(),
+            java.util.stream.Collectors.reducing(
+                BigDecimal.ZERO,
+                receivable -> amount(receivable.getAmount()).subtract(amount(receivable.getSettledAmount())),
+                BigDecimal::add
+            )
+        ));
     return deleteGovernanceService.visible("CUSTOMER", customerRepository.findAllByOrderByCreatedAtDesc(), Customer::getId).stream()
         .filter(customer -> dataScopeService.canViewOwner(customer.getOwnerName()))
-        .map(this::toSummary)
+        .map(customer -> toSummary(
+            customer,
+            signedOrderAmounts.getOrDefault(customer.getId(), BigDecimal.ZERO),
+            paidAmounts.getOrDefault(customer.getId(), BigDecimal.ZERO),
+            pendingAmounts.getOrDefault(customer.getId(), BigDecimal.ZERO)
+        ))
         .toList();
   }
 
@@ -442,7 +466,12 @@ public class CustomerService {
     entityManager.createNativeQuery("DELETE FROM crm_customers WHERE id = ?1").setParameter(1, id).executeUpdate();
   }
 
-  private CustomerSummaryResponse toSummary(Customer customer) {
+  private CustomerSummaryResponse toSummary(
+      Customer customer,
+      BigDecimal signedOrderAmount,
+      BigDecimal paidAmount,
+      BigDecimal pendingAmount
+  ) {
     String primaryContact = customer.getContacts().stream()
         .filter(CustomerContact::isPrimaryContact)
         .findFirst()
@@ -461,7 +490,10 @@ public class CustomerService {
         customer.getRiskStatus(),
         customer.getContacts().size(),
         customer.getSites().size(),
-        primaryContact
+        primaryContact,
+        signedOrderAmount,
+        paidAmount,
+        pendingAmount
     );
   }
 

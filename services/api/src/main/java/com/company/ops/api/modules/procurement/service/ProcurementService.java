@@ -65,6 +65,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.util.StringUtils;
+import org.springframework.security.core.context.SecurityContextHolder;
+import com.company.ops.api.modules.system.security.UserPrincipal;
 import static com.company.ops.api.common.util.MoneyUtils.amount;
 
 @Service
@@ -116,14 +118,17 @@ public class ProcurementService {
 
   @Transactional(readOnly = true)
   public List<SupplierResponse> listSuppliers() {
+    Map<UUID, SupplierFinancialSummary> summaries = supplierFinancialSummaries();
     return supplierRepository.findAllByOrderByCreatedAtDesc().stream()
-        .map(this::toSupplierResponse)
+        .map(supplier -> toSupplierResponse(supplier, summaries.get(supplier.getId())))
         .toList();
   }
 
   @Transactional(readOnly = true)
   public Page<SupplierResponse> listSuppliers(Pageable pageable) {
-    return supplierRepository.findAll(pageable).map(this::toSupplierResponse);
+    Map<UUID, SupplierFinancialSummary> summaries = supplierFinancialSummaries();
+    return supplierRepository.findAll(pageable)
+        .map(supplier -> toSupplierResponse(supplier, summaries.get(supplier.getId())));
   }
 
   @Transactional
@@ -135,7 +140,7 @@ public class ProcurementService {
     Supplier supplier = new Supplier();
     supplier.setCode(supplierCode);
     applySupplierRequest(supplier, request);
-    return toSupplierResponse(supplierRepository.save(supplier));
+    return toSupplierResponse(supplierRepository.save(supplier), null);
   }
 
   @Transactional
@@ -143,7 +148,8 @@ public class ProcurementService {
     Supplier supplier = supplierRepository.findById(id)
         .orElseThrow(() -> new BusinessException("供应商不存在"));
     applySupplierRequest(supplier, request);
-    return toSupplierResponse(supplierRepository.save(supplier));
+    Supplier saved = supplierRepository.save(supplier);
+    return toSupplierResponse(saved, supplierFinancialSummaries().get(saved.getId()));
   }
 
   private void applySupplierRequest(Supplier supplier, CreateSupplierRequest request) {
@@ -240,16 +246,18 @@ public class ProcurementService {
     CostTarget costTarget = resolveCostTarget(
         request.costType(), request.projectId(), request.departmentId()
     );
+    BigDecimal requestAmount = request.quantity().multiply(amount(request.unitPrice()));
+    validateProjectBudget(request.costType(), request.projectId(), requestAmount, null);
 
     PurchaseRequest purchaseRequest = new PurchaseRequest();
     purchaseRequest.setCode(prCode);
-    purchaseRequest.setRequesterName(request.requesterName());
+    purchaseRequest.setRequesterName(currentName());
     purchaseRequest.setPartId(request.partId());
     purchaseRequest.setPartName(partName);
     purchaseRequest.setQuantity(request.quantity());
     purchaseRequest.setUnitPrice(amount(request.unitPrice()));
     purchaseRequest.setTaxRate(defaultTaxRate(request.taxRate()));
-    purchaseRequest.setTotalAmount(request.quantity().multiply(amount(request.unitPrice())));
+    purchaseRequest.setTotalAmount(requestAmount);
     purchaseRequest.setExpectedDate(request.expectedDate());
     purchaseRequest.setReason(request.reason());
     purchaseRequest.setCostType(request.costType());
@@ -286,7 +294,7 @@ public class ProcurementService {
     record.setRequestId(purchaseRequest.getId());
     record.setDecision(request.decision());
     record.setComment(request.comment());
-    record.setApproverName(request.approverName());
+    record.setApproverName(currentName());
     record.setDecidedAt(OffsetDateTime.now());
     requestApprovalRepository.save(record);
     return toPurchaseRequestResponse(purchaseRequest);
@@ -302,7 +310,7 @@ public class ProcurementService {
         || purchaseRequest.getStatus() == PurchaseRequestStatus.CANCELLED) {
       throw new BusinessException("该申请当前状态不可编辑");
     }
-    purchaseRequest.setRequesterName(request.requesterName());
+    purchaseRequest.setRequesterName(currentName());
     purchaseRequest.setPartId(request.partId());
     if (request.partId() != null) {
       InventoryPart part = partRepository.findById(request.partId())
@@ -322,6 +330,8 @@ public class ProcurementService {
     purchaseRequest.setDepartmentId(request.departmentId());
     CostTarget costTarget = resolveCostTarget(
         request.costType(), request.projectId(), request.departmentId());
+    validateProjectBudget(
+        request.costType(), request.projectId(), purchaseRequest.getTotalAmount(), purchaseRequest.getId());
     purchaseRequest.setCostTargetCode(costTarget.code());
     purchaseRequest.setCostTargetName(costTarget.name());
     // If was rejected, reset to PENDING for re-approval
@@ -397,10 +407,9 @@ public class ProcurementService {
     order.setDepartmentId(purchaseRequest.getDepartmentId());
     order.setCostTargetCode(purchaseRequest.getCostTargetCode());
     order.setCostTargetName(purchaseRequest.getCostTargetName());
-    order.setStatus(PurchaseOrderStatus.ORDERED);
+    order.setStatus(PurchaseOrderStatus.DRAFT);
+    order.setApprovalStatus(ApprovalStatus.PENDING);
 
-    purchaseRequest.setStatus(PurchaseRequestStatus.ORDERED);
-    requestRepository.save(purchaseRequest);
     PurchaseOrder saved = orderRepository.save(order);
     return toPurchaseOrderResponse(saved, supplier, purchaseRequest);
   }
@@ -426,6 +435,34 @@ public class ProcurementService {
     PurchaseRequest purchaseRequest = order.getRequestId() != null
         ? requestRepository.findById(order.getRequestId()).orElse(null) : null;
     return toPurchaseOrderResponse(saved, supplier, purchaseRequest);
+  }
+
+  @Transactional
+  public PurchaseOrderResponse submitPurchaseOrder(UUID id) {
+    PurchaseOrder order = orderRepository.findByIdForUpdate(id)
+        .orElseThrow(() -> new BusinessException("采购订单不存在"));
+    if (order.getStatus() != PurchaseOrderStatus.DRAFT) throw new BusinessException("只有草稿订单可以提交审批");
+    order.setApprovalStatus(ApprovalStatus.PENDING);
+    Supplier supplier = supplierRepository.findById(order.getSupplierId()).orElse(null);
+    PurchaseRequest purchaseRequest = requestRepository.findById(order.getRequestId()).orElse(null);
+    return toPurchaseOrderResponse(orderRepository.save(order), supplier, purchaseRequest);
+  }
+
+  @Transactional
+  public PurchaseOrderResponse approvePurchaseOrder(UUID id, ApprovalStatus decision, String approverName, String comment) {
+    PurchaseOrder order = orderRepository.findByIdForUpdate(id)
+        .orElseThrow(() -> new BusinessException("采购订单不存在"));
+    if (order.getStatus() != PurchaseOrderStatus.DRAFT || order.getApprovalStatus() != ApprovalStatus.PENDING)
+      throw new BusinessException("该订单当前不可审批");
+    if (decision == ApprovalStatus.PENDING) throw new BusinessException("请选择通过或驳回");
+    order.setApprovalStatus(decision); order.setApproverName(currentName()); order.setApprovalComment(comment); order.setApprovedAt(OffsetDateTime.now());
+    if (decision == ApprovalStatus.APPROVED) {
+      order.setStatus(PurchaseOrderStatus.ORDERED);
+      requestRepository.findById(order.getRequestId()).ifPresent(pr -> {pr.setStatus(PurchaseRequestStatus.ORDERED); requestRepository.save(pr);});
+    }
+    Supplier supplier = supplierRepository.findById(order.getSupplierId()).orElse(null);
+    PurchaseRequest purchaseRequest = requestRepository.findById(order.getRequestId()).orElse(null);
+    return toPurchaseOrderResponse(orderRepository.save(order), supplier, purchaseRequest);
   }
 
   @Transactional
@@ -471,7 +508,7 @@ public class ProcurementService {
     receipt.setAmount(receiptAmount);
     receipt.setReceivedDate(request.receivedDate());
     receipt.setDeliveryNo(request.deliveryNo());
-    receipt.setReceiverName(request.receiverName());
+    receipt.setReceiverName(currentName());
     GoodsReceipt savedReceipt = receiptRepository.save(receipt);
 
     StockMovement movement = new StockMovement();
@@ -583,7 +620,8 @@ public class ProcurementService {
         .toList();
   }
 
-  private SupplierResponse toSupplierResponse(Supplier supplier) {
+  private SupplierResponse toSupplierResponse(Supplier supplier, SupplierFinancialSummary summary) {
+    SupplierFinancialSummary financials = summary == null ? SupplierFinancialSummary.ZERO : summary;
     return new SupplierResponse(
         supplier.getId(),
         supplier.getCode(),
@@ -604,7 +642,52 @@ public class ProcurementService {
         supplier.getBankAccount(),
         supplier.getAdmissionStatus(),
         supplier.getRemark(),
-        supplier.getRiskStatus()
+        supplier.getRiskStatus(),
+        financials.contractedAmount(),
+        financials.payableAmount(),
+        financials.paidAmount(),
+        financials.outstandingAmount()
+    );
+  }
+
+  private Map<UUID, SupplierFinancialSummary> supplierFinancialSummaries() {
+    Map<UUID, BigDecimal> contractedAmounts = orderRepository.findAll().stream()
+        .filter(order -> order.getStatus() != PurchaseOrderStatus.CANCELLED)
+        .collect(Collectors.groupingBy(
+            PurchaseOrder::getSupplierId,
+            Collectors.reducing(BigDecimal.ZERO, order -> amount(order.getOrderAmount()), BigDecimal::add)
+        ));
+    Map<UUID, List<ProcurementPayable>> payablesBySupplier = payableRepository.findAll().stream()
+        .filter(payable -> payable.getStatus() != PayableStatus.CANCELLED)
+        .collect(Collectors.groupingBy(ProcurementPayable::getSupplierId));
+    return supplierRepository.findAll().stream().collect(Collectors.toMap(
+        Supplier::getId,
+        supplier -> {
+          List<ProcurementPayable> payables = payablesBySupplier.getOrDefault(supplier.getId(), List.of());
+          BigDecimal payableAmount = payables.stream()
+              .map(ProcurementPayable::getAmount).map(this::amount)
+              .reduce(BigDecimal.ZERO, BigDecimal::add);
+          BigDecimal paidAmount = payables.stream()
+              .map(ProcurementPayable::getPaidAmount).map(this::amount)
+              .reduce(BigDecimal.ZERO, BigDecimal::add);
+          return new SupplierFinancialSummary(
+              contractedAmounts.getOrDefault(supplier.getId(), BigDecimal.ZERO),
+              payableAmount,
+              paidAmount,
+              payableAmount.subtract(paidAmount)
+          );
+        }
+    ));
+  }
+
+  private record SupplierFinancialSummary(
+      BigDecimal contractedAmount,
+      BigDecimal payableAmount,
+      BigDecimal paidAmount,
+      BigDecimal outstandingAmount
+  ) {
+    private static final SupplierFinancialSummary ZERO = new SupplierFinancialSummary(
+        BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO
     );
   }
 
@@ -693,7 +776,7 @@ public class ProcurementService {
         costTargetId(order.getCostType(), order.getProjectId(), order.getDepartmentId()),
         order.getCostTargetCode(),
         order.getCostTargetName(),
-        order.getStatus()
+        order.getStatus(), order.getApprovalStatus(), order.getApprovalComment(), order.getApproverName(), order.getApprovedAt()
     );
   }
 
@@ -721,7 +804,8 @@ public class ProcurementService {
             order.getCostType(), order.getProjectId(), order.getDepartmentId()
         ),
         order == null ? null : order.getCostTargetCode(),
-        order == null ? null : order.getCostTargetName()
+        order == null ? null : order.getCostTargetName(),
+        receipt.getInspectionStatus(), receipt.getQualifiedQty(), receipt.getRejectedQty(), receipt.getInspectorName(), receipt.getInspectionComment(), receipt.getInspectedAt()
     );
   }
 
@@ -814,6 +898,26 @@ public class ProcurementService {
     return new CostTarget(department.getCode(), department.getName());
   }
 
+  private void validateProjectBudget(
+      ProcurementCostType costType, UUID projectId, BigDecimal requestedAmount, UUID excludedRequestId
+  ) {
+    if (costType != ProcurementCostType.PROJECT || projectId == null) return;
+    Project project = projectRepository.findById(projectId)
+        .orElseThrow(() -> new BusinessException("关联项目不存在"));
+    BigDecimal occupied = requestRepository.findAll().stream()
+        .filter(item -> item.getProjectId() != null && item.getProjectId().equals(projectId))
+        .filter(item -> excludedRequestId == null || !item.getId().equals(excludedRequestId))
+        .filter(item -> item.getStatus() != PurchaseRequestStatus.CANCELLED)
+        .filter(item -> item.getApprovalStatus() != ApprovalStatus.REJECTED)
+        .map(item -> amount(item.getTotalAmount()))
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
+    BigDecimal available = amount(project.getBudgetAmount()).subtract(occupied);
+    if (requestedAmount.compareTo(available) > 0) {
+      throw new BusinessException(
+          "项目预算不足：剩余可申请 " + available + "，本次申请 " + requestedAmount + "，请调整金额或发起超预算审批");
+    }
+  }
+
   private void validateOrderCostTarget(PurchaseOrder order) {
     if (order.getCostType() == ProcurementCostType.PROJECT) {
       if (order.getProjectId() == null) {
@@ -883,6 +987,12 @@ public class ProcurementService {
 
   private BigDecimal defaultTaxRate(BigDecimal value) {
     return value == null ? BigDecimal.valueOf(13) : value;
+  }
+
+  private String currentName() {
+    var authentication = SecurityContextHolder.getContext().getAuthentication();
+    return authentication != null && authentication.getPrincipal() instanceof UserPrincipal principal
+        ? principal.displayName() : "系统";
   }
 
   private record CostTarget(String code, String name) {}

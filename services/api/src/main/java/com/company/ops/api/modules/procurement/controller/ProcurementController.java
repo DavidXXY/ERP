@@ -18,6 +18,7 @@ import com.company.ops.api.modules.procurement.domain.PurchaseRequestStatus;
 import com.company.ops.api.modules.procurement.domain.ApprovalStatus;
 import com.company.ops.api.modules.procurement.domain.ProcurementCostType;
 import com.company.ops.api.modules.procurement.domain.PurchaseOrderStatus;
+import com.company.ops.api.modules.procurement.dto.ProcurementControlDtos;
 import com.company.ops.api.modules.procurement.dto.SupplierResponse;
 import com.company.ops.api.modules.procurement.service.ProcurementService;
 import jakarta.validation.Valid;
@@ -153,6 +154,18 @@ public class ProcurementController {
       @Valid @RequestBody CreatePurchaseOrderRequest request
   ) {
     return ApiResponse.ok(procurementService.createPurchaseOrder(request));
+  }
+
+  @PostMapping("/orders/{id}/submit")
+  @PreAuthorize("hasAuthority('procurement:purchase:create')")
+  public ApiResponse<PurchaseOrderResponse> submitPurchaseOrder(@PathVariable UUID id) {
+    return ApiResponse.ok(procurementService.submitPurchaseOrder(id));
+  }
+
+  @PostMapping("/orders/{id}/approval")
+  @PreAuthorize("hasAuthority('procurement:request:approve') and @approvalFlowSecurity.canApprove('PURCHASE')")
+  public ApiResponse<PurchaseOrderResponse> approvePurchaseOrder(@PathVariable UUID id, @Valid @RequestBody ProcurementControlDtos.ApproveOrder request) {
+    return ApiResponse.ok(procurementService.approvePurchaseOrder(id, ApprovalStatus.valueOf(request.decision()), request.approverName(), request.comment()));
   }
 
   @PostMapping("/orders/{id}/cancel")

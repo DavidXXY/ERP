@@ -8,6 +8,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
@@ -66,6 +67,11 @@ public class PurchaseOrder extends BaseEntity {
   @Enumerated(EnumType.STRING)
   @Column(nullable = false, length = 32)
   private PurchaseOrderStatus status = PurchaseOrderStatus.ORDERED;
+  @Enumerated(EnumType.STRING) @Column(name="approval_status",nullable=false,length=32)
+  private ApprovalStatus approvalStatus = ApprovalStatus.PENDING;
+  @Column(name="approval_comment",length=500) private String approvalComment;
+  @Column(name="approver_name",length=80) private String approverName;
+  @Column(name="approved_at") private OffsetDateTime approvedAt;
 
   public String getCode() {
     return code;
@@ -202,4 +208,8 @@ public class PurchaseOrder extends BaseEntity {
   public void setTaxRate(BigDecimal taxRate) {
     this.taxRate = taxRate;
   }
+  public ApprovalStatus getApprovalStatus(){return approvalStatus;} public void setApprovalStatus(ApprovalStatus v){approvalStatus=v;}
+  public String getApprovalComment(){return approvalComment;} public void setApprovalComment(String v){approvalComment=v;}
+  public String getApproverName(){return approverName;} public void setApproverName(String v){approverName=v;}
+  public OffsetDateTime getApprovedAt(){return approvedAt;} public void setApprovedAt(OffsetDateTime v){approvedAt=v;}
 }

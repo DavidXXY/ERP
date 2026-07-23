@@ -32,7 +32,7 @@ public class SecurityConfig {
 
   public SecurityConfig(
       JwtAuthenticationFilter jwtAuthenticationFilter,
-      @Value("${ops.security.allowed-origins:http://localhost:5174,http://127.0.0.1:5174}") String allowedOrigins
+      @Value("${ops.security.allowed-origins:http://localhost:5174,http://127.0.0.1:5174,http://localhost:8088,http://127.0.0.1:8088}") String allowedOrigins
   ) {
     this.jwtAuthenticationFilter = jwtAuthenticationFilter;
     this.allowedOrigins = allowedOrigins;

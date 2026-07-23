@@ -80,7 +80,7 @@
           :pagination="{ pageSize: 10, showSizeChanger: false }"
           :row-key="(record: CustomerSummary) => record.id"
           :custom-row="customerRow"
-          :scroll="{ x: 1040 }"
+          :scroll="{ x: 1210 }"
         >
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'name'">
@@ -88,14 +88,14 @@
                 <span class="customer-avatar" aria-hidden="true">{{
                   customerInitial(record.name)
                 }}</span>
-                <div>
+                <div class="customer-name-content">
                   <a-button
                     type="link"
                     class="table-link"
-                    @click.stop="selectCustomer(record.id)"
+                    :title="record.name"
+                    @click.stop="router.push(`/crm/customers/${record.id}`)"
                     >{{ record.name }}</a-button
                   >
-                  <span class="table-subtitle">{{ record.code }}</span>
                 </div>
               </div>
             </template>
@@ -110,21 +110,20 @@
                 record.industry
               }}</span></template
             >
-            <template v-else-if="column.key === 'contact'"
-              ><strong class="customer-cell-primary">{{
-                record.primaryContact || "未登记联系人"
-              }}</strong
-              ><span class="table-subtitle"
-                >共 {{ record.contactCount }} 位联系人</span
-              ></template
+            <template v-else-if="column.key === 'signedAmount'"
+              ><strong class="customer-money">{{
+                formatMoney(record.signedOrderAmount)
+              }}</strong></template
             >
-            <template v-else-if="column.key === 'site'"
-              ><strong>{{ record.siteCount }}</strong> 个</template
+            <template v-else-if="column.key === 'paidAmount'"
+              ><strong class="customer-money customer-money--paid">{{
+                formatMoney(record.paidAmount)
+              }}</strong></template
             >
-            <template v-else-if="column.key === 'payment'"
-              ><span class="customer-payment-habit">{{
-                record.paymentHabit || "未登记付款习惯"
-              }}</span></template
+            <template v-else-if="column.key === 'pendingAmount'"
+              ><strong class="customer-money customer-money--pending">{{
+                formatMoney(record.pendingAmount)
+              }}</strong></template
             >
             <template v-else-if="column.key === 'risk'"
               ><a-tag :color="riskColor(record.riskStatus)">{{
@@ -138,7 +137,7 @@
                   size="small"
                   title="查看客户"
                   aria-label="查看客户"
-                  @click.stop="selectCustomer(record.id)"
+                  @click.stop="router.push(`/crm/customers/${record.id}`)"
                   ><template #icon><EyeOutlined /></template
                 ></a-button>
                 <a-button
@@ -249,6 +248,10 @@
             >
           </template>
           <template v-else>
+            <a-button
+              @click="router.push(`/crm/customers/${selectedDetail.id}`)"
+              >完整详情</a-button
+            >
             <a-button
               v-if="auth.can('crm:followup:create')"
               @click="createFollowUpForCustomer"
@@ -1018,13 +1021,13 @@ const rules = {
   ownerName: [{ required: true, message: "请输入负责人" }],
 };
 const columns = [
-  { title: "客户", key: "name", width: 210 },
+  { title: "客户", key: "name", width: 300 },
   { title: "客户编码", dataIndex: "code", width: 150 },
   { title: "负责人", key: "owner", width: 110 },
   { title: "等级 / 行业", key: "level", width: 120 },
-  { title: "主要联系人", key: "contact", width: 180 },
-  { title: "项目地址", key: "site", width: 90 },
-  { title: "付款习惯", key: "payment", width: 160 },
+  { title: "已签订单金额", key: "signedAmount", width: 150 },
+  { title: "累计支付金额", key: "paidAmount", width: 150 },
+  { title: "待付金额", key: "pendingAmount", width: 150 },
   { title: "风险", key: "risk", width: 90 },
   { title: "操作", key: "action", width: 80, fixed: "right" },
 ];
@@ -1506,6 +1509,24 @@ function uniqueKey() {
   align-items: center;
   gap: 10px;
   min-width: 0;
+}
+.customer-name-content {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+.customer-name-content .table-link {
+  display: block;
+  overflow: hidden;
+  width: 100%;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.customer-name-content .table-link :deep(span) {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .customer-avatar {
   display: grid;

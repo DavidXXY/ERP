@@ -23,6 +23,9 @@ public class DataInitializer implements CommandLineRunner {
   private static final String TENANT_ID = "default";
   private static final List<RequiredPermission> REQUIRED_ADMIN_PERMISSIONS = List.of(
       new RequiredPermission("project:delete", "项目删除", "project"),
+      new RequiredPermission("project:stage:update", "项目阶段推进", "project"),
+      new RequiredPermission("project:cost:create", "项目成本归集", "project"),
+      new RequiredPermission("crm:quote:cost", "报价成本询价", "crm"),
       new RequiredPermission("maintenance:order:delete", "工单删除", "maintenance")
   );
 

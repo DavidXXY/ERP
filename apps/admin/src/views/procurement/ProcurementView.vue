@@ -859,7 +859,7 @@ import {
   listSuppliers,
   processPurchaseRequestApproval,
   updatePurchaseRequest,
-  receivePurchaseOrder,
+  registerPurchaseArrival,
   type ApprovalStatus,
   type CreatePurchaseOrderPayload,
   type CreatePurchaseRequestPayload,
@@ -1479,13 +1479,11 @@ async function handleReceive() {
   await receiptFormRef.value?.validate();
   savingReceipt.value = true;
   try {
-    const result = await receivePurchaseOrder(selectedOrder.value.id, {
+    await registerPurchaseArrival(selectedOrder.value.id, {
       ...receiptForm,
     });
     receiptOpen.value = false;
-    message.success(
-      `入库完成，${result.costAllocation.costTargetName} 成本 ${formatMoney(result.costAllocation.amount)} 已归集`,
-    );
+    message.success("到货已登记，请在采购控制中心完成质检；合格后才入库并生成应付");
     await loadData();
   } catch (error) {
     message.error(error instanceof Error ? error.message : "到货入库失败");

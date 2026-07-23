@@ -3,11 +3,14 @@ package com.company.ops.api.modules.finance.dto;
 import com.company.ops.api.modules.finance.domain.PaymentMethod;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 public record ExecutePaymentRequest(
     String paymentCode, // auto-generated if null
+    @NotNull @Positive BigDecimal amount,
     @NotNull LocalDate paidDate,
     @NotNull PaymentMethod paymentMethod,
     @NotBlank @Size(max = 100) String bankReference,

@@ -138,6 +138,24 @@ export function saveRiskRule(data: Omit<RiskRuleConfigResponse, "id">) {
   });
 }
 
+export function updateRiskRule(
+  id: string,
+  data: Omit<RiskRuleConfigResponse, "id">,
+) {
+  return request<RiskRuleConfigResponse>({
+    method: "PUT",
+    url: `/risk/rules/${id}`,
+    data,
+  });
+}
+
+export function deleteRiskRule(id: string) {
+  return request<void>({
+    method: "DELETE",
+    url: `/risk/rules/${id}`,
+  });
+}
+
 export function listRiskWorkflows() {
   return request<RiskWorkflowResponse[]>({
     method: "GET",

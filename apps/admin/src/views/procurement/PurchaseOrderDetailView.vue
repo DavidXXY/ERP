@@ -110,6 +110,12 @@
                     money(order.orderAmount)
                   }}</strong></a-descriptions-item
                 >
+                <a-descriptions-item label="订单版本">V{{ order.orderVersion || 1 }}</a-descriptions-item>
+                <a-descriptions-item label="币种">{{ order.currency || "CNY" }}</a-descriptions-item>
+                <a-descriptions-item label="运费">{{ money(order.freightAmount || 0) }}</a-descriptions-item>
+                <a-descriptions-item label="询价单">{{ order.inquiryId || "未关联" }}</a-descriptions-item>
+                <a-descriptions-item label="采购合同">{{ order.contractId || "未关联" }}</a-descriptions-item>
+                <a-descriptions-item label="寻源/直接采购依据" :span="2">{{ order.sourceReason || "-" }}</a-descriptions-item>
               </a-descriptions>
             </a-col>
             <a-col :xs="24" :xl="10">

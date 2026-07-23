@@ -36,6 +36,8 @@ public interface PurchaseOrderRepository extends JpaRepository<PurchaseOrder, UU
   boolean existsByCode(String code);
 
   boolean existsByRequestId(UUID requestId);
+  List<PurchaseOrder> findByRequestId(UUID requestId);
+  List<PurchaseOrder> findBySupplierId(UUID supplierId);
 
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select order from PurchaseOrder order where order.id = :id")

@@ -49,6 +49,8 @@ public class GoodsReceipt extends BaseEntity {
   @Column(name="inspection_comment",length=500) private String inspectionComment;
   @Column(name="inspected_at") private OffsetDateTime inspectedAt;
   @Column(name="payable_due_date") private LocalDate payableDueDate;
+  @Column(name="client_request_id",length=80) private String clientRequestId;
+  @Column(name="asn_no",length=80) private String asnNo;
 
   public String getCode() {
     return code;
@@ -136,4 +138,6 @@ public class GoodsReceipt extends BaseEntity {
   public String getInspectionComment(){return inspectionComment;} public void setInspectionComment(String v){inspectionComment=v;}
   public OffsetDateTime getInspectedAt(){return inspectedAt;} public void setInspectedAt(OffsetDateTime v){inspectedAt=v;}
   public LocalDate getPayableDueDate(){return payableDueDate;} public void setPayableDueDate(LocalDate v){payableDueDate=v;}
+  public String getClientRequestId(){return clientRequestId;} public void setClientRequestId(String v){clientRequestId=v;}
+  public String getAsnNo(){return asnNo;} public void setAsnNo(String v){asnNo=v;}
 }

@@ -68,6 +68,12 @@ public class PurchaseRequest extends BaseEntity {
   @Column(name = "approval_status", nullable = false, length = 32)
   private ApprovalStatus approvalStatus = ApprovalStatus.PENDING;
 
+  @Column(name = "source_type", nullable = false, length = 32)
+  private String sourceType = "MANUAL";
+
+  @Column(name = "source_reference", length = 120)
+  private String sourceReference;
+
   public String getCode() {
     return code;
   }
@@ -203,4 +209,9 @@ public class PurchaseRequest extends BaseEntity {
   public void setApprovalStatus(ApprovalStatus approvalStatus) {
     this.approvalStatus = approvalStatus;
   }
+
+  public String getSourceType() { return sourceType; }
+  public void setSourceType(String sourceType) { this.sourceType = sourceType; }
+  public String getSourceReference() { return sourceReference; }
+  public void setSourceReference(String sourceReference) { this.sourceReference = sourceReference; }
 }

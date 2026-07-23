@@ -12,6 +12,17 @@ public record ReceivePurchaseOrderRequest(
     @NotNull LocalDate receivedDate,
     @NotBlank @Size(max = 80) String deliveryNo,
     @NotBlank @Size(max = 80) String receiverName,
-    @NotNull LocalDate payableDueDate
+    @NotNull LocalDate payableDueDate,
+    @Size(max = 80) String clientRequestId,
+    @Size(max = 80) String asnNo
 ) {
+  public ReceivePurchaseOrderRequest(
+      BigDecimal quantity,
+      LocalDate receivedDate,
+      String deliveryNo,
+      String receiverName,
+      LocalDate payableDueDate
+  ) {
+    this(quantity, receivedDate, deliveryNo, receiverName, payableDueDate, null, null);
+  }
 }

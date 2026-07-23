@@ -14,5 +14,23 @@ public record CreatePurchaseOrderRequest(
     @NotNull UUID requestId,
     @NotNull @DecimalMin("0.01") BigDecimal unitPrice,
     @DecimalMin("0") BigDecimal taxRate,
-    LocalDate expectedDeliveryDate
-) {}
+    LocalDate expectedDeliveryDate,
+    @DecimalMin("0.01") BigDecimal orderedQty,
+    UUID inquiryId,
+    UUID contractId,
+    String currency,
+    @DecimalMin("0") BigDecimal freightAmount,
+    String sourceReason
+) {
+  public CreatePurchaseOrderRequest(
+      String code,
+      UUID supplierId,
+      UUID requestId,
+      BigDecimal unitPrice,
+      BigDecimal taxRate,
+      LocalDate expectedDeliveryDate
+  ) {
+    this(code, supplierId, requestId, unitPrice, taxRate, expectedDeliveryDate,
+        null, null, null, null, null, null);
+  }
+}

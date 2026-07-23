@@ -122,6 +122,7 @@
         :loading="loading"
         row-key="ruleCode"
         :pagination="{ pageSize: 10 }"
+        :scroll="{ x: 1280 }"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'name'">
@@ -145,18 +146,164 @@
               >升级：{{ record.escalationOwner || "-" }}</span
             >
           </template>
+          <template v-else-if="column.key === 'source'">
+            <a-tag :color="record.id ? 'blue' : 'default'">
+              {{ record.id ? "已配置" : "系统默认" }}
+            </a-tag>
+          </template>
+          <template v-else-if="column.key === 'actions'">
+            <a-space>
+              <a-button type="link" @click="openEdit(record)">修改</a-button>
+              <a-popconfirm
+                v-if="record.id"
+                :title="deleteConfirmText(record)"
+                ok-text="确定"
+                cancel-text="取消"
+                @confirm="removeRule(record)"
+              >
+                <a-button type="link" danger :loading="deletingId === record.id"
+                  >删除</a-button
+                >
+              </a-popconfirm>
+              <a-tooltip v-else title="系统默认规则没有可删除的自定义配置">
+                <a-button type="link" danger disabled>删除</a-button>
+              </a-tooltip>
+            </a-space>
+          </template>
         </template>
       </a-table>
     </a-card>
+
+    <a-modal
+      v-model:open="editOpen"
+      title="修改流程规则"
+      width="720px"
+      :confirm-loading="editing"
+      ok-text="保存修改"
+      cancel-text="取消"
+      @ok="submitEdit"
+    >
+      <a-form
+        ref="editFormRef"
+        :model="editForm"
+        :rules="formRules"
+        layout="vertical"
+      >
+        <a-row :gutter="12">
+          <a-col :xs="24" :md="12">
+            <a-form-item label="规则编码" name="ruleCode">
+              <a-input v-model:value="editForm.ruleCode" disabled />
+            </a-form-item>
+          </a-col>
+          <a-col :xs="24" :md="12">
+            <a-form-item label="规则名称" name="name">
+              <a-input
+                v-model:value="editForm.name"
+                :maxlength="120"
+                show-count
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :xs="24" :md="12">
+            <a-form-item label="所属模块" name="module">
+              <a-select
+                v-model:value="editForm.module"
+                :options="moduleOptions"
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :xs="24" :md="12">
+            <a-form-item label="规则状态" name="enabled">
+              <a-switch
+                v-model:checked="editForm.enabled"
+                checked-children="启用"
+                un-checked-children="停用"
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :xs="24" :md="12">
+            <a-form-item label="高危阈值" name="highThreshold">
+              <a-input-number
+                v-model:value="editForm.highThreshold"
+                :min="0"
+                :precision="2"
+                class="full-input"
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :xs="24" :md="12">
+            <a-form-item label="关注阈值" name="mediumThreshold">
+              <a-input-number
+                v-model:value="editForm.mediumThreshold"
+                :min="0"
+                :precision="2"
+                class="full-input"
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :xs="24" :md="12">
+            <a-form-item label="预警提前天数" name="warningDays">
+              <a-input-number
+                v-model:value="editForm.warningDays"
+                :min="0"
+                :precision="0"
+                class="full-input"
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :xs="24" :md="12">
+            <a-form-item label="SLA处理时限(小时)" name="slaHours">
+              <a-input-number
+                v-model:value="editForm.slaHours"
+                :min="1"
+                :precision="0"
+                class="full-input"
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :xs="24" :md="12">
+            <a-form-item label="默认责任人" name="defaultOwner">
+              <a-input v-model:value="editForm.defaultOwner" :maxlength="80" />
+            </a-form-item>
+          </a-col>
+          <a-col :xs="24" :md="12">
+            <a-form-item label="升级责任人" name="escalationOwner">
+              <a-input
+                v-model:value="editForm.escalationOwner"
+                :maxlength="80"
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="24">
+            <a-form-item label="规则说明" name="remark">
+              <a-textarea
+                v-model:value="editForm.remark"
+                :rows="3"
+                :maxlength="500"
+                show-count
+              />
+            </a-form-item>
+          </a-col>
+        </a-row>
+      </a-form>
+      <a-alert
+        v-if="editingSystemDefault"
+        type="info"
+        show-icon
+        message="保存后将生成该系统规则的自定义配置；删除自定义配置时会恢复系统默认值。"
+      />
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
-import { message } from "ant-design-vue";
+import { computed, onMounted, ref } from "vue";
+import { message, type FormInstance } from "ant-design-vue";
 import {
+  deleteRiskRule,
   listRiskRules,
   saveRiskRule,
+  updateRiskRule,
   type RiskRuleConfigResponse,
 } from "@/api/risk";
 
@@ -223,14 +370,47 @@ const ruleForms = ref<RuleForm[]>(templates.map(cloneRule));
 const loading = ref(false);
 const savingCode = ref("");
 const savingAll = ref(false);
+const editOpen = ref(false);
+const editing = ref(false);
+const deletingId = ref("");
+const editingId = ref("");
+const editFormRef = ref<FormInstance>();
+const editForm = ref<RuleForm>(cloneRule(templates[0]));
+const editingSystemDefault = computed(() => !editingId.value);
+
+const moduleOptions = [
+  { label: "项目管理", value: "project" },
+  { label: "CRM", value: "crm" },
+  { label: "供应链采购", value: "procurement" },
+  { label: "OA协同", value: "office" },
+  { label: "财务资金", value: "finance" },
+  { label: "库存管理", value: "inventory" },
+  { label: "资质管理", value: "qualification" },
+  { label: "维保", value: "maintenance" },
+];
+
+const formRules = {
+  name: [{ required: true, whitespace: true, message: "请输入规则名称" }],
+  module: [{ required: true, message: "请选择所属模块" }],
+  slaHours: [
+    {
+      type: "number",
+      min: 1,
+      message: "SLA处理时限必须大于0",
+      trigger: "change",
+    },
+  ],
+};
 
 const columns = [
   { title: "规则", key: "name", width: 220 },
   { title: "模块", key: "module", width: 110 },
   { title: "状态", key: "enabled", width: 90 },
+  { title: "来源", key: "source", width: 100 },
   { title: "阈值 / SLA", key: "thresholds", width: 260 },
   { title: "责任人", key: "owner", width: 180 },
   { title: "说明", dataIndex: "remark", key: "remark" },
+  { title: "操作", key: "actions", width: 140, fixed: "right" as const },
 ];
 
 async function loadData() {
@@ -276,6 +456,75 @@ async function saveAll() {
   } finally {
     savingAll.value = false;
   }
+}
+
+function openEdit(item: RiskRuleConfigResponse) {
+  editingId.value = item.id || "";
+  editForm.value = normalizeRule(stripId(item) as RuleForm);
+  editOpen.value = true;
+}
+
+async function submitEdit() {
+  try {
+    await editFormRef.value?.validate();
+  } catch {
+    return;
+  }
+
+  editing.value = true;
+  try {
+    const payload = normalizeRule(editForm.value);
+    if (editingId.value) {
+      await updateRiskRule(editingId.value, payload);
+    } else {
+      await saveRiskRule(payload);
+    }
+    message.success(`${payload.name}已修改`);
+    editOpen.value = false;
+    await loadData();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "规则修改失败");
+  } finally {
+    editing.value = false;
+  }
+}
+
+async function removeRule(item: RiskRuleConfigResponse) {
+  if (!item.id) return;
+  deletingId.value = item.id;
+  try {
+    await deleteRiskRule(item.id);
+    const restoresDefault = systemDefaultCodes.has(item.ruleCode);
+    message.success(
+      restoresDefault
+        ? `${item.name}的自定义配置已删除，已恢复系统默认值`
+        : `${item.name}已删除`,
+    );
+    await loadData();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "规则删除失败");
+  } finally {
+    deletingId.value = "";
+  }
+}
+
+const systemDefaultCodes = new Set([
+  "office_warning",
+  "office_todo",
+  "inventory_replenishment",
+  "procurement_matching",
+  "project_profitability",
+  "finance_receivable_overdue",
+  "finance_payable_overdue",
+  "qualification_expiry",
+  "crm_renewal",
+  "maintenance_work_order_overdue",
+]);
+
+function deleteConfirmText(item: RiskRuleConfigResponse) {
+  return systemDefaultCodes.has(item.ruleCode)
+    ? `确定删除“${item.name}”的自定义配置并恢复系统默认值？`
+    : `确定删除规则“${item.name}”？删除后将不再参与流程判断。`;
 }
 
 function normalizeRule(item: RuleForm): RuleForm {

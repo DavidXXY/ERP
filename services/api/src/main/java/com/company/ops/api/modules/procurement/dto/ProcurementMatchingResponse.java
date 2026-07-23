@@ -13,6 +13,8 @@ public record ProcurementMatchingResponse(
     BigDecimal orderAmount,
     BigDecimal receiptAmount,
     BigDecimal payableAmount,
+    BigDecimal invoiceAmount,
+    BigDecimal matchedInvoiceAmount,
     BigDecimal paidAmount,
     String matchStatus,
     String riskMessage

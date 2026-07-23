@@ -231,6 +231,12 @@ const rootRoutes: RouteRecordRaw[] = [
     meta: { title: "采购控制中心", permission: "procurement:view" },
   },
   {
+    path: "procurement/governance",
+    name: "procurement-governance",
+    component: () => import("@/views/procurement/ProcurementGovernanceView.vue"),
+    meta: { title: "供应采购治理", permission: "procurement:view" },
+  },
+  {
     path: "procurement/suppliers",
     name: "procurement-suppliers",
     component: () => import("@/views/procurement/SupplierManagementView.vue"),

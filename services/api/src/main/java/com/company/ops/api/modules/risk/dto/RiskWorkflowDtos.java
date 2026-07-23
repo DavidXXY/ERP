@@ -2,6 +2,8 @@ package com.company.ops.api.modules.risk.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -83,10 +85,10 @@ public final class RiskWorkflowDtos {
       @NotBlank @Size(max = 120) String name,
       @NotBlank @Size(max = 40) String module,
       Boolean enabled,
-      BigDecimal highThreshold,
-      BigDecimal mediumThreshold,
-      Integer warningDays,
-      Integer slaHours,
+      @PositiveOrZero BigDecimal highThreshold,
+      @PositiveOrZero BigDecimal mediumThreshold,
+      @PositiveOrZero Integer warningDays,
+      @Positive Integer slaHours,
       @Size(max = 80) String defaultOwner,
       @Size(max = 80) String escalationOwner,
       @Size(max = 500) String remark

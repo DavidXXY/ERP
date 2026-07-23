@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
 import com.company.ops.api.common.exception.BusinessException;
@@ -108,7 +109,7 @@ class ProcurementServiceTest {
   }
 
   @Test
-  void projectReceiptPostsMaterialCostAndUpdatesActualCost() {
+  void projectArrivalWaitsForQualityInspectionBeforePostingCost() {
     UUID projectId = UUID.randomUUID();
     UUID requestId = UUID.randomUUID();
     InventoryPart part = part("Control module");
@@ -145,7 +146,6 @@ class ProcurementServiceTest {
     order.setCostTargetName(project.getName());
 
     when(orderRepository.findByIdForUpdate(order.getId())).thenReturn(Optional.of(order));
-    when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
     when(partRepository.findById(part.getId())).thenReturn(Optional.of(part));
     when(receiptRepository.countByOrderId(order.getId())).thenReturn(0L);
     when(receiptRepository.save(any(GoodsReceipt.class))).thenAnswer(invocation -> {
@@ -153,25 +153,19 @@ class ProcurementServiceTest {
       receipt.setId(UUID.randomUUID());
       return receipt;
     });
-    when(orderRepository.save(order)).thenReturn(order);
     when(requestRepository.findById(requestId)).thenReturn(Optional.empty());
     when(supplierRepository.findById(supplier.getId())).thenReturn(Optional.of(supplier));
-    when(payableRepository.save(any(ProcurementPayable.class))).thenAnswer(invocation -> invocation.getArgument(0));
-    when(costAllocationRepository.save(any(ProcurementCostAllocation.class))).thenAnswer(invocation -> invocation.getArgument(0));
-    when(projectCostRepository.save(any(ProjectCostEntry.class))).thenAnswer(invocation -> invocation.getArgument(0));
-    when(projectRepository.save(project)).thenReturn(project);
 
     var result = procurementService.receiveOrder(order.getId(), new ReceivePurchaseOrderRequest(
         BigDecimal.ONE, LocalDate.now(), "SH-001", "Keeper", LocalDate.now().plusDays(30)
     ));
 
-    assertThat(result.costAllocation().costType()).isEqualTo(ProcurementCostType.PROJECT);
-    assertThat(result.costAllocation().amount()).isEqualByComparingTo("120");
-    assertThat(project.getActualCost()).isEqualByComparingTo("620");
-    ArgumentCaptor<ProjectCostEntry> costCaptor = ArgumentCaptor.forClass(ProjectCostEntry.class);
-    verify(projectCostRepository).save(costCaptor.capture());
-    assertThat(costCaptor.getValue().getSourceType()).isEqualTo(ProjectCostSource.PROCUREMENT);
-    assertThat(costCaptor.getValue().getAmount()).isEqualByComparingTo("120");
+    assertThat(result.costAllocation()).isNull();
+    assertThat(result.payable()).isNull();
+    assertThat(result.receipt().inspectionStatus()).isEqualTo("PENDING");
+    assertThat(project.getActualCost()).isEqualByComparingTo("500");
+    verify(projectCostRepository, never()).save(any(ProjectCostEntry.class));
+    verify(payableRepository, never()).save(any(ProcurementPayable.class));
   }
 
   private InventoryPart part(String name) {

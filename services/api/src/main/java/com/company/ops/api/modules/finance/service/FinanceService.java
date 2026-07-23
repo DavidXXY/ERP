@@ -196,21 +196,24 @@ public class FinanceService {
     if (payable.getStatus() == PayableStatus.PAID || payable.getStatus() == PayableStatus.CANCELLED) {
       throw new BusinessException("当前应付单不能申请付款");
     }
-    BigDecimal matchedInvoiceAmount = supplierInvoiceRepository.findByOrderId(payable.getOrderId()).stream()
+    var payableInvoices = supplierInvoiceRepository.findByPayableId(payable.getId());
+    var relevantInvoices = payableInvoices.isEmpty()
+        ? supplierInvoiceRepository.findByOrderId(payable.getOrderId())
+        : payableInvoices;
+    BigDecimal matchedInvoiceAmount = relevantInvoices.stream()
         .filter(item -> "MATCHED".equals(item.getMatchStatus()))
-        .map(item -> amount(item.getAmount()))
+        .filter(item -> "APPROVED".equals(item.getApprovalStatus()))
+        .filter(item -> "VERIFIED".equals(item.getVerificationStatus()))
+        .map(item -> amount(item.getMatchedAmount()))
         .reduce(BigDecimal.ZERO, BigDecimal::add);
-    BigDecimal orderPayableAmount = payableRepository.findAll().stream()
-        .filter(item -> item.getOrderId().equals(payable.getOrderId()))
-        .filter(item -> item.getStatus() != PayableStatus.CANCELLED)
-        .map(item -> amount(item.getAmount()))
-        .reduce(BigDecimal.ZERO, BigDecimal::add);
-    if (matchedInvoiceAmount.compareTo(orderPayableAmount) < 0) {
-      throw new BusinessException("采购订单尚未完成供应商发票三单匹配，不能申请付款");
-    }
     BigDecimal outstanding = amount(payable.getAmount()).subtract(amount(payable.getPaidAmount()));
     BigDecimal reserved = reservedAmount(payable.getId());
-    BigDecimal available = outstanding.subtract(reserved);
+    BigDecimal invoiceAvailable = matchedInvoiceAmount
+        .subtract(amount(payable.getPaidAmount())).subtract(reserved);
+    BigDecimal available = outstanding.subtract(reserved).min(invoiceAvailable).max(BigDecimal.ZERO);
+    if (matchedInvoiceAmount.signum() == 0) {
+      throw new BusinessException("当前应付尚无审核通过且验真的匹配发票，不能申请付款");
+    }
     if (request.requestedAmount().compareTo(available) > 0) {
       throw new BusinessException("申请金额超过可申请金额" + available);
     }

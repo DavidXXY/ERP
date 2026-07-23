@@ -52,7 +52,7 @@ class LocalApplicationContextTest {
         "select max(cast(version as integer)) from flyway_schema_history where success = true",
         Integer.class
     );
-    assertThat(version).isEqualTo(70);
+    assertThat(version).isEqualTo(72);
     assertThat(jdbc.queryForObject("select count(*) from shedlock", Integer.class)).isZero();
   }
 

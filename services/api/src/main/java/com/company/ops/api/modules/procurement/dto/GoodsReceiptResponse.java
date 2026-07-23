@@ -29,6 +29,8 @@ public record GoodsReceiptResponse(
     BigDecimal rejectedQty,
     String inspectorName,
     String inspectionComment,
-    OffsetDateTime inspectedAt
+    OffsetDateTime inspectedAt,
+    String clientRequestId,
+    String asnNo
 ) {
 }

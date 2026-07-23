@@ -63,7 +63,15 @@
             ></template
           >
           <template v-else-if="column.key === 'action'">
-            <a-button type="link" size="small" @click="openDetail(record)">查看详情</a-button>
+            <a-space>
+              <a-button type="link" size="small" @click="openDetail(record)">查看详情</a-button>
+              <a-button
+                v-if="record.status !== 'PAID' && record.status !== 'CANCELLED'"
+                type="link"
+                size="small"
+                @click="openPayment(record)"
+              >申请支付</a-button>
+            </a-space>
           </template>
         </template>
       </a-table>
@@ -87,10 +95,28 @@
         <a-descriptions-item label="状态">{{ payableStatusText(selectedPayable.status) }}</a-descriptions-item>
       </a-descriptions>
     </a-drawer>
+    <a-modal v-model:open="paymentOpen" title="采购付款申请" :confirm-loading="submitting" @ok="submitPayment">
+      <a-alert
+        v-if="selectedPayable"
+        type="info"
+        show-icon
+        :message="`${selectedPayable.supplierName} · ${selectedPayable.code}`"
+        :description="`待付 ${formatMoney(selectedPayable.outstandingAmount)}，审批中的申请 ${formatMoney(reservedAmount)}`"
+        style="margin-bottom: 16px"
+      />
+      <a-form layout="vertical">
+        <a-form-item label="申请付款金额" required>
+          <a-input-number v-model:value="paymentForm.requestedAmount" :min="0.01" :max="availableAmount" :precision="2" style="width: 100%" />
+        </a-form-item>
+        <a-form-item label="申请付款日期" required><a-input v-model:value="paymentForm.requestedDate" type="date" /></a-form-item>
+        <a-form-item label="付款用途" required><a-textarea v-model:value="paymentForm.purpose" /></a-form-item>
+        <a-alert type="warning" show-icon message="系统会校验已审核验真的匹配发票额度；财务审批后再填实际付款金额。" />
+      </a-form>
+    </a-modal>
   </div>
 </template>
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 import { message } from "ant-design-vue";
 import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
@@ -99,11 +125,22 @@ import {
   type ProcurementPayable,
 } from "@/api/procurement";
 import { statusLabel, statusColor } from "@/utils/status-mapper";
+import { createPaymentApplication, listPaymentApplications, type PaymentApplication } from "@/api/finance";
+import { useAuthStore } from "@/stores/auth";
+const auth = useAuthStore();
 const router = useRouter();
 const loading = ref(false);
 const payables = ref<ProcurementPayable[]>([]);
 const detailOpen = ref(false);
 const selectedPayable = ref<ProcurementPayable | null>(null);
+const paymentOpen = ref(false);
+const submitting = ref(false);
+const applications = ref<PaymentApplication[]>([]);
+const paymentForm = reactive({ requestedAmount: 0, requestedDate: new Date().toISOString().slice(0, 10), purpose: "采购订单付款" });
+const reservedAmount = computed(() => applications.value
+  .filter(item => item.payableId === selectedPayable.value?.id && ["PENDING_APPROVAL", "APPROVED"].includes(item.status))
+  .reduce((sum, item) => sum + Number(item.requestedAmount || 0), 0));
+const availableAmount = computed(() => Math.max(0, Number(selectedPayable.value?.outstandingAmount || 0) - reservedAmount.value));
 const payableColumns = [
   { title: "应付单", key: "payable", width: 240 },
   { title: "金额", key: "amount", width: 140 },
@@ -115,6 +152,38 @@ const payableColumns = [
 function openDetail(record: ProcurementPayable) {
   selectedPayable.value = record;
   detailOpen.value = true;
+}
+function openPayment(record: ProcurementPayable) {
+  selectedPayable.value = record;
+  paymentForm.requestedAmount = Math.max(0, Number(record.outstandingAmount || 0) - applications.value
+    .filter(item => item.payableId === record.id && ["PENDING_APPROVAL", "APPROVED"].includes(item.status))
+    .reduce((sum, item) => sum + Number(item.requestedAmount || 0), 0));
+  paymentForm.requestedDate = new Date().toISOString().slice(0, 10);
+  paymentForm.purpose = `采购订单 ${record.orderCode || ""} 付款`;
+  paymentOpen.value = true;
+}
+async function submitPayment() {
+  if (!selectedPayable.value || paymentForm.requestedAmount <= 0) {
+    message.warning("请输入有效的申请金额");
+    return;
+  }
+  submitting.value = true;
+  try {
+    await createPaymentApplication({
+      payableId: selectedPayable.value.id,
+      requestedAmount: paymentForm.requestedAmount,
+      requestedDate: paymentForm.requestedDate,
+      applicantName: auth.user?.displayName || "申请人",
+      purpose: paymentForm.purpose,
+    });
+    paymentOpen.value = false;
+    message.success("付款申请已提交财务审批");
+    await loadData();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "付款申请失败");
+  } finally {
+    submitting.value = false;
+  }
 }
 function payableStatusText(status: ProcurementPayable["status"]) {
   return statusLabel(status, {
@@ -128,7 +197,12 @@ onMounted(loadData);
 async function loadData() {
   loading.value = true;
   try {
-    payables.value = await listProcurementPayables();
+    const [payableRows, applicationRows] = await Promise.all([
+      listProcurementPayables(),
+      listPaymentApplications(),
+    ]);
+    payables.value = payableRows;
+    applications.value = applicationRows;
   } catch (e: any) {
     message.error(e.message || "加载失败");
   } finally {

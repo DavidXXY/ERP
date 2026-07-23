@@ -737,14 +737,13 @@
                 type="date" /></a-form-item
           ></a-col>
           <a-col :xs="24" :md="8"
-            ><a-form-item label="采购数量"
-              ><a-input
-                :value="
-                  selectedOrderRequest
-                    ? formatQuantity(selectedOrderRequest.quantity)
-                    : ''
-                "
-                disabled /></a-form-item
+            ><a-form-item label="本单采购数量" name="orderedQty"
+              ><a-input-number
+                v-model:value="orderForm.orderedQty"
+                :min="0.01"
+                :max="selectedOrderRequest?.quantity || undefined"
+                :precision="2"
+                class="full-input" /></a-form-item
           ></a-col>
           <a-col :xs="24" :md="8"
             ><a-form-item label="含税单价" name="unitPrice"
@@ -778,6 +777,12 @@
                     : ''
                 "
                 disabled /></a-form-item
+          ></a-col>
+          <a-col :span="24"
+            ><a-form-item label="寻源/直接采购依据" name="sourceReason"
+              ><a-textarea
+                v-model:value="orderForm.sourceReason"
+                placeholder="已询价请填写定标依据；未询价必须说明直接采购原因" /></a-form-item
           ></a-col>
         </a-row>
       </a-form>
@@ -1138,6 +1143,8 @@ const orderRules = {
   requestId: [{ required: true, message: "请选择已审批采购申请" }],
   supplierId: [{ required: true, message: "请选择供应商" }],
   unitPrice: [{ required: true, message: "请输入含税单价" }],
+  orderedQty: [{ required: true, message: "请输入本单采购数量" }],
+  sourceReason: [{ required: true, message: "请填写寻源或直接采购依据" }],
 };
 const receiptRules = {
   quantity: [{ required: true, message: "请输入本次到货数量" }],
@@ -1181,10 +1188,6 @@ const filteredCostAllocations = computed(() =>
         (item) => item.costType === costFilter.value,
       ),
 );
-const orderedRequestIds = computed(
-  () =>
-    new Set(purchaseOrders.value.map((item) => item.requestId).filter(Boolean)),
-);
 const partOptions = computed(() =>
   parts.value.map((part) => ({
     label: `${part.name} (${part.code}) · 库存 ${formatQuantity(part.stockQty)}`,
@@ -1193,7 +1196,10 @@ const partOptions = computed(() =>
 );
 const supplierOptions = computed(() =>
   suppliers.value
-    .filter((item) => item.riskStatus !== "BLOCKED")
+    .filter(
+      (item) =>
+        item.riskStatus !== "BLOCKED" && item.admissionStatus === "APPROVED",
+    )
     .map((item) => ({
       label: `${item.name} (${item.code})${item.riskStatus === "WATCHLIST" ? " · 关注" : ""}`,
       value: item.id,
@@ -1216,8 +1222,7 @@ const requestOptions = computed(() =>
     .filter(
       (item) =>
         item.approvalStatus === "APPROVED" &&
-        item.status === "APPROVED" &&
-        !orderedRequestIds.value.has(item.id),
+        item.status === "APPROVED",
     )
     .map((item) => ({
       label: `${item.code} · ${item.partName} · ${item.costTargetName}`,
@@ -1231,8 +1236,11 @@ const selectedOrderRequest = computed(
 );
 const orderAmount = computed(
   () =>
-    Number(selectedOrderRequest.value?.quantity || 0) *
-    Number(orderForm.unitPrice || 0),
+    Number(
+      orderForm.orderedQty || selectedOrderRequest.value?.quantity || 0,
+    ) *
+      Number(orderForm.unitPrice || 0) +
+    Number(orderForm.freightAmount || 0),
 );
 const remainingQuantity = computed(() =>
   Math.max(
@@ -1379,6 +1387,7 @@ function syncOrderRequest(requestId: string) {
         ? Number(part?.unitCost)
         : 0.01;
   orderForm.taxRate = request?.taxRate ?? 13;
+  orderForm.orderedQty = request?.quantity || 1;
 }
 
 async function handleCreateSupplier() {
@@ -1481,6 +1490,7 @@ async function handleReceive() {
   try {
     await registerPurchaseArrival(selectedOrder.value.id, {
       ...receiptForm,
+      clientRequestId: `arrival-${selectedOrder.value.id}-${Date.now()}`,
     });
     receiptOpen.value = false;
     message.success("到货已登记，请在采购控制中心完成质检；合格后才入库并生成应付");
@@ -1534,6 +1544,10 @@ function initialOrderForm(): CreatePurchaseOrderPayload {
     unitPrice: 0.01,
     taxRate: 13,
     expectedDeliveryDate: undefined,
+    orderedQty: 1,
+    currency: "CNY",
+    freightAmount: 0,
+    sourceReason: "",
   };
 }
 function initialReceiptForm(): ReceiptForm {

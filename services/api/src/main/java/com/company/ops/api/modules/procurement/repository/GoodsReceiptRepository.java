@@ -10,4 +10,6 @@ public interface GoodsReceiptRepository extends JpaRepository<GoodsReceipt, UUID
   long countByOrderId(UUID orderId);
 
   List<GoodsReceipt> findAllByOrderByReceivedDateDesc();
+  List<GoodsReceipt> findByOrderId(UUID orderId);
+  java.util.Optional<GoodsReceipt> findByClientRequestId(String clientRequestId);
 }

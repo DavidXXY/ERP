@@ -8,9 +8,13 @@ import com.company.ops.api.modules.risk.dto.RiskWorkflowDtos.UpdateRiskRuleConfi
 import com.company.ops.api.modules.risk.service.RiskCenterService;
 import jakarta.validation.Valid;
 import java.util.List;
+import java.util.UUID;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -59,5 +63,20 @@ public class RiskCenterController {
   @PreAuthorize("hasAuthority('risk:update')")
   public ApiResponse<RiskRuleConfigResponse> saveRule(@Valid @RequestBody UpdateRiskRuleConfigRequest request) {
     return ApiResponse.ok(service.saveRule(request));
+  }
+
+  @PutMapping("/rules/{id}")
+  @PreAuthorize("hasAuthority('risk:update')")
+  public ApiResponse<RiskRuleConfigResponse> updateRule(
+      @PathVariable UUID id,
+      @Valid @RequestBody UpdateRiskRuleConfigRequest request) {
+    return ApiResponse.ok(service.updateRule(id, request));
+  }
+
+  @DeleteMapping("/rules/{id}")
+  @PreAuthorize("hasAuthority('risk:update')")
+  public ApiResponse<Void> deleteRule(@PathVariable UUID id) {
+    service.deleteRule(id);
+    return ApiResponse.ok();
   }
 }

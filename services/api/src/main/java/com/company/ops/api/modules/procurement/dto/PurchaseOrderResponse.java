@@ -31,5 +31,13 @@ public record PurchaseOrderResponse(
     ApprovalStatus approvalStatus,
     String approvalComment,
     String approverName,
-    OffsetDateTime approvedAt
+    OffsetDateTime approvedAt,
+    UUID inquiryId,
+    UUID contractId,
+    String currency,
+    BigDecimal freightAmount,
+    String sourceReason,
+    OffsetDateTime submittedAt,
+    OffsetDateTime closedAt,
+    Integer orderVersion
 ) {}

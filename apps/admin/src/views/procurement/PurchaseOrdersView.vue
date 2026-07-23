@@ -82,6 +82,7 @@
             <a-button v-if="record.status==='DRAFT'&&record.approvalStatus==='PENDING'" type="link" size="small" @click="handleSubmit(record)">提交审批</a-button>
             <a-button v-if="record.status==='DRAFT'&&record.approvalStatus==='PENDING'&&auth.can('procurement:request:approve')" type="link" size="small" @click="handleApproval(record,'APPROVED')">审批通过</a-button>
             <a-button v-if="record.status==='DRAFT'&&record.approvalStatus==='PENDING'&&auth.can('procurement:request:approve')" danger type="link" size="small" @click="handleApproval(record,'REJECTED')">驳回</a-button></a-space>
+            <a-button v-if="['PARTIAL_RECEIVED','RECEIVED'].includes(record.status)" type="link" size="small" @click="handleClose(record)">关闭订单</a-button>
           </template>
         </template>
       </a-table>
@@ -94,7 +95,7 @@ import { useRouter } from "vue-router";
 import { message } from "ant-design-vue";
 import PlusOutlined from "@ant-design/icons-vue/PlusOutlined";
 import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
-import { listPurchaseOrders, submitPurchaseOrder, approvePurchaseOrder, type PurchaseOrder } from "@/api/procurement";
+import { listPurchaseOrders, submitPurchaseOrder, approvePurchaseOrder, closePurchaseOrder, type PurchaseOrder } from "@/api/procurement";
 import { useAuthStore } from "@/stores/auth";
 const auth = useAuthStore();
 const router = useRouter();
@@ -113,6 +114,7 @@ const orderColumns = [
 ];
 async function handleSubmit(record:PurchaseOrder){try{await submitPurchaseOrder(record.id);message.success("订单已提交审批");await loadData()}catch(e){message.error(e instanceof Error?e.message:"提交失败")}}
 async function handleApproval(record:PurchaseOrder,decision:"APPROVED"|"REJECTED"){try{await approvePurchaseOrder(record.id,{decision,approverName:auth.user?.displayName||"审批人",comment:decision==="APPROVED"?"同意采购订单":"采购订单驳回"});message.success(decision==="APPROVED"?"订单审批通过，可以登记到货":"订单已驳回");await loadData()}catch(e){message.error(e instanceof Error?e.message:"审批失败")}}
+async function handleClose(record:PurchaseOrder){try{await closePurchaseOrder(record.id);message.success("订单已关闭，未交数量不再接收");await loadData()}catch(e){message.error(e instanceof Error?e.message:"关闭失败")}}
 onMounted(loadData);
 async function loadData() {
   loading.value = true;

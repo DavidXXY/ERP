@@ -181,7 +181,7 @@ export function listPaymentApplications() {
 }
 
 export function createPaymentApplication(payload: {
-  code: string;
+  code?: string;
   payableId: string;
   requestedAmount: number;
   requestedDate: string;

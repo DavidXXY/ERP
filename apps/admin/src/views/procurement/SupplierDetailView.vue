@@ -406,26 +406,27 @@ const relationCurrent = computed(() =>
             ? 1
             : 0,
 );
-const onTimeRate = computed(() =>
-  orders.value.length
-    ? Math.round(
-        (orders.value.filter((item) => item.receivedQty >= item.orderedQty)
-          .length /
-          orders.value.length) *
-          100,
-      )
-    : 100,
-);
-const qualityRate = computed(() =>
-  receipts.value.length
-    ? Math.round(
-        (receipts.value.filter((item) => item.inspectionStatus === "PASSED")
-          .length /
-          receipts.value.length) *
-          100,
-      )
-    : 100,
-);
+const onTimeRate = computed(() => {
+  const evaluated = orders.value.filter((item) => item.expectedDeliveryDate);
+  if (!evaluated.length) return 100;
+  const onTime = evaluated.filter((order) => {
+    const related = receipts.value
+      .filter((receipt) => receipt.orderId === order.id && receipt.inspectionStatus !== "PENDING")
+      .sort((a, b) => String(b.receivedDate).localeCompare(String(a.receivedDate)));
+    return (
+      Number(order.receivedQty) >= Number(order.orderedQty) &&
+      !!related[0]?.receivedDate &&
+      related[0].receivedDate <= String(order.expectedDeliveryDate)
+    );
+  }).length;
+  return Math.round((onTime / evaluated.length) * 100);
+});
+const qualityRate = computed(() => {
+  const inspected = receipts.value.filter((item) => item.inspectionStatus !== "PENDING");
+  const received = inspected.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+  const qualified = inspected.reduce((sum, item) => sum + Number(item.qualifiedQty || 0), 0);
+  return received ? Math.round((qualified / received) * 100) : 100;
+});
 const invoiceRate = computed(() =>
   invoices.value.length
     ? Math.round(
@@ -437,8 +438,8 @@ const invoiceRate = computed(() =>
     : 100,
 );
 const performanceScores = computed(() => [
-  { label: "交付完成", value: onTimeRate.value },
-  { label: "质检通过", value: qualityRate.value },
+  { label: "准时交付率", value: onTimeRate.value },
+  { label: "质量合格率", value: qualityRate.value },
   { label: "发票匹配", value: invoiceRate.value },
   { label: "资料完整", value: profileCompleteness.value },
 ]);
@@ -485,7 +486,7 @@ const invoiceColumns = [
   { title: "发票号", dataIndex: "invoiceNo" },
   { title: "金额", key: "amount", width: 130 },
   { title: "日期", dataIndex: "invoiceDate", width: 110 },
-  { title: "三单匹配", key: "match", width: 100 },
+  { title: "四单匹配", key: "match", width: 100 },
 ];
 const payableColumns = [
   { title: "应付单", key: "code" },

@@ -50,11 +50,11 @@
       </a-spin>
     </a-card>
 
-    <a-card title="订单-入库-应付匹配" style="margin-top: 16px">
+    <a-card title="订单-质检入库-应付-发票四单匹配" style="margin-top: 16px">
       <section class="p2p-action-panel">
         <div class="p2p-action-head">
           <div>
-            <h3>三单匹配处理动作</h3>
+            <h3>四单匹配处理动作</h3>
             <p>按异常类型给出下一步处理建议，避免只看见差异但不知道谁处理。</p>
           </div>
           <a-tag :color="matchingRiskCount > 0 ? 'red' : 'green'"
@@ -104,6 +104,10 @@
           <template v-else-if="column.key === 'payableAmount'">{{
             formatMoney(record.payableAmount)
           }}</template>
+          <template v-else-if="column.key === 'invoiceAmount'">
+            {{ formatMoney(record.invoiceAmount) }}
+            <span class="table-subtitle">已审核匹配 {{ formatMoney(record.matchedInvoiceAmount) }}</span>
+          </template>
           <template v-else-if="column.key === 'status'"
             ><a-tag :color="matchStatusColor(record.matchStatus)">{{
               matchStatusLabel(record.matchStatus)
@@ -297,12 +301,14 @@ const matchingActions = computed(() => [
     link: "/procurement/p2p",
   },
   {
-    key: "cancelled",
-    label: "取消订单",
-    count: matchingItems.value.filter((i) => i.matchStatus === "CANCELLED")
+    key: "invoice",
+    label: "发票待处理",
+    count: matchingItems.value.filter((i) =>
+      ["INVOICE_PENDING", "INVOICE_MISMATCH", "INVOICE_REVIEW"].includes(i.matchStatus),
+    )
       .length,
-    action: "确认是否释放预算或重新请购",
-    link: "/procurement/orders",
+    action: "登记、复核并审核供应商发票",
+    link: "/procurement/controls",
   },
 ]);
 
@@ -318,6 +324,7 @@ const matchingColumns = [
   { title: "订单金额", key: "orderAmount", width: 130 },
   { title: "入库金额", key: "receiptAmount", width: 130 },
   { title: "应付金额", key: "payableAmount", width: 130 },
+  { title: "发票/审核匹配", key: "invoiceAmount", width: 170 },
   { title: "匹配状态", key: "status", width: 120 },
   { title: "风险说明", dataIndex: "riskMessage", width: 260 },
   { title: "处理动作", key: "action", width: 120 },
@@ -359,6 +366,9 @@ function matchStatusLabel(v: string) {
         RECEIVING: "待入库",
         PAYABLE_MISSING: "缺应付",
         AMOUNT_MISMATCH: "金额不一致",
+        INVOICE_PENDING: "发票未收齐",
+        INVOICE_MISMATCH: "发票金额异常",
+        INVOICE_REVIEW: "发票待审核",
         CANCELLED: "已取消",
       } as Record<string, string>
     )[v] || v
@@ -372,6 +382,9 @@ function matchStatusColor(v: string) {
         RECEIVING: "blue",
         PAYABLE_MISSING: "orange",
         AMOUNT_MISMATCH: "red",
+        INVOICE_PENDING: "orange",
+        INVOICE_MISMATCH: "red",
+        INVOICE_REVIEW: "blue",
         CANCELLED: "default",
       } as Record<string, string>
     )[v] || "default"
@@ -384,6 +397,9 @@ function matchAction(record: ProcurementMatching) {
         RECEIVING: { label: "去入库", link: "/procurement/receipts" },
         PAYABLE_MISSING: { label: "补应付", link: "/procurement/payables" },
         AMOUNT_MISMATCH: { label: "查差异", link: "/procurement/p2p" },
+        INVOICE_PENDING: { label: "登记发票", link: "/procurement/controls" },
+        INVOICE_MISMATCH: { label: "查发票", link: "/procurement/controls" },
+        INVOICE_REVIEW: { label: "审核发票", link: "/procurement/controls" },
         CANCELLED: { label: "看订单", link: "/procurement/orders" },
         MATCHED: { label: "已完成", link: "/procurement/p2p" },
       } as Record<string, { label: string; link: string }>

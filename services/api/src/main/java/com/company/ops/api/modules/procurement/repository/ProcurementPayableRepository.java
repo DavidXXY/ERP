@@ -13,6 +13,8 @@ import org.springframework.data.repository.query.Param;
 public interface ProcurementPayableRepository extends JpaRepository<ProcurementPayable, UUID> {
 
   List<ProcurementPayable> findAllByOrderByDueDateAsc();
+  List<ProcurementPayable> findByOrderId(UUID orderId);
+  Optional<ProcurementPayable> findByReceiptId(UUID receiptId);
 
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select payable from ProcurementPayable payable where payable.id = :id")

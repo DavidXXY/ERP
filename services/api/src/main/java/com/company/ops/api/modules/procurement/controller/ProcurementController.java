@@ -174,6 +174,12 @@ public class ProcurementController {
     return ApiResponse.ok(procurementService.cancelPurchaseOrder(id));
   }
 
+  @PostMapping("/orders/{id}/close")
+  @PreAuthorize("hasAuthority('procurement:order:receive')")
+  public ApiResponse<PurchaseOrderResponse> closePurchaseOrder(@PathVariable UUID id) {
+    return ApiResponse.ok(procurementService.closePurchaseOrder(id));
+  }
+
   @PostMapping("/orders/{id}/receipts")
   @PreAuthorize("hasAuthority('procurement:order:receive')")
   public ApiResponse<ReceivePurchaseOrderResult> receiveOrder(

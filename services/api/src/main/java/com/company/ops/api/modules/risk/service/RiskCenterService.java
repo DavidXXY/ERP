@@ -1,5 +1,6 @@
 package com.company.ops.api.modules.risk.service;
 
+import com.company.ops.api.common.exception.BusinessException;
 import com.company.ops.api.modules.crm.domain.ReceivableStatus;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ReceivableResponse;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.RenewalResponse;
@@ -42,8 +43,10 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -184,12 +187,20 @@ public class RiskCenterService {
 
   @Transactional(readOnly = true)
   public List<RiskRuleConfigResponse> listRules() {
-    Map<String, RiskRuleConfig> saved = ruleMap();
-    List<RiskRuleConfigResponse> rows = defaultRules().values().stream()
+    Map<String, RiskRuleConfig> saved = ruleRepository.findAll().stream()
+        .collect(Collectors.toMap(
+            RiskRuleConfig::getRuleCode,
+            rule -> rule,
+            (left, right) -> left,
+            LinkedHashMap::new));
+    Map<String, RiskRuleConfig> defaults = defaultRules();
+    List<RiskRuleConfigResponse> rows = defaults.values().stream()
         .map(rule -> toRuleResponse(saved.getOrDefault(rule.getRuleCode(), rule)))
         .collect(Collectors.toCollection(ArrayList::new));
     saved.values().stream()
-        .filter(rule -> !defaultRules().containsKey(rule.getRuleCode()))
+        .filter(rule -> !defaults.containsKey(rule.getRuleCode()))
+        .sorted(Comparator.comparing(RiskRuleConfig::getModule)
+            .thenComparing(RiskRuleConfig::getRuleCode))
         .map(this::toRuleResponse)
         .forEach(rows::add);
     return rows;
@@ -198,6 +209,29 @@ public class RiskCenterService {
   @Transactional
   public RiskRuleConfigResponse saveRule(UpdateRiskRuleConfigRequest request) {
     RiskRuleConfig rule = ruleRepository.findByRuleCode(request.ruleCode()).orElseGet(RiskRuleConfig::new);
+    applyRule(rule, request);
+    return toRuleResponse(ruleRepository.save(rule));
+  }
+
+  @Transactional
+  public RiskRuleConfigResponse updateRule(UUID id, UpdateRiskRuleConfigRequest request) {
+    RiskRuleConfig rule = ruleRepository.findById(id)
+        .orElseThrow(() -> new BusinessException("流程规则不存在或已被删除"));
+    if (!rule.getRuleCode().equals(request.ruleCode())) {
+      throw new BusinessException("规则编码不可修改");
+    }
+    applyRule(rule, request);
+    return toRuleResponse(ruleRepository.save(rule));
+  }
+
+  @Transactional
+  public void deleteRule(UUID id) {
+    RiskRuleConfig rule = ruleRepository.findById(id)
+        .orElseThrow(() -> new BusinessException("流程规则不存在或已被删除"));
+    ruleRepository.delete(rule);
+  }
+
+  private void applyRule(RiskRuleConfig rule, UpdateRiskRuleConfigRequest request) {
     rule.setRuleCode(request.ruleCode());
     rule.setName(request.name());
     rule.setModule(request.module());
@@ -209,7 +243,6 @@ public class RiskCenterService {
     rule.setDefaultOwner(trimToNull(request.defaultOwner()));
     rule.setEscalationOwner(trimToNull(request.escalationOwner()));
     rule.setRemark(trimToNull(request.remark()));
-    return toRuleResponse(ruleRepository.save(rule));
   }
 
   private List<RiskItemResponse> collectItems(Map<String, RiskWorkflowResponse> workflows, Map<String, RiskRuleConfig> rules) {
@@ -413,7 +446,7 @@ public class RiskCenterService {
   }
 
   private Map<String, RiskRuleConfig> defaultRules() {
-    Map<String, RiskRuleConfig> rules = new HashMap<>();
+    Map<String, RiskRuleConfig> rules = new LinkedHashMap<>();
     putDefault(rules, "office_warning", "OA预警", "office", null, null, null, 48, "综合管理员", "管理员");
     putDefault(rules, "office_todo", "OA待办", "office", null, null, null, 72, "综合管理员", "管理员");
     putDefault(rules, "inventory_replenishment", "库存补货", "inventory", null, null, null, 72, "仓库管理员", "运营负责人");

@@ -72,6 +72,14 @@ public class PurchaseOrder extends BaseEntity {
   @Column(name="approval_comment",length=500) private String approvalComment;
   @Column(name="approver_name",length=80) private String approverName;
   @Column(name="approved_at") private OffsetDateTime approvedAt;
+  @Column(name="inquiry_id") private UUID inquiryId;
+  @Column(name="contract_id") private UUID contractId;
+  @Column(nullable=false,length=8) private String currency="CNY";
+  @Column(name="freight_amount",nullable=false,precision=14,scale=2) private BigDecimal freightAmount=BigDecimal.ZERO;
+  @Column(name="source_reason",length=1000) private String sourceReason;
+  @Column(name="submitted_at") private OffsetDateTime submittedAt;
+  @Column(name="closed_at") private OffsetDateTime closedAt;
+  @Column(name="order_version",nullable=false) private Integer orderVersion=1;
 
   public String getCode() {
     return code;
@@ -212,4 +220,12 @@ public class PurchaseOrder extends BaseEntity {
   public String getApprovalComment(){return approvalComment;} public void setApprovalComment(String v){approvalComment=v;}
   public String getApproverName(){return approverName;} public void setApproverName(String v){approverName=v;}
   public OffsetDateTime getApprovedAt(){return approvedAt;} public void setApprovedAt(OffsetDateTime v){approvedAt=v;}
+  public UUID getInquiryId(){return inquiryId;} public void setInquiryId(UUID v){inquiryId=v;}
+  public UUID getContractId(){return contractId;} public void setContractId(UUID v){contractId=v;}
+  public String getCurrency(){return currency;} public void setCurrency(String v){currency=v;}
+  public BigDecimal getFreightAmount(){return freightAmount;} public void setFreightAmount(BigDecimal v){freightAmount=v;}
+  public String getSourceReason(){return sourceReason;} public void setSourceReason(String v){sourceReason=v;}
+  public OffsetDateTime getSubmittedAt(){return submittedAt;} public void setSubmittedAt(OffsetDateTime v){submittedAt=v;}
+  public OffsetDateTime getClosedAt(){return closedAt;} public void setClosedAt(OffsetDateTime v){closedAt=v;}
+  public Integer getOrderVersion(){return orderVersion;} public void setOrderVersion(Integer v){orderVersion=v;}
 }

@@ -158,9 +158,12 @@ public class OfficeController {
 
   @GetMapping("/audits") @PreAuthorize("hasAuthority('office:audit:view')")
   public ApiResponse<org.springframework.data.domain.Page<AuditResponse>> listAudits(
+      @RequestParam(required = false) String keyword,
+      @RequestParam(required = false) java.time.LocalDate startDate,
+      @RequestParam(required = false) java.time.LocalDate endDate,
       @org.springframework.data.web.PageableDefault(size = 20, sort = "createdAt", direction = org.springframework.data.domain.Sort.Direction.DESC) 
       org.springframework.data.domain.Pageable pageable) {
-    return ApiResponse.ok(service.listAudits(pageable));
+    return ApiResponse.ok(service.listAudits(keyword, startDate, endDate, pageable));
   }
 
   @GetMapping("/notifications/count") @PreAuthorize("hasAuthority('office:notification:view')")

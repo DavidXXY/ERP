@@ -28,6 +28,7 @@
         >查看合同</a-button
       >
       <a-button
+        v-if="auth.can('procurement:purchase:create')"
         type="primary"
         @click="router.push(`/procurement/requests?projectId=${projectId}`)"
         >发起采购</a-button
@@ -252,9 +253,11 @@ import {
 } from "@/api/project";
 import { listPurchaseOrders, type PurchaseOrder } from "@/api/procurement";
 import { listReceivables, type Receivable } from "@/api/crm";
+import { useAuthStore } from "@/stores/auth";
 
 const route = useRoute();
 const router = useRouter();
+const auth = useAuthStore();
 const projectId = computed(() => String(route.params.id));
 const loading = ref(false);
 const detail = ref<ProjectDetail | null>(null);
@@ -361,8 +364,12 @@ async function loadData() {
   try {
     const [project, orderPage, allReceivables] = await Promise.all([
       getProject(projectId.value),
-      listPurchaseOrders({ page: 0, size: 999 }),
-      listReceivables(),
+      auth.can("procurement:view")
+        ? listPurchaseOrders({ page: 0, size: 999 })
+        : Promise.resolve({ content: [] } as { content: PurchaseOrder[] }),
+      auth.can("crm:receivable:view")
+        ? listReceivables()
+        : Promise.resolve([] as Receivable[]),
     ]);
     detail.value = project;
     orders.value = orderPage.content.filter(

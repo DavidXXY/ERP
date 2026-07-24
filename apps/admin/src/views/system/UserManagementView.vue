@@ -24,7 +24,7 @@
         <span>账号总数</span><strong>{{ pagination.total }}</strong>
       </div>
       <div>
-        <span>启用账号</span><strong>{{ enabledUserCount }}</strong>
+        <span>本页启用</span><strong>{{ enabledUserCount }}</strong>
       </div>
       <div>
         <span>角色模板</span><strong>{{ roles.length }}</strong>
@@ -41,11 +41,13 @@
           allow-clear
           placeholder="搜索姓名、账号、手机号或邮箱"
           style="width: 320px"
+          @search="applyFilters"
         />
         <a-select
           v-model:value="statusFilter"
           :options="statusOptions"
           style="width: 140px"
+          @change="applyFilters"
         />
         <a-select
           v-model:value="roleFilter"
@@ -53,12 +55,13 @@
           style="width: 180px"
           show-search
           option-filter-prop="label"
+          @change="applyFilters"
         />
       </a-space>
 
       <a-table
         :columns="columns"
-        :data-source="filteredUsers"
+        :data-source="users"
         :loading="loading"
         :pagination="pagination"
         row-key="id"
@@ -309,33 +312,20 @@ const roleFilterOptions = computed(() => [
   { label: "全部角色", value: "ALL" },
   ...roleOptions.value,
 ]);
-const filteredUsers = computed(() => {
-  const normalized = keyword.value.trim().toLowerCase();
-  return users.value.filter((user) => {
-    const keywordMatches =
-      !normalized ||
-      user.username.toLowerCase().includes(normalized) ||
-      user.displayName.toLowerCase().includes(normalized) ||
-      (user.phone || "").toLowerCase().includes(normalized) ||
-      (user.email || "").toLowerCase().includes(normalized);
-    const statusMatches =
-      statusFilter.value === "ALL" ||
-      (statusFilter.value === "ENABLED" && user.enabled) ||
-      (statusFilter.value === "DISABLED" && !user.enabled);
-    const roleMatches =
-      roleFilter.value === "ALL" ||
-      user.roles.some((role) => role.id === roleFilter.value);
-    return keywordMatches && statusMatches && roleMatches;
-  });
-});
-
 onMounted(loadData);
 
 async function loadData() {
   loading.value = true;
   try {
     const [userData, roleData, organizationData] = await Promise.all([
-      listUsersApi(pagination.current - 1, pagination.pageSize),
+      listUsersApi(pagination.current - 1, pagination.pageSize, {
+        keyword: keyword.value.trim() || undefined,
+        enabled:
+          statusFilter.value === "ALL"
+            ? undefined
+            : statusFilter.value === "ENABLED",
+        roleId: roleFilter.value === "ALL" ? undefined : roleFilter.value,
+      }),
       auth.can("system:role:view")
         ? listRolesApi(0, 200)
         : Promise.resolve({ content: [] as RoleResponse[] }),
@@ -352,6 +342,11 @@ async function loadData() {
   } finally {
     loading.value = false;
   }
+}
+
+function applyFilters() {
+  pagination.current = 1;
+  loadData();
 }
 
 function initialForm() {

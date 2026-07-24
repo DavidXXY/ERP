@@ -114,6 +114,7 @@ export type MaterialReturn = {
   projectName: string;
   returnDate: string;
   handlerName: string;
+  reason: string;
   totalAmount: number;
   lines: MaterialReturnLine[];
 };
@@ -200,6 +201,7 @@ export function createMaterialReturn(
     code: string;
     returnDate: string;
     handlerName: string;
+    reason: string;
     lines: Array<{ issueLineId: string; quantity: number }>;
   },
 ) {

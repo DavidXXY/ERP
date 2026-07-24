@@ -1202,7 +1202,7 @@
       :category-options="categoryOptions"
       :project-type-options="projectTypeOptions"
       :source-options="sourceOptions"
-      :user-options="visibleUserOptions"
+      :user-options="projectManagerOptions"
       :detail="detail"
       :active-project="activeProject"
       :next-stage="nextStage"
@@ -1210,7 +1210,7 @@
         createOpen = false;
         loadData();
       "
-      @updated="loadData()"
+      @updated="handleProjectUpdated"
     />
   </div>
 </template>
@@ -1230,6 +1230,8 @@ import {
   listPreSalesSupport,
   submitPreSalesCost,
   approvePreSalesCost,
+  listProjectManagerOptions,
+  getProjectManagerAssignmentCapability,
 } from "@/api/project";
 import { listUsersApi, type UserResponse } from "@/api/system";
 import {
@@ -1263,6 +1265,10 @@ const detailCache = ref<Record<string, ProjectDetail>>({});
 const pageMeta = ref({ totalElements: 0, totalPages: 0, number: 0, size: 999 });
 const customers = ref<CustomerSummary[]>([]);
 const visibleUsers = ref<UserResponse[]>([]);
+const projectManagers = ref<
+  Array<{ id: string; username: string; displayName: string }>
+>([]);
+const canManageProjectAssignment = ref(false);
 const detail = ref<ProjectDetail | null>(null);
 const activeProject = ref<Project | null>(null);
 const loading = ref(false);
@@ -1468,6 +1474,12 @@ const visibleUserOptions = computed(() => {
     ? [{ label: selected, value: selected }, ...options]
     : options;
 });
+const projectManagerOptions = computed(() =>
+  projectManagers.value.map((item) => ({
+    label: `${item.displayName} · ${item.username}`,
+    value: item.displayName,
+  })),
+);
 const totalContract = computed(() =>
   projects.value.reduce(
     (sum, item) => sum + Number(item.contractAmount || 0),
@@ -1753,7 +1765,11 @@ async function loadData() {
     const [projectPage, customerRows, profitability, preSales] =
       await Promise.all([
         listProjects(0, 999),
-        listCustomers(),
+        // Project roles can work on projects and pre-sales costs without CRM
+        // customer-directory permission.  The project rows already carry the
+        // customer display data, so a forbidden optional lookup must not blank
+        // the whole page or surface a misleading load error.
+        listCustomers().catch(() => []),
         listProjectProfitability(),
         pageMode.value === "presales"
           ? listPreSalesSupport()
@@ -1769,7 +1785,7 @@ async function loadData() {
     customers.value = customerRows;
     profitabilityRows.value = profitability;
     preSalesRows.value = preSales;
-    await loadVisibleUsers();
+    await Promise.all([loadVisibleUsers(), loadProjectManagerAssignmentData()]);
     if (pageMode.value === "costs" || pageMode.value === "stages")
       await hydrateProjectDetails();
   } catch (error) {
@@ -1778,6 +1794,20 @@ async function loadData() {
   } finally {
     loading.value = false;
   }
+}
+
+async function loadProjectManagerAssignmentData() {
+  if (!auth.can("project:approve")) {
+    projectManagers.value = [];
+    canManageProjectAssignment.value = false;
+    return;
+  }
+  const [options, capability] = await Promise.all([
+    listProjectManagerOptions().catch(() => []),
+    getProjectManagerAssignmentCapability().catch(() => false),
+  ]);
+  projectManagers.value = options;
+  canManageProjectAssignment.value = capability;
 }
 
 async function loadPreSalesSupport() {
@@ -1791,12 +1821,30 @@ async function loadPreSalesSupport() {
     loading.value = false;
   }
 }
+async function handleProjectUpdated() {
+  const projectId = detail.value?.project.id || activeProject.value?.id;
+  if (projectId) {
+    const refreshed = await getProject(projectId).catch(() => null);
+    if (refreshed) {
+      detail.value = refreshed;
+      activeProject.value = refreshed.project;
+      detailCache.value = {
+        ...detailCache.value,
+        [projectId]: refreshed,
+      };
+    }
+  }
+  await loadData();
+  if (pageMode.value === "costs" || pageMode.value === "stages") {
+    await hydrateProjectDetails(true);
+  }
+}
 function openCreate() {
   createOpen.value = true;
 }
 function openApproval(project: Project) {
   activeProject.value = project;
-  if (!visibleUsers.value.length) void loadVisibleUsers();
+  if (!projectManagers.value.length) void loadProjectManagerAssignmentData();
   approvalOpen.value = true;
 }
 function openStage() {
@@ -1995,6 +2043,7 @@ function canAdvance(project: Project) {
 function canAssignManager(project: Project) {
   return (
     auth.can("project:approve") &&
+    canManageProjectAssignment.value &&
     (project.approvalStatus === "PENDING" ||
       project.approvalStatus === "APPROVED")
   );
@@ -2223,7 +2272,7 @@ function formatMoney(value: number) {
     maximumFractionDigits: 2,
   }).format(value || 0);
 }
-function moneyFormatter(value: number | string) {
+function moneyFormatter({ value }: { value: number | string }) {
   return formatMoney(Number(value));
 }
 function calcNetAmount(amount?: number, taxRate?: number) {

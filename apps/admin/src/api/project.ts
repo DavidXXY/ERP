@@ -137,6 +137,12 @@ export type ProjectProfitability = {
   riskMessage: string;
 };
 
+export type ProjectManagerOption = {
+  id: string;
+  username: string;
+  displayName: string;
+};
+
 export function listProjects(page?: number, size?: number) {
   return request<PageResponse<Project>>({
     method: "GET",
@@ -149,6 +155,20 @@ export function listProjectProfitability() {
   return request<ProjectProfitability[]>({
     method: "GET",
     url: "/projects/profitability",
+  });
+}
+
+export function listProjectManagerOptions() {
+  return request<ProjectManagerOption[]>({
+    method: "GET",
+    url: "/projects/manager-options",
+  });
+}
+
+export function getProjectManagerAssignmentCapability() {
+  return request<boolean>({
+    method: "GET",
+    url: "/projects/manager-assignment-capability",
   });
 }
 

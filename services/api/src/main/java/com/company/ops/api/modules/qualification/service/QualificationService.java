@@ -116,14 +116,24 @@ public class QualificationService {
     List<CompanyQualification> companies = companyRepository.findAllByOrderBySubjectCompanyAscNameAsc();
     List<PersonnelCertificate> certificates = certificateRepository.findAllByOrderByEmployeeNameAscNameAsc();
     List<QualificationPerformance> performances = performanceRepository.findAllByOrderBySubjectCompanyAscNameAsc();
+    List<SystemOrganization> organizations = organizationRepository
+        .findByTenantIdOrderBySortOrderAsc(TenantContext.currentTenant());
     Set<String> subjects = new LinkedHashSet<>();
     companies.forEach(item -> add(subjects, item.getSubjectCompany()));
+    organizations.stream()
+        .filter(SystemOrganization::isEnabled)
+        .filter(item -> item.getParent() == null || "COMPANY".equalsIgnoreCase(item.getType()))
+        .forEach(item -> add(subjects, item.getName()));
+    Set<String> qualificationCategories = new LinkedHashSet<>(List.of(
+        "建筑业企业资质", "安全生产许可证", "质量管理体系认证",
+        "环境管理体系认证", "职业健康安全管理体系认证", "其他"));
+    qualificationCategories.addAll(distinct(companies, CompanyQualification::getCategory));
     return new ReferenceDataResponse(
-        List.copyOf(subjects), distinct(companies, CompanyQualification::getCategory),
+        List.copyOf(subjects), List.copyOf(qualificationCategories),
         distinct(certificates, PersonnelCertificate::getType), distinct(certificates, PersonnelCertificate::getSpecialty),
         distinct(performances, QualificationPerformance::getProjectType),
         employees.stream().map(item -> new EmployeeOption(item.getId(), item.getName(), item.getWorkNo())).toList(),
-        organizationRepository.findByTenantIdOrderBySortOrderAsc(TenantContext.currentTenant()).stream()
+        organizations.stream()
             .map(item -> new OrganizationOption(item.getId(), item.getName(), organizationPath(item), item.isEnabled()))
             .toList()
     );

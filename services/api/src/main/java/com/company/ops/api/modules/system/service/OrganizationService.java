@@ -80,7 +80,9 @@ public class OrganizationService {
 
   @Transactional
   public OrganizationResponse createOrganization(CreateOrganizationRequest request) {
-    String orgCode = request.code() != null ? request.code() : codeGenerator.generate("ORGANIZATION");
+    String orgCode = request.code() != null && !request.code().isBlank()
+        ? request.code().trim()
+        : codeGenerator.generate("ORGANIZATION");
     if (organizationRepository.existsByCodeAndTenantId(orgCode, TenantContext.currentTenant())) {
       throw new BusinessException("组织代码已存在");
     }

@@ -15,6 +15,7 @@ import com.company.ops.api.modules.finance.dto.PaymentApplicationResponse;
 import com.company.ops.api.modules.finance.dto.PaymentRecordResponse;
 import com.company.ops.api.modules.finance.dto.ProcessPaymentApplicationRequest;
 import com.company.ops.api.modules.finance.service.FinanceService;
+import com.company.ops.api.modules.system.service.ApprovalFlowSecurity;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
@@ -34,13 +35,16 @@ public class FinanceController {
 
   private final FinanceService financeService;
   private final CrmOperationsService crmOperationsService;
+  private final ApprovalFlowSecurity approvalFlowSecurity;
 
   public FinanceController(
       FinanceService financeService,
-      CrmOperationsService crmOperationsService
+      CrmOperationsService crmOperationsService,
+      ApprovalFlowSecurity approvalFlowSecurity
   ) {
     this.financeService = financeService;
     this.crmOperationsService = crmOperationsService;
+    this.approvalFlowSecurity = approvalFlowSecurity;
   }
 
   @GetMapping("/overview")
@@ -98,6 +102,12 @@ public class FinanceController {
   @PreAuthorize("hasAnyAuthority('finance:payable:view', 'finance:payment:approve', 'finance:payment:execute')")
   public ApiResponse<List<PaymentApplicationResponse>> listApplications() {
     return ApiResponse.ok(financeService.listApplications());
+  }
+
+  @GetMapping("/payment-applications/can-approve")
+  @PreAuthorize("hasAnyAuthority('finance:payable:view', 'finance:payment:approve', 'finance:payment:execute')")
+  public ApiResponse<Boolean> canApprovePaymentApplication() {
+    return ApiResponse.ok(approvalFlowSecurity.canApprove("PAYMENT"));
   }
 
   @PostMapping("/payment-applications")

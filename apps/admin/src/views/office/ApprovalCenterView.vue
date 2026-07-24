@@ -430,6 +430,31 @@
 
           <a-card
             v-if="
+              auth.can('office:approval:create') &&
+              isCurrentApplicant(detailApproval) &&
+              ['PENDING', 'REJECTED'].includes(detailApproval.status)
+            "
+            size="small"
+            title="申请人操作"
+          >
+            <a-popconfirm
+              v-if="detailApproval.status === 'PENDING'"
+              title="确认撤回该审批？"
+              @confirm="handleDetailWithdraw"
+            >
+              <a-button danger :loading="saving">撤回审批</a-button>
+            </a-popconfirm>
+            <a-button
+              v-else
+              type="primary"
+              :loading="saving"
+              @click="handleDetailResubmit"
+              >按最新规则重新提交</a-button
+            >
+          </a-card>
+
+          <a-card
+            v-if="
               detailApproval.status === 'PENDING' &&
               auth.can('office:approval:process')
             "
@@ -715,6 +740,7 @@ import {
   getOfficeReferences,
   listApprovals,
   processApproval,
+  resubmitApproval,
   returnApproval,
   transferApproval,
   withdrawApproval,
@@ -1081,17 +1107,23 @@ onMounted(loadData);
 async function loadData() {
   loading.value = true;
   try {
-    const promises: Promise<any>[] = [
-      getOfficeReferences(),
-      listApprovals(),
-      listQuotes(),
-      listContracts(),
-    ];
-    const results = await Promise.all(promises);
-    users.value = results[0].users;
-    officeApprovals.value = results[1];
-    const allQuotes = results[2];
-    const allContracts = results[3];
+    const canLoadReferences =
+      auth.can("office:view") ||
+      auth.can("office:expense:create") ||
+      auth.can("office:outsource:create");
+    const [referenceData, approvalData, quoteData, contractData] =
+      await Promise.all([
+        canLoadReferences ? getOfficeReferences() : Promise.resolve(null),
+        auth.can("office:approval:view")
+          ? listApprovals()
+          : Promise.resolve([]),
+        auth.can("crm:quote:view") ? listQuotes() : Promise.resolve([]),
+        auth.can("crm:contract:view") ? listContracts() : Promise.resolve([]),
+      ]);
+    users.value = referenceData?.users || [];
+    officeApprovals.value = approvalData;
+    const allQuotes = quoteData;
+    const allContracts = contractData;
     pendingQuotes.value = allQuotes.filter(
       (q: QuotePlan) => q.status === "PENDING_APPROVAL",
     );
@@ -1100,6 +1132,10 @@ async function loadData() {
     );
     // Fetch contract changes
     try {
+      if (!auth.can("crm:contract:view")) {
+        pendingChanges.value = [];
+        return;
+      }
       const contracts = allContracts;
       const allChanges: any[] = [];
       for (const c of contracts) {
@@ -1269,8 +1305,37 @@ async function handleWithdraw(item: any) {
     });
     message.success("审批已撤回");
     await loadData();
+    emit("changed");
   } catch (error) {
     message.error(error instanceof Error ? error.message : "撤回失败");
+  } finally {
+    saving.value = false;
+  }
+}
+function isCurrentApplicant(item: any) {
+  return Boolean(
+    item?.applicantName && item.applicantName === auth.user?.displayName,
+  );
+}
+async function handleDetailWithdraw() {
+  if (!detailApproval.value) return;
+  await handleWithdraw(detailApproval.value);
+  detailOpen.value = false;
+}
+async function handleDetailResubmit() {
+  if (!detailApproval.value) return;
+  saving.value = true;
+  try {
+    await resubmitApproval(detailApproval.value.id, {
+      applicantName: auth.user?.displayName || "",
+      comment: "审批配置已更新，按最新规则重新提交",
+    });
+    message.success("审批已按最新规则重新提交");
+    detailOpen.value = false;
+    await loadData();
+    emit("changed");
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "重新提交失败");
   } finally {
     saving.value = false;
   }

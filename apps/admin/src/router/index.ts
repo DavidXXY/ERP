@@ -177,6 +177,12 @@ const rootRoutes: RouteRecordRaw[] = [
   // Procurement
   { path: "procurement", redirect: "/procurement/requests" },
   {
+    path: "procurement/workbench",
+    name: "procurement-workbench",
+    component: () => import("@/views/procurement/ProcurementView.vue"),
+    meta: { title: "采购工作台", permission: "procurement:view" },
+  },
+  {
     path: "procurement/requests",
     name: "procurement-requests",
     component: () => import("@/views/procurement/PurchaseRequestsView.vue"),
@@ -226,7 +232,10 @@ const rootRoutes: RouteRecordRaw[] = [
     path: "procurement/payables",
     name: "procurement-payables",
     component: () => import("@/views/procurement/ProcurementPayableView.vue"),
-    meta: { title: "\u91c7\u8d2d\u5e94\u4ed8", permission: "procurement:view" },
+    meta: {
+      title: "\u91c7\u8d2d\u5e94\u4ed8",
+      permission: "procurement:payable:view",
+    },
   },
   {
     path: "procurement/analytics",
@@ -303,7 +312,7 @@ const rootRoutes: RouteRecordRaw[] = [
   {
     path: "inventory/parts",
     name: "inventory-parts",
-    component: () => import("@/views/inventory/PartsLedgerView.vue"),
+    component: () => import("@/views/inventory/InventoryPartsView.vue"),
     meta: { title: "\u5e93\u5b58\u53f0\u8d26", permission: "inventory:view" },
   },
   {
@@ -657,6 +666,30 @@ const rootRoutes: RouteRecordRaw[] = [
   { path: "self/approvals", redirect: "/workbench/todos?tab=approvals" },
 ];
 
+function canAccessRoute(
+  route: RouteRecordRaw,
+  can: (permission: string) => boolean,
+) {
+  const permission = route.meta?.permission;
+  if (typeof permission === "string" && !can(permission)) return false;
+  const permissions = route.meta?.permissions;
+  return !(
+    Array.isArray(permissions) &&
+    !permissions.some((item) => typeof item === "string" && can(item))
+  );
+}
+
+function firstAccessiblePath(can: (permission: string) => boolean) {
+  const route = rootRoutes.find(
+    (item) =>
+      typeof item.path === "string" &&
+      !item.redirect &&
+      !item.path.includes(":") &&
+      canAccessRoute(item, can),
+  );
+  return route ? `/${route.path}` : "/profile";
+}
+
 const router = createRouter({
   history: createWebHistory(),
   routes: [
@@ -690,13 +723,13 @@ router.beforeEach(async (to) => {
   }
   const permission = to.meta.permission;
   if (typeof permission === "string" && !auth.can(permission))
-    return { path: "/login", query: { redirect: to.fullPath } };
+    return { path: firstAccessiblePath(auth.can) };
   const permissions = to.meta.permissions;
   if (
     Array.isArray(permissions) &&
     !permissions.some((item) => typeof item === "string" && auth.can(item))
   )
-    return { path: "/login", query: { redirect: to.fullPath } };
+    return { path: firstAccessiblePath(auth.can) };
   return true;
 });
 

@@ -187,7 +187,9 @@ public class FinanceService {
 
   @Transactional
   public PaymentApplicationResponse createApplication(CreatePaymentApplicationRequest request) {
-    String appCode = request.code() != null ? request.code() : codeGenerator.generate("PAYMENT_APPLICATION");
+    String appCode = request.code() != null && !request.code().isBlank()
+        ? request.code().trim()
+        : codeGenerator.generate("PAYMENT_APPLICATION");
     if (applicationRepository.existsByCode(appCode)) {
       throw new BusinessException("付款申请单号已存在");
     }

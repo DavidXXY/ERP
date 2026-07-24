@@ -214,6 +214,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
+import { useAuthStore } from "@/stores/auth";
 import {
   getOpportunity,
   getQuote,
@@ -269,6 +270,7 @@ const props = defineProps<{
 }>();
 
 const router = useRouter();
+const auth = useAuthStore();
 const loading = ref(false);
 const loadErrors = ref<string[]>([]);
 const relatedQuote = ref<QuotePlan | null>(null);
@@ -736,16 +738,25 @@ async function loadData() {
   try {
     relatedContract.value = props.contract || null;
     relatedProject.value =
-      props.projectDetail?.project || props.project || null;
+      props.projectDetail?.project ||
+      props.project ||
+      projectSummaryFromContract(props.contract) ||
+      null;
     relatedProjectDetail.value = props.projectDetail || null;
 
     await loadCrmChain();
     await loadProjectChain();
     await Promise.all([
-      collect("采购", loadProcurementChain),
-      collect("库存领料", loadInventoryChain),
+      ...(auth.can("procurement:view")
+        ? [collect("采购", loadProcurementChain)]
+        : []),
+      ...(auth.can("inventory:view")
+        ? [collect("库存领料", loadInventoryChain)]
+        : []),
       collect("应收回款", loadReceivableChain),
-      collect("利润", loadProfitability),
+      ...(auth.can("project:view")
+        ? [collect("利润", loadProfitability)]
+        : []),
     ]);
   } finally {
     loading.value = false;
@@ -773,7 +784,7 @@ async function loadProjectChain() {
         (item) =>
           item.contractId === activeContract.value?.id ||
           item.contractCode === activeContract.value?.code,
-      ) || null;
+      ) || projectSummaryFromContract(activeContract.value);
   }
   if (!relatedProjectDetail.value && activeProject.value?.id) {
     relatedProjectDetail.value = await getProject(activeProject.value.id).catch(
@@ -892,7 +903,30 @@ function formatPercent(value: number) {
   return `${Number(value || 0).toFixed(1)}%`;
 }
 
-function moneyFormatter(value: number | string) {
+function projectSummaryFromContract(contract?: ServiceContract | null): Project | null {
+  if (!contract?.projectId) return null;
+  return {
+    id: contract.projectId,
+    customerId: contract.customerId,
+    customerName: contract.customerName,
+    contractId: contract.id,
+    contractCode: contract.code,
+    contractStatus: contract.status,
+    code: contract.projectCode || "已承接项目",
+    name: contract.projectName,
+    managerName: contract.projectManagerName || "待项目管理部门分配",
+    contractAmount: contract.amount,
+    plannedStartDate: contract.startDate,
+    plannedEndDate: contract.endDate,
+    stage: contract.projectStage || "ENTRY",
+    approvalStatus: contract.projectApprovalStatus || "PENDING",
+    budgetAmount: 0,
+    actualCost: 0,
+    progress: 0,
+  } as Project;
+}
+
+function moneyFormatter({ value }: { value: number | string }) {
   return formatMoney(Number(value || 0));
 }
 

@@ -28,7 +28,9 @@
       >
       <a-button
         v-if="
-          order?.status === 'DRAFT' && auth.can('procurement:purchase:create')
+          order?.status === 'DRAFT' &&
+          auth.can('procurement:purchase:create') &&
+          (!order.submittedAt || order.approvalStatus === 'REJECTED')
         "
         type="primary"
         :loading="saving"
@@ -38,7 +40,8 @@
       <a-button
         v-if="
           order?.approvalStatus === 'PENDING' &&
-          auth.can('procurement:purchase:approve')
+          order?.submittedAt &&
+          auth.can('procurement:request:approve')
         "
         type="primary"
         @click="approvalOpen = true"

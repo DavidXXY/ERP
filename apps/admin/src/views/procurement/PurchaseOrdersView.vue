@@ -88,7 +88,7 @@
               <a-button
                 v-if="
                   record.status === 'DRAFT' &&
-                  record.approvalStatus === 'PENDING'
+                  (!record.submittedAt || record.approvalStatus === 'REJECTED')
                 "
                 type="link"
                 size="small"
@@ -99,6 +99,7 @@
                 v-if="
                   record.status === 'DRAFT' &&
                   record.approvalStatus === 'PENDING' &&
+                  record.submittedAt &&
                   auth.can('procurement:request:approve')
                 "
                 type="link"
@@ -110,6 +111,7 @@
                 v-if="
                   record.status === 'DRAFT' &&
                   record.approvalStatus === 'PENDING' &&
+                  record.submittedAt &&
                   auth.can('procurement:request:approve')
                 "
                 danger
@@ -151,7 +153,7 @@ const router = useRouter();
 const loading = ref(false);
 const orders = ref<PurchaseOrder[]>([]);
 function openCreate() {
-  router.push("/procurement?tab=orders");
+  router.push("/procurement/workbench?tab=orders&createOrder=1");
 }
 const orderColumns = [
   { title: "订单编号", key: "order", width: 220 },

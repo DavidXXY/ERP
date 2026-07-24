@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface ApprovalRuntimeNodeRepository extends JpaRepository<ApprovalRuntimeNode, UUID> {
   List<ApprovalRuntimeNode> findByApprovalIdOrderByStepNoAscCreatedAtAsc(UUID approvalId);
+  void deleteByApprovalId(UUID approvalId);
   List<ApprovalRuntimeNode> findByApprovalIdAndStepNoOrderByCreatedAtAsc(UUID approvalId, int stepNo);
   List<ApprovalRuntimeNode> findByApprovalIdAndNodeStatusOrderByStepNoAscCreatedAtAsc(UUID approvalId, String nodeStatus);
   List<ApprovalRuntimeNode> findByNodeStatusAndDueAtBeforeOrderByDueAtAsc(String nodeStatus, OffsetDateTime dueAt);

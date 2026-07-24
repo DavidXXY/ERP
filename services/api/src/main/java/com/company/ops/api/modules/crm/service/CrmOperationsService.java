@@ -71,6 +71,7 @@ import com.company.ops.api.modules.ledger.dto.LedgerDtos.PostingLine;
 import com.company.ops.api.modules.ledger.service.LedgerService;
 import com.company.ops.api.modules.project.domain.ProjectCostCategory;
 import com.company.ops.api.modules.project.domain.ProjectType;
+import com.company.ops.api.modules.project.domain.Project;
 import com.company.ops.api.modules.project.dto.CreateProjectRequest;
 import com.company.ops.api.modules.project.dto.ProjectBudgetItemRequest;
 import com.company.ops.api.modules.project.repository.ProjectRepository;
@@ -169,7 +170,9 @@ public class CrmOperationsService {
 
   @Transactional
   public OpportunityResponse createOpportunity(CreateOpportunityRequest request) {
-    String oppCode = request.code() != null ? request.code() : codeGenerator.generate("OPPORTUNITY");
+    String oppCode = request.code() != null && !request.code().isBlank()
+        ? request.code().trim()
+        : codeGenerator.generate("OPPORTUNITY");
     if (opportunityRepository.existsByCode(oppCode)) {
       throw new BusinessException("商机编码已存在");
     }
@@ -538,7 +541,11 @@ public class CrmOperationsService {
     Map<UUID, Customer> customers = customerMap(contracts.stream()
         .map(ServiceContract::getCustomerId)
         .toList());
-    return contracts.stream().map(item -> toContract(item, customers)).toList();
+    Map<UUID, Project> projects = projectRepository.findByContractIdIn(
+            contracts.stream().map(ServiceContract::getId).toList())
+        .stream()
+        .collect(Collectors.toMap(Project::getContractId, Function.identity(), (first, ignored) -> first));
+    return contracts.stream().map(item -> toContract(item, customers, projects.get(item.getId()))).toList();
   }
 
   @Transactional(readOnly = true)
@@ -628,6 +635,11 @@ public class CrmOperationsService {
         ? ReceivableStatus.OVERDUE
         : ReceivableStatus.PAYMENT_PENDING);
     Receivable saved = receivableRepository.save(receivable);
+    ledgerService.post("INVOICE", saved.getCode(), request.invoiceDate(),
+        "客户开票 " + saved.getCode(), List.of(
+            new PostingLine("1122", "应收账款", saved.getAmount(), BigDecimal.ZERO, request.invoiceNo()),
+            new PostingLine("6001", "主营业务收入", BigDecimal.ZERO, saved.getAmount(), saved.getCode())
+        ));
     return mapReceivable(saved);
   }
 
@@ -1238,6 +1250,11 @@ public class CrmOperationsService {
   }
 
   private ContractResponse toContract(ServiceContract item, Map<UUID, Customer> customers) {
+    Project project = projectRepository.findLatestByContractId(item.getId()).orElse(null);
+    return toContract(item, customers, project);
+  }
+
+  private ContractResponse toContract(ServiceContract item, Map<UUID, Customer> customers, Project project) {
     return new ContractResponse(
         item.getId(),
         item.getQuoteId(),
@@ -1253,7 +1270,12 @@ public class CrmOperationsService {
         item.getEndDate(),
         contractSalesOwnerName(item, customers),
         item.getServiceCycle(),
-        item.getStatus()
+        item.getStatus(),
+        project == null ? null : project.getId(),
+        project == null ? null : project.getCode(),
+        project == null || project.getStage() == null ? null : project.getStage().name(),
+        project == null || project.getApprovalStatus() == null ? null : project.getApprovalStatus().name(),
+        project == null ? null : project.getManagerName()
     );
   }
 

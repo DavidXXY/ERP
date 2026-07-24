@@ -120,6 +120,7 @@ async function loadData() {
   loading.value = true;
   try {
     notifications.value = await listNotifications();
+    notifyLayout();
   } catch (error) {
     message.error(error instanceof Error ? error.message : "数据加载失败");
   } finally {
@@ -147,6 +148,13 @@ async function handleMarkAllRead() {
   }
   message.success("已标记 " + unread.length + " 条为已读");
   await loadData();
+}
+function notifyLayout() {
+  window.dispatchEvent(
+    new CustomEvent("notification-count-changed", {
+      detail: notifications.value.filter((item) => !item.read).length,
+    }),
+  );
 }
 function relatedRoute(item: NotificationRecord) {
   const type = (item.relatedType || item.type || "").toUpperCase();

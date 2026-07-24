@@ -1563,6 +1563,8 @@ import {
   type UserResponse,
 } from "@/api/system";
 
+const emit = defineEmits<{ dataChanged: [] }>();
+
 type QualificationViewMode =
   | "dashboard"
   | "companies"
@@ -1987,6 +1989,7 @@ async function saveCompany() {
     message.success("公司资质已保存");
     await refreshReferences();
     await loadCompanies();
+    emit("dataChanged");
   } catch (error) {
     message.error(error instanceof Error ? error.message : "保存失败");
   } finally {
@@ -1997,6 +2000,7 @@ async function removeCompany(id: string) {
   await deleteCompanyQualification(id);
   message.success("公司资质已删除");
   await loadCompanies();
+  emit("dataChanged");
 }
 function goToEmployeeDetail(id: string) {
   window.open(`/hr/employees/${id}`, "_blank");
@@ -2027,6 +2031,7 @@ async function saveEmployee() {
     message.success("人员档案已保存");
     await refreshReferences();
     await loadEmployees();
+    emit("dataChanged");
   } catch (error) {
     message.error(error instanceof Error ? error.message : "保存失败");
   } finally {
@@ -2038,6 +2043,7 @@ async function removeEmployee(id: string) {
   message.success("人员档案已删除");
   await refreshReferences();
   await loadEmployees();
+  emit("dataChanged");
 }
 async function showEmployee(id: string) {
   employeeDetail.value = await getQualificationEmployee(id);
@@ -2234,6 +2240,7 @@ async function saveCertificate() {
     message.success("人员证书已保存");
     await refreshReferences();
     await loadCertificates();
+    emit("dataChanged");
   } catch (error) {
     message.error(error instanceof Error ? error.message : "保存失败");
   } finally {
@@ -2244,6 +2251,7 @@ async function removeCertificate(id: string) {
   await deletePersonnelCertificate(id);
   message.success("人员证书已删除");
   await loadCertificates();
+  emit("dataChanged");
 }
 function openPerformance(record?: QualificationPerformance) {
   performanceEditingId.value = record?.id || "";

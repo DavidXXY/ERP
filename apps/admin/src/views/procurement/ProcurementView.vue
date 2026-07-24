@@ -309,6 +309,38 @@
               <template v-else-if="column.key === 'action'">
                 <a-space>
                   <a-button
+                    type="link"
+                    size="small"
+                    @click="router.push(`/procurement/orders/${record.id}`)"
+                  >
+                    详情
+                  </a-button>
+                  <a-button
+                    v-if="
+                      auth.can('procurement:purchase:create') &&
+                      record.status === 'DRAFT' &&
+                      (!record.submittedAt || record.approvalStatus === 'REJECTED')
+                    "
+                    type="link"
+                    size="small"
+                    @click="handleSubmitOrder(record)"
+                  >
+                    提交审批
+                  </a-button>
+                  <a-button
+                    v-if="
+                      auth.can('procurement:request:approve') &&
+                      record.status === 'DRAFT' &&
+                      record.approvalStatus === 'PENDING' &&
+                      record.submittedAt
+                    "
+                    type="link"
+                    size="small"
+                    @click="handleApproveOrder(record)"
+                  >
+                    审批通过
+                  </a-button>
+                  <a-button
                     v-if="
                       auth.can('procurement:order:receive') &&
                       canReceive(record)
@@ -331,13 +363,22 @@
                   >
                     取消订单
                   </a-button>
-                  <span v-else class="muted">
+                  <span
+                    v-if="
+                      record.status === 'RECEIVED' ||
+                      record.status === 'CANCELLED' ||
+                      (record.status === 'DRAFT' &&
+                        record.submittedAt &&
+                        !auth.can('procurement:request:approve'))
+                    "
+                    class="muted"
+                  >
                     {{
                       record.status === "RECEIVED"
                         ? "已全部入库"
                         : record.status === "CANCELLED"
                           ? "已取消"
-                          : "无需处理"
+                          : "待审批"
                     }}
                   </span>
                 </a-space>
@@ -853,18 +894,20 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
 import { message, Modal } from "ant-design-vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import PlusOutlined from "@ant-design/icons-vue/PlusOutlined";
 import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
 import ShoppingCartOutlined from "@ant-design/icons-vue/ShoppingCartOutlined";
 import {
   cancelPurchaseOrder,
+  approvePurchaseOrder,
   createPurchaseOrder,
   createPurchaseRequest,
   createSupplier,
   listGoodsReceipts,
   listProcurementCostAllocations,
   listProcurementCostTargets,
+  listProcurementInquiries,
   listProcurementPayables,
   listPurchaseOrders,
   listPurchaseRequests,
@@ -872,6 +915,7 @@ import {
   processPurchaseRequestApproval,
   updatePurchaseRequest,
   registerPurchaseArrival,
+  submitPurchaseOrder,
   type ApprovalStatus,
   type CreatePurchaseOrderPayload,
   type CreatePurchaseRequestPayload,
@@ -881,6 +925,7 @@ import {
   type ProcurementCostAllocation,
   type ProcurementCostTargetOptions,
   type ProcurementCostType,
+  type ProcurementInquiry,
   type ProcurementPayable,
   type PurchaseOrder,
   type PurchaseOrderStatus,
@@ -943,6 +988,7 @@ function handleTabChange(key: string) {
 }
 
 const route = useRoute();
+const router = useRouter();
 const tabPathMap: Record<string, string> = {
   requests: "/procurement/requests",
   orders: "/procurement/orders",
@@ -960,16 +1006,19 @@ function tabFromPath(p: string) {
   return "requests";
 }
 watch(
-  () => route.path,
-  (path) => {
-    const t = tabFromPath(path);
-    if (t) activeTab.value = t;
+  () => [route.path, route.query.tab] as const,
+  ([path, queryTab]) => {
+    const t = typeof queryTab === "string" ? queryTab : tabFromPath(path);
+    if (t && Object.prototype.hasOwnProperty.call(tabPathMap, t)) {
+      activeTab.value = t;
+    }
   },
   { immediate: true },
 );
 const suppliers = ref<Supplier[]>([]);
 const purchaseRequests = ref<PurchaseRequest[]>([]);
 const purchaseOrders = ref<PurchaseOrder[]>([]);
+const procurementInquiries = ref<ProcurementInquiry[]>([]);
 const goodsReceipts = ref<GoodsReceipt[]>([]);
 const payables = ref<ProcurementPayable[]>([]);
 const costAllocations = ref<ProcurementCostAllocation[]>([]);
@@ -1254,7 +1303,12 @@ const remainingQuantity = computed(() =>
   ),
 );
 
-onMounted(loadData);
+onMounted(async () => {
+  await loadData();
+  if (route.query.createOrder === "1") {
+    openOrder();
+  }
+});
 
 async function loadData() {
   loading.value = true;
@@ -1269,6 +1323,7 @@ async function loadData() {
       payableData,
       targetData,
       allocationData,
+      inquiryData,
     ] = await Promise.all([
       listSuppliers(),
       listPurchaseRequests(),
@@ -1280,6 +1335,7 @@ async function loadData() {
         : Promise.resolve([]),
       listProcurementCostTargets(),
       listProcurementCostAllocations(),
+      listProcurementInquiries(),
     ]);
     suppliers.value = supplierData.content || supplierData;
     purchaseRequests.value = requestData.content || requestData;
@@ -1289,6 +1345,7 @@ async function loadData() {
     payables.value = payableData;
     costTargets.value = targetData;
     costAllocations.value = allocationData;
+    procurementInquiries.value = inquiryData;
   } catch (error) {
     errorMessage.value =
       error instanceof Error ? error.message : "采购数据加载失败";
@@ -1383,15 +1440,34 @@ function changeCostType(value: string | number) {
 function syncOrderRequest(requestId: string) {
   const request = purchaseRequests.value.find((item) => item.id === requestId);
   const part = parts.value.find((item) => item.id === request?.partId);
+  const awardedInquiries = procurementInquiries.value.filter(
+    (item) =>
+      item.status === "AWARDED" &&
+      (item.requestId === requestId || item.requestIds?.includes(requestId)),
+  );
+  const inquiry = awardedInquiries.length === 1 ? awardedInquiries[0] : undefined;
+  const quote = inquiry?.quotes.find(
+    (item) => item.id === inquiry.selectedQuoteId || item.selected,
+  );
+  const quoteLine = quote?.lines.find((item) => item.requestId === requestId);
+  orderForm.inquiryId = inquiry?.id;
+  orderForm.supplierId = quote?.supplierId || "";
   orderForm.expectedDeliveryDate = request?.expectedDate;
   orderForm.unitPrice =
-    Number(request?.unitPrice || 0) > 0
+    Number(quoteLine?.unitPrice || quote?.unitPrice || 0) > 0
+      ? Number(quoteLine?.unitPrice || quote?.unitPrice)
+      : Number(request?.unitPrice || 0) > 0
       ? Number(request?.unitPrice)
       : Number(part?.unitCost || 0) > 0
         ? Number(part?.unitCost)
         : 0.01;
-  orderForm.taxRate = request?.taxRate ?? 13;
+  orderForm.taxRate = quoteLine?.taxRate ?? quote?.taxRate ?? request?.taxRate ?? 13;
   orderForm.orderedQty = request?.quantity || 1;
+  orderForm.currency = quote?.currency || "CNY";
+  orderForm.freightAmount = Number(quote?.freightAmount || 0);
+  orderForm.sourceReason = inquiry
+    ? `询价单 ${inquiry.code} 已定标${inquiry.selectionReason ? `：${inquiry.selectionReason}` : ""}`
+    : "";
 }
 
 async function handleCreateSupplier() {
@@ -1428,24 +1504,6 @@ async function handleSaveRequest() {
     savingRequest.value = false;
   }
 
-  function handleCancelOrder(record: PurchaseOrder) {
-    Modal.confirm({
-      title: "确认取消订单",
-      content: "确定要取消订单 " + record.code + " 吗？此操作不可撤销。",
-      okText: "确认取消",
-      okType: "danger",
-      cancelText: "暂不取消",
-      onOk: async () => {
-        try {
-          await cancelPurchaseOrder(record.id);
-          message.success("采购订单已取消");
-          await loadOrders();
-        } catch (error) {
-          message.error(error instanceof Error ? error.message : "取消失败");
-        }
-      },
-    });
-  }
 }
 async function handleApproval() {
   if (!selectedRequest.value) return;
@@ -1468,8 +1526,47 @@ async function handleApproval() {
     savingApproval.value = false;
   }
 }
-async function handleCancelOrder(record: PurchaseOrder) {
-  message.warning("订单取消失败：该功能尚未实现");
+async function handleSubmitOrder(record: PurchaseOrder) {
+  try {
+    await submitPurchaseOrder(record.id);
+    message.success("采购订单已提交审批");
+    await loadOrders();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "提交失败");
+  }
+}
+
+async function handleApproveOrder(record: PurchaseOrder) {
+  try {
+    await approvePurchaseOrder(record.id, {
+      decision: "APPROVED",
+      approverName: auth.user?.displayName || "审批人",
+      comment: "同意采购订单",
+    });
+    message.success("采购订单审批通过");
+    await loadOrders();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "审批失败");
+  }
+}
+
+function handleCancelOrder(record: PurchaseOrder) {
+  Modal.confirm({
+    title: "确认取消订单",
+    content: `确定要取消订单 ${record.code} 吗？此操作不可撤销。`,
+    okText: "确认取消",
+    okType: "danger",
+    cancelText: "暂不取消",
+    onOk: async () => {
+      try {
+        await cancelPurchaseOrder(record.id);
+        message.success("采购订单已取消");
+        await loadOrders();
+      } catch (error) {
+        message.error(error instanceof Error ? error.message : "取消失败");
+      }
+    },
+  });
 }
 
 async function handleCreateOrder() {
@@ -1591,7 +1688,7 @@ function isOverdue(item: ProcurementPayable) {
     item.dueDate < addDays(0)
   );
 }
-function moneyFormatter(value: number | string) {
+function moneyFormatter({ value }: { value: number | string }) {
   return formatMoney(Number(value));
 }
 function formatMoney(value: number) {

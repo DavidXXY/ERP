@@ -10,7 +10,8 @@ public class OfficeDocumentSecurity {
 
   private static final Set<String> PROCUREMENT_BIZ_TYPES = Set.of(
       "PURCHASE_REQUEST_BATCH",
-      "PURCHASE_REQUEST"
+      "PURCHASE_REQUEST",
+      "SUPPLIER"
   );
 
   private final DocumentFileRepository documentRepository;
@@ -30,4 +31,3 @@ public class OfficeDocumentSecurity {
             .orElse(false);
   }
 }
-

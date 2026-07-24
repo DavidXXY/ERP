@@ -313,7 +313,12 @@ public final class CrmOperationsDtos {
       LocalDate endDate,
       String salesOwnerName,
       String serviceCycle,
-      ContractStatus status
+      ContractStatus status,
+      UUID projectId,
+      String projectCode,
+      String projectStage,
+      String projectApprovalStatus,
+      String projectManagerName
   ) {
   }
 

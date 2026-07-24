@@ -18,6 +18,7 @@ public record GoodsReceiptResponse(
     BigDecimal taxRate,
     BigDecimal amount,
     LocalDate receivedDate,
+    LocalDate payableDueDate,
     String deliveryNo,
     String receiverName,
     ProcurementCostType costType,

@@ -120,7 +120,9 @@ public class InventoryService {
 
   @Transactional
   public InventoryPartResponse createPart(CreateInventoryPartRequest request) {
-    String partCode = request.code() != null ? request.code() : codeGenerator.generate("PART");
+    String partCode = request.code() != null && !request.code().isBlank()
+        ? request.code().trim()
+        : codeGenerator.generate("PART");
     if (partRepository.existsByCode(partCode)) {
       throw new BusinessException("物料编码已存在");
     }
@@ -174,7 +176,9 @@ public class InventoryService {
 
   @Transactional
   public MaterialIssueResponse createIssue(CreateMaterialIssueRequest request) {
-    String issueCode = request.code() != null ? request.code() : codeGenerator.generate("ISSUE");
+    String issueCode = request.code() != null && !request.code().isBlank()
+        ? request.code().trim()
+        : codeGenerator.generate("ISSUE");
     if (issueRepository.existsByCode(issueCode)) {
       throw new BusinessException("领料单号已存在");
     }
@@ -241,7 +245,9 @@ public class InventoryService {
 
   @Transactional
   public MaterialReturnResponse createReturn(UUID issueId, CreateMaterialReturnRequest request) {
-    String returnCode = request.code() != null ? request.code() : codeGenerator.generate("RETURN_ORDER");
+    String returnCode = request.code() != null && !request.code().isBlank()
+        ? request.code().trim()
+        : codeGenerator.generate("RETURN_ORDER");
     if (returnRepository.existsByCode(returnCode)) {
       throw new BusinessException("退料单号已存在");
     }
@@ -271,6 +277,7 @@ public class InventoryService {
     returnOrder.setProjectId(project.getId());
     returnOrder.setReturnDate(request.returnDate());
     returnOrder.setHandlerName(request.handlerName());
+    returnOrder.setReason(request.reason().trim());
     InventoryReturnOrder savedReturn = returnRepository.save(returnOrder);
 
     List<InventoryReturnLine> returnLines = request.lines().stream().map(item -> {
@@ -291,8 +298,9 @@ public class InventoryService {
       line.setAmount(lineAmount);
       issueLine.setReturnedQty(issueLine.getReturnedQty().add(item.quantity()));
       part.setStockQty(part.getStockQty().add(item.quantity()));
-      saveMovement(part.getId(), StockMovementType.RETURN, item.quantity(), request.code(),
-          "项目退料 " + project.getCode() + " · 原领料单 " + issue.getCode());
+      saveMovement(part.getId(), StockMovementType.RETURN, item.quantity(), returnCode,
+          "项目退料 " + project.getCode() + " · 原领料单 " + issue.getCode()
+              + " · " + request.reason().trim());
       return line;
     }).toList();
     returnLineRepository.saveAll(returnLines);
@@ -307,8 +315,8 @@ public class InventoryService {
         .allMatch(line -> line.getReturnedQty().compareTo(line.getQuantity()) == 0);
     issue.setStatus(fullyReturned ? InventoryIssueStatus.FULLY_RETURNED : InventoryIssueStatus.PARTIAL_RETURNED);
     issueRepository.save(issue);
-    createProjectCost(project, request.code(), request.returnDate(), total, true,
-        "项目退料：原领料单 " + issue.getCode());
+    createProjectCost(project, returnCode, request.returnDate(), total, true,
+        "项目退料：原领料单 " + issue.getCode() + " · " + request.reason().trim());
     return toReturnResponse(savedReturn, issue, project, returnLines);
   }
 
@@ -435,6 +443,7 @@ public class InventoryService {
         project == null ? null : project.getName(),
         order.getReturnDate(),
         order.getHandlerName(),
+        order.getReason(),
         amount(order.getTotalAmount()),
         lines.stream().map(line -> new MaterialReturnLineResponse(
             line.getId(),

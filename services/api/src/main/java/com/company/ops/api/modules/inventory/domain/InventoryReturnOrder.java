@@ -27,6 +27,9 @@ public class InventoryReturnOrder extends BaseEntity {
   @Column(name = "handler_name", nullable = false, length = 80)
   private String handlerName;
 
+  @Column(nullable = false, length = 255)
+  private String reason;
+
   @Column(name = "total_amount", nullable = false, precision = 14, scale = 2)
   private BigDecimal totalAmount = BigDecimal.ZERO;
 
@@ -68,6 +71,14 @@ public class InventoryReturnOrder extends BaseEntity {
 
   public void setHandlerName(String handlerName) {
     this.handlerName = handlerName;
+  }
+
+  public String getReason() {
+    return reason;
+  }
+
+  public void setReason(String reason) {
+    this.reason = reason;
   }
 
   public BigDecimal getTotalAmount() {

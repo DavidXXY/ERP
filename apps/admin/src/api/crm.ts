@@ -131,6 +131,7 @@ export type CustomerDetail = CustomerSummary & {
   }>;
   metrics: {
     contractCount: number;
+    projectCount: number;
     contractAmount: number;
     outstandingAmount: number;
     settledAmount: number;
@@ -396,6 +397,11 @@ export type ServiceContract = {
   salesOwnerName?: string;
   serviceCycle?: string;
   status: ContractStatus;
+  projectId?: string;
+  projectCode?: string;
+  projectStage?: string;
+  projectApprovalStatus?: string;
+  projectManagerName?: string;
 };
 
 export type Receivable = {

@@ -394,7 +394,9 @@ async function handleCreate() {
       ...form,
       customerId: form.customerId,
       type: form.type as FollowUpType,
-      followedAt: form.followedAt || new Date().toISOString(),
+      followedAt: form.followedAt
+        ? new Date(form.followedAt).toISOString()
+        : new Date().toISOString(),
     });
     createOpen.value = false;
     message.success("跟进记录已创建");

@@ -215,6 +215,7 @@ export type GoodsReceipt = {
   taxRate?: number;
   amount: number;
   receivedDate: string;
+  payableDueDate: string;
   deliveryNo: string;
   receiverName: string;
   costType: ProcurementCostType;

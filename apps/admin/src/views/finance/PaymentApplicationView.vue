@@ -155,7 +155,7 @@
             <a-space size="small">
               <a-button
                 v-if="
-                  auth.can('finance:payment:approve') &&
+                  canCurrentUserApprove &&
                   record.status === 'PENDING_APPROVAL'
                 "
                 type="link"
@@ -357,6 +357,7 @@ import PayCircleOutlined from "@ant-design/icons-vue/PayCircleOutlined";
 import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
 import {
   executePayment,
+  getPaymentApprovalCapability,
   listPaymentApplications,
   listPaymentRecords,
   processPaymentApplication,
@@ -380,6 +381,7 @@ const payments = ref<PaymentRecord[]>([]);
 const selectedApplication = ref<PaymentApplication | null>(null);
 const loading = ref(false);
 const saving = ref(false);
+const canCurrentUserApprove = ref(false);
 const approvalOpen = ref(false);
 const paymentOpen = ref(false);
 const keyword = ref("");
@@ -514,7 +516,7 @@ const canApproveSelected = computed(
   () =>
     !!selectedApplication.value &&
     selectedApplication.value.status === "PENDING_APPROVAL" &&
-    auth.can("finance:payment:approve"),
+    canCurrentUserApprove.value,
 );
 const workbenchCards = computed(() => [
   {
@@ -564,9 +566,11 @@ onMounted(loadData);
 async function loadData() {
   loading.value = true;
   try {
-    [applications.value, payments.value] = await Promise.all([
+    [applications.value, payments.value, canCurrentUserApprove.value] =
+      await Promise.all([
       listPaymentApplications(),
       listPaymentRecords(),
+      getPaymentApprovalCapability(),
     ]);
   } catch (error) {
     message.error(error instanceof Error ? error.message : "付款数据加载失败");
@@ -642,7 +646,7 @@ async function handlePayment() {
 
 function hasAction(item: PaymentApplication) {
   return (
-    (auth.can("finance:payment:approve") &&
+    (canCurrentUserApprove.value &&
       item.status === "PENDING_APPROVAL") ||
     (auth.can("finance:payment:execute") && item.status === "APPROVED")
   );
@@ -763,7 +767,7 @@ function formatMoney(value: number) {
     maximumFractionDigits: 2,
   }).format(value || 0);
 }
-function moneyFormatter(value: number | string) {
+function moneyFormatter({ value }: { value: number | string }) {
   return formatMoney(Number(value));
 }
 function paymentApprovalSteps(

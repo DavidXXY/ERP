@@ -495,7 +495,11 @@ export type AuditLogRecord = {
   createdAt: string;
 };
 
-export function listAuditLogs(page: number = 0, size: number = 20) {
+export function listAuditLogs(
+  page: number = 0,
+  size: number = 20,
+  filters: { keyword?: string; startDate?: string; endDate?: string } = {},
+) {
   return request<{
     content: AuditLogRecord[];
     totalElements: number;
@@ -505,7 +509,13 @@ export function listAuditLogs(page: number = 0, size: number = 20) {
   }>({
     method: "GET",
     url: "/office/audits",
-    params: { page, size },
+    params: {
+      page,
+      size,
+      keyword: filters.keyword || undefined,
+      startDate: filters.startDate || undefined,
+      endDate: filters.endDate || undefined,
+    },
   });
 }
 

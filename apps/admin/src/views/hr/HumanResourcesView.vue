@@ -85,10 +85,12 @@
     <QualificationCenterView
       v-if="activeTab === 'employees'"
       display-mode="employees"
+      @data-changed="loadMetrics"
     />
     <QualificationCenterView
       v-else-if="activeTab === 'certificates'"
       display-mode="certificates"
+      @data-changed="loadMetrics"
     />
     <QualificationCenterView v-else display-mode="dashboard" />
   </div>

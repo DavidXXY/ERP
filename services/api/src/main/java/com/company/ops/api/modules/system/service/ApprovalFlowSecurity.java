@@ -145,7 +145,7 @@ public class ApprovalFlowSecurity {
       case "PROCUREMENT_MANAGER" -> List.of("PROCUREMENT_MANAGER", "PURCHASE_MANAGER", "ADMIN");
       case "HR_MANAGER" -> List.of("HR_MANAGER", "HR_ADMIN", "ADMIN");
       case "PROJECT_MANAGER" -> List.of("PROJECT_MANAGER", "PROJECT_DIRECTOR", "ADMIN");
-      case "CUSTOMER_OWNER" -> List.of("SALES_MANAGER", "CRM_MANAGER", "ADMIN");
+      case "CUSTOMER_OWNER" -> List.of("SALES_DIRECTOR", "SALES_MANAGER", "CRM_MANAGER", "ADMIN");
       case "DEPARTMENT_LEADER", "DIRECT_MANAGER" -> List.of("DEPARTMENT_MANAGER", "MANAGER", "ADMIN");
       default -> List.of("ADMIN");
     };

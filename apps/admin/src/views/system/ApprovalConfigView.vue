@@ -248,6 +248,7 @@
               editingId ? '请选择 1 个审批对象' : '可选择多个审批对象'
             "
             :options="targetOptions"
+            @change="handleTargetChange"
           />
         </a-form-item>
         <a-form-item
@@ -770,6 +771,11 @@ function openEdit(record: ApprovalConfigResponse) {
     enabled: record.enabled,
   });
   addOpen.value = true;
+}
+function handleTargetChange(values: string[]) {
+  if (editingId.value && values.length > 1) {
+    form.targetIds = [values[values.length - 1]];
+  }
 }
 async function saveConfig() {
   await formRef.value?.validate();

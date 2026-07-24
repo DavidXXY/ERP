@@ -340,10 +340,19 @@ export type PageResponse<T> = {
 };
 
 // User APIs
-export function listUsersApi(page: number, size: number = 20) {
+export function listUsersApi(
+  page: number,
+  size: number = 20,
+  filters: { keyword?: string; enabled?: boolean; roleId?: string } = {},
+) {
+  const params = new URLSearchParams({ page: String(page), size: String(size) });
+  if (filters.keyword) params.set("keyword", filters.keyword);
+  if (filters.enabled !== undefined)
+    params.set("enabled", String(filters.enabled));
+  if (filters.roleId) params.set("roleId", filters.roleId);
   return request<PageResponse<UserResponse>>({
     method: "GET",
-    url: `/users?page=${page}&size=${size}`,
+    url: `/users?${params.toString()}`,
   });
 }
 

@@ -493,9 +493,7 @@ async function handleAdvanceStage() {
     } as any);
     emit("updated");
     emit("update:stageOpen", false);
-    message.success(
-      "项目已进入" + stageLabel(props.detail.project.stage) + "阶段",
-    );
+    message.success("项目已进入" + stageLabel(props.nextStage) + "阶段");
   } catch (error) {
     message.error(error instanceof Error ? error.message : "项目阶段推进失败");
   }

@@ -318,6 +318,7 @@ public class OfficeService {
   public ApprovalResponse withdrawApproval(UUID id, ApprovalWithdrawRequest request) {
     ApprovalRequest approval = approvalRepository.findByIdForUpdate(id).orElseThrow(() -> new BusinessException("审批单不存在"));
     if (approval.getStatus() != ApprovalStatus.PENDING) throw new BusinessException("只有待审批单据可以撤回");
+    requireCurrentApplicant(approval);
     approval.setStatus(ApprovalStatus.REJECTED);
     approval.setApproverName(request.operatorName());
     approval.setApprovalComment("撤回：" + request.comment());
@@ -354,14 +355,35 @@ public class OfficeService {
   public ApprovalResponse resubmitApproval(UUID id, ApprovalResubmitRequest request) {
     ApprovalRequest approval = approvalRepository.findByIdForUpdate(id).orElseThrow(() -> new BusinessException("审批单不存在"));
     if (approval.getStatus() != ApprovalStatus.REJECTED) throw new BusinessException("只有已驳回/撤回审批可以重新提交");
-    List<ApprovalRuntimeNode> nodes = runtimeNodeRepository.findByApprovalIdOrderByStepNoAscCreatedAtAsc(id);
-    if (nodes.isEmpty()) throw new BusinessException("审批运行节点不存在，不能重新提交");
-    nodes.forEach(item -> { item.setNodeStatus("PENDING"); item.setCompletedAt(null); item.setApproverId(null); item.setApproverName(null); item.setApprovalComment(null); });
-    runtimeNodeRepository.saveAll(nodes);
-    approval.setStatus(ApprovalStatus.PENDING); approval.setApplicantName(request.applicantName()); approval.setApprovalComment("重新提交：" + request.comment());
-    approval.setProcessedAt(null); approval.setApproverName(null); approval.setCurrentStep(nextPendingStep(id)); approval.setCurrentApproverName(currentRuntimeApproverNames(id, approval.getCurrentStep()));
+    requireCurrentApplicant(approval);
+    ApprovalPlan plan = approvalFlowSecurity.resolve(approvalContext(approval));
+    validatePlan(plan);
+    runtimeNodeRepository.deleteByApprovalId(id);
+    boolean autoApproved = isAutoApprovalPlan(plan);
+    approval.setStatus(autoApproved ? ApprovalStatus.APPROVED : ApprovalStatus.PENDING);
+    approval.setApplicantName(request.applicantName()); approval.setApprovalComment("重新提交：" + request.comment());
+    approval.setProcessedAt(autoApproved ? OffsetDateTime.now() : null); approval.setApproverName(autoApproved ? "系统自动审批" : null);
+    approval.setApprovalConfigVersion(plan.versionNo()); approval.setApprovalPlanSnapshot(planSnapshot(plan));
+    approval.setApprovalMode(plan.mode()); approval.setCurrentStep(plan.configs().isEmpty() || autoApproved ? null : 1);
+    approval.setTotalSteps(plan.stepCount() == 0 ? null : plan.stepCount());
+    approval.setCurrentApproverName(autoApproved ? null : currentApproverNames(plan, 0));
+    approval.setMatchedRuleText(ruleTextWithRuntime(plan));
     ApprovalRequest saved = approvalRepository.save(approval);
-    saveRuntimeAction(id, "RESUBMIT", request.applicantName(), request.comment(), approval.getCurrentStep());
+    createRuntimeNodes(saved, plan);
+    saveRuntimeAction(id, "RESUBMIT", request.applicantName(), request.comment(), saved.getCurrentStep() == null ? 1 : saved.getCurrentStep());
+    if (saved.getApprovalType() == ApprovalType.EXPENSE) {
+      expenseRepository.findByApprovalRequestId(id).ifPresent(expense -> {
+        expense.setStatus(autoApproved ? ExpenseStatus.APPROVED : ExpenseStatus.PENDING_APPROVAL);
+        expenseRepository.save(expense);
+      });
+      if (autoApproved) processExpenseSource(saved);
+    }
+    if (saved.getApprovalType() == ApprovalType.OUTSOURCE) {
+      outsourceRepository.findByApprovalRequestId(id).ifPresent(item -> {
+        item.setStatus(autoApproved ? OutsourceStatus.APPROVED : OutsourceStatus.PENDING_APPROVAL);
+        outsourceRepository.save(item);
+      });
+    }
     notify("APPROVAL", "审批重新提交", saved.getTitle(), "APPROVAL", saved.getId());
     return toApproval(saved);
   }
@@ -709,6 +731,14 @@ public class OfficeService {
     if (nodes.stream().noneMatch(this::runtimeNodeMatchesCurrentUser)) throw new org.springframework.security.access.AccessDeniedException("当前账号不是该审批节点处理人");
   }
 
+  private void requireCurrentApplicant(ApprovalRequest approval) {
+    UUID currentUserId = approvalFlowSecurity.currentUserId();
+    boolean applicantMatches = currentUserId != null && userRepository.findById(currentUserId)
+        .map(user -> user.getDisplayName().equals(approval.getApplicantName()))
+        .orElse(false);
+    if (!applicantMatches) throw new org.springframework.security.access.AccessDeniedException("只有申请人本人可以撤回或重新提交");
+  }
+
   private ApprovalRuntimeNode selectRuntimeNode(List<ApprovalRuntimeNode> nodes, UUID delegatedUserId) {
     if (delegatedUserId != null && delegatedUserId.equals(approvalFlowSecurity.currentUserId())) return nodes.get(0);
     return nodes.stream().filter(this::runtimeNodeMatchesCurrentUser).findFirst().orElse(nodes.get(0));
@@ -948,8 +978,18 @@ public class OfficeService {
   }
 
   @Transactional(readOnly = true)
-  public org.springframework.data.domain.Page<AuditResponse> listAudits(org.springframework.data.domain.Pageable pageable) {
-    return auditLogRepository.findAllByOrderByCreatedAtDesc(pageable)
+  public org.springframework.data.domain.Page<AuditResponse> listAudits(
+      String keyword,
+      LocalDate startDate,
+      LocalDate endDate,
+      org.springframework.data.domain.Pageable pageable) {
+    String normalizedKeyword = keyword == null ? "" : keyword.trim();
+    java.time.ZoneId zone = java.time.ZoneId.of("Asia/Shanghai");
+    OffsetDateTime startTime = (startDate == null ? LocalDate.of(2000, 1, 1) : startDate)
+        .atStartOfDay(zone).toOffsetDateTime();
+    OffsetDateTime endTime = (endDate == null ? LocalDate.of(3000, 1, 1) : endDate.plusDays(1))
+        .atStartOfDay(zone).toOffsetDateTime();
+    return auditLogRepository.search(normalizedKeyword, startTime, endTime, pageable)
         .map(item -> new AuditResponse(
             item.getId(),
             item.getUsername(),

@@ -389,7 +389,7 @@
     <a-drawer
       v-model:open="documentOpen"
       :title="attachmentTarget?.title || '采购申请附件'"
-      width="720"
+      width="min(720px, 100vw)"
     >
       <a-alert
         class="section-alert"

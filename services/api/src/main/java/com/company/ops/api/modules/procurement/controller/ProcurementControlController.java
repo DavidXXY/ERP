@@ -80,7 +80,7 @@ public class ProcurementControlController {
   }
 
   @PostMapping("/receipts/{id}/inspection")
-  @PreAuthorize("hasAuthority('procurement:order:receive')")
+  @PreAuthorize("hasAuthority('procurement:receipt:inspect')")
   public ApiResponse<Map<String, Object>> inspect(
       @PathVariable UUID id,
       @Valid @RequestBody InspectReceipt request

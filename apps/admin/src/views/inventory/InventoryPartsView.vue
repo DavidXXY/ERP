@@ -199,6 +199,9 @@
               <template v-else-if="column.key === 'lines'">{{
                 returnLineSummary(record)
               }}</template>
+              <template v-else-if="column.key === 'reason'">{{
+                record.reason
+              }}</template>
               <template v-else-if="column.key === 'amount'"
                 ><strong>{{
                   formatMoney(record.totalAmount)
@@ -449,6 +452,13 @@
               ><a-input v-model:value="returnForm.handlerName" /></a-form-item
           ></a-col>
         </a-row>
+        <a-form-item label="退料原因" name="reason">
+          <a-textarea
+            v-model:value="returnForm.reason"
+            :rows="2"
+            placeholder="说明余料、错领、质量异常等退料原因"
+          />
+        </a-form-item>
         <a-table
           :columns="returnLineColumns"
           :data-source="returnForm.lines"
@@ -534,6 +544,7 @@ type ReturnForm = {
   code: string;
   returnDate: string;
   handlerName: string;
+  reason: string;
   lines: ReturnFormLine[];
 };
 
@@ -590,6 +601,7 @@ const returnColumns = [
   { title: "退料单", key: "code", width: 240 },
   { title: "项目", key: "project", width: 240 },
   { title: "退料明细", key: "lines", width: 280 },
+  { title: "退料原因", key: "reason", width: 240 },
   { title: "退料日期", dataIndex: "returnDate", width: 120 },
   { title: "经办人", dataIndex: "handlerName", width: 120 },
   { title: "冲回成本", key: "amount", width: 140 },
@@ -631,6 +643,7 @@ const returnRules = {
   code: [],
   returnDate: [{ required: true }],
   handlerName: [{ required: true, message: "请输入经办人" }],
+  reason: [{ required: true, message: "请输入退料原因" }],
 };
 
 const inventoryValue = computed(() =>
@@ -845,6 +858,7 @@ async function handleCreateReturn() {
       code: returnForm.code,
       returnDate: returnForm.returnDate,
       handlerName: returnForm.handlerName,
+      reason: returnForm.reason,
       lines: lines.map((line) => ({
         issueLineId: line.issueLineId,
         quantity: line.quantity,
@@ -890,6 +904,7 @@ function initialReturnForm(): ReturnForm {
     code: "",
     returnDate: today(),
     handlerName: auth.user?.displayName || "",
+    reason: "",
     lines: [],
   };
 }
@@ -962,7 +977,7 @@ function formatMoney(value: number) {
     maximumFractionDigits: 2,
   }).format(value || 0);
 }
-function moneyFormatter(value: number | string) {
+function moneyFormatter({ value }: { value: number | string }) {
   return formatMoney(Number(value));
 }
 function formatQuantity(value: number) {

@@ -8,7 +8,7 @@
     >
       <div class="approval-progress-node">
         <div class="approval-progress-avatar">
-          {{ initials(step.personName || step.title) }}
+          {{ step.avatarText || initials(step.personName || step.title) }}
           <span class="approval-progress-badge">{{
             badgeText(step.state)
           }}</span>
@@ -34,6 +34,7 @@ export type ApprovalProgressState =
 export type ApprovalProgressStep = {
   key?: string;
   personName?: string;
+  avatarText?: string;
   title: string;
   time?: string;
   note?: string;

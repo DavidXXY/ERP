@@ -13,5 +13,6 @@ public record CreateMaterialReturnRequest(
     String code,
     @NotNull LocalDate returnDate,
     @NotBlank @Size(max = 80) String handlerName,
+    @NotBlank @Size(max = 255) String reason,
     @NotEmpty List<@Valid MaterialReturnLineRequest> lines
 ) {}

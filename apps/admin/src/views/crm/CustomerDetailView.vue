@@ -33,7 +33,7 @@
       <a-steps size="small" :current="relationCurrent" responsive>
         <a-step
           title="客户建档"
-          :description="`${detail?.contactCount || 0} 位联系人`"
+          :description="`${detail?.contacts.length || 0} 位联系人`"
         />
         <a-step
           title="商机与报价"
@@ -43,7 +43,10 @@
           title="合同签约"
           :description="`${detail?.contracts.length || 0} 份合同`"
         />
-        <a-step title="履约项目" description="合同生效后承接" />
+        <a-step
+          title="履约项目"
+          :description="`${detail?.metrics.projectCount || 0} 个项目`"
+        />
         <a-step
           title="开票回款"
           :description="`已收 ${money(detail?.metrics.settledAmount)}`"
@@ -306,18 +309,18 @@ const metrics = computed<DetailMetric[]>(() =>
     ? [
         {
           label: "已签订单金额",
-          value: money(detail.value.signedOrderAmount),
+          value: money(detail.value.metrics.contractAmount),
           hint: `${detail.value.contracts.length} 份合同`,
         },
         {
           label: "累计支付金额",
-          value: money(detail.value.paidAmount),
+          value: money(detail.value.metrics.settledAmount),
           hint: "已核销回款",
         },
         {
           label: "待付金额",
-          value: money(detail.value.pendingAmount),
-          danger: detail.value.pendingAmount > 0,
+          value: money(detail.value.metrics.outstandingAmount),
+          danger: detail.value.metrics.outstandingAmount > 0,
           hint: "客户待支付",
         },
         {
@@ -331,13 +334,15 @@ const metrics = computed<DetailMetric[]>(() =>
     : [],
 );
 const relationCurrent = computed(() =>
-  detail.value?.receivables.some((item) => item.settledAmount > 0)
+  (detail.value?.metrics.settledAmount || 0) > 0
     ? 4
-    : detail.value?.contracts.length
+    : (detail.value?.metrics.projectCount || 0) > 0
       ? 3
-      : detail.value?.opportunities.length
-        ? 1
-        : 0,
+      : detail.value?.contracts.length
+        ? 2
+        : detail.value?.opportunities.length
+          ? 1
+          : 0,
 );
 const contactColumns = [
   { title: "联系人", key: "name" },

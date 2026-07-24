@@ -953,7 +953,7 @@ function formatMoney(value: number) {
     maximumFractionDigits: 2,
   }).format(value || 0);
 }
-function moneyFormatter(value: number | string) {
+function moneyFormatter({ value }: { value: number | string }) {
   return formatMoney(Number(value));
 }
 </script>

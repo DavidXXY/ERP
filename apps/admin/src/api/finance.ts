@@ -180,6 +180,13 @@ export function listPaymentApplications() {
   });
 }
 
+export function getPaymentApprovalCapability() {
+  return request<boolean>({
+    method: "GET",
+    url: "/finance/payment-applications/can-approve",
+  });
+}
+
 export function createPaymentApplication(payload: {
   code?: string;
   payableId: string;

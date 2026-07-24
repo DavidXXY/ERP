@@ -47,8 +47,10 @@ public class UserService {
   }
 
   @Transactional(readOnly = true)
-  public Page<UserResponse> listUsers(Pageable pageable) {
-    return userRepository.findAll(pageable).map(this::toUserResponseWithDetails);
+  public Page<UserResponse> listUsers(String keyword, Boolean enabled, UUID roleId, Pageable pageable) {
+    String normalizedKeyword = keyword == null || keyword.isBlank() ? "" : keyword.trim();
+    return userRepository.search(normalizedKeyword, enabled, roleId, pageable)
+        .map(this::toUserResponseWithDetails);
   }
 
   @Transactional(readOnly = true)

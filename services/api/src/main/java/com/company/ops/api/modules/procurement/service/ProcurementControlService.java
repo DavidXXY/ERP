@@ -6,6 +6,8 @@ import com.company.ops.api.modules.inventory.domain.StockMovement;
 import com.company.ops.api.modules.inventory.domain.StockMovementType;
 import com.company.ops.api.modules.inventory.repository.InventoryPartRepository;
 import com.company.ops.api.modules.inventory.repository.StockMovementRepository;
+import com.company.ops.api.modules.ledger.dto.LedgerDtos.PostingLine;
+import com.company.ops.api.modules.ledger.service.LedgerService;
 import com.company.ops.api.modules.procurement.domain.*;
 import com.company.ops.api.modules.procurement.dto.ProcurementControlDtos.*;
 import com.company.ops.api.modules.procurement.dto.CreateConsolidatedInquiryRequest;
@@ -52,6 +54,7 @@ public class ProcurementControlService {
   private final PurchaseRequestApprovalRecordRepository requestApprovals;
   private final ProjectRepository projects;
   private final ProcurementArrivalService arrivals;
+  private final LedgerService ledgerService;
 
   public ProcurementControlService(
       ProcurementInquiryRepository inquiries,
@@ -70,7 +73,8 @@ public class ProcurementControlService {
       SupplierInvoiceRepository invoices,
       PurchaseRequestApprovalRecordRepository requestApprovals,
       ProjectRepository projects,
-      ProcurementArrivalService arrivals
+      ProcurementArrivalService arrivals,
+      LedgerService ledgerService
   ) {
     this.inquiries = inquiries;
     this.inquiryRequests = inquiryRequests;
@@ -89,6 +93,7 @@ public class ProcurementControlService {
     this.requestApprovals = requestApprovals;
     this.projects = projects;
     this.arrivals = arrivals;
+    this.ledgerService = ledgerService;
   }
 
   @Transactional(readOnly = true)
@@ -564,7 +569,15 @@ public class ProcurementControlService {
     if (!isBlank(request.comment())) {
       invoice.setRemark(defaultText(invoice.getRemark(), "") + " 审核：" + request.comment());
     }
-    return invoices.save(invoice);
+    SupplierInvoice saved = invoices.save(invoice);
+    if ("APPROVED".equals(decision)) {
+      ledgerService.post("SUPPLIER_INVOICE", saved.getCode(), saved.getInvoiceDate(),
+          "供应商发票 " + saved.getInvoiceNo(), List.of(
+              new PostingLine("1405", "库存商品", saved.getAmount(), BigDecimal.ZERO, saved.getInvoiceNo()),
+              new PostingLine("2202", "应付账款", BigDecimal.ZERO, saved.getAmount(), saved.getCode())
+          ));
+    }
+    return saved;
   }
 
   @Transactional(readOnly = true)

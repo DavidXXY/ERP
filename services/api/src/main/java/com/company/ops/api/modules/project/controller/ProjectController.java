@@ -8,8 +8,10 @@ import com.company.ops.api.modules.project.dto.CreateProjectRequest;
 import com.company.ops.api.modules.project.dto.ProcessProjectApprovalRequest;
 import com.company.ops.api.modules.project.dto.ProjectDetailResponse;
 import com.company.ops.api.modules.project.dto.ProjectProfitabilityResponse;
+import com.company.ops.api.modules.project.dto.ProjectManagerOption;
 import com.company.ops.api.modules.project.dto.ProjectResponse;
 import com.company.ops.api.modules.project.service.ProjectService;
+import com.company.ops.api.modules.system.service.ApprovalFlowSecurity;
 import com.company.ops.api.modules.crm.domain.QuoteStatus;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ApproveQuoteCostRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.QuoteCostRequestResponse;
@@ -39,10 +41,13 @@ public class ProjectController {
 
   private final ProjectService projectService;
   private final CrmOperationsService crmOperationsService;
+  private final ApprovalFlowSecurity approvalFlowSecurity;
 
-  public ProjectController(ProjectService projectService, CrmOperationsService crmOperationsService) {
+  public ProjectController(ProjectService projectService, CrmOperationsService crmOperationsService,
+                           ApprovalFlowSecurity approvalFlowSecurity) {
     this.projectService = projectService;
     this.crmOperationsService = crmOperationsService;
+    this.approvalFlowSecurity = approvalFlowSecurity;
   }
 
   @GetMapping
@@ -55,6 +60,18 @@ public class ProjectController {
   @PreAuthorize("hasAuthority('project:view')")
   public ApiResponse<List<ProjectProfitabilityResponse>> profitability() {
     return ApiResponse.ok(projectService.profitability());
+  }
+
+  @GetMapping("/manager-options")
+  @PreAuthorize("hasAuthority('project:approve')")
+  public ApiResponse<List<ProjectManagerOption>> managerOptions() {
+    return ApiResponse.ok(projectService.managerOptions());
+  }
+
+  @GetMapping("/manager-assignment-capability")
+  @PreAuthorize("hasAuthority('project:view')")
+  public ApiResponse<Boolean> managerAssignmentCapability() {
+    return ApiResponse.ok(approvalFlowSecurity.canApprove("PROJECT"));
   }
 
   @GetMapping("/presales-support")

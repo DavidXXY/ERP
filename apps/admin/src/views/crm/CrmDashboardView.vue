@@ -32,8 +32,8 @@
         </div>
         <div class="closure-score">
           <span>闭环健康度</span>
-          <strong :class="{ 'text-danger': closureHealth < 70 }">{{
-            closureHealth
+          <strong :class="{ 'text-danger': detailComplete && closureHealth < 70 }">{{
+            detailComplete ? closureHealth : "--"
           }}</strong>
         </div>
       </div>
@@ -73,7 +73,11 @@
           <em>{{ item.value }}</em>
         </button>
         <div v-if="closureAlerts.length === 0" class="closure-empty">
-          当前没有跨模块断点，业务闭环运转平稳
+          {{
+            detailComplete
+              ? "当前没有跨模块断点，业务闭环运转平稳"
+              : "部分业务明细受当前角色权限限制，请以可见指标为准"
+          }}
         </div>
       </div>
     </a-card>
@@ -196,18 +200,18 @@
                 isCompanyDashboard ? "今日优先级" : "销售优先级"
               }}</strong>
             </div>
-            <a-tag :color="riskScore > 0 ? 'red' : 'green'">{{
-              riskScore > 0 ? "需关注" : "平稳"
+            <a-tag :color="!detailComplete ? 'default' : riskScore > 0 ? 'red' : 'green'">{{
+              !detailComplete ? "数据受限" : riskScore > 0 ? "需关注" : "平稳"
             }}</a-tag>
           </div>
           <div class="health-card">
             <div>
               <span>{{ isCompanyDashboard ? "经营健康度" : "CRM健康度" }}</span>
-              <strong>{{ healthScore }}</strong>
+              <strong>{{ detailComplete ? healthScore : "--" }}</strong>
             </div>
             <a-progress
               type="circle"
-              :percent="healthScore"
+              :percent="detailComplete ? healthScore : 0"
               :width="74"
               :stroke-color="healthScore >= 80 ? '#237804' : '#faad14'"
             />
@@ -516,6 +520,35 @@ const contractItems = ref<ServiceContract[]>([]);
 const projectProfitItems = ref<ProjectProfitability[]>([]);
 const procurementMatchItems = ref<ProcurementMatching[]>([]);
 const replenishmentItems = ref<ReplenishmentSuggestion[]>([]);
+type DetailSource =
+  | "customers"
+  | "opportunities"
+  | "quotes"
+  | "contracts"
+  | "receivables"
+  | "followUps"
+  | "projects"
+  | "procurement"
+  | "inventory";
+const detailAccess = reactive<Record<DetailSource, boolean>>({
+  customers: true,
+  opportunities: true,
+  quotes: true,
+  contracts: true,
+  receivables: true,
+  followUps: true,
+  projects: true,
+  procurement: true,
+  inventory: true,
+});
+const detailComplete = computed(
+  () =>
+    detailAccess.contracts &&
+    detailAccess.receivables &&
+    detailAccess.projects &&
+    detailAccess.procurement &&
+    detailAccess.inventory,
+);
 const riskScore = computed(
   () =>
     stats.overdueCount +
@@ -800,9 +833,15 @@ const rightMetrics = computed(() => [
 const riskItems = computed(() => [
   {
     label: "逾期应收",
-    value: `${stats.overdueCount} 笔`,
-    desc: formatMoney(stats.overdueAmount),
-    tone: stats.overdueCount > 0 ? "danger" : "good",
+    value: detailAccess.receivables ? `${stats.overdueCount} 笔` : "--",
+    desc: detailAccess.receivables
+      ? formatMoney(stats.overdueAmount)
+      : "当前角色无明细权限",
+    tone: detailAccess.receivables
+      ? stats.overdueCount > 0
+        ? "danger"
+        : "good"
+      : "warn",
   },
   {
     label: "低库存",
@@ -827,8 +866,16 @@ const closureLoops = computed(() => [
   {
     key: "order-cash",
     title: "销售回款",
-    desc: `${stats.monthContractCount} 份本月签约，${stats.overdueCount} 笔逾期待回收`,
-    value: stats.overdueCount > 0 ? `${stats.overdueCount} 笔` : "正常",
+    desc:
+      detailAccess.contracts && detailAccess.receivables
+        ? `${stats.monthContractCount} 份本月签约，${stats.overdueCount} 笔逾期待回收`
+        : "当前角色无销售明细权限",
+    value:
+      detailAccess.contracts && detailAccess.receivables
+        ? stats.overdueCount > 0
+          ? `${stats.overdueCount} 笔`
+          : "正常"
+        : "数据受限",
     percent:
       stats.overdueCount > 0 ? Math.max(8, 100 - stats.overdueCount * 12) : 100,
     stroke: stats.overdueCount > 0 ? "#ff4d4f" : "#52c41a",
@@ -838,9 +885,13 @@ const closureLoops = computed(() => [
   {
     key: "project-profit",
     title: "项目利润",
-    desc: `${projectProfitItems.value.length} 个项目纳入利润跟踪`,
+    desc: detailAccess.projects
+      ? `${projectProfitItems.value.length} 个项目纳入利润跟踪`
+      : "当前角色无项目明细权限",
     value:
-      projectRiskItems.value.length > 0
+      !detailAccess.projects
+        ? "数据受限"
+        : projectRiskItems.value.length > 0
         ? `${projectRiskItems.value.length} 项`
         : "达标",
     percent: projectProfitItems.value.length
@@ -860,9 +911,13 @@ const closureLoops = computed(() => [
   {
     key: "procurement-pay",
     title: "采购付款",
-    desc: `${procurementMatchItems.value.length} 张订单完成 P2P 勾稽`,
+    desc: detailAccess.procurement
+      ? `${procurementMatchItems.value.length} 张订单完成 P2P 勾稽`
+      : "当前角色无采购明细权限",
     value:
-      procurementRiskItems.value.length > 0
+      !detailAccess.procurement
+        ? "数据受限"
+        : procurementRiskItems.value.length > 0
         ? `${procurementRiskItems.value.length} 条`
         : "匹配",
     percent: procurementMatchItems.value.length
@@ -883,9 +938,13 @@ const closureLoops = computed(() => [
   {
     key: "inventory-delivery",
     title: "库存交付",
-    desc: `${replenishmentItems.value.length} 条补货建议，优先保障交付`,
+    desc: detailAccess.inventory
+      ? `${replenishmentItems.value.length} 条补货建议，优先保障交付`
+      : "当前角色无库存明细权限",
     value:
-      urgentReplenishmentItems.value.length > 0
+      !detailAccess.inventory
+        ? "数据受限"
+        : urgentReplenishmentItems.value.length > 0
         ? `${urgentReplenishmentItems.value.length} 项`
         : "充足",
     percent: replenishmentItems.value.length
@@ -973,10 +1032,16 @@ const teamColumns = [
 
 onMounted(loadData);
 
-async function safeList<T>(loader: () => Promise<T[]>): Promise<T[]> {
+async function safeList<T>(
+  loader: () => Promise<T[]>,
+  source: DetailSource,
+): Promise<T[]> {
   try {
-    return await loader();
+    const rows = await loader();
+    detailAccess[source] = true;
+    return rows;
   } catch {
+    detailAccess[source] = false;
     return [];
   }
 }
@@ -995,15 +1060,15 @@ async function loadData() {
       procurementMatching,
       replenishmentSuggestions,
     ] = await Promise.all([
-      listCustomers(),
-      listOpportunities(),
-      listQuotes(),
-      listContracts(),
-      listReceivables(),
-      listFollowUps(),
-      safeList(listProjectProfitability),
-      safeList(listProcurementMatching),
-      safeList(listReplenishmentSuggestions),
+      safeList(listCustomers, "customers"),
+      safeList(listOpportunities, "opportunities"),
+      safeList(listQuotes, "quotes"),
+      safeList(listContracts, "contracts"),
+      safeList(listReceivables, "receivables"),
+      safeList(listFollowUps, "followUps"),
+      safeList(listProjectProfitability, "projects"),
+      safeList(listProcurementMatching, "procurement"),
+      safeList(listReplenishmentSuggestions, "inventory"),
     ]);
     customerItems.value = customers;
     opportunityItems.value = opps;

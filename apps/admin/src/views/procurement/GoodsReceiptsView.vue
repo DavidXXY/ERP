@@ -66,7 +66,7 @@
             <a-button
               v-if="
                 record.inspectionStatus === 'PENDING' &&
-                auth.can('procurement:order:receive')
+                auth.can('procurement:receipt:inspect')
               "
               type="link"
               @click="openInspect(record)"
@@ -282,7 +282,7 @@ function openInspect(receipt: GoodsReceipt) {
     rejectedQty: 0,
     inspectorName: auth.user?.displayName || "",
     comment: "",
-    payableDueDate: today(),
+    payableDueDate: receipt.payableDueDate || today(),
   });
   inspectOpen.value = true;
 }

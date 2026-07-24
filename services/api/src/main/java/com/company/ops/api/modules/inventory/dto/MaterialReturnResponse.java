@@ -15,6 +15,7 @@ public record MaterialReturnResponse(
     String projectName,
     LocalDate returnDate,
     String handlerName,
+    String reason,
     BigDecimal totalAmount,
     List<MaterialReturnLineResponse> lines
 ) {}

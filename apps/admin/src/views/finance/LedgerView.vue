@@ -539,7 +539,7 @@ function formatMoney(value: number) {
   }).format(value || 0);
 }
 
-function moneyFormatter(value: number | string) {
+function moneyFormatter({ value }: { value: number | string }) {
   return formatMoney(Number(value));
 }
 </script>

@@ -19,6 +19,7 @@ public interface InventoryPartRepository extends JpaRepository<InventoryPart, UU
   boolean existsByCode(String code);
 
   Optional<InventoryPart> findByCodeIgnoreCase(String code);
+  List<InventoryPart> findByNameIgnoreCase(String name);
   List<InventoryPart> findByCodeContainingIgnoreCaseOrNameContainingIgnoreCase(String code,String name,Pageable pageable);
 
   @Lock(LockModeType.PESSIMISTIC_WRITE)

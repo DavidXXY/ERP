@@ -164,7 +164,7 @@
             </a-tag>
           </template>
           <template v-else-if="column.key === 'action'">
-            <a-space @click.stop>
+            <a-space wrap size="small" @click.stop>
               <a-button type="link" size="small" @click="openProfile(record)"
                 >资料</a-button
               >
@@ -667,7 +667,11 @@
       </template>
     </a-modal>
 
-    <a-drawer v-model:open="documentOpen" width="820" title="供应商档案">
+    <a-drawer
+      v-model:open="documentOpen"
+      width="min(820px, 100vw)"
+      title="供应商档案"
+    >
       <template v-if="selectedSupplier">
         <div class="profile-heading">
           <div>

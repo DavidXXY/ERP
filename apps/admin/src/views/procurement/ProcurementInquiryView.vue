@@ -89,7 +89,11 @@
               </template>
               <template v-else-if="column.key === 'select'">
                 <a-button
-                  v-if="!quote.selected && record.status === 'OPEN'"
+                  v-if="
+                    !quote.selected &&
+                    record.status === 'OPEN' &&
+                    auth.can('procurement:request:approve')
+                  "
                   type="link"
                   @click="selectQuote(record, quote)"
                 >
@@ -100,7 +104,10 @@
             </template>
           </a-table>
           <a-button
-            v-if="record.status === 'OPEN'"
+            v-if="
+              record.status === 'OPEN' &&
+              auth.can('procurement:purchase:create')
+            "
             size="small"
             style="margin-top: 8px"
             @click="openQuote(record)"

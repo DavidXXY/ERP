@@ -83,13 +83,22 @@
         <a-sub-menu v-if="auth.can('procurement:view')" key="procurement">
           <template #icon><ShoppingCartOutlined /></template>
           <template #title>供应链采购</template>
+          <a-menu-item key="/procurement/workbench">采购工作台</a-menu-item>
           <a-menu-item key="/procurement/requests">采购申请</a-menu-item>
           <a-menu-item key="/procurement/purchase-pool">待采购清单</a-menu-item>
           <a-menu-item key="/procurement/inquiries">询价管理</a-menu-item>
           <a-menu-item key="/procurement/orders">采购订单</a-menu-item>
           <a-menu-item key="/procurement/receipts">到货入库</a-menu-item>
-          <a-menu-item key="/procurement/invoices">采购发票</a-menu-item>
-          <a-menu-item key="/procurement/payables">采购应付</a-menu-item>
+          <a-menu-item
+            v-if="auth.can('procurement:payable:view')"
+            key="/procurement/invoices"
+            >采购发票</a-menu-item
+          >
+          <a-menu-item
+            v-if="auth.can('procurement:payable:view')"
+            key="/procurement/payables"
+            >采购应付</a-menu-item
+          >
           <a-menu-item key="/procurement/suppliers">供应商</a-menu-item>
           <a-menu-item key="/procurement/analytics">采购分析</a-menu-item>
           <a-menu-item key="/procurement/p2p">P2P流程</a-menu-item>
@@ -327,7 +336,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import DashboardOutlined from "@ant-design/icons-vue/DashboardOutlined";
 import CalendarOutlined from "@ant-design/icons-vue/CalendarOutlined";
@@ -353,16 +362,35 @@ import { useAuthStore } from "@/stores/auth";
 const app = useAppStore();
 const auth = useAuthStore();
 const unreadCount = ref(0);
+let notificationTimer: ReturnType<typeof setInterval> | undefined;
 
-onMounted(async () => {
+async function refreshUnreadCount() {
   try {
     unreadCount.value = await getUnreadNotificationCount();
   } catch {}
-  setInterval(async () => {
-    try {
-      unreadCount.value = await getUnreadNotificationCount();
-    } catch {}
-  }, 30000);
+}
+
+function handleNotificationCountChanged(event: Event) {
+  const count = (event as CustomEvent<number>).detail;
+  if (Number.isInteger(count) && count >= 0) unreadCount.value = count;
+  else void refreshUnreadCount();
+}
+
+onMounted(async () => {
+  await refreshUnreadCount();
+  window.addEventListener(
+    "notification-count-changed",
+    handleNotificationCountChanged,
+  );
+  notificationTimer = setInterval(refreshUnreadCount, 30000);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener(
+    "notification-count-changed",
+    handleNotificationCountChanged,
+  );
+  if (notificationTimer) clearInterval(notificationTimer);
 });
 const route = useRoute();
 const router = useRouter();

@@ -925,7 +925,9 @@ async function loadClosureData() {
       projectsResult.value.content.find(
         (item) =>
           item.contractId === current.id || item.contractCode === current.code,
-      ) || null;
+      ) || projectSummaryFromContract(current);
+  } else {
+    relatedProject.value = projectSummaryFromContract(current);
   }
   if (receivablesResult.status === "fulfilled") {
     contractReceivables.value = receivablesResult.value.filter(
@@ -935,6 +937,29 @@ async function loadClosureData() {
         item.sourceNo === current.code,
     );
   }
+}
+
+function projectSummaryFromContract(contract: ServiceContract): Project | null {
+  if (!contract.projectId) return null;
+  return {
+    id: contract.projectId,
+    customerId: contract.customerId,
+    customerName: contract.customerName,
+    contractId: contract.id,
+    contractCode: contract.code,
+    contractStatus: contract.status,
+    code: contract.projectCode || "已承接项目",
+    name: contract.projectName,
+    managerName: contract.projectManagerName || "待项目管理部门分配",
+    contractAmount: contract.amount,
+    plannedStartDate: contract.startDate,
+    plannedEndDate: contract.endDate,
+    stage: contract.projectStage || "ENTRY",
+    approvalStatus: contract.projectApprovalStatus || "PENDING",
+    budgetAmount: 0,
+    actualCost: 0,
+    progress: 0,
+  } as Project;
 }
 
 function canApplyInvoice(item: Receivable) {
@@ -1277,6 +1302,7 @@ function contractApprovalSteps(item: ServiceContract): ApprovalProgressStep[] {
   return [
     {
       key: "start",
+      avatarText: "发起",
       personName: item.salesOwnerName || item.customerName || "发起人",
       title: "发起合同",
       note: `${item.contractType || "-"} · ${formatMoney(item.amount)}`,
@@ -1284,6 +1310,7 @@ function contractApprovalSteps(item: ServiceContract): ApprovalProgressStep[] {
     },
     {
       key: "contract",
+      avatarText: "合同",
       personName: contractApproved ? "合同审批人" : "当前审批人",
       title: item.status === "PENDING_APPROVAL" ? "待审批" : "已同意",
       note:
@@ -1294,6 +1321,7 @@ function contractApprovalSteps(item: ServiceContract): ApprovalProgressStep[] {
     },
     {
       key: "seal",
+      avatarText: "盖章",
       personName:
         pendingSignedDocApproval.value?.approvedBy ||
         pendingSignedDocApproval.value?.requestedBy ||
@@ -1327,6 +1355,7 @@ function contractApprovalSteps(item: ServiceContract): ApprovalProgressStep[] {
     },
     {
       key: "project",
+      avatarText: "项目",
       personName: relatedProject.value?.code || "项目承接",
       title: item.status === "ACTIVE" ? "已承接" : "待承接",
       note: relatedProject.value?.name || "盖章通过后自动承接项目",

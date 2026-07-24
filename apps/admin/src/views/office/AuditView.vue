@@ -6,7 +6,7 @@
           <a-range-picker v-model:value="dateRange" @change="loadData" />
           <a-input-search
             v-model:value="searchUser"
-            placeholder="搜索操作人"
+            placeholder="搜索操作人、路径或业务对象"
             style="width: 200px"
             allow-clear
             @search="loadData"
@@ -139,6 +139,7 @@
 </template>
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
+import type { Dayjs } from "dayjs";
 import { message } from "ant-design-vue";
 import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
 import { listAuditLogs, type AuditLogRecord } from "@/api/office";
@@ -150,7 +151,7 @@ const page = ref(0);
 const size = ref(20);
 const total = ref(0);
 const searchUser = ref("");
-const dateRange = ref<[string, string] | null>(null);
+const dateRange = ref<[Dayjs, Dayjs] | null>(null);
 const detailOpen = ref(false);
 const selected = ref<AuditLogRecord | null>(null);
 
@@ -185,7 +186,11 @@ onMounted(loadData);
 async function loadData() {
   loading.value = true;
   try {
-    const result = await listAuditLogs(page.value, size.value);
+    const result = await listAuditLogs(page.value, size.value, {
+      keyword: searchUser.value.trim(),
+      startDate: dateRange.value?.[0]?.format("YYYY-MM-DD"),
+      endDate: dateRange.value?.[1]?.format("YYYY-MM-DD"),
+    });
     auditLogs.value = result.content;
     total.value = result.totalElements;
   } catch (e: any) {

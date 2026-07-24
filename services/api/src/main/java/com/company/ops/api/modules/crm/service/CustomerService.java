@@ -19,6 +19,7 @@ import com.company.ops.api.modules.crm.repository.ReceivableRepository;
 import com.company.ops.api.modules.crm.repository.ServiceContractRepository;
 import com.company.ops.api.modules.system.security.DataScopeService;
 import com.company.ops.api.modules.system.repository.SystemUserRepository;
+import com.company.ops.api.modules.project.repository.ProjectRepository;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
@@ -38,6 +39,7 @@ public class CustomerService {
   private final FollowUpRepository followUpRepository;
   private final DataScopeService dataScopeService;
   private final SystemUserRepository userRepository;
+  private final ProjectRepository projectRepository;
   private final DeleteGovernanceService deleteGovernanceService;
 
   @jakarta.persistence.PersistenceContext
@@ -52,6 +54,7 @@ public class CustomerService {
       FollowUpRepository followUpRepository,
       DataScopeService dataScopeService,
       SystemUserRepository userRepository,
+      ProjectRepository projectRepository,
       DeleteGovernanceService deleteGovernanceService
   ) {
     this.codeGenerator = codeGenerator;
@@ -62,6 +65,7 @@ public class CustomerService {
     this.followUpRepository = followUpRepository;
     this.dataScopeService = dataScopeService;
     this.userRepository = userRepository;
+    this.projectRepository = projectRepository;
     this.deleteGovernanceService = deleteGovernanceService;
   }
 
@@ -107,6 +111,8 @@ public class CustomerService {
     var opportunities = opportunityRepository.findByCustomerIdOrderByUpdatedAtDesc(id);
     var receivables = receivableRepository.findByCustomerIdOrderByDueDateAsc(id);
     var followUps = followUpRepository.findByCustomerIdOrderByFollowedAtDesc(id);
+    int projectCount = projectRepository.findByContractIdIn(
+        contracts.stream().map(contract -> contract.getId()).toList()).size();
     Map<UUID, String> opportunityCodes = opportunities.stream()
         .collect(java.util.stream.Collectors.toMap(
             opportunity -> opportunity.getId(),
@@ -210,6 +216,7 @@ public class CustomerService {
             .toList(),
         new CustomerDetailResponse.CustomerMetrics(
             contracts.size(),
+            projectCount,
             contractAmount,
             outstanding,
             settled
@@ -219,7 +226,9 @@ public class CustomerService {
 
   @Transactional
   public CustomerDetailResponse createCustomer(CreateCustomerRequest request) {
-    String generatedCode = request.code() != null ? request.code() : codeGenerator.generate("CUSTOMER");
+    String generatedCode = request.code() != null && !request.code().isBlank()
+        ? request.code().trim()
+        : codeGenerator.generate("CUSTOMER");
     if (customerRepository.existsByCode(generatedCode)) {
       throw new BusinessException("客户编码已存在");
     }

@@ -174,7 +174,9 @@ public class ProcurementService {
 
   @Transactional
   public SupplierResponse createSupplier(CreateSupplierRequest request) {
-    String supplierCode = request.code() != null ? request.code() : codeGenerator.generate("SUPPLIER");
+    String supplierCode = request.code() != null && !request.code().isBlank()
+        ? request.code().trim()
+        : codeGenerator.generate("SUPPLIER");
     if (supplierRepository.existsByCode(supplierCode)) {
       throw new BusinessException("供应商编码已存在");
     }
@@ -334,16 +336,26 @@ public class ProcurementService {
 
   @Transactional
   public PurchaseRequestResponse createPurchaseRequest(CreatePurchaseRequestRequest request) {
-    String prCode = request.code() != null ? request.code() : codeGenerator.generate("PURCHASE_REQUEST");
+    String prCode = request.code() != null && !request.code().isBlank()
+        ? request.code().trim()
+        : codeGenerator.generate("PURCHASE_REQUEST");
     if (requestRepository.existsByCode(prCode)) {
       throw new BusinessException("采购申请编码已存在");
     }
 
+    UUID partId = request.partId();
     String partName = request.partName();
     if (request.partId() != null) {
       InventoryPart part = partRepository.findById(request.partId())
           .orElseThrow(() -> new BusinessException("物料不存在"));
       partName = part.getName();
+    } else if (StringUtils.hasText(partName)) {
+      List<InventoryPart> exactMatches = partRepository.findByNameIgnoreCase(partName.trim());
+      if (exactMatches.size() == 1) {
+        InventoryPart part = exactMatches.get(0);
+        partId = part.getId();
+        partName = part.getName();
+      }
     }
     if (!StringUtils.hasText(partName)) {
       throw new BusinessException("请选择物料或填写采购物料名称");
@@ -362,7 +374,7 @@ public class ProcurementService {
     purchaseRequest.setLineNo(1);
     purchaseRequest.setCode(prCode);
     purchaseRequest.setRequesterName(currentName());
-    purchaseRequest.setPartId(request.partId());
+    purchaseRequest.setPartId(partId);
     purchaseRequest.setPartName(partName);
     purchaseRequest.setQuantity(request.quantity());
     purchaseRequest.setUnitPrice(amount(request.unitPrice()));
@@ -543,13 +555,24 @@ public class ProcurementService {
       throw new BusinessException("该申请当前状态不可编辑");
     }
     purchaseRequest.setRequesterName(currentName());
-    purchaseRequest.setPartId(request.partId());
+    UUID partId = request.partId();
     if (request.partId() != null) {
       InventoryPart part = partRepository.findById(request.partId())
           .orElseThrow(() -> new BusinessException("物料不存在"));
+      purchaseRequest.setPartId(part.getId());
       purchaseRequest.setPartName(part.getName());
     } else {
-      purchaseRequest.setPartName(request.partName());
+      String partName = request.partName();
+      if (StringUtils.hasText(partName)) {
+        List<InventoryPart> exactMatches = partRepository.findByNameIgnoreCase(partName.trim());
+        if (exactMatches.size() == 1) {
+          InventoryPart part = exactMatches.get(0);
+          partId = part.getId();
+          partName = part.getName();
+        }
+      }
+      purchaseRequest.setPartId(partId);
+      purchaseRequest.setPartName(partName);
     }
     purchaseRequest.setQuantity(request.quantity());
     purchaseRequest.setUnitPrice(amount(request.unitPrice()));
@@ -596,7 +619,8 @@ public class ProcurementService {
 
   @Transactional
   public PurchaseOrderResponse createPurchaseOrder(CreatePurchaseOrderRequest request) {
-    if (orderRepository.existsByCode(request.code())) {
+    String orderCode = StringUtils.hasText(request.code()) ? request.code().trim() : null;
+    if (orderCode != null && orderRepository.existsByCode(orderCode)) {
       throw new BusinessException("采购订单编码已存在");
     }
     Supplier supplier = supplierRepository.findById(request.supplierId())
@@ -614,8 +638,18 @@ public class ProcurementService {
         || purchaseRequest.getStatus() != PurchaseRequestStatus.APPROVED) {
       throw new BusinessException("采购申请审批通过后才能下单");
     }
+    if (purchaseRequest.getPartId() == null && StringUtils.hasText(purchaseRequest.getPartName())) {
+      List<InventoryPart> exactMatches = partRepository.findByNameIgnoreCase(
+          purchaseRequest.getPartName().trim());
+      if (exactMatches.size() == 1) {
+        InventoryPart part = exactMatches.get(0);
+        purchaseRequest.setPartId(part.getId());
+        purchaseRequest.setPartName(part.getName());
+        requestRepository.save(purchaseRequest);
+      }
+    }
     if (purchaseRequest.getPartId() == null) {
-      throw new BusinessException("采购申请未关联物料，请先建立物料档案");
+      throw new BusinessException("采购申请未关联唯一物料，请先建立物料档案或消除同名物料");
     }
     partRepository.findById(purchaseRequest.getPartId())
         .orElseThrow(() -> new BusinessException("关联物料不存在"));
@@ -629,10 +663,25 @@ public class ProcurementService {
       throw new BusinessException("拆分订单数量超过采购申请剩余数量");
     }
 
+    UUID inquiryId = request.inquiryId();
+    if (inquiryId == null) {
+      List<ProcurementInquiry> awardedInquiries = inquiryRepository.findAll().stream()
+          .filter(inquiry -> "AWARDED".equals(inquiry.getStatus()))
+          .filter(inquiry -> inquiry.getRequestId().equals(purchaseRequest.getId())
+              || inquiryRequestRepository.existsByInquiryIdAndRequestId(
+                  inquiry.getId(), purchaseRequest.getId()))
+          .toList();
+      if (awardedInquiries.size() == 1) {
+        inquiryId = awardedInquiries.get(0).getId();
+      } else if (awardedInquiries.size() > 1) {
+        throw new BusinessException("该采购申请存在多个已定标询价，请明确选择询价单");
+      }
+    }
+
     SupplierQuotation selectedQuote = null;
     SupplierQuotationLine selectedQuoteLine = null;
-    if (request.inquiryId() != null) {
-      ProcurementInquiry inquiry = inquiryRepository.findById(request.inquiryId())
+    if (inquiryId != null) {
+      ProcurementInquiry inquiry = inquiryRepository.findById(inquiryId)
           .orElseThrow(() -> new BusinessException("询价单不存在"));
       boolean inquiryContainsRequest = inquiry.getRequestId().equals(purchaseRequest.getId())
           || inquiryRequestRepository.existsByInquiryIdAndRequestId(
@@ -671,8 +720,11 @@ public class ProcurementService {
       }
     }
 
+    if (orderCode == null) {
+      orderCode = codeGenerator.generate("PURCHASE_ORDER");
+    }
     PurchaseOrder order = new PurchaseOrder();
-    order.setCode(request.code());
+    order.setCode(orderCode);
     order.setSupplierId(request.supplierId());
     order.setRequestId(request.requestId());
     order.setPartId(purchaseRequest.getPartId());
@@ -698,7 +750,7 @@ public class ProcurementService {
     order.setCostTargetName(purchaseRequest.getCostTargetName());
     order.setStatus(PurchaseOrderStatus.DRAFT);
     order.setApprovalStatus(ApprovalStatus.PENDING);
-    order.setInquiryId(request.inquiryId());
+    order.setInquiryId(inquiryId);
     order.setContractId(request.contractId());
     order.setCurrency(StringUtils.hasText(request.currency()) ? request.currency()
         : selectedQuote == null ? "CNY" : selectedQuote.getCurrency());
@@ -761,6 +813,9 @@ public class ProcurementService {
     PurchaseOrder order = orderRepository.findByIdForUpdate(id)
         .orElseThrow(() -> new BusinessException("采购订单不存在"));
     if (order.getStatus() != PurchaseOrderStatus.DRAFT) throw new BusinessException("只有草稿订单可以提交审批");
+    if (order.getSubmittedAt() != null && order.getApprovalStatus() == ApprovalStatus.PENDING) {
+      throw new BusinessException("采购订单已提交审批，请勿重复提交");
+    }
     order.setApprovalStatus(ApprovalStatus.PENDING);
     order.setSubmittedAt(OffsetDateTime.now());
     Supplier supplier = supplierRepository.findById(order.getSupplierId()).orElse(null);
@@ -774,6 +829,7 @@ public class ProcurementService {
         .orElseThrow(() -> new BusinessException("采购订单不存在"));
     if (order.getStatus() != PurchaseOrderStatus.DRAFT || order.getApprovalStatus() != ApprovalStatus.PENDING)
       throw new BusinessException("该订单当前不可审批");
+    if (order.getSubmittedAt() == null) throw new BusinessException("采购订单尚未提交审批");
     if (decision == ApprovalStatus.PENDING) throw new BusinessException("请选择通过或驳回");
     order.setApprovalStatus(decision); order.setApproverName(currentName()); order.setApprovalComment(comment); order.setApprovedAt(OffsetDateTime.now());
     if (decision == ApprovalStatus.APPROVED) {
@@ -1082,6 +1138,7 @@ public class ProcurementService {
         defaultTaxRate(receipt.getTaxRate()),
         receipt.getAmount(),
         receipt.getReceivedDate(),
+        receipt.getPayableDueDate(),
         receipt.getDeliveryNo(),
         receipt.getReceiverName(),
         order == null ? null : order.getCostType(),

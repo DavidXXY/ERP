@@ -1,0 +1,4 @@
+UIE2E TEST DOCUMENT
+Batch: UIE2E-20260724-0900
+Document type: Supplier business license test fixture
+This file contains no real company or personal information.

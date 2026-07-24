@@ -374,7 +374,7 @@ const forecastTotal = computed(
   () => forecastBuckets.value[2] ?? { net: 0, receivable: 0, payable: 0 },
 );
 const agingBuckets = computed(() => [
-  buildAgingBucket("current", "未到期", Number.NEGATIVE_INFINITY, -1),
+  buildAgingBucket("current", "未到期", Number.NEGATIVE_INFINITY, 0),
   buildAgingBucket("d1", "逾期1-30天", 1, 30),
   buildAgingBucket("d31", "逾期31-60天", 31, 60),
   buildAgingBucket("d61", "逾期60天以上", 61, Number.POSITIVE_INFINITY),
@@ -599,7 +599,7 @@ function inAgingBucket(value: string, minDays: number, maxDays: number) {
   return overdue >= minDays && overdue <= maxDays;
 }
 function daysOverdue(value: string) {
-  return Math.max(0, -daysFromToday(value));
+  return -daysFromToday(value);
 }
 function daysFromToday(value: string) {
   const today = new Date();
@@ -616,7 +616,7 @@ function formatMoney(value: number) {
     maximumFractionDigits: 2,
   }).format(value || 0);
 }
-function moneyFormatter(value: number | string) {
+function moneyFormatter({ value }: { value: number | string }) {
   return formatMoney(Number(value));
 }
 </script>

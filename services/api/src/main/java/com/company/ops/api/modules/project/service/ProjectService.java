@@ -23,6 +23,7 @@ import com.company.ops.api.modules.project.dto.ProjectBudgetItemResponse;
 import com.company.ops.api.modules.project.dto.ProjectCostEntryResponse;
 import com.company.ops.api.modules.project.dto.ProjectDetailResponse;
 import com.company.ops.api.modules.project.dto.ProjectProfitabilityResponse;
+import com.company.ops.api.modules.project.dto.ProjectManagerOption;
 import com.company.ops.api.modules.project.dto.ProjectResponse;
 import com.company.ops.api.modules.project.dto.ProjectStageRecordResponse;
 import com.company.ops.api.modules.project.repository.ProjectBudgetItemRepository;
@@ -30,6 +31,7 @@ import com.company.ops.api.modules.project.repository.ProjectCostEntryRepository
 import com.company.ops.api.modules.project.repository.ProjectRepository;
 import com.company.ops.api.modules.project.repository.ProjectStageRecordRepository;
 import com.company.ops.api.modules.system.security.DataScopeService;
+import com.company.ops.api.modules.system.repository.SystemUserRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import org.springframework.data.domain.Page;
@@ -61,6 +63,7 @@ public class ProjectService {
   private final DataScopeService dataScopeService;
   private final ServiceContractRepository contractRepository;
   private final DeleteGovernanceService deleteGovernanceService;
+  private final SystemUserRepository userRepository;
   @PersistenceContext
   private EntityManager entityManager;
 
@@ -73,7 +76,8 @@ public class ProjectService {
       ProjectStageRecordRepository stageRecordRepository,
       CustomerRepository customerRepository,
       DataScopeService dataScopeService,
-      DeleteGovernanceService deleteGovernanceService
+      DeleteGovernanceService deleteGovernanceService,
+      SystemUserRepository userRepository
   ) {
     this.projectRepository = projectRepository;
     this.budgetRepository = budgetRepository;
@@ -84,13 +88,21 @@ public class ProjectService {
     this.dataScopeService = dataScopeService;
     this.contractRepository = contractRepository;
     this.deleteGovernanceService = deleteGovernanceService;
+    this.userRepository = userRepository;
+  }
+
+  @Transactional(readOnly = true)
+  public List<ProjectManagerOption> managerOptions() {
+    return userRepository.findEnabledByRoleCode("PROJECT_MANAGER").stream()
+        .map(user -> new ProjectManagerOption(user.getId(), user.getUsername(), user.getDisplayName()))
+        .toList();
   }
 
   @Transactional(readOnly = true)
   public Page<ProjectResponse> listProjects(Pageable pageable) {
     Page<Project> projectPage = projectRepository.findAllByOrderByCreatedAtDesc(pageable);
     List<Project> visibleProjects = deleteGovernanceService.visible("PROJECT", projectPage.getContent(), Project::getId).stream()
-        .filter(project -> dataScopeService.canViewOwner(project.getManagerName()))
+        .filter(this::canViewProject)
         .toList();
     Map<UUID, String> customerNames = loadCustomerNames(visibleProjects);
     return new org.springframework.data.domain.PageImpl<>(
@@ -104,14 +116,14 @@ public class ProjectService {
   public ProjectDetailResponse getProject(UUID id) {
     Project project = requireProject(id);
     if (deleteGovernanceService.isHidden("PROJECT", id)) throw new BusinessException("项目不存在");
-    if (!dataScopeService.canViewOwner(project.getManagerName())) throw new BusinessException("无权查看该项目");
+    if (!canViewProject(project)) throw new BusinessException("无权查看该项目");
     return toDetail(project);
   }
 
   @Transactional(readOnly = true)
   public List<ProjectProfitabilityResponse> profitability() {
     List<Project> projects = projectRepository.findAllByOrderByCreatedAtDesc().stream()
-        .filter(project -> dataScopeService.canViewOwner(project.getManagerName()))
+        .filter(this::canViewProject)
         .toList();
     Map<UUID, String> customerNames = loadCustomerNames(projects);
     return projects.stream()
@@ -424,6 +436,14 @@ public class ProjectService {
         project.getProgress(),
         project.getWarrantyEndDate()
     );
+  }
+
+  private boolean canViewProject(Project project) {
+    if (dataScopeService.canViewOwner(project.getManagerName())) return true;
+    return dataScopeService.hasAuthority("project:approve")
+        && (project.getApprovalStatus() == ProjectApprovalStatus.PENDING
+            || project.getManagerName() == null
+            || project.getManagerName().startsWith("待"));
   }
 
   private ProjectProfitabilityResponse toProfitability(Project project, String customerName) {

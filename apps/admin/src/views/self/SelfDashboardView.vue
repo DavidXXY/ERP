@@ -38,13 +38,13 @@
         >
         <a-col :xs="12" :lg="6"
           ><div class="self-metric-card">
-            <span>本月新增</span><strong>{{ analytics.newThisMonth }}</strong>
+            <span>本月请假</span><strong>{{ monthLeaveCount }}</strong>
           </div></a-col
         >
         <a-col :xs="12" :lg="6"
           ><div class="self-metric-card warn">
             <span>待审批请假</span
-            ><strong>{{ analytics.leavePendingCount }}</strong>
+            ><strong>{{ pendingLeaveCount }}</strong>
           </div></a-col
         >
       </a-row>
@@ -173,16 +173,18 @@
         </a-card>
       </a-col>
       <a-col :xs="24" :lg="8">
-        <a-card title="员工概览">
+        <a-card title="我的档案">
           <a-descriptions :column="1" size="small">
-            <a-descriptions-item label="总人数">{{
-              analytics.totalEmployees
-            }}</a-descriptions-item>
-            <a-descriptions-item label="在职人数">{{
-              analytics.activeEmployees
+            <a-descriptions-item label="工号">{{
+              employee?.workNo || "-"
             }}</a-descriptions-item>
             <a-descriptions-item label="当前组织">{{
               employee?.organizationName || "-"
+            }}</a-descriptions-item>
+            <a-descriptions-item label="人员状态">{{
+              employee?.employmentStatus === "ACTIVE"
+                ? "在职"
+                : employee?.employmentStatus || "-"
             }}</a-descriptions-item>
           </a-descriptions>
         </a-card>
@@ -235,7 +237,6 @@ import {
   BarChartOutlined,
   CheckSquareOutlined,
 } from "@ant-design/icons-vue";
-import { useAuthStore } from "@/stores/auth";
 import {
   getSelfProfile,
   getSelfLeaveBalances,
@@ -245,29 +246,18 @@ import {
   type LeaveRecord,
   type TodoItem,
 } from "@/api/hr";
-import { getHrAnalytics, type HrAnalytics } from "@/api/hr";
 
-const auth = useAuthStore();
 const loading = ref(false);
 const employee = ref<{
   name: string;
+  workNo?: string;
   position?: string;
   organizationName?: string;
+  employmentStatus?: string;
 }>();
 const balances = ref<LeaveBalanceRecord[]>([]);
 const recentLeaves = ref<LeaveRecord[]>([]);
 const todos = ref<TodoItem[]>([]);
-const analytics = ref<HrAnalytics>({
-  totalEmployees: 0,
-  activeEmployees: 0,
-  leftEmployees: 0,
-  newThisMonth: 0,
-  leavePendingCount: 0,
-  educationDistribution: [],
-  statusDistribution: [],
-  organizationDistribution: [],
-  recentLifecycles: [],
-});
 
 const greeting = computed(() => {
   const h = new Date().getHours();
@@ -280,6 +270,14 @@ const greeting = computed(() => {
 const approvalTodoCount = computed(
   () => todos.value.filter((item) => item.type === "APPROVAL_PENDING").length,
 );
+const pendingLeaveCount = computed(
+  () => recentLeaves.value.filter((item) => item.status === "PENDING").length,
+);
+const monthLeaveCount = computed(() => {
+  const month = new Date().toISOString().slice(0, 7);
+  return recentLeaves.value.filter((item) => item.startDate.startsWith(month))
+    .length;
+});
 
 function calcPct(b: LeaveBalanceRecord) {
   return Math.round((b.remainingDays / Math.max(b.totalDays, 1)) * 100);
@@ -326,23 +324,23 @@ const leafCols = [
 async function loadData() {
   loading.value = true;
   try {
-    const [profile, bal, leaves, hrA, todosData] = await Promise.all([
+    const [profile, bal, leaves, todosData] = await Promise.all([
       getSelfProfile().catch(() => null),
       getSelfLeaveBalances().catch(() => []),
       getSelfLeaves().catch(() => []),
-      getHrAnalytics().catch(() => analytics.value),
       getSelfTodos().catch(() => []),
     ]);
     todos.value = todosData || [];
     if (profile)
       employee.value = {
         name: profile.employee.name,
+        workNo: profile.employee.workNo,
         position: profile.employee.position,
         organizationName: profile.employee.organizationName,
+        employmentStatus: profile.employee.employmentStatus,
       };
     balances.value = bal;
     recentLeaves.value = leaves.slice(0, 10);
-    analytics.value = hrA;
   } catch {
   } finally {
     loading.value = false;

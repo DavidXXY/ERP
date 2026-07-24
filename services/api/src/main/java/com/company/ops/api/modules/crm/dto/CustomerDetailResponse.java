@@ -115,6 +115,7 @@ public record CustomerDetailResponse(
 
   public record CustomerMetrics(
       int contractCount,
+      int projectCount,
       BigDecimal contractAmount,
       BigDecimal outstandingAmount,
       BigDecimal settledAmount

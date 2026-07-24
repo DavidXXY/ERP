@@ -35,8 +35,12 @@ public class UserController {
 
   @GetMapping
   @PreAuthorize("hasAuthority('system:user:view')")
-  public ApiResponse<Page<UserResponse>> list(@PageableDefault(size = 20) Pageable pageable) {
-    return ApiResponse.ok(userService.listUsers(pageable));
+  public ApiResponse<Page<UserResponse>> list(
+      @RequestParam(required = false) String keyword,
+      @RequestParam(required = false) Boolean enabled,
+      @RequestParam(required = false) UUID roleId,
+      @PageableDefault(size = 20) Pageable pageable) {
+    return ApiResponse.ok(userService.listUsers(keyword, enabled, roleId, pageable));
   }
 
   @GetMapping("/options")

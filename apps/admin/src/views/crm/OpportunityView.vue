@@ -400,9 +400,16 @@ const customerOptions = computed(() =>
     value: item.id,
   })),
 );
-const userOptions = computed(() =>
-  users.value.map((u) => ({ label: u.displayName, value: u.displayName })),
-);
+const userOptions = computed(() => {
+  const options = users.value.map((u) => ({
+    label: u.displayName,
+    value: u.displayName,
+  }));
+  const selected = createForm.ownerName;
+  return selected && !options.some((item) => item.value === selected)
+    ? [{ label: selected, value: selected }, ...options]
+    : options;
+});
 const filteredOpportunities = computed(() => {
   const term = keyword.value.trim().toLowerCase();
   const results = opportunities.value.filter((item) => {
@@ -475,7 +482,9 @@ async function loadData() {
     [opportunities.value, customers.value, users.value] = await Promise.all([
       listOpportunities(),
       listCustomers(),
-      listUsersApi(1, 9999).then((r) => r.content),
+      listUsersApi(0, 9999)
+        .then((r) => r.content)
+        .catch(() => [] as UserResponse[]),
     ]);
   } catch (error) {
     message.error(error instanceof Error ? error.message : "商机加载失败");

@@ -159,11 +159,15 @@
                   >详情</a-button
                 >
                 <a-button
-                  v-if="record.status === 'PENDING_APPROVAL' && auth.can('crm:contract:update')"
+                  v-if="
+                    record.status === 'PENDING_APPROVAL' &&
+                    auth.can('crm:contract:update')
+                  "
                   size="small"
                   type="link"
                   @click="openDetail(record)"
-                >去审批</a-button>
+                  >去审批</a-button
+                >
                 <a-button
                   v-if="record.status === 'PENDING_SEAL'"
                   size="small"

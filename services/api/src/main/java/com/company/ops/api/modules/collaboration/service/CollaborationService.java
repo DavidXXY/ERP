@@ -18,6 +18,7 @@ import com.company.ops.api.modules.procurement.domain.*;
 import com.company.ops.api.modules.procurement.repository.*;
 import com.company.ops.api.modules.project.domain.*;
 import com.company.ops.api.modules.project.repository.*;
+import com.company.ops.api.modules.project.service.ProjectCostLedgerService;
 import com.company.ops.api.modules.system.domain.*;
 import com.company.ops.api.modules.system.repository.*;
 import com.company.ops.api.modules.system.security.DataScopeService;
@@ -40,6 +41,7 @@ public class CollaborationService {
   private final ProjectStaffAssignmentRepository assignments;
   private final ProjectRepository projects;
   private final ProjectCostEntryRepository projectCosts;
+  private final ProjectCostLedgerService costLedger;
   private final ServiceContractRepository contracts;
   private final CustomerRepository customers;
   private final ReceivableRepository receivables;
@@ -63,7 +65,8 @@ public class CollaborationService {
       ResponsibilityBindingRepository responsibilities, ResponsibilityCollaboratorRepository responsibilityCollaborators,
       ProjectHandoverRepository handovers,
       ProjectStaffAssignmentRepository assignments, ProjectRepository projects,
-      ProjectCostEntryRepository projectCosts, ServiceContractRepository contracts,
+      ProjectCostEntryRepository projectCosts, ProjectCostLedgerService costLedger,
+      ServiceContractRepository contracts,
       CustomerRepository customers, ReceivableRepository receivables,
       PurchaseRequestRepository purchaseRequests, PurchaseOrderRepository purchaseOrders,
       GoodsReceiptRepository receipts, SupplierInvoiceRepository invoices,
@@ -73,7 +76,7 @@ public class CollaborationService {
       EmployeeCertificateRepository certificates, CollaborationGovernanceService governance,
       DataScopeService dataScope, DocumentFileRepository documents, OfficeService officeService) {
     this.responsibilities=responsibilities; this.responsibilityCollaborators=responsibilityCollaborators; this.handovers=handovers; this.assignments=assignments;
-    this.projects=projects; this.projectCosts=projectCosts; this.contracts=contracts; this.customers=customers;
+    this.projects=projects; this.projectCosts=projectCosts; this.costLedger=costLedger; this.contracts=contracts; this.customers=customers;
     this.receivables=receivables; this.purchaseRequests=purchaseRequests; this.purchaseOrders=purchaseOrders;
     this.receipts=receipts; this.invoices=invoices; this.payables=payables; this.payments=payments;
     this.suppliers=suppliers; this.approvals=approvals; this.users=users; this.organizations=organizations;
@@ -193,28 +196,32 @@ public class CollaborationService {
   @Transactional
   public Map<String,Object> recordHours(UUID id,StaffHoursRequest request) {
     ProjectStaffAssignment item=assignments.findById(id).orElseThrow(()->new BusinessException("派工记录不存在"));
-    BigDecimal previousCost=amount(item.getActualHours()).multiply(amount(item.getHourlyCost()));
     item.setActualHours(request.actualHours()); item.setStatus(request.actualHours().compareTo(item.getPlannedHours())>=0?"COMPLETED":"IN_PROGRESS");
     BigDecimal laborCost=amount(item.getActualHours()).multiply(amount(item.getHourlyCost()));
     String sourceNo="STAFF-"+item.getId();
-    ProjectCostEntry cost=projectCosts.findBySourceNo(sourceNo).orElseGet(ProjectCostEntry::new);
-    cost.setProjectId(item.getProjectId());cost.setCategory(ProjectCostCategory.LABOR);cost.setSourceType(ProjectCostSource.MANUAL);
-    cost.setSourceNo(sourceNo);cost.setDescription("项目人员工时成本");cost.setAmount(laborCost);cost.setIncurredDate(LocalDate.now());projectCosts.save(cost);
+    costLedger.upsert(item.getProjectId(),ProjectCostCategory.LABOR,ProjectCostSource.MANUAL,
+        sourceNo,"项目人员工时成本",laborCost,LocalDate.now());
     Project project=projects.findById(item.getProjectId()).orElseThrow(()->new BusinessException("项目不存在"));
-    project.setActualCost(amount(project.getActualCost()).subtract(previousCost).add(laborCost));projects.save(project);
     return assignmentView(assignments.save(item),project,users.findById(item.getUserId()).orElse(null));
   }
 
   @Transactional(readOnly=true)
   public List<Map<String,Object>> budgets() {
-    List<PurchaseOrder> orderRows=purchaseOrders.findAll();
-    List<ProjectCostEntry> costRows=projectCosts.findAll();
-    List<ProjectStaffAssignment> staffRows=assignments.findAll();
-    return projects.findAllByOrderByCreatedAtDesc().stream().filter(this::visibleProject).map(p->{
-      BigDecimal committed=orderRows.stream().filter(o->Objects.equals(o.getProjectId(),p.getId())&&o.getStatus()!=PurchaseOrderStatus.CANCELLED)
-          .map(o->amount(o.getOrderAmount())).reduce(BigDecimal.ZERO,BigDecimal::add);
-      BigDecimal actual=costRows.stream().filter(c->c.getProjectId().equals(p.getId())).map(c->amount(c.getAmount())).reduce(BigDecimal.ZERO,BigDecimal::add);
-      BigDecimal labor=staffRows.stream().filter(s->s.getProjectId().equals(p.getId())).map(s->amount(s.getActualHours()).multiply(amount(s.getHourlyCost()))).reduce(BigDecimal.ZERO,BigDecimal::add);
+    List<Project> projectRows=projects.findAllByOrderByCreatedAtDesc().stream().filter(this::visibleProject).toList();
+    Set<UUID> projectIds=projectRows.stream().map(Project::getId).collect(Collectors.toSet());
+    List<PurchaseOrder> orderRows=projectIds.isEmpty()?List.of():purchaseOrders.findByProjectIdIn(projectIds);
+    List<ProjectCostEntry> costRows=projectIds.isEmpty()?List.of():projectCosts.findByProjectIdIn(projectIds);
+    List<ProjectStaffAssignment> staffRows=projectIds.isEmpty()?List.of():assignments.findByProjectIdIn(projectIds);
+    Map<UUID,BigDecimal> committedByProject=orderRows.stream().filter(o->o.getProjectId()!=null&&o.getStatus()!=PurchaseOrderStatus.CANCELLED)
+        .collect(Collectors.groupingBy(PurchaseOrder::getProjectId,Collectors.reducing(BigDecimal.ZERO,o->amount(o.getOrderAmount()),BigDecimal::add)));
+    Map<UUID,BigDecimal> actualByProject=costRows.stream().collect(Collectors.groupingBy(ProjectCostEntry::getProjectId,
+        Collectors.reducing(BigDecimal.ZERO,c->amount(c.getAmount()),BigDecimal::add)));
+    Map<UUID,BigDecimal> laborByProject=staffRows.stream().collect(Collectors.groupingBy(ProjectStaffAssignment::getProjectId,
+        Collectors.reducing(BigDecimal.ZERO,s->amount(s.getActualHours()).multiply(amount(s.getHourlyCost())),BigDecimal::add)));
+    return projectRows.stream().map(p->{
+      BigDecimal committed=committedByProject.getOrDefault(p.getId(),BigDecimal.ZERO);
+      BigDecimal actual=actualByProject.getOrDefault(p.getId(),BigDecimal.ZERO);
+      BigDecimal labor=laborByProject.getOrDefault(p.getId(),BigDecimal.ZERO);
       BigDecimal used=actual; BigDecimal remaining=amount(p.getBudgetAmount()).subtract(committed.max(used));
       int rate=amount(p.getBudgetAmount()).signum()==0?0:committed.max(used).multiply(BigDecimal.valueOf(100)).divide(p.getBudgetAmount(),0,java.math.RoundingMode.HALF_UP).intValue();
       Map<String,Object> m=new LinkedHashMap<>(); m.put("projectId",p.getId());m.put("projectCode",p.getCode());m.put("projectName",p.getName());
@@ -225,37 +232,58 @@ public class CollaborationService {
 
   @Transactional(readOnly=true)
   public List<Map<String,Object>> financialMilestones() {
-    Map<UUID,Customer> customerMap=customers.findAll().stream().collect(Collectors.toMap(Customer::getId,Function.identity()));
-    List<Receivable> all=receivables.findAll();
     Set<UUID> visibleContractIds=projects.findAllByOrderByCreatedAtDesc().stream().filter(this::visibleProject).map(Project::getContractId).filter(Objects::nonNull).collect(Collectors.toSet());
-    return contracts.findAllByOrderByEndDateAsc().stream().filter(c->visibleContractIds.contains(c.getId())||
-        Optional.ofNullable(customerMap.get(c.getCustomerId())).map(x->dataScope.canViewOwner(x.getOwnerName())).orElse(false)).map(c->{
-      List<Receivable> rows=all.stream().filter(r->Objects.equals(r.getContractId(),c.getId())).toList();
+    List<ServiceContract> contractRows=contracts.findAllByOrderByEndDateAsc();
+    Set<UUID> customerIds=contractRows.stream().map(ServiceContract::getCustomerId).collect(Collectors.toSet());
+    Map<UUID,Customer> customerMap=customers.findAllById(customerIds).stream().collect(Collectors.toMap(Customer::getId,Function.identity()));
+    List<ServiceContract> visibleContracts=contractRows.stream().filter(c->visibleContractIds.contains(c.getId())||
+        Optional.ofNullable(customerMap.get(c.getCustomerId())).map(x->dataScope.canViewOwner(x.getOwnerName())).orElse(false)).toList();
+    Set<UUID> contractIds=visibleContracts.stream().map(ServiceContract::getId).collect(Collectors.toSet());
+    Map<UUID,List<Receivable>> receivablesByContract=(contractIds.isEmpty()?List.<Receivable>of():receivables.findByContractIdIn(contractIds)).stream()
+        .filter(r->r.getContractId()!=null).collect(Collectors.groupingBy(Receivable::getContractId));
+    Map<UUID,UUID> departmentByContract=new HashMap<>();
+    if(!contractIds.isEmpty())projects.findByContractIdIn(contractIds).stream().filter(this::visibleProject).forEach(p->{
+      UUID departmentId=responsibilityDepartmentId("PROJECT",p.getId());
+      if(departmentId!=null)departmentByContract.putIfAbsent(p.getContractId(),departmentId);
+    });
+    return visibleContracts.stream().map(c->{
+      List<Receivable> rows=receivablesByContract.getOrDefault(c.getId(),List.of());
       BigDecimal billed=rows.stream().filter(r->r.getInvoiceNo()!=null).map(r->amount(r.getAmount())).reduce(BigDecimal.ZERO,BigDecimal::add);
       BigDecimal received=rows.stream().map(r->amount(r.getSettledAmount())).reduce(BigDecimal.ZERO,BigDecimal::add);
       BigDecimal outstanding=rows.stream().map(r->amount(r.getAmount()).subtract(amount(r.getSettledAmount()))).reduce(BigDecimal.ZERO,BigDecimal::add);
       LocalDate nextDue=rows.stream().filter(r->amount(r.getAmount()).compareTo(amount(r.getSettledAmount()))>0).map(Receivable::getDueDate).min(LocalDate::compareTo).orElse(null);
       Map<String,Object> m=new LinkedHashMap<>();m.put("contractId",c.getId());m.put("contractCode",c.getCode());m.put("customerName",Optional.ofNullable(customerMap.get(c.getCustomerId())).map(Customer::getName).orElse("-"));
       m.put("contractAmount",amount(c.getAmount()));m.put("billedAmount",billed);m.put("receivedAmount",received);m.put("outstandingAmount",outstanding);
-      m.put("nextDueDate",nextDue);m.put("businessDate",c.getStartDate());m.put("departmentId",projectDepartmentForContract(c.getId()));m.put("overdue",nextDue!=null&&nextDue.isBefore(LocalDate.now()));m.put("status",c.getStatus().name());return m;
+      m.put("nextDueDate",nextDue);m.put("businessDate",c.getStartDate());m.put("departmentId",departmentByContract.get(c.getId()));m.put("overdue",nextDue!=null&&nextDue.isBefore(LocalDate.now()));m.put("status",c.getStatus().name());return m;
     }).toList();
   }
 
   @Transactional(readOnly=true)
   public List<Map<String,Object>> procurementReconciliation() {
-    List<GoodsReceipt> receiptRows=receipts.findAll(); List<SupplierInvoice> invoiceRows=invoices.findAll();
-    List<ProcurementPayable> payableRows=payables.findAll(); Map<UUID,Supplier> supplierMap=suppliers.findAll().stream().collect(Collectors.toMap(Supplier::getId,Function.identity()));
-    Map<UUID,Project> projectMap=projects.findAll().stream().collect(Collectors.toMap(Project::getId,Function.identity()));
+    List<PurchaseOrder> orderRows=purchaseOrders.findAllByOrderByCreatedAtDesc();
+    Set<UUID> projectIds=orderRows.stream().map(PurchaseOrder::getProjectId).filter(Objects::nonNull).collect(Collectors.toSet());
+    Map<UUID,Project> projectMap=projects.findAllById(projectIds).stream().collect(Collectors.toMap(Project::getId,Function.identity()));
+    List<PurchaseOrder> visibleOrders=orderRows.stream().filter(o->o.getProjectId()!=null?
+        Optional.ofNullable(projectMap.get(o.getProjectId())).map(this::visibleProject).orElse(false):dataScope.canViewOrganization(o.getDepartmentId())).toList();
+    Set<UUID> orderIds=visibleOrders.stream().map(PurchaseOrder::getId).collect(Collectors.toSet());
+    List<GoodsReceipt> receiptRows=orderIds.isEmpty()?List.of():receipts.findByOrderIdIn(orderIds);
+    List<SupplierInvoice> invoiceRows=orderIds.isEmpty()?List.of():invoices.findByOrderIdIn(orderIds);
+    List<ProcurementPayable> payableRows=orderIds.isEmpty()?List.of():payables.findByOrderIdIn(orderIds);
+    Set<UUID> supplierIds=visibleOrders.stream().map(PurchaseOrder::getSupplierId).filter(Objects::nonNull).collect(Collectors.toSet());
+    Map<UUID,Supplier> supplierMap=suppliers.findAllById(supplierIds).stream().collect(Collectors.toMap(Supplier::getId,Function.identity()));
     Map<String,Long> invoiceNoCounts=invoiceRows.stream().collect(Collectors.groupingBy(SupplierInvoice::getInvoiceNo,Collectors.counting()));
-    return purchaseOrders.findAllByOrderByCreatedAtDesc().stream().filter(o->o.getProjectId()!=null?
-        Optional.ofNullable(projectMap.get(o.getProjectId())).map(this::visibleProject).orElse(false):dataScope.canViewOrganization(o.getDepartmentId())).map(o->{
-      List<GoodsReceipt> orderReceipts=receiptRows.stream().filter(r->r.getOrderId().equals(o.getId())).toList();
-      List<SupplierInvoice> orderInvoices=invoiceRows.stream().filter(i->i.getOrderId().equals(o.getId())).toList();
+    Map<UUID,List<GoodsReceipt>> receiptsByOrder=receiptRows.stream().collect(Collectors.groupingBy(GoodsReceipt::getOrderId));
+    Map<UUID,List<SupplierInvoice>> invoicesByOrder=invoiceRows.stream().collect(Collectors.groupingBy(SupplierInvoice::getOrderId));
+    Map<UUID,List<ProcurementPayable>> payablesByOrder=payableRows.stream().collect(Collectors.groupingBy(ProcurementPayable::getOrderId));
+    return visibleOrders.stream().map(o->{
+      List<GoodsReceipt> orderReceipts=receiptsByOrder.getOrDefault(o.getId(),List.of());
+      List<SupplierInvoice> orderInvoices=invoicesByOrder.getOrDefault(o.getId(),List.of());
+      List<ProcurementPayable> orderPayables=payablesByOrder.getOrDefault(o.getId(),List.of());
       BigDecimal receivedQty=orderReceipts.stream().map(r->amount(r.getQualifiedQty())).reduce(BigDecimal.ZERO,BigDecimal::add);
       BigDecimal received=orderReceipts.stream().map(r->amount(r.getQualifiedQty()).multiply(amount(r.getUnitPrice()))).reduce(BigDecimal.ZERO,BigDecimal::add);
       BigDecimal invoiced=orderInvoices.stream().map(i->amount(i.getAmount())).reduce(BigDecimal.ZERO,BigDecimal::add);
-      BigDecimal payable=payableRows.stream().filter(p->p.getOrderId().equals(o.getId())&&p.getStatus()!=PayableStatus.CANCELLED).map(p->amount(p.getAmount())).reduce(BigDecimal.ZERO,BigDecimal::add);
-      BigDecimal paid=payableRows.stream().filter(p->p.getOrderId().equals(o.getId())).map(p->amount(p.getPaidAmount())).reduce(BigDecimal.ZERO,BigDecimal::add);
+      BigDecimal payable=orderPayables.stream().filter(p->p.getStatus()!=PayableStatus.CANCELLED).map(p->amount(p.getAmount())).reduce(BigDecimal.ZERO,BigDecimal::add);
+      BigDecimal paid=orderPayables.stream().map(p->amount(p.getPaidAmount())).reduce(BigDecimal.ZERO,BigDecimal::add);
       BigDecimal tolerance=amount(o.getOrderAmount()).multiply(new BigDecimal("0.005")).max(BigDecimal.ONE);
       boolean amountMatch=received.subtract(invoiced).abs().compareTo(tolerance)<=0&&invoiced.subtract(payable).abs().compareTo(tolerance)<=0;
       boolean quantityComplete=receivedQty.compareTo(amount(o.getOrderedQty()))>=0;
@@ -276,28 +304,42 @@ public class CollaborationService {
   @Transactional
   public List<Map<String,Object>> todos() {
     List<Map<String,Object>> rows=new ArrayList<>(); OffsetDateTime now=OffsetDateTime.now();
-    Map<UUID,Project> projectMap=projects.findAll().stream().collect(Collectors.toMap(Project::getId,Function.identity()));
-    Map<UUID,PurchaseOrder> orderMap=purchaseOrders.findAll().stream().collect(Collectors.toMap(PurchaseOrder::getId,Function.identity()));
+    var pendingApproval=com.company.ops.api.modules.procurement.domain.ApprovalStatus.PENDING;
+    List<PurchaseRequest> pendingRequests=purchaseRequests.findByApprovalStatus(pendingApproval);
+    List<PurchaseOrder> pendingOrders=purchaseOrders.findByApprovalStatus(pendingApproval);
+    List<ProjectHandover> pendingHandovers=handovers.findByStatusNot("ACCEPTED");
+    List<SupplierInvoice> mismatchInvoices=invoices.findByMatchStatusNot("MATCHED");
+    Set<UUID> invoiceOrderIds=mismatchInvoices.stream().map(SupplierInvoice::getOrderId).collect(Collectors.toSet());
+    Map<UUID,PurchaseOrder> orderMap=purchaseOrders.findAllById(invoiceOrderIds).stream().collect(Collectors.toMap(PurchaseOrder::getId,Function.identity()));
+    Set<UUID> projectIds=new HashSet<>();
+    pendingRequests.stream().map(PurchaseRequest::getProjectId).filter(Objects::nonNull).forEach(projectIds::add);
+    pendingOrders.stream().map(PurchaseOrder::getProjectId).filter(Objects::nonNull).forEach(projectIds::add);
+    pendingHandovers.stream().map(ProjectHandover::getProjectId).filter(Objects::nonNull).forEach(projectIds::add);
+    orderMap.values().stream().map(PurchaseOrder::getProjectId).filter(Objects::nonNull).forEach(projectIds::add);
+    Map<UUID,Project> projectMap=projects.findAllById(projectIds).stream().collect(Collectors.toMap(Project::getId,Function.identity()));
     Set<UUID> visibleContractIds=financialMilestones().stream().map(x->(UUID)x.get("contractId")).collect(Collectors.toSet());
-    approvals.findAllByOrderByCreatedAtDesc().stream().filter(a->a.getStatus()==ApprovalStatus.PENDING&&dataScope.canViewOwner(a.getApplicantName())).forEach(a->rows.add(todo("APPROVAL",a.getId(),a.getTitle(),a.getApplicantName(),a.getCreatedAt(),"/office/approvals",a.getDelegatedUserId())));
-    purchaseRequests.findAll().stream().filter(x->x.getApprovalStatus()==com.company.ops.api.modules.procurement.domain.ApprovalStatus.PENDING&&visibleProcurementTarget(x.getProjectId(),x.getDepartmentId(),projectMap)).forEach(x->rows.add(todo("PURCHASE_REQUEST",x.getId(),"采购申请待审批 "+x.getCode(),x.getRequesterName(),x.getCreatedAt(),"/procurement/requests",null)));
-    purchaseOrders.findAll().stream().filter(x->x.getApprovalStatus()==com.company.ops.api.modules.procurement.domain.ApprovalStatus.PENDING&&visibleProcurementTarget(x.getProjectId(),x.getDepartmentId(),projectMap)).forEach(x->rows.add(todo("PURCHASE_ORDER",x.getId(),"采购订单待审批 "+x.getCode(),x.getCostTargetName(),x.getCreatedAt(),"/procurement/orders",null)));
-    handovers.findAll().stream().filter(x->!"ACCEPTED".equals(x.getStatus())&&Optional.ofNullable(projectMap.get(x.getProjectId())).map(this::visibleProject).orElse(false)).forEach(x->rows.add(todo("HANDOVER",x.getId(),"合同转项目待交接",projectName(x.getProjectId()),x.getCreatedAt(),"/collaboration",x.getProjectManagerId())));
-    invoices.findAll().stream().filter(x->!"MATCHED".equals(x.getMatchStatus())).filter(x->Optional.ofNullable(orderMap.get(x.getOrderId())).map(o->visibleProcurementTarget(o.getProjectId(),o.getDepartmentId(),projectMap)).orElse(false)).forEach(x->rows.add(todo("INVOICE_MATCH",x.getId(),"供应商发票匹配异常 "+x.getInvoiceNo(),x.getDifferenceAmount().toPlainString(),x.getCreatedAt(),"/procurement/controls",null)));
-    receivables.findAll().stream().filter(x->visibleContractIds.contains(x.getContractId())&&amount(x.getAmount()).compareTo(amount(x.getSettledAmount()))>0&&x.getDueDate().isBefore(LocalDate.now())).forEach(x->rows.add(todo("RECEIVABLE",x.getId(),"应收款已逾期 "+x.getCode(),x.getDueDate().toString(),x.getCreatedAt(),"/finance/receivables",null)));
+    approvals.findByStatusOrderByCreatedAtDesc(ApprovalStatus.PENDING).stream().filter(a->dataScope.canViewOwner(a.getApplicantName())).forEach(a->rows.add(todo("APPROVAL",a.getId(),a.getTitle(),a.getApplicantName(),a.getCreatedAt(),"/office/approvals",a.getDelegatedUserId())));
+    pendingRequests.stream().filter(x->visibleProcurementTarget(x.getProjectId(),x.getDepartmentId(),projectMap)).forEach(x->rows.add(todo("PURCHASE_REQUEST",x.getId(),"采购申请待审批 "+x.getCode(),x.getRequesterName(),x.getCreatedAt(),"/procurement/requests",null)));
+    pendingOrders.stream().filter(x->visibleProcurementTarget(x.getProjectId(),x.getDepartmentId(),projectMap)).forEach(x->rows.add(todo("PURCHASE_ORDER",x.getId(),"采购订单待审批 "+x.getCode(),x.getCostTargetName(),x.getCreatedAt(),"/procurement/orders",null)));
+    pendingHandovers.stream().filter(x->Optional.ofNullable(projectMap.get(x.getProjectId())).map(this::visibleProject).orElse(false)).forEach(x->rows.add(todo("HANDOVER",x.getId(),"合同转项目待交接",Optional.ofNullable(projectMap.get(x.getProjectId())).map(Project::getName).orElse("-"),x.getCreatedAt(),"/collaboration",x.getProjectManagerId())));
+    mismatchInvoices.stream().filter(x->Optional.ofNullable(orderMap.get(x.getOrderId())).map(o->visibleProcurementTarget(o.getProjectId(),o.getDepartmentId(),projectMap)).orElse(false)).forEach(x->rows.add(todo("INVOICE_MATCH",x.getId(),"供应商发票匹配异常 "+x.getInvoiceNo(),amount(x.getDifferenceAmount()).toPlainString(),x.getCreatedAt(),"/procurement/controls",null)));
+    receivables.findOverdueOutstanding(LocalDate.now()).stream().filter(x->visibleContractIds.contains(x.getContractId())).forEach(x->rows.add(todo("RECEIVABLE",x.getId(),"应收款已逾期 "+x.getCode(),x.getDueDate().toString(),x.getCreatedAt(),"/finance/receivables",null)));
     rows.forEach(m->{
       UUID assignee=(UUID)m.remove("defaultAssignee");CollaborationTaskControl control=governance.syncTask((String)m.get("type"),(UUID)m.get("id"),(OffsetDateTime)m.get("createdAt"),assignee);
       Map<String,Object> state=governance.taskControlView((String)m.get("type"),(UUID)m.get("id"));m.putAll(state);
-      UUID controlledAssignee=(UUID)m.get("assigneeUserId");m.put("departmentId",controlledAssignee==null?null:users.findById(controlledAssignee).map(u->u.getOrganization()==null?null:u.getOrganization().getId()).orElse(null));
       OffsetDateTime due=control.getDueAt();long overdue=due!=null&&due.isBefore(now)?Math.max(1,Duration.between(due,now).toDays()+1):0;
       m.put("overdueDays",overdue);m.put("priority",overdue>5?"URGENT":overdue>0?"HIGH":"NORMAL");m.put("escalationLevel",overdue>7?2:overdue>3?1:0);
     });
+    Set<UUID> assigneeIds=rows.stream().map(m->(UUID)m.get("assigneeUserId")).filter(Objects::nonNull).collect(Collectors.toSet());
+    Map<UUID,SystemUser> assigneeMap=users.findAllById(assigneeIds).stream().collect(Collectors.toMap(SystemUser::getId,Function.identity()));
+    rows.forEach(m->{UUID userId=(UUID)m.get("assigneeUserId");SystemUser assignedUser=assigneeMap.get(userId);
+      m.put("assigneeName",assignedUser==null?null:assignedUser.getDisplayName());m.put("departmentId",assignedUser==null||assignedUser.getOrganization()==null?null:assignedUser.getOrganization().getId());});
     rows.sort((a,b)->((OffsetDateTime)b.get("createdAt")).compareTo((OffsetDateTime)a.get("createdAt"))); return rows;
   }
 
   @Transactional(readOnly=true) public List<Map<String,Object>> references(){
     return List.of(Map.of("users",users.findByEnabledTrueOrderByDisplayNameAsc().stream().map(u->Map.of("id",u.getId(),"name",u.getDisplayName(),"departmentId",u.getOrganization()==null?"":u.getOrganization().getId())).toList(),
-        "departments",organizations.findAll().stream().filter(o->o.isEnabled()&&"DEPARTMENT".equals(o.getType())).map(o->Map.of("id",o.getId(),"name",o.getName())).toList(),
+        "departments",organizations.findByEnabledTrueAndTypeOrderBySortOrderAsc("DEPARTMENT").stream().map(o->Map.of("id",o.getId(),"name",o.getName())).toList(),
         "projects",projects.findAllByOrderByCreatedAtDesc().stream().filter(this::visibleProject).map(p->Map.of("id",p.getId(),"code",p.getCode(),"name",p.getName())).toList()));
   }
 
@@ -337,41 +379,81 @@ public class CollaborationService {
     return officeService.listDocumentsByBiz("PROJECT_HANDOVER",id);
   }
   private void applyHandover(ProjectHandover h,HandoverRequest r){h.setProjectId(r.projectId());h.setContractId(r.contractId());h.setSalesOwnerId(r.salesOwnerId());h.setProjectManagerId(r.projectManagerId());h.setSalesDepartmentId(r.salesDepartmentId());h.setDeliveryDepartmentId(r.deliveryDepartmentId());h.setScopeSummary(r.scopeSummary());h.setPaymentTerms(r.paymentTerms());h.setAcceptanceCriteria(r.acceptanceCriteria());h.setCustomerContact(r.customerContact());h.setTechnicalSolution(r.technicalSolution());h.setQuotationSummary(r.quotationSummary());h.setRiskNotes(r.riskNotes());}
-  private List<Map<String,Object>> handoverViews(){Map<UUID,Project> pm=projects.findAll().stream().collect(Collectors.toMap(Project::getId,Function.identity()));Map<UUID,ServiceContract> cm=contracts.findAll().stream().collect(Collectors.toMap(ServiceContract::getId,Function.identity()));return handovers.findAllByOrderByCreatedAtDesc().stream().filter(h->Optional.ofNullable(pm.get(h.getProjectId())).map(this::visibleProject).orElse(false)).map(h->handoverView(h,pm.get(h.getProjectId()),cm.get(h.getContractId()))).toList();}
+  private List<Map<String,Object>> handoverViews(){
+    List<ProjectHandover> rows=handovers.findAllByOrderByCreatedAtDesc();
+    Set<UUID> projectIds=rows.stream().map(ProjectHandover::getProjectId).collect(Collectors.toSet());
+    Set<UUID> contractIds=rows.stream().map(ProjectHandover::getContractId).filter(Objects::nonNull).collect(Collectors.toSet());
+    Map<UUID,Project> pm=projects.findAllById(projectIds).stream().collect(Collectors.toMap(Project::getId,Function.identity()));
+    Map<UUID,ServiceContract> cm=contracts.findAllById(contractIds).stream().collect(Collectors.toMap(ServiceContract::getId,Function.identity()));
+    Map<UUID,Long> materialCounts=rows.isEmpty()?Map.of():documents.countByBizTypeAndBizIdIn("PROJECT_HANDOVER",rows.stream().map(ProjectHandover::getId).toList()).stream()
+        .collect(Collectors.toMap(result->(UUID)result[0],result->(Long)result[1]));
+    return rows.stream().filter(h->Optional.ofNullable(pm.get(h.getProjectId())).map(this::visibleProject).orElse(false))
+        .map(h->handoverView(h,pm.get(h.getProjectId()),cm.get(h.getContractId()),materialCounts.getOrDefault(h.getId(),0L))).toList();
+  }
   private Map<String,Object> handoverView(ProjectHandover h,Project p,ServiceContract c){
+    return handoverView(h,p,c,documents.countByBizTypeAndBizId("PROJECT_HANDOVER",h.getId()));
+  }
+  private Map<String,Object> handoverView(ProjectHandover h,Project p,ServiceContract c,long materialCount){
     Map<String,Object>m=new LinkedHashMap<>();m.put("id",h.getId());m.put("projectId",h.getProjectId());m.put("contractId",h.getContractId());m.put("departmentId",h.getDeliveryDepartmentId());
     m.put("projectCode",p==null?"-":p.getCode());m.put("projectName",p==null?"-":p.getName());m.put("contractCode",c==null?"-":c.getCode());
     m.put("scopeSummary",h.getScopeSummary());m.put("paymentTerms",h.getPaymentTerms());m.put("acceptanceCriteria",h.getAcceptanceCriteria());
     m.put("customerContact",h.getCustomerContact());m.put("technicalSolution",h.getTechnicalSolution());m.put("quotationSummary",h.getQuotationSummary());m.put("riskNotes",h.getRiskNotes());
-    long materialCount=documents.countByBizTypeAndBizId("PROJECT_HANDOVER",h.getId());m.put("materialCount",materialCount);
+    m.put("materialCount",materialCount);
     m.put("materialsComplete",!isBlank(h.getScopeSummary())&&!isBlank(h.getPaymentTerms())&&!isBlank(h.getAcceptanceCriteria())&&!isBlank(h.getCustomerContact())&&!isBlank(h.getTechnicalSolution())&&!isBlank(h.getQuotationSummary())&&materialCount>0);
     m.put("status",h.getStatus());m.put("createdAt",h.getCreatedAt());m.put("acceptedBy",h.getAcceptedBy());m.put("acceptedAt",h.getAcceptedAt());m.put("comment",h.getComment());return m;
   }
-  private List<Map<String,Object>> assignmentViews(){Map<UUID,Project>pm=projects.findAll().stream().collect(Collectors.toMap(Project::getId,Function.identity()));Map<UUID,SystemUser>um=users.findAll().stream().collect(Collectors.toMap(SystemUser::getId,Function.identity()));return assignments.findAllByOrderByCreatedAtDesc().stream().filter(a->Optional.ofNullable(pm.get(a.getProjectId())).map(this::visibleProject).orElse(false)||dataScope.canViewAssignee(a.getUserId(),false)).map(a->assignmentView(a,pm.get(a.getProjectId()),um.get(a.getUserId()))).toList();}
+  private List<Map<String,Object>> assignmentViews(){
+    List<ProjectStaffAssignment> rows=assignments.findAllByOrderByCreatedAtDesc();
+    Set<UUID> projectIds=rows.stream().map(ProjectStaffAssignment::getProjectId).collect(Collectors.toSet());
+    Set<UUID> userIds=rows.stream().map(ProjectStaffAssignment::getUserId).collect(Collectors.toSet());
+    Map<UUID,Project> pm=projects.findAllById(projectIds).stream().collect(Collectors.toMap(Project::getId,Function.identity()));
+    Map<UUID,SystemUser> um=users.findAllById(userIds).stream().collect(Collectors.toMap(SystemUser::getId,Function.identity()));
+    return rows.stream().filter(a->Optional.ofNullable(pm.get(a.getProjectId())).map(this::visibleProject).orElse(false)||dataScope.canViewAssignee(a.getUserId(),false))
+        .map(a->assignmentView(a,pm.get(a.getProjectId()),um.get(a.getUserId()))).toList();
+  }
   private Map<String,Object> assignmentView(ProjectStaffAssignment a,Project p,SystemUser u){
     Map<String,Object>m=new LinkedHashMap<>();m.put("id",a.getId());m.put("projectId",a.getProjectId());m.put("projectName",p==null?"-":p.getName());m.put("userId",a.getUserId());m.put("userName",u==null?"-":u.getDisplayName());
     m.put("department",u==null||u.getOrganization()==null?"-":u.getOrganization().getName());m.put("departmentId",u==null||u.getOrganization()==null?null:u.getOrganization().getId());
     m.put("roleName",a.getRoleName());m.put("plannedHours",a.getPlannedHours());m.put("actualHours",a.getActualHours());m.put("hourlyCost",a.getHourlyCost());m.put("allocationPercent",a.getAllocationPercent());
     m.put("laborCost",amount(a.getActualHours()).multiply(amount(a.getHourlyCost())));m.put("startDate",a.getStartDate());m.put("endDate",a.getEndDate());m.put("certificateStatus",a.getCertificateStatus());m.put("status",a.getStatus());return m;
   }
-  private List<Map<String,Object>> responsibilityViews(){Map<UUID,SystemUser>um=users.findAll().stream().collect(Collectors.toMap(SystemUser::getId,Function.identity()));Map<UUID,SystemOrganization>om=organizations.findAll().stream().collect(Collectors.toMap(SystemOrganization::getId,Function.identity()));return responsibilities.findAll().stream().filter(this::visibleResponsibility).map(r->{List<UUID> ids=responsibilityCollaborators.findByBindingId(r.getId()).stream().map(ResponsibilityCollaborator::getDepartmentId).toList();if(ids.isEmpty()&&!isBlank(r.getCollaboratorDepartmentIds()))ids=Arrays.stream(r.getCollaboratorDepartmentIds().split(",")).map(String::trim).filter(s->!s.isBlank()).map(UUID::fromString).toList();Map<String,Object>m=new LinkedHashMap<>();m.put("id",r.getId());m.put("sourceType",r.getSourceType());m.put("sourceId",r.getSourceId());m.put("ownerUserId",r.getOwnerUserId());m.put("departmentId",r.getDepartmentId());m.put("ownerName",Optional.ofNullable(um.get(r.getOwnerUserId())).map(SystemUser::getDisplayName).orElse("-"));m.put("departmentName",Optional.ofNullable(om.get(r.getDepartmentId())).map(SystemOrganization::getName).orElse("-"));m.put("collaboratorDepartmentIds",ids);m.put("collaboratorDepartmentNames",ids.stream().map(om::get).filter(Objects::nonNull).map(SystemOrganization::getName).toList());return m;}).toList();}
+  private List<Map<String,Object>> responsibilityViews(){
+    List<ResponsibilityBinding> allRows=responsibilities.findAll();
+    Set<UUID> sourceProjectIds=allRows.stream().filter(r->"PROJECT".equals(r.getSourceType())).map(ResponsibilityBinding::getSourceId).collect(Collectors.toSet());
+    Set<UUID> sourceCustomerIds=allRows.stream().filter(r->"CUSTOMER".equals(r.getSourceType())).map(ResponsibilityBinding::getSourceId).collect(Collectors.toSet());
+    Map<UUID,Project> sourceProjects=projects.findAllById(sourceProjectIds).stream().collect(Collectors.toMap(Project::getId,Function.identity()));
+    Map<UUID,Customer> sourceCustomers=customers.findAllById(sourceCustomerIds).stream().collect(Collectors.toMap(Customer::getId,Function.identity()));
+    Set<UUID> visibleContractIds=financialMilestones().stream().map(x->(UUID)x.get("contractId")).collect(Collectors.toSet());
+    List<ResponsibilityBinding> rows=allRows.stream().filter(r->switch(r.getSourceType()){
+      case "PROJECT" -> Optional.ofNullable(sourceProjects.get(r.getSourceId())).map(p->dataScope.canViewOwner(p.getManagerName())||dataScope.canViewAssignee(r.getOwnerUserId(),false)||dataScope.canViewOrganization(r.getDepartmentId())).orElse(false);
+      case "CONTRACT" -> visibleContractIds.contains(r.getSourceId());
+      case "CUSTOMER" -> Optional.ofNullable(sourceCustomers.get(r.getSourceId())).map(c->dataScope.canViewOwner(c.getOwnerName())).orElse(false);
+      default -> false;
+    }).toList();
+    Set<UUID> bindingIds=rows.stream().map(ResponsibilityBinding::getId).collect(Collectors.toSet());
+    Map<UUID,List<UUID>> collaboratorIds=(bindingIds.isEmpty()?List.<ResponsibilityCollaborator>of():responsibilityCollaborators.findByBindingIdIn(bindingIds)).stream()
+        .collect(Collectors.groupingBy(ResponsibilityCollaborator::getBindingId,
+            Collectors.mapping(ResponsibilityCollaborator::getDepartmentId,Collectors.toList())));
+    Set<UUID> userIds=rows.stream().map(ResponsibilityBinding::getOwnerUserId).filter(Objects::nonNull).collect(Collectors.toSet());
+    Set<UUID> organizationIds=rows.stream().map(ResponsibilityBinding::getDepartmentId).filter(Objects::nonNull).collect(Collectors.toSet());
+    collaboratorIds.values().forEach(organizationIds::addAll);
+    rows.stream().map(ResponsibilityBinding::getCollaboratorDepartmentIds).filter(value->!isBlank(value)).flatMap(value->Arrays.stream(value.split(",")))
+        .map(String::trim).filter(value->!value.isBlank()).map(UUID::fromString).forEach(organizationIds::add);
+    Map<UUID,SystemUser>um=users.findAllById(userIds).stream().collect(Collectors.toMap(SystemUser::getId,Function.identity()));
+    Map<UUID,SystemOrganization>om=organizations.findAllById(organizationIds).stream().collect(Collectors.toMap(SystemOrganization::getId,Function.identity()));
+    return rows.stream().map(r->{
+      List<UUID> ids=collaboratorIds.getOrDefault(r.getId(),List.of());
+      if(ids.isEmpty()&&!isBlank(r.getCollaboratorDepartmentIds()))ids=Arrays.stream(r.getCollaboratorDepartmentIds().split(",")).map(String::trim).filter(s->!s.isBlank()).map(UUID::fromString).toList();
+      Map<String,Object>m=new LinkedHashMap<>();m.put("id",r.getId());m.put("sourceType",r.getSourceType());m.put("sourceId",r.getSourceId());m.put("ownerUserId",r.getOwnerUserId());m.put("departmentId",r.getDepartmentId());m.put("ownerName",Optional.ofNullable(um.get(r.getOwnerUserId())).map(SystemUser::getDisplayName).orElse("-"));m.put("departmentName",Optional.ofNullable(om.get(r.getDepartmentId())).map(SystemOrganization::getName).orElse("-"));m.put("collaboratorDepartmentIds",ids);m.put("collaboratorDepartmentNames",ids.stream().map(om::get).filter(Objects::nonNull).map(SystemOrganization::getName).toList());return m;
+    }).toList();
+  }
   private String responsibilityDepartment(String type,UUID id){return responsibilities.findBySourceTypeAndSourceId(type,id).flatMap(x->organizations.findById(x.getDepartmentId())).map(SystemOrganization::getName).orElse("-");}
   private UUID responsibilityDepartmentId(String type,UUID id){return responsibilities.findBySourceTypeAndSourceId(type,id).map(ResponsibilityBinding::getDepartmentId).orElse(null);}
-  private UUID projectDepartmentForContract(UUID contractId){return projects.findAllByOrderByCreatedAtDesc().stream().filter(p->Objects.equals(contractId,p.getContractId())).map(p->responsibilityDepartmentId("PROJECT",p.getId())).filter(Objects::nonNull).findFirst().orElse(null);}
   private Map<String,Object> todo(String type,UUID id,String title,String detail,OffsetDateTime created,String link,UUID assignee){Map<String,Object>m=new LinkedHashMap<>();m.put("type",type);m.put("id",id);m.put("title",title);m.put("detail",detail==null?"":detail);m.put("createdAt",created==null?OffsetDateTime.now():created);m.put("status","PENDING");m.put("link",link);m.put("defaultAssignee",assignee);return m;}
-  private String projectName(UUID id){return projects.findById(id).map(Project::getName).orElse("-");}
   private boolean visibleProject(Project p){
     if(p==null)return false;
     if(dataScope.canViewOwner(p.getManagerName()))return true;
     return responsibilities.findBySourceTypeAndSourceId("PROJECT",p.getId()).map(r->dataScope.canViewAssignee(r.getOwnerUserId(),false)||dataScope.canViewOrganization(r.getDepartmentId())).orElse(false);
-  }
-  private boolean visibleResponsibility(ResponsibilityBinding r){
-    return switch(r.getSourceType()){
-      case "PROJECT" -> projects.findById(r.getSourceId()).map(this::visibleProject).orElse(false);
-      case "CONTRACT" -> contracts.findById(r.getSourceId()).map(c->financialMilestones().stream().anyMatch(x->r.getSourceId().equals(x.get("contractId")))).orElse(false);
-      case "CUSTOMER" -> customers.findById(r.getSourceId()).map(c->dataScope.canViewOwner(c.getOwnerName())).orElse(false);
-      default -> false;
-    };
   }
   private boolean visibleProcurementTarget(UUID projectId,UUID departmentId,Map<UUID,Project> projectMap){
     return projectId!=null?Optional.ofNullable(projectMap.get(projectId)).map(this::visibleProject).orElse(false):dataScope.canViewOrganization(departmentId);
@@ -389,13 +471,15 @@ public class CollaborationService {
     long todoDone=todos.stream().filter(x->"DONE".equals(x.get("status"))).count();long overdue=todos.stream().filter(x->((Number)x.getOrDefault("overdueDays",0)).longValue()>0&&!"DONE".equals(x.get("status"))).count();
     BigDecimal budgetTotal=sum(budgets,"budgetAmount"),actualTotal=sum(budgets,"actualAmount"),contractTotal=sum(finance,"contractAmount"),receivedTotal=sum(finance,"receivedAmount");
     long matched=procurement.stream().filter(x->"MATCHED".equals(x.get("matchStatus"))).count();
-    long approvedCount=approvals.findAllByOrderByCreatedAtDesc().stream().filter(x->x.getProcessedAt()!=null).count();
-    double averageApprovalHours=approvals.findAllByOrderByCreatedAtDesc().stream().filter(x->x.getProcessedAt()!=null).mapToLong(x->Duration.between(x.getCreatedAt(),x.getProcessedAt()).toHours()).average().orElse(0);
-    List<ProjectHandover> accepted=handovers.findAll().stream().filter(x->x.getAcceptedAt()!=null).toList();
+    List<com.company.ops.api.modules.office.domain.ApprovalRequest> processedApprovals=approvals.findByProcessedAtIsNotNull();
+    long approvedCount=processedApprovals.size();
+    double averageApprovalHours=processedApprovals.stream().mapToLong(x->Duration.between(x.getCreatedAt(),x.getProcessedAt()).toHours()).average().orElse(0);
+    List<ProjectHandover> accepted=handovers.findByAcceptedAtIsNotNull();
     double handoverHours=accepted.stream().mapToLong(x->Duration.between(x.getCreatedAt(),x.getAcceptedAt()).toHours()).average().orElse(0);
-    Map<UUID,List<GoodsReceipt>> receiptsByOrder=receipts.findAll().stream().collect(Collectors.groupingBy(GoodsReceipt::getOrderId));
-    List<PurchaseOrder> delivered=purchaseOrders.findAll().stream().filter(x->x.getExpectedDeliveryDate()!=null&&receiptsByOrder.containsKey(x.getId())).toList();
-    long onTime=delivered.stream().filter(o->receiptsByOrder.get(o.getId()).stream().map(GoodsReceipt::getReceivedDate).max(LocalDate::compareTo).orElse(LocalDate.MAX).compareTo(o.getExpectedDeliveryDate())<=0).count();
+    Map<UUID,LocalDate> latestReceiptDate=receipts.findLatestReceivedDateByOrder().stream().collect(Collectors.toMap(
+        row->(UUID)row[0],row->(LocalDate)row[1]));
+    List<PurchaseOrder> delivered=purchaseOrders.findAllById(latestReceiptDate.keySet()).stream().filter(x->x.getExpectedDeliveryDate()!=null).toList();
+    long onTime=delivered.stream().filter(o->latestReceiptDate.get(o.getId()).compareTo(o.getExpectedDeliveryDate())<=0).count();
     BigDecimal planned=staff.stream().map(x->amount((BigDecimal)x.get("plannedHours"))).reduce(BigDecimal.ZERO,BigDecimal::add);
     BigDecimal actual=staff.stream().map(x->amount((BigDecimal)x.get("actualHours"))).reduce(BigDecimal.ZERO,BigDecimal::add);
     Map<String,Object>m=new LinkedHashMap<>();m.put("todoCompletionRate",percent(todoDone,todos.size()));m.put("todoOverdueRate",percent(overdue,todos.size()));

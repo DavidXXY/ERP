@@ -11,9 +11,11 @@ import com.company.ops.api.modules.office.domain.SystemNotification;
 import com.company.ops.api.modules.office.repository.SystemNotificationRepository;
 import com.company.ops.api.modules.project.domain.*;
 import com.company.ops.api.modules.project.repository.*;
+import com.company.ops.api.modules.project.service.ProjectCostLedgerService;
 import com.company.ops.api.modules.qualification.repository.QualificationEmployeeRepository;
 import com.company.ops.api.modules.system.domain.SystemUser;
 import com.company.ops.api.modules.system.repository.SystemUserRepository;
+import com.company.ops.api.modules.system.security.DataScopeService;
 import com.company.ops.api.modules.system.security.UserPrincipal;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -21,6 +23,7 @@ import java.time.*;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -36,22 +39,24 @@ public class CollaborationGovernanceService {
   private final ProjectBudgetVersionRepository budgetVersions;
   private final ProjectStaffAssignmentRepository assignments;
   private final ProjectRepository projects;
-  private final ProjectCostEntryRepository projectCosts;
+  private final ProjectCostLedgerService costLedger;
   private final SystemUserRepository users;
   private final SystemNotificationRepository notifications;
   private final QualificationEmployeeRepository employees;
   private final LeaveRequestRepository leaveRequests;
+  private final DataScopeService dataScopeService;
 
   public CollaborationGovernanceService(
       CollaborationTaskControlRepository controls, CollaborationActionLogRepository actions,
       ProjectTimesheetRepository timesheets, TimesheetPeriodLockRepository periodLocks,
       ProjectBudgetVersionRepository budgetVersions, ProjectStaffAssignmentRepository assignments,
-      ProjectRepository projects, ProjectCostEntryRepository projectCosts, SystemUserRepository users,
+      ProjectRepository projects, ProjectCostLedgerService costLedger, SystemUserRepository users,
       SystemNotificationRepository notifications, QualificationEmployeeRepository employees,
-      LeaveRequestRepository leaveRequests) {
+      LeaveRequestRepository leaveRequests, DataScopeService dataScopeService) {
     this.controls=controls;this.actions=actions;this.timesheets=timesheets;this.periodLocks=periodLocks;
-    this.budgetVersions=budgetVersions;this.assignments=assignments;this.projects=projects;this.projectCosts=projectCosts;
+    this.budgetVersions=budgetVersions;this.assignments=assignments;this.projects=projects;this.costLedger=costLedger;
     this.users=users;this.notifications=notifications;this.employees=employees;this.leaveRequests=leaveRequests;
+    this.dataScopeService=dataScopeService;
   }
 
   @Transactional
@@ -68,7 +73,8 @@ public class CollaborationGovernanceService {
   public Map<String,Object> actOnTodo(String type,UUID sourceId,TodoActionRequest request) {
     UserPrincipal p=requirePrincipal(); String action=request.action().toUpperCase(Locale.ROOT);
     CollaborationTaskControl item=controls.findBySourceTypeAndSourceId(type,sourceId)
-        .orElseGet(()->syncTask(type,sourceId,OffsetDateTime.now(),null));
+        .orElseThrow(()->new BusinessException("待办不存在或已失效"));
+    assertTodoActionAllowed(p,item,action);
     switch(action){
       case "TRANSFER" -> {
         if(request.targetUserId()==null)throw new BusinessException("转办必须选择接收人");
@@ -177,8 +183,10 @@ public class CollaborationGovernanceService {
   public List<Map<String,Object>> periodLockViews(){return periodLocks.findAllByOrderByYearMonthDesc().stream().map(this::periodLockView).toList();}
   @Transactional(readOnly=true)
   public List<Map<String,Object>> budgetVersionViews(){
-    Map<UUID,String> names=projects.findAll().stream().collect(Collectors.toMap(Project::getId,Project::getName));
-    return budgetVersions.findAllByOrderByCreatedAtDesc().stream().map(x->budgetView(x,names.getOrDefault(x.getProjectId(),"-"))).toList();
+    List<ProjectBudgetVersion> versions=budgetVersions.findAllByOrderByCreatedAtDesc();
+    Set<UUID> projectIds=versions.stream().map(ProjectBudgetVersion::getProjectId).collect(Collectors.toSet());
+    Map<UUID,String> names=projects.findAllById(projectIds).stream().collect(Collectors.toMap(Project::getId,Project::getName));
+    return versions.stream().map(x->budgetView(x,names.getOrDefault(x.getProjectId(),"-"))).toList();
   }
   @Transactional(readOnly=true)
   public List<Map<String,Object>> actionViews(){
@@ -196,20 +204,25 @@ public class CollaborationGovernanceService {
   public List<Map<String,Object>> resourceLoads(Integer year,Integer month){
     LocalDate start=LocalDate.of(year==null?LocalDate.now().getYear():year,month==null?LocalDate.now().getMonthValue():month,1);
     LocalDate end=start.withDayOfMonth(start.lengthOfMonth());
-    Map<UUID,SystemUser> userMap=users.findAll().stream().collect(Collectors.toMap(SystemUser::getId,Function.identity()));
-    Map<UUID,List<ProjectTimesheet>> sheets=timesheets.findAllByOrderByWorkDateDesc().stream().filter(x->!x.getWorkDate().isBefore(start)&&!x.getWorkDate().isAfter(end)&&"APPROVED".equals(x.getStatus())).collect(Collectors.groupingBy(ProjectTimesheet::getUserId));
+    List<ProjectStaffAssignment> activeAssignments=
+        assignments.findByStartDateLessThanEqualAndEndDateGreaterThanEqual(end,start);
+    Set<UUID> userIds=activeAssignments.stream().map(ProjectStaffAssignment::getUserId).collect(Collectors.toSet());
+    Map<UUID,SystemUser> userMap=users.findAllById(userIds).stream().collect(Collectors.toMap(SystemUser::getId,Function.identity()));
+    Map<UUID,List<ProjectTimesheet>> sheets=timesheets.findByWorkDateBetweenAndStatus(start,end,"APPROVED").stream()
+        .collect(Collectors.groupingBy(ProjectTimesheet::getUserId));
     long workdays=start.datesUntil(end.plusDays(1)).filter(d->d.getDayOfWeek()!=DayOfWeek.SATURDAY&&d.getDayOfWeek()!=DayOfWeek.SUNDAY).count();
-    return assignments.findAllByOrderByCreatedAtDesc().stream().collect(Collectors.groupingBy(ProjectStaffAssignment::getUserId)).entrySet().stream().map(e->{
-      SystemUser u=userMap.get(e.getKey());BigDecimal planned=e.getValue().stream().filter(a->!a.getEndDate().isBefore(start)&&!a.getStartDate().isAfter(end)).map(ProjectStaffAssignment::getPlannedHours).reduce(BigDecimal.ZERO,BigDecimal::add);
+    return activeAssignments.stream().collect(Collectors.groupingBy(ProjectStaffAssignment::getUserId)).entrySet().stream().map(e->{
+      SystemUser u=userMap.get(e.getKey());BigDecimal planned=e.getValue().stream().map(ProjectStaffAssignment::getPlannedHours).reduce(BigDecimal.ZERO,BigDecimal::add);
       BigDecimal actual=sheets.getOrDefault(e.getKey(),List.of()).stream().map(ProjectTimesheet::getHours).reduce(BigDecimal.ZERO,BigDecimal::add);
       BigDecimal capacity=BigDecimal.valueOf(workdays*8);int utilization=capacity.signum()==0?0:actual.multiply(BigDecimal.valueOf(100)).divide(capacity,0,RoundingMode.HALF_UP).intValue();
-      BigDecimal allocation=e.getValue().stream().filter(a->!a.getEndDate().isBefore(start)&&!a.getStartDate().isAfter(end)&&!"CANCELLED".equals(a.getStatus())).map(ProjectStaffAssignment::getAllocationPercent).reduce(BigDecimal.ZERO,BigDecimal::add);
+      BigDecimal allocation=e.getValue().stream().filter(a->!"CANCELLED".equals(a.getStatus())).map(ProjectStaffAssignment::getAllocationPercent).reduce(BigDecimal.ZERO,BigDecimal::add);
       Map<String,Object> m=new LinkedHashMap<>();m.put("userId",e.getKey());m.put("userName",u==null?"-":u.getDisplayName());m.put("department",u==null||u.getOrganization()==null?"-":u.getOrganization().getName());m.put("departmentId",u==null||u.getOrganization()==null?null:u.getOrganization().getId());
       m.put("plannedHours",planned);m.put("actualHours",actual);m.put("capacityHours",capacity);m.put("utilizationRate",utilization);m.put("allocationPercent",allocation);m.put("overloaded",allocation.compareTo(BigDecimal.valueOf(100))>0||utilization>100);return m;
     }).toList();
   }
 
   @Scheduled(cron="${ops.collaboration.escalation-cron:0 20 * * * *}")
+  @SchedulerLock(name="collaborationOverdueEscalation",lockAtLeastFor="PT1M",lockAtMostFor="PT30M")
   @Transactional
   public void escalateOverdueTasks(){
     OffsetDateTime now=OffsetDateTime.now();
@@ -224,14 +237,11 @@ public class CollaborationGovernanceService {
 
   private void recalculateAssignment(UUID assignmentId){
     ProjectStaffAssignment assignment=assignments.findById(assignmentId).orElseThrow(()->new BusinessException("派工不存在"));
-    BigDecimal previous=amount(assignment.getActualHours()).multiply(amount(assignment.getHourlyCost()));
     BigDecimal hours=timesheets.findByAssignmentIdAndStatus(assignmentId,"APPROVED").stream().map(ProjectTimesheet::getHours).reduce(BigDecimal.ZERO,BigDecimal::add);
     assignment.setActualHours(hours);assignment.setStatus(hours.compareTo(assignment.getPlannedHours())>=0?"COMPLETED":hours.signum()>0?"IN_PROGRESS":"PLANNED");assignments.save(assignment);
     BigDecimal labor=hours.multiply(amount(assignment.getHourlyCost()));String sourceNo="STAFF-"+assignment.getId();
-    ProjectCostEntry cost=projectCosts.findBySourceNo(sourceNo).orElseGet(ProjectCostEntry::new);cost.setProjectId(assignment.getProjectId());cost.setCategory(ProjectCostCategory.LABOR);
-    cost.setSourceType(ProjectCostSource.MANUAL);cost.setSourceNo(sourceNo);cost.setDescription("审批通过的项目人员工时成本");cost.setAmount(labor);cost.setIncurredDate(LocalDate.now());projectCosts.save(cost);
-    Project project=projects.findById(assignment.getProjectId()).orElseThrow(()->new BusinessException("项目不存在"));
-    project.setActualCost(amount(project.getActualCost()).subtract(previous).add(labor));projects.save(project);
+    costLedger.upsert(assignment.getProjectId(),ProjectCostCategory.LABOR,ProjectCostSource.MANUAL,
+        sourceNo,"审批通过的项目人员工时成本",labor,LocalDate.now());
   }
 
   private void assertNotOnLeave(UUID userId,LocalDate date){
@@ -242,6 +252,16 @@ public class CollaborationGovernanceService {
   }
   private void assertPeriodOpen(LocalDate date){if(periodLocks.existsByYearMonth(YearMonth.from(date).toString()))throw new BusinessException("该月份已经结账锁定");}
   private SystemUser activeUser(UUID id){SystemUser u=users.findById(id).orElseThrow(()->new BusinessException("用户不存在"));if(!u.isEnabled())throw new BusinessException("用户已停用");return u;}
+  private void assertTodoActionAllowed(UserPrincipal principal,CollaborationTaskControl item,String action){
+    boolean administrator=principal.roleCodes().contains("ADMIN");
+    boolean processManager=principal.permissions().contains("office:approval:process")||principal.permissions().contains("project:stage:update");
+    boolean assignee=Objects.equals(principal.id(),item.getAssigneeUserId());
+    if("REMIND".equals(action)){
+      if(!administrator&&!processManager&&!dataScopeService.canViewAssignee(item.getAssigneeUserId(),false))throw new AccessDeniedException("无权催办该事项");
+      return;
+    }
+    if(!administrator&&!processManager&&!assignee)throw new AccessDeniedException("只能处理本人经办的待办");
+  }
   private UserPrincipal requirePrincipal(){var a=SecurityContextHolder.getContext().getAuthentication();if(a==null||!(a.getPrincipal() instanceof UserPrincipal p))throw new AccessDeniedException("请先登录");return p;}
   private String joinIds(Collection<UUID> ids){return ids==null?"":ids.stream().distinct().map(UUID::toString).collect(Collectors.joining(","));}
   private void notifyUser(UUID userId,String title,String content,String type,UUID id,String key){

@@ -55,6 +55,7 @@ public class ProjectService {
   private final ProjectRepository projectRepository;
   private final ProjectBudgetItemRepository budgetRepository;
   private final ProjectCostEntryRepository costRepository;
+  private final ProjectCostLedgerService costLedger;
   private final ProjectStageRecordRepository stageRecordRepository;
   private final CustomerRepository customerRepository;
   private final DataScopeService dataScopeService;
@@ -68,6 +69,7 @@ public class ProjectService {
       ProjectRepository projectRepository,
       ProjectBudgetItemRepository budgetRepository,
       ProjectCostEntryRepository costRepository,
+      ProjectCostLedgerService costLedger,
       ProjectStageRecordRepository stageRecordRepository,
       CustomerRepository customerRepository,
       DataScopeService dataScopeService,
@@ -76,6 +78,7 @@ public class ProjectService {
     this.projectRepository = projectRepository;
     this.budgetRepository = budgetRepository;
     this.costRepository = costRepository;
+    this.costLedger = costLedger;
     this.stageRecordRepository = stageRecordRepository;
     this.customerRepository = customerRepository;
     this.dataScopeService = dataScopeService;
@@ -239,26 +242,16 @@ public class ProjectService {
       throw new BusinessException("项目已关闭，不能继续归集成本");
     }
 
-    ProjectCostEntry entry = new ProjectCostEntry();
-    entry.setProjectId(project.getId());
-    entry.setCategory(request.category());
-    entry.setSourceType(request.sourceType());
-    entry.setSourceNo(request.sourceNo());
-    entry.setDescription(request.description());
-    entry.setAmount(request.amount());
-    entry.setIncurredDate(request.incurredDate());
-    costRepository.save(entry);
-
-    BigDecimal newCost = amount(project.getActualCost()).add(request.amount());
+    BigDecimal currentCost = costLedger.total(project.getId());
+    BigDecimal newCost = currentCost.add(request.amount());
     if (newCost.compareTo(amount(project.getBudgetAmount())) > 0) {
-      long overPct = newCost.subtract(amount(project.getBudgetAmount()))
-          .multiply(BigDecimal.valueOf(100))
-          .divide(amount(project.getBudgetAmount()), 0, java.math.RoundingMode.HALF_UP)
-          .longValue();
+      BigDecimal budget = amount(project.getBudgetAmount());
+      long overPct = budget.signum() == 0 ? 100 : newCost.subtract(budget)
+          .multiply(BigDecimal.valueOf(100)).divide(budget, 0, java.math.RoundingMode.HALF_UP).longValue();
       throw new BusinessException("Cost exceeds budget by " + overPct + "%");
     }
-    project.setActualCost(newCost);
-    projectRepository.save(project);
+    costLedger.record(project.getId(), request.category(), request.sourceType(), request.sourceNo(),
+        request.description(), request.amount(), request.incurredDate());
     return toDetail(project);
   }
 

@@ -69,7 +69,7 @@ sudo chmod 600 /etc/ops-erp/ops-erp.env
 sudo vi /etc/ops-erp/ops-erp.env   # 修改密码等敏感信息
 ```
 
-必须配置 `JWT_SECRET`、`DATA_ENCRYPTION_KEY`、`REDIS_PASSWORD` 和数据库密码；两个应用密钥建议分别用 `openssl rand -hex 32` 生成。将证书链和私钥安装为 `/etc/nginx/tls/fullchain.pem`、`/etc/nginx/tls/privkey.pem` 后再启用 Nginx。
+必须配置 `JWT_SECRET`、`DATA_ENCRYPTION_KEY`、`REDIS_PASSWORD`、数据库密码和首次启动管理员密码 `BOOTSTRAP_ADMIN_PASSWORD`；两个应用密钥建议分别用 `openssl rand -hex 32` 生成。管理员只会在用户名不存在时创建，后续重启不会覆盖已经修改过的密码。将证书链和私钥安装为 `/etc/nginx/tls/fullchain.pem`、`/etc/nginx/tls/privkey.pem` 后再启用 Nginx。
 
 `STORAGE_TYPE=minio` 时后端使用 MinIO/S3 兼容对象存储，`MINIO_ENDPOINT`、`MINIO_ACCESS_KEY`、`MINIO_SECRET_KEY`、`MINIO_BUCKET` 必须与 Docker Compose 或外部对象存储服务一致。`MINIO_PRESIGNED_EXPIRY_SECONDS` 控制附件临时下载链接有效期，建议生产保持 5-15 分钟。开发或单机调试可改为 `STORAGE_TYPE=local`，文件会写入 `LOCAL_STORAGE_PATH` 或默认本地目录。
 
@@ -103,6 +103,10 @@ docker compose -f docker-compose.yml up -d
 
 ## 验证部署
 
+全新空库首次启动只执行 `V33__fresh_install_baseline.sql`，一次性创建完整结构和基础权限配置。后续数据库变更从 `V100` 开始编号，以兼容曾经执行到 V77 的旧部署。
+
+已有 V77 数据库首次切换到基线构建时，需要在环境文件中增加 `SPRING_FLYWAY_IGNORE_MIGRATION_PATTERNS=*:missing,*:ignored` 和 `SPRING_FLYWAY_VALIDATE_ON_MIGRATE=false`。这只用于兼容已执行但不再随包发布的旧迁移，以及跳过低于 V77 的 V33 基线；全新数据库不应设置这两项，仍使用严格校验。
+
 ```bash
 # 后端健康检查
 curl http://127.0.0.1:8080/actuator/health
@@ -111,7 +115,7 @@ curl http://127.0.0.1:8080/actuator/health
 # API 可达性
 curl -s https://erp.example.com/api/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"username":"admin","password":"Admin@123"}'
+  -d '{"username":"admin","password":"<BOOTSTRAP_ADMIN_PASSWORD>"}'
 
 # 前端可达性
 curl -s -o /dev/null -w "%{http_code}" https://erp.example.com/
@@ -130,7 +134,7 @@ sudo systemctl restart ops-erp-api
 ./deploy/build.sh && ./deploy/deploy.sh root@10.10.10.111
 
 # 生成并校验 PostgreSQL 备份
-BACKUP_MODE=postgres DB_PASSWORD='...' ../scripts/backup-data.sh
+DB_PASSWORD='...' ../scripts/backup-data.sh
 
 # 恢复到预先创建的演练库（不得使用生产库名）
 RESTORE_TARGET=ops_erp_restore_drill RESTORE_CONFIRM=ops_erp_restore_drill \

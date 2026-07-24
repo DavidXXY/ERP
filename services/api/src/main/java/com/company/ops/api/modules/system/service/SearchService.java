@@ -7,6 +7,7 @@ import com.company.ops.api.modules.project.repository.ProjectRepository;
 import com.company.ops.api.modules.qualification.repository.QualificationEmployeeRepository;
 import java.util.ArrayList;
 import java.util.List;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,43 +29,35 @@ public class SearchService {
   @Transactional(readOnly = true)
   public List<SearchResult> search(String q) {
     if (q == null || q.trim().isEmpty()) return List.of();
-    String keyword = q.trim().toLowerCase();
+    String keyword = q.trim();
+    var limit = PageRequest.of(0, 10);
     List<SearchResult> results = new ArrayList<>();
 
-    customerRepo.findAll().forEach(c -> {
-      if ((c.getName() != null && c.getName().toLowerCase().contains(keyword))
-          || (c.getCode() != null && c.getCode().toLowerCase().contains(keyword)))
+    customerRepo.findByNameContainingIgnoreCaseOrCodeContainingIgnoreCase(keyword, keyword, limit).forEach(c -> {
         results.add(new SearchResult("customer", c.getId().toString(),
             (c.getCode() != null ? c.getCode() : "") + " - " + c.getName(),
             c.getLevel() != null ? c.getLevel().name() : "", "/crm/customers/" + c.getId()));
     });
 
-    contractRepo.findAll().forEach(c -> {
-      if ((c.getCode() != null && c.getCode().toLowerCase().contains(keyword))
-          || (c.getProjectName() != null && c.getProjectName().toLowerCase().contains(keyword)))
+    contractRepo.findByCodeContainingIgnoreCaseOrProjectNameContainingIgnoreCase(keyword, keyword, limit).forEach(c -> {
         results.add(new SearchResult("contract", c.getId().toString(),
             (c.getCode() != null ? c.getCode() : "") + " - " + c.getProjectName(),
             "", "/crm/contracts/" + c.getId()));
     });
 
-    projectRepo.findAll().forEach(p -> {
-      if ((p.getCode() != null && p.getCode().toLowerCase().contains(keyword))
-          || (p.getName() != null && p.getName().toLowerCase().contains(keyword)))
+    projectRepo.findByCodeContainingIgnoreCaseOrNameContainingIgnoreCase(keyword, keyword, limit).forEach(p -> {
         results.add(new SearchResult("project", p.getId().toString(),
             (p.getCode() != null ? p.getCode() : "") + " - " + p.getName(),
             p.getManagerName() != null ? p.getManagerName() : "", "/projects/list?id=" + p.getId()));
     });
 
-    partRepo.findAll().forEach(p -> {
-      if ((p.getCode() != null && p.getCode().toLowerCase().contains(keyword))
-          || (p.getName() != null && p.getName().toLowerCase().contains(keyword)))
+    partRepo.findByCodeContainingIgnoreCaseOrNameContainingIgnoreCase(keyword, keyword, limit).forEach(p -> {
         results.add(new SearchResult("part", p.getId().toString(),
             (p.getCode() != null ? p.getCode() : "") + " - " + p.getName(),
             String.valueOf(p.getStockQty()), "/inventory/parts?id=" + p.getId()));
     });
 
-    empRepo.findAll().forEach(e -> {
-      if (e.getName() != null && e.getName().toLowerCase().contains(keyword))
+    empRepo.findByNameContainingIgnoreCase(keyword, limit).forEach(e -> {
         results.add(new SearchResult("employee", e.getId().toString(), e.getName(),
             e.getPosition() != null ? e.getPosition() : "", "/hr/employees/" + e.getId()));
     });

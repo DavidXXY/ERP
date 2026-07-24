@@ -1,6 +1,7 @@
 package com.company.ops.api.modules.system.service;
 
 import com.company.ops.api.common.exception.BusinessException;
+import com.company.ops.api.common.tenant.TenantContext;
 import com.company.ops.api.modules.system.domain.SystemOrganization;
 import com.company.ops.api.modules.system.domain.SystemPermission;
 import com.company.ops.api.modules.system.domain.SystemRole;
@@ -55,7 +56,7 @@ public class RoleService {
 
   @Transactional
   public RoleResponse createRole(CreateRoleRequest request) {
-    if (roleRepository.existsByCodeAndTenantId(request.code(), "default")) {
+    if (roleRepository.existsByCodeAndTenantId(request.code(), TenantContext.currentTenant())) {
       throw new BusinessException("角色代码已存在");
     }
     validateDataScope(request.dataScope(), request.dataOrganizationIds());

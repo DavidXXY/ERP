@@ -25,7 +25,9 @@
         <div class="supplier-score-head">
           <div>
             <h3>供应商准入审批与资料完整度</h3>
-            <p>新建供应商自动进入待审批，通过准入审批后才可参与询价、签约和采购下单。</p>
+            <p>
+              新建供应商自动进入待审批，通过准入审批后才可参与询价、签约和采购下单。
+            </p>
           </div>
           <a-tag :color="watchSupplierCount ? 'orange' : 'green'"
             >关注 {{ watchSupplierCount }} 家</a-tag
@@ -359,9 +361,7 @@
             <a-descriptions-item label="准入状态">
               <a-tag
                 :color="admissionColor(selectedSupplier.admissionStatus)"
-                >{{
-                  admissionLabel(selectedSupplier.admissionStatus)
-                }}</a-tag
+                >{{ admissionLabel(selectedSupplier.admissionStatus) }}</a-tag
               >
             </a-descriptions-item>
             <a-descriptions-item label="提交审批时间">{{
@@ -553,9 +553,7 @@
                 <a-col :xs="24" :md="8">
                   <a-form-item label="准入状态">
                     <a-tag
-                      :color="
-                        admissionColor(selectedSupplier.admissionStatus)
-                      "
+                      :color="admissionColor(selectedSupplier.admissionStatus)"
                     >
                       {{ admissionLabel(selectedSupplier.admissionStatus) }}
                     </a-tag>

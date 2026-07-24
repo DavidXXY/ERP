@@ -20,6 +20,8 @@ spring:
   flyway:
     enabled: true
     baseline-on-migrate: true
+    # V1-V77 were consolidated into B77; existing databases retain those history rows.
+    ignore-migration-patterns: "*:missing"
   data:
     redis:
       host: ${REDIS_HOST:localhost}
@@ -57,6 +59,10 @@ springdoc:
 ops:
   version: 0.1.0
   build-time: 2026-07-10
+  bootstrap-admin:
+    username: ${BOOTSTRAP_ADMIN_USERNAME:admin}
+    password: ${BOOTSTRAP_ADMIN_PASSWORD:}
+    display-name: ${BOOTSTRAP_ADMIN_DISPLAY_NAME:系统管理员}
   security:
     jwt-secret: ${JWT_SECRET:ops-erp-local-development-secret-please-change}
     jwt-expire-minutes: ${JWT_EXPIRE_MINUTES:720}

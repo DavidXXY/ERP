@@ -13,43 +13,26 @@ if [[ "${RESTORE_CONFIRM:-}" != "$restore_target" ]]; then
 fi
 
 case "$backup_file" in
-  *.dump)
-    command -v pg_restore >/dev/null || { echo "pg_restore is required" >&2; exit 1; }
-    if [[ "$restore_target" == "postgres" || "$restore_target" == "template0" || "$restore_target" == "template1" ]]; then
-      echo "Refusing to restore into a protected PostgreSQL database." >&2
-      exit 1
-    fi
-    PGPASSWORD="${DB_PASSWORD:-ops_erp}" pg_restore \
-      --host "${DB_HOST:-localhost}" \
-      --port "${DB_PORT:-5432}" \
-      --username "${DB_USERNAME:-ops_erp}" \
-      --dbname "$restore_target" \
-      --exit-on-error \
-      --no-owner \
-      --no-privileges \
-      "$backup_file"
-    ;;
-  *.tar.gz|*.tgz)
-    if [[ -e "$restore_target" ]]; then
-      echo "Refusing to overwrite existing local restore target: $restore_target" >&2
-      exit 1
-    fi
-    temp_dir="$(mktemp -d)"
-    trap 'rm -rf "$temp_dir"' EXIT
-    tar -xzf "$backup_file" -C "$temp_dir"
-    restored_count="$(find "$temp_dir" -mindepth 1 -maxdepth 1 -print | wc -l | tr -d ' ')"
-    restored_entry="$(find "$temp_dir" -mindepth 1 -maxdepth 1 -print | head -n 1)"
-    if [[ "$restored_count" -ne 1 || ! -d "$restored_entry" ]]; then
-      echo "Local backup must contain exactly one top-level data directory." >&2
-      exit 1
-    fi
-    mkdir -p "$(dirname "$restore_target")"
-    mv "$restored_entry" "$restore_target"
-    ;;
+  *.dump) ;;
   *)
-    echo "Unsupported backup format: $backup_file" >&2
+    echo "Unsupported backup format: expected a PostgreSQL .dump file" >&2
     exit 1
     ;;
 esac
+
+command -v pg_restore >/dev/null || { echo "pg_restore is required" >&2; exit 1; }
+if [[ "$restore_target" == "postgres" || "$restore_target" == "template0" || "$restore_target" == "template1" ]]; then
+  echo "Refusing to restore into a protected PostgreSQL database." >&2
+  exit 1
+fi
+PGPASSWORD="${DB_PASSWORD:-ops_erp}" pg_restore \
+  --host "${DB_HOST:-localhost}" \
+  --port "${DB_PORT:-5432}" \
+  --username "${DB_USERNAME:-ops_erp}" \
+  --dbname "$restore_target" \
+  --exit-on-error \
+  --no-owner \
+  --no-privileges \
+  "$backup_file"
 
 echo "Restore completed successfully: $restore_target"

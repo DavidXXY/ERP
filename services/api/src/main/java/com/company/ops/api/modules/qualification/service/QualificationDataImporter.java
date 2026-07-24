@@ -1,5 +1,6 @@
 package com.company.ops.api.modules.qualification.service;
 
+import com.company.ops.api.common.tenant.TenantContext;
 import com.company.ops.api.modules.qualification.domain.CompanyQualification;
 import com.company.ops.api.modules.qualification.domain.PersonnelCertificate;
 import com.company.ops.api.modules.qualification.domain.QualificationEmployee;
@@ -165,7 +166,7 @@ public class QualificationDataImporter {
 
   private SystemOrganization importedOrganization(String department) {
     if (department == null || department.isBlank() || "未分配".equals(department)) return null;
-    for (SystemOrganization organization : organizationRepository.findByTenantIdOrderBySortOrderAsc("default")) {
+    for (SystemOrganization organization : organizationRepository.findByTenantIdOrderBySortOrderAsc(TenantContext.currentTenant())) {
       if (department.equals(organization.getName())) return organization;
     }
     String code = department.contains("财务") ? "FINANCE_DEPARTMENT"
@@ -173,6 +174,6 @@ public class QualificationDataImporter {
         : department.contains("市场") ? "MARKETING_DEPARTMENT"
         : department.contains("销售") || department.contains("客户") ? "DEPT_SALES"
         : "TECHNICAL_SERVICE_DEPARTMENT";
-    return organizationRepository.findByCodeAndTenantId(code, "default");
+    return organizationRepository.findByCodeAndTenantId(code, TenantContext.currentTenant());
   }
 }

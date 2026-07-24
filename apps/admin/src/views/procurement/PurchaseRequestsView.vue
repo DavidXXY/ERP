@@ -293,9 +293,7 @@
           </a-col>
         </a-row>
         <a-form-item
-          :label="
-            importForm.costType === 'PROJECT' ? '关联项目' : '关联部门'
-          "
+          :label="importForm.costType === 'PROJECT' ? '关联项目' : '关联部门'"
           name="costTargetId"
         >
           <a-select
@@ -334,10 +332,7 @@
           />
         </a-form-item>
         <a-space>
-          <a-button
-            href="/templates/采购申请批量导入模板.xlsx"
-            download
-          >
+          <a-button href="/templates/采购申请批量导入模板.xlsx" download>
             <template #icon><DownloadOutlined /></template>下载最新模板
           </a-button>
           <span class="muted-text">请保留模板第4行表头。</span>
@@ -435,7 +430,10 @@
           </template>
           <template v-else-if="column.key === 'action'">
             <a-space>
-              <a-button type="link" size="small" @click="previewDocument(record)"
+              <a-button
+                type="link"
+                size="small"
+                @click="previewDocument(record)"
                 >预览</a-button
               >
               <a-button
@@ -605,12 +603,12 @@ const targetOptions = computed(() =>
   ),
 );
 const importTargetOptions = computed(() =>
-  (
-    importForm.costType === "PROJECT" ? projects.value : departments.value
-  ).map((item) => ({
-    label: `${item.name}${item.code ? " · " + item.code : ""}`,
-    value: item.id,
-  })),
+  (importForm.costType === "PROJECT" ? projects.value : departments.value).map(
+    (item) => ({
+      label: `${item.name}${item.code ? " · " + item.code : ""}`,
+      value: item.id,
+    }),
+  ),
 );
 const estimatedAmount = computed(
   () => Number(form.quantity || 0) * Number(form.unitPrice || 0),
@@ -642,8 +640,7 @@ const requestBatches = computed<RequestBatch[]>(() => {
     return {
       batchId,
       batchCode: sorted[0].batchCode || sorted[0].code || "-",
-      batchName:
-        sorted[0].batchName || sorted[0].partName || "单项采购申请",
+      batchName: sorted[0].batchName || sorted[0].partName || "单项采购申请",
       items: sorted,
       itemCount: sorted.length,
       pendingCount,
@@ -777,9 +774,7 @@ async function handleImport() {
       batchName: importForm.batchName,
       costType: importForm.costType,
       projectId:
-        importForm.costType === "PROJECT"
-          ? importForm.costTargetId
-          : undefined,
+        importForm.costType === "PROJECT" ? importForm.costTargetId : undefined,
       departmentId:
         importForm.costType === "DEPARTMENT"
           ? importForm.costTargetId
@@ -926,9 +921,7 @@ function approvalColor(status: ApprovalStatus) {
 }
 
 function approvalStatusLabel(status: ApprovalStatus) {
-  return { PENDING: "待审批", APPROVED: "已通过", REJECTED: "已驳回" }[
-    status
-  ];
+  return { PENDING: "待审批", APPROVED: "已通过", REJECTED: "已驳回" }[status];
 }
 
 function batchApprovalSteps(batch: RequestBatch): ApprovalProgressStep[] {

@@ -2,6 +2,9 @@ package com.company.ops.api.modules.procurement.repository;
 
 import com.company.ops.api.modules.procurement.domain.ProcurementPayable;
 import java.util.List;
+import java.util.Collection;
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
 import jakarta.persistence.LockModeType;
@@ -13,10 +16,15 @@ import org.springframework.data.repository.query.Param;
 public interface ProcurementPayableRepository extends JpaRepository<ProcurementPayable, UUID> {
 
   List<ProcurementPayable> findAllByOrderByDueDateAsc();
+  List<ProcurementPayable> findByDueDateBetweenOrderByDueDateAsc(LocalDate startDate,LocalDate endDate);
   List<ProcurementPayable> findByOrderId(UUID orderId);
+  List<ProcurementPayable> findByOrderIdIn(Collection<UUID> orderIds);
   Optional<ProcurementPayable> findByReceiptId(UUID receiptId);
 
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select payable from ProcurementPayable payable where payable.id = :id")
   Optional<ProcurementPayable> findByIdForUpdate(@Param("id") UUID id);
+
+  @Query("select coalesce(sum(p.amount - p.paidAmount), 0) from ProcurementPayable p")
+  BigDecimal sumOutstandingAmount();
 }

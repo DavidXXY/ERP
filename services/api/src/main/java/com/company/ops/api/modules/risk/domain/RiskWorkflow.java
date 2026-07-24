@@ -4,12 +4,14 @@ import com.company.ops.api.common.domain.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import java.time.OffsetDateTime;
 
 @Entity
-@Table(name = "risk_workflows")
+@Table(name = "risk_workflows", uniqueConstraints = @UniqueConstraint(
+    name = "uk_risk_workflow_tenant_key", columnNames = {"tenant_id", "risk_key"}))
 public class RiskWorkflow extends BaseEntity {
-  @Column(name = "risk_key", nullable = false, unique = true, length = 180)
+  @Column(name = "risk_key", nullable = false, length = 180)
   private String riskKey;
   @Column(nullable = false, length = 32)
   private String status = "UNCLAIMED";

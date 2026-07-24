@@ -15,10 +15,18 @@
 
       <a-row :gutter="[16, 16]" class="summary-row">
         <a-col :xs="12" :lg="6">
-          <a-statistic title="待采购申请" :value="pool.totalRequests" suffix="条" />
+          <a-statistic
+            title="待采购申请"
+            :value="pool.totalRequests"
+            suffix="条"
+          />
         </a-col>
         <a-col :xs="12" :lg="6">
-          <a-statistic title="可集采物料" :value="pool.totalGroups" suffix="类" />
+          <a-statistic
+            title="可集采物料"
+            :value="pool.totalGroups"
+            suffix="类"
+          />
         </a-col>
         <a-col :xs="12" :lg="6">
           <a-statistic
@@ -41,7 +49,7 @@
         class="section-alert"
         type="info"
         show-icon
-        message="这里仅显示审批通过、尚有未采购数量且未进入询价的申请。系统按物料编码归类，可跨项目、跨申请集中询价，订单和成本仍能追溯到原始申请。"
+        message="这里仅显示审批通过、尚有未采购数量且未进入询价的申请。可勾选多个不同物料组成一个询价包，供应商按物料分项报价，订单和成本仍追溯到原始申请。"
       />
 
       <a-space wrap class="table-toolbar">
@@ -60,6 +68,15 @@
             { label: '已逾期', value: 'OVERDUE' },
           ]"
         />
+        <a-button
+          v-if="auth.can('procurement:purchase:create')"
+          type="primary"
+          :disabled="!selectedGroupKeys.length"
+          @click="openSelectedConsolidate"
+        >
+          <template #icon><MergeCellsOutlined /></template>
+          集中询价（{{ selectedGroupKeys.length }}种物料）
+        </a-button>
       </a-space>
 
       <a-table
@@ -67,6 +84,7 @@
         :data-source="filteredGroups"
         :loading="loading"
         row-key="groupKey"
+        :row-selection="groupRowSelection"
         :pagination="{ pageSize: 12 }"
         :scroll="{ x: 1180 }"
       >
@@ -169,7 +187,9 @@
 
         <template #emptyText>
           <a-empty description="暂无待采购申请">
-            <a-button type="primary" @click="router.push('/procurement/requests')"
+            <a-button
+              type="primary"
+              @click="router.push('/procurement/requests')"
               >查看采购申请</a-button
             >
           </a-empty>
@@ -186,23 +206,26 @@
       @ok="handleCreateInquiry"
     >
       <a-alert
-        v-if="selectedGroup"
+        v-if="selectedGroups.length"
         class="section-alert"
         type="success"
         show-icon
-        :message="`${selectedGroup.partName} · 已选择 ${selectedItems.length}/${selectedGroup.requestCount} 条申请 · 合计 ${formatQuantity(selectedQuantity)} · 预计 ${formatMoney(selectedAmount)}`"
+        :message="`已选择 ${selectedGroups.length} 种物料、${selectedItems.length}/${selectableItems.length} 条申请 · 预计 ${formatMoney(selectedAmount)}`"
       />
       <a-table
-        v-if="selectedGroup"
+        v-if="selectedGroups.length"
         size="small"
         :columns="selectionColumns"
-        :data-source="selectedGroup.items"
+        :data-source="selectableItems"
         :row-selection="inquiryRowSelection"
         :pagination="{ pageSize: 6 }"
         row-key="requestId"
       >
         <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'request'">
+          <template v-if="column.key === 'material'">
+            <strong>{{ record.partName }}</strong>
+          </template>
+          <template v-else-if="column.key === 'request'">
             <strong>{{ record.requestCode }}</strong>
             <span class="table-subtitle">{{ record.batchName }}</span>
           </template>
@@ -291,7 +314,7 @@ const saving = ref(false);
 const keyword = ref("");
 const urgencyFilter = ref("ALL");
 const consolidateOpen = ref(false);
-const selectedGroup = ref<ProcurementPurchasePoolGroup | null>(null);
+const selectedGroupKeys = ref<string[]>([]);
 const selectedRequestIds = ref<string[]>([]);
 const inquiryFormRef = ref();
 const pool = reactive<ProcurementPurchasePool>({
@@ -327,6 +350,7 @@ const itemColumns = [
   { title: "采购说明", key: "reason", width: 220 },
 ];
 const selectionColumns = [
+  { title: "物料", key: "material", width: 190 },
   { title: "申请/批次", key: "request" },
   { title: "成本归属", dataIndex: "costTargetName", width: 210 },
   { title: "到货日期", dataIndex: "expectedDate", width: 120 },
@@ -349,12 +373,7 @@ const filteredGroups = computed(() => {
       group.partName.toLowerCase().includes(key) ||
       (group.partCode || "").toLowerCase().includes(key) ||
       group.items.some((item) =>
-        [
-          item.requestCode,
-          item.batchCode,
-          item.batchName,
-          item.costTargetName,
-        ]
+        [item.requestCode, item.batchCode, item.batchName, item.costTargetName]
           .filter(Boolean)
           .some((value) => String(value).toLowerCase().includes(key)),
       );
@@ -364,15 +383,19 @@ const filteredGroups = computed(() => {
     return matchesKeyword && matchesUrgency;
   });
 });
-const selectedItems = computed<ProcurementPurchasePoolItem[]>(() =>
-  (selectedGroup.value?.items || []).filter((item) =>
-    selectedRequestIds.value.includes(item.requestId),
+const selectedGroups = computed<ProcurementPurchasePoolGroup[]>(() =>
+  pool.groups.filter((group) =>
+    selectedGroupKeys.value.includes(group.groupKey),
   ),
 );
-const selectedQuantity = computed(() =>
-  selectedItems.value.reduce(
-    (sum, item) => sum + Number(item.remainingQuantity || 0),
-    0,
+const selectableItems = computed<ProcurementPurchasePoolItem[]>(() =>
+  selectedGroups.value.flatMap((group) =>
+    group.items.map((item) => ({ ...item, partName: group.partName })),
+  ),
+);
+const selectedItems = computed<ProcurementPurchasePoolItem[]>(() =>
+  selectableItems.value.filter((item) =>
+    selectedRequestIds.value.includes(item.requestId),
   ),
 );
 const selectedAmount = computed(() =>
@@ -385,6 +408,13 @@ const inquiryRowSelection = computed(() => ({
   selectedRowKeys: selectedRequestIds.value,
   onChange: (keys: (string | number)[]) => {
     selectedRequestIds.value = keys.map(String);
+  },
+}));
+const groupRowSelection = computed(() => ({
+  selectedRowKeys: selectedGroupKeys.value,
+  preserveSelectedRowKeys: true,
+  onChange: (keys: (string | number)[]) => {
+    selectedGroupKeys.value = keys.map(String);
   },
 }));
 
@@ -402,11 +432,31 @@ async function loadData() {
 }
 
 function openConsolidate(group: ProcurementPurchasePoolGroup) {
-  selectedGroup.value = group;
-  selectedRequestIds.value = group.items.map((item) => item.requestId);
+  selectedGroupKeys.value = [group.groupKey];
+  prepareConsolidate([group]);
+}
+
+function openSelectedConsolidate() {
+  prepareConsolidate(selectedGroups.value);
+}
+
+function prepareConsolidate(groups: ProcurementPurchasePoolGroup[]) {
+  if (!groups.length) {
+    message.warning("请至少选择一种物料");
+    return;
+  }
+  const items = groups.flatMap((group) => group.items);
+  selectedRequestIds.value = items.map((item) => item.requestId);
+  const earliestExpectedDate = groups
+    .map((group) => group.earliestExpectedDate)
+    .filter(Boolean)
+    .sort()[0];
   Object.assign(inquiryForm, {
-    title: `${group.partName}集中采购询价（${group.requestCount}条申请）`,
-    deadline: defaultDeadline(group.earliestExpectedDate),
+    title:
+      groups.length === 1
+        ? `${groups[0].partName}集中采购询价（${items.length}条申请）`
+        : `${groups.length}种物料集中采购询价（${items.length}条申请）`,
+    deadline: defaultDeadline(earliestExpectedDate),
     sourcingMethod: "COMPETITIVE",
     minQuoteCount: 3,
     exceptionReason: "",
@@ -432,8 +482,10 @@ async function handleCreateInquiry() {
     });
     consolidateOpen.value = false;
     message.success(
-      `${inquiry.code} 已创建，${inquiry.requestCount || selectedRequestIds.value.length}条申请已进入集中询价`,
+      `${inquiry.code} 已创建，${inquiry.materialCount || selectedGroups.value.length}种物料、${inquiry.requestCount || selectedRequestIds.value.length}条申请已进入集中询价`,
     );
+    selectedGroupKeys.value = [];
+    selectedRequestIds.value = [];
     await loadData();
   } catch (error: any) {
     message.error(error.message || "集中询价创建失败");

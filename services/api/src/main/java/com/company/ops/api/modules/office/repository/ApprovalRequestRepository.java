@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository; import org.springf
 public interface ApprovalRequestRepository extends JpaRepository<ApprovalRequest, UUID> {
   List<ApprovalRequest> findAllByOrderByCreatedAtDesc(); boolean existsByCode(String code);
   List<ApprovalRequest> findByStatusOrderByCreatedAtDesc(ApprovalStatus status);
+  List<ApprovalRequest> findByProcessedAtIsNotNull();
   @Lock(LockModeType.PESSIMISTIC_WRITE) @Query("select item from ApprovalRequest item where item.id = :id") Optional<ApprovalRequest> findByIdForUpdate(@Param("id") UUID id);
   long countByStatus(String status);
 }

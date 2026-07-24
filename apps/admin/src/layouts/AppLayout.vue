@@ -85,10 +85,10 @@
           <template #title>供应链采购</template>
           <a-menu-item key="/procurement/requests">采购申请</a-menu-item>
           <a-menu-item key="/procurement/purchase-pool">待采购清单</a-menu-item>
+          <a-menu-item key="/procurement/inquiries">询价管理</a-menu-item>
           <a-menu-item key="/procurement/orders">采购订单</a-menu-item>
-          <a-menu-item key="/procurement/controls">询价·质检·发票</a-menu-item>
           <a-menu-item key="/procurement/receipts">到货入库</a-menu-item>
-          <a-menu-item key="/procurement/costs">成本归集</a-menu-item>
+          <a-menu-item key="/procurement/invoices">采购发票</a-menu-item>
           <a-menu-item key="/procurement/payables">采购应付</a-menu-item>
           <a-menu-item key="/procurement/suppliers">供应商</a-menu-item>
           <a-menu-item key="/procurement/analytics">采购分析</a-menu-item>

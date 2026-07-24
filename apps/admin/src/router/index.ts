@@ -189,6 +189,12 @@ const rootRoutes: RouteRecordRaw[] = [
     meta: { title: "待采购清单", permission: "procurement:view" },
   },
   {
+    path: "procurement/inquiries",
+    name: "procurement-inquiries",
+    component: () => import("@/views/procurement/ProcurementInquiryView.vue"),
+    meta: { title: "询价管理", permission: "procurement:view" },
+  },
+  {
     path: "procurement/orders",
     name: "procurement-orders",
     component: () => import("@/views/procurement/PurchaseOrdersView.vue"),
@@ -207,10 +213,14 @@ const rootRoutes: RouteRecordRaw[] = [
     meta: { title: "\u5230\u8d27\u5165\u5e93", permission: "procurement:view" },
   },
   {
+    path: "procurement/invoices",
+    name: "procurement-invoices",
+    component: () => import("@/views/procurement/SupplierInvoiceView.vue"),
+    meta: { title: "采购发票", permission: "procurement:payable:view" },
+  },
+  {
     path: "procurement/costs",
-    name: "procurement-costs",
-    component: () => import("@/views/procurement/CostAllocationView.vue"),
-    meta: { title: "\u6210\u672c\u5f52\u96c6", permission: "procurement:view" },
+    redirect: "/projects/costs",
   },
   {
     path: "procurement/payables",
@@ -232,9 +242,7 @@ const rootRoutes: RouteRecordRaw[] = [
   },
   {
     path: "procurement/controls",
-    name: "procurement-controls",
-    component: () => import("@/views/procurement/ProcurementControlView.vue"),
-    meta: { title: "采购控制中心", permission: "procurement:view" },
+    redirect: "/procurement/inquiries",
   },
   {
     path: "procurement/governance",

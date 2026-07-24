@@ -9,14 +9,16 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import java.util.HashSet;
 import java.util.Set;
 
 @Entity
-@Table(name = "sys_organizations")
+@Table(name = "sys_organizations", uniqueConstraints = @UniqueConstraint(
+    name = "uk_sys_organization_tenant_code", columnNames = {"tenant_id", "code"}))
 public class SystemOrganization extends BaseEntity {
 
-  @Column(name = "code", length = 64, nullable = false, unique = true)
+  @Column(name = "code", length = 64, nullable = false)
   private String code;
 
   @Column(name = "name", length = 120, nullable = false)

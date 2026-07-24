@@ -6,4 +6,5 @@ public interface ProjectTimesheetRepository extends JpaRepository<ProjectTimeshe
   List<ProjectTimesheet> findByAssignmentIdOrderByWorkDateDesc(UUID assignmentId);
   List<ProjectTimesheet> findByAssignmentIdAndStatus(UUID assignmentId,String status);
   List<ProjectTimesheet> findByUserIdAndWorkDate(UUID userId,LocalDate workDate);
+  List<ProjectTimesheet> findByWorkDateBetweenAndStatus(LocalDate startDate,LocalDate endDate,String status);
 }

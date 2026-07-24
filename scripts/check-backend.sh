@@ -5,8 +5,7 @@ echo "Backend environment check"
 echo
 
 missing=0
-has_local_profile=0
-API_PORT="${API_PORT:-8081}"
+API_PORT="${API_PORT:-8080}"
 
 check_command() {
   local name="$1"
@@ -59,11 +58,6 @@ else
   missing=1
 fi
 
-if [[ -f "services/api/src/main/resources/application-local.yml" ]]; then
-  echo "OK   local H2 profile: npm run api:dev:local"
-  has_local_profile=1
-fi
-
 if command -v docker >/dev/null 2>&1; then
   echo "OK   docker: $(command -v docker)"
 else
@@ -73,8 +67,6 @@ fi
 echo
 if lsof -nP -iTCP:5432 -sTCP:LISTEN >/dev/null 2>&1; then
   echo "OK   PostgreSQL: listening on 5432"
-elif [[ "$has_local_profile" -eq 1 ]]; then
-  echo "OK   PostgreSQL: skipped for local H2 mode"
 else
   echo "MISS PostgreSQL: not listening on 5432"
   missing=1
@@ -94,15 +86,11 @@ if [[ "$missing" -eq 0 ]]; then
   echo "Backend environment looks ready."
 else
   echo "Backend is not ready yet."
-  echo "Fast local startup:"
-  echo "  1. npm run tools:install"
-  echo "  2. npm run api:dev:local"
-  echo "  3. npm run admin:dev"
-  echo
   echo "PostgreSQL startup:"
-  echo "  1. npm run infra:up"
-  echo "  2. npm run api:dev"
-  echo "  3. npm run admin:dev"
+  echo "  1. npm run tools:install"
+  echo "  2. npm run infra:up"
+  echo "  3. npm run api:dev"
+  echo "  4. npm run admin:dev"
 fi
 
 exit "$missing"

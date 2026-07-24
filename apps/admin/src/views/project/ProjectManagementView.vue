@@ -85,54 +85,6 @@
             </button>
           </div>
         </section>
-        <a-table
-          :columns="profitabilityColumns"
-          :data-source="profitabilityHighlights"
-          :loading="loading"
-          :pagination="false"
-          :row-key="(record: ProjectProfitability) => record.projectId"
-          :scroll="{ x: 980 }"
-          size="small"
-          style="margin-bottom: 16px"
-        >
-          <template #title>项目利润与预算风险</template>
-          <template #bodyCell="{ column, record }">
-            <template v-if="column.key === 'project'">
-              <a-button
-                type="link"
-                class="table-link"
-                @click="openProfitabilityProject(record.projectId)"
-                >{{ record.projectName }}</a-button
-              >
-              <span class="table-subtitle"
-                >{{ record.projectCode || "-" }} ·
-                {{ record.customerName || "未关联客户" }}</span
-              >
-            </template>
-            <template v-else-if="column.key === 'gross'">
-              <strong :class="{ 'text-danger': record.grossMargin < 0 }">{{
-                formatMoney(record.grossMargin)
-              }}</strong>
-              <span class="table-subtitle"
-                >毛利率 {{ formatPercent(record.grossMarginRate) }}</span
-              >
-            </template>
-            <template v-else-if="column.key === 'budget'">
-              {{ formatMoney(record.actualCost) }}
-              <span class="table-subtitle"
-                >预算使用 {{ formatPercent(record.budgetUsageRate) }}</span
-              >
-            </template>
-            <template v-else-if="column.key === 'risk'">
-              <a-tag :color="riskColor(record.riskLevel)">{{
-                riskLabel(record.riskLevel)
-              }}</a-tag>
-              <span class="table-subtitle">{{ record.riskMessage }}</span>
-            </template>
-          </template>
-          <template #emptyText>暂无项目利润风险</template>
-        </a-table>
-
         <a-space wrap class="table-toolbar">
           <a-input-search
             v-model:value="keyword"
@@ -537,8 +489,8 @@
         <section class="project-workbench">
           <div class="workbench-title">
             <div>
-              <h3>阶段履历</h3>
-              <p>按项目阶段查看推进分布和历史变更，关注长期停留与关闭情况。</p>
+              <h3>项目阶段总览</h3>
+              <p>先看项目当前进度，再查看每次阶段推进记录。</p>
             </div>
             <a-button
               :loading="detailHydrating"
@@ -548,9 +500,20 @@
           </div>
           <div class="stage-kanban-grid">
             <button
+              class="stage-card"
+              :class="{ active: stageFilter === 'ALL' }"
+              type="button"
+              @click="stageFilter = 'ALL'"
+            >
+              <span>全部项目</span>
+              <strong>{{ projects.length }}</strong>
+              <em>{{ formatMoney(totalContract) }}</em>
+            </button>
+            <button
               v-for="item in stageCards"
               :key="item.stage"
               class="stage-card"
+              :class="{ active: stageFilter === item.stage }"
               type="button"
               @click="stageFilter = item.stage"
             >
@@ -559,31 +522,110 @@
               <em>{{ item.amount }}</em>
             </button>
           </div>
-          <div class="stage-gate-list">
-            <div
-              v-for="item in stageGateRules"
-              :key="item.stage"
-              class="stage-gate-row"
-            >
-              <a-tag :color="stageColor(item.stage)">{{
-                stageLabel(item.stage)
-              }}</a-tag>
-              <span>{{ item.rule }}</span>
-              <em>{{ item.owner }}</em>
-            </div>
-          </div>
         </section>
+
+        <div class="stage-section-header">
+          <div>
+            <h4>项目当前进度</h4>
+            <span>共 {{ stageProjectRows.length }} 个项目</span>
+          </div>
+          <a-space wrap>
+            <a-input-search
+              v-model:value="keyword"
+              allow-clear
+              placeholder="搜索项目、客户、负责人"
+              style="width: 240px"
+            />
+            <a-select
+              v-model:value="stageFilter"
+              :options="stageFilterOptions"
+              style="width: 140px"
+            />
+          </a-space>
+        </div>
+        <a-table
+          :columns="stageProjectColumns"
+          :data-source="stageProjectRows"
+          :loading="loading || detailHydrating"
+          :pagination="{ pageSize: 10 }"
+          :row-key="(record: ProjectStageOverviewRow) => record.project.id"
+          :scroll="{ x: 920 }"
+          size="middle"
+        >
+          <template #bodyCell="{ column, record }">
+            <template v-if="column.key === 'project'">
+              <a-button
+                type="link"
+                class="table-link"
+                @click="openDetail(record.project)"
+                >{{ record.project.name }}</a-button
+              >
+              <span class="table-subtitle"
+                >{{ record.project.code || "-" }} ·
+                {{ record.project.managerName || "待分配负责人" }}</span
+              >
+            </template>
+            <template v-else-if="column.key === 'stage'">
+              <a-tag :color="stageColor(record.project.stage)">{{
+                stageLabel(record.project.stage)
+              }}</a-tag>
+            </template>
+            <template v-else-if="column.key === 'progress'">
+              <div class="stage-progress-cell">
+                <a-progress
+                  :percent="normalizedProgress(record.project.progress)"
+                  size="small"
+                  :status="
+                    normalizedProgress(record.project.progress) >= 100
+                      ? 'success'
+                      : 'active'
+                  "
+                />
+              </div>
+            </template>
+            <template v-else-if="column.key === 'schedule'">
+              {{ record.project.plannedStartDate || "未设置" }}
+              <span class="table-subtitle"
+                >至 {{ record.project.plannedEndDate || "未设置" }}</span
+              >
+            </template>
+            <template v-else-if="column.key === 'latest'">
+              <template v-if="record.latestRecord">
+                <span
+                  >{{ stageLabel(record.latestRecord.fromStage) }} →
+                  {{ stageLabel(record.latestRecord.toStage) }}</span
+                >
+                <span class="table-subtitle"
+                  >{{ record.latestRecord.operatorName }} ·
+                  {{ formatDateTime(record.latestRecord.changedAt) }}</span
+                >
+              </template>
+              <span v-else class="text-muted">尚无推进记录</span>
+            </template>
+          </template>
+          <template #emptyText>当前筛选条件下暂无项目</template>
+        </a-table>
+
+        <div class="stage-section-header stage-history-header">
+          <div>
+            <h4>阶段变更记录</h4>
+            <span>按时间倒序展示，共 {{ flatStageRecords.length }} 条</span>
+          </div>
+        </div>
         <a-table
           :columns="flatStageColumns"
           :data-source="flatStageRecords"
           :loading="loading || detailHydrating"
           :pagination="{ pageSize: 12 }"
           :row-key="(record: FlatStageRecord) => record.id"
-          :scroll="{ x: 980 }"
+          :scroll="{ x: 1180 }"
           size="middle"
         >
           <template #bodyCell="{ column, record }">
-            <template v-if="column.key === 'project'">
+            <template v-if="column.key === 'time'">
+              {{ formatDateTime(record.changedAt) }}
+            </template>
+            <template v-else-if="column.key === 'project'">
               <a-button
                 type="link"
                 class="table-link"
@@ -603,12 +645,12 @@
                 stageLabel(record.toStage)
               }}</a-tag>
             </template>
-            <template v-else-if="column.key === 'operator'"
-              >{{ record.operatorName
-              }}<span class="table-subtitle">{{
-                formatDateTime(record.changedAt)
-              }}</span></template
-            >
+            <template v-else-if="column.key === 'progress'">
+              <strong>{{ normalizedProgress(record.progress) }}%</strong>
+            </template>
+            <template v-else-if="column.key === 'operator'">{{
+              record.operatorName || "-"
+            }}</template>
           </template>
           <template #emptyText>暂无阶段推进记录</template>
         </a-table>
@@ -1250,6 +1292,10 @@ type ProjectBudgetRow = {
 };
 type FlatCostEntry = ProjectCostEntry & { project: Project };
 type FlatStageRecord = ProjectStageRecord & { project: Project };
+type ProjectStageOverviewRow = {
+  project: Project;
+  latestRecord: ProjectStageRecord | null;
+};
 const preSalesRows = ref<QuotePlan[]>([]);
 const selectedPreSales = ref<QuotePlan | null>(null);
 const preSalesCostForm = reactive(initialPreSalesCostForm());
@@ -1329,12 +1375,6 @@ const columns = [
   { title: "毛利 / 余额", key: "gross", width: 180 },
   { title: "操作", key: "action", width: 130, fixed: "right" },
 ];
-const profitabilityColumns = [
-  { title: "项目 / 客户", key: "project", width: 280 },
-  { title: "毛利", key: "gross", width: 170 },
-  { title: "实际成本 / 预算", key: "budget", width: 180 },
-  { title: "风险", key: "risk", width: 320 },
-];
 const budgetColumns = [
   { title: "成本分类", key: "category", width: 140 },
   { title: "预算金额", key: "planned", width: 150 },
@@ -1371,10 +1411,19 @@ const flatCostColumns = [
   { title: "金额", key: "amount", width: 140 },
 ];
 const flatStageColumns = [
+  { title: "推进时间", key: "time", width: 170 },
   { title: "项目", key: "project", width: 240 },
-  { title: "阶段变化", key: "change", width: 260 },
-  { title: "节点说明", dataIndex: "comment" },
-  { title: "操作记录", key: "operator", width: 220 },
+  { title: "阶段变化", key: "change", width: 240 },
+  { title: "完成进度", key: "progress", width: 110 },
+  { title: "推进说明", dataIndex: "comment" },
+  { title: "操作人", key: "operator", width: 140 },
+];
+const stageProjectColumns = [
+  { title: "项目 / 负责人", key: "project", width: 250 },
+  { title: "当前阶段", key: "stage", width: 110 },
+  { title: "项目进度", key: "progress", width: 180 },
+  { title: "计划周期", key: "schedule", width: 170 },
+  { title: "最近推进", key: "latest", width: 210 },
 ];
 const preSalesColumns = [
   { title: "报价 / 客户", key: "quote", width: 260 },
@@ -1444,15 +1493,6 @@ const budgetOverrunCount = computed(
     projects.value.filter((item) => Number(item.budgetVariance || 0) < 0)
       .length,
 );
-const profitabilityHighlights = computed(() =>
-  [...profitabilityRows.value]
-    .sort(
-      (a, b) =>
-        riskRank(b.riskLevel) - riskRank(a.riskLevel) ||
-        Number(b.budgetUsageRate || 0) - Number(a.budgetUsageRate || 0),
-    )
-    .slice(0, 5),
-);
 const nextStage = computed<ProjectStage | null>(() => {
   if (!detail.value || detail.value.project.stage === "CLOSED") return null;
   const currentIndex = stageOptions.findIndex(
@@ -1495,6 +1535,45 @@ const materialBudgetItem = computed(
     ) || null,
 );
 const detailRows = computed(() => Object.values(detailCache.value));
+const stageFilteredProjects = computed(() =>
+  projects.value.filter((project) => {
+    const search = keyword.value.trim().toLowerCase();
+    const textMatched =
+      !search ||
+      [
+        project.code,
+        project.name,
+        project.customerName,
+        project.managerName,
+      ].some((value) => value?.toLowerCase().includes(search));
+    return (
+      textMatched &&
+      (stageFilter.value === "ALL" || project.stage === stageFilter.value)
+    );
+  }),
+);
+const latestStageRecordMap = computed(() => {
+  const rows = new Map<string, ProjectStageRecord>();
+  detailRows.value.forEach((detailRow) => {
+    const latest = [...detailRow.stageRecords].sort((a, b) =>
+      (b.changedAt || "").localeCompare(a.changedAt || ""),
+    )[0];
+    if (latest) rows.set(detailRow.project.id, latest);
+  });
+  return rows;
+});
+const stageProjectRows = computed<ProjectStageOverviewRow[]>(() =>
+  [...stageFilteredProjects.value]
+    .sort(
+      (a, b) =>
+        stageSequenceIndex(a.stage) - stageSequenceIndex(b.stage) ||
+        a.name.localeCompare(b.name, "zh-CN"),
+    )
+    .map((project) => ({
+      project,
+      latestRecord: latestStageRecordMap.value.get(project.id) || null,
+    })),
+);
 const flatCostEntries = computed<FlatCostEntry[]>(() =>
   detailRows.value
     .flatMap((row) =>
@@ -1503,17 +1582,17 @@ const flatCostEntries = computed<FlatCostEntry[]>(() =>
     .sort((a, b) => (b.incurredDate || "").localeCompare(a.incurredDate || "")),
 );
 const flatStageRecords = computed<FlatStageRecord[]>(() =>
-  detailRows.value
-    .flatMap((row) =>
-      row.stageRecords.map((item) => ({ ...item, project: row.project })),
-    )
-    .filter(
-      (item) =>
-        stageFilter.value === "ALL" ||
-        item.toStage === stageFilter.value ||
-        item.project.stage === stageFilter.value,
-    )
-    .sort((a, b) => (b.changedAt || "").localeCompare(a.changedAt || "")),
+  (() => {
+    const visibleProjectIds = new Set(
+      stageFilteredProjects.value.map((project) => project.id),
+    );
+    return detailRows.value
+      .filter((row) => visibleProjectIds.has(row.project.id))
+      .flatMap((row) =>
+        row.stageRecords.map((item) => ({ ...item, project: row.project })),
+      )
+      .sort((a, b) => (b.changedAt || "").localeCompare(a.changedAt || ""));
+  })(),
 );
 const budgetCards = computed(() => [
   {
@@ -1657,29 +1736,6 @@ const profitReviewCards = computed(() => {
     },
   ];
 });
-const stageGateRules = [
-  {
-    stage: "ENTRY" as ProjectStage,
-    rule: "入场前确认合同已生效、项目经理已分配、预算科目已带入",
-    owner: "项目管理负责人",
-  },
-  {
-    stage: "CONSTRUCTION" as ProjectStage,
-    rule: "施工前确认采购计划、库存物料和安全资料",
-    owner: "项目/采购",
-  },
-  {
-    stage: "INITIAL_ACCEPTANCE" as ProjectStage,
-    rule: "初验前确认成本归集、变更单和验收资料",
-    owner: "项目经理",
-  },
-  {
-    stage: "CLOSED" as ProjectStage,
-    rule: "关闭前确认应收回款、成本完整和利润复盘",
-    owner: "财务/项目",
-  },
-];
-
 onMounted(loadData);
 watch(
   () => route.path,
@@ -1930,11 +1986,6 @@ async function hydrateProjectDetails(force = false) {
   }
 }
 
-function openProfitabilityProject(projectId: string) {
-  const project = projects.value.find((item) => item.id === projectId);
-  if (project) openDetail(project);
-}
-
 function canExecute(project: Project) {
   return project.approvalStatus === "APPROVED" && project.stage !== "CLOSED";
 }
@@ -1966,6 +2017,11 @@ function stageColor(stage: ProjectStage) {
       CLOSED: "default",
     } as Record<ProjectStage, string>
   )[stage];
+}
+function stageSequenceIndex(stage: ProjectStage) {
+  if (stage === "INITIATED" || stage === "BIDDING") return 0;
+  const index = stageOptions.findIndex((item) => item.value === stage);
+  return index >= 0 ? index : stageOptions.length;
 }
 function approvalLabel(status: ProjectApprovalStatus) {
   return (
@@ -2145,9 +2201,6 @@ function initialProjectPurchaseForm() {
     reason: "",
   };
 }
-function riskRank(level: string) {
-  return ({ HIGH: 3, MEDIUM: 2, LOW: 1 } as Record<string, number>)[level] || 0;
-}
 function riskLabel(level: string) {
   return (
     ({ HIGH: "高风险", MEDIUM: "关注", LOW: "正常" } as Record<string, string>)[
@@ -2180,6 +2233,9 @@ function calcNetAmount(amount?: number, taxRate?: number) {
 }
 function formatPercent(value: number) {
   return `${Number(value || 0).toFixed(1)}%`;
+}
+function normalizedProgress(value?: number) {
+  return Math.min(Math.max(Math.round(Number(value || 0)), 0), 100);
 }
 function formatDateTime(value: string) {
   return value
@@ -2231,35 +2287,7 @@ function dateAfter(days: number) {
   gap: 10px;
 }
 .stage-kanban-grid {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-}
-.stage-gate-list {
-  display: grid;
-  gap: 8px;
-  margin-top: 12px;
-}
-.stage-gate-row {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 10px;
-  align-items: center;
-  padding: 8px 10px;
-  border: 1px solid #eef2f7;
-  border-radius: 8px;
-  background: #fff;
-}
-.stage-gate-row span {
-  overflow: hidden;
-  color: #344054;
-  font-size: 13px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.stage-gate-row em {
-  color: #667085;
-  font-size: 12px;
-  font-style: normal;
-  white-space: nowrap;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 .presales-cost-table {
   display: grid;
@@ -2333,6 +2361,15 @@ function dateAfter(days: number) {
   border-color: #91caff;
   background: #f6faff;
 }
+.stage-card.active {
+  border-color: #1677ff;
+  background: #eaf4ff;
+  box-shadow: inset 0 0 0 1px #1677ff;
+}
+.stage-card.active span,
+.stage-card.active strong {
+  color: #0958d9;
+}
 .summary-card span,
 .stage-card span {
   color: #667085;
@@ -2355,6 +2392,38 @@ function dateAfter(days: number) {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.stage-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 20px 0 10px;
+}
+.stage-section-header > div:first-child {
+  min-width: 0;
+}
+.stage-section-header h4 {
+  margin: 0;
+  color: #101828;
+  font-size: 14px;
+  font-weight: 600;
+}
+.stage-section-header span {
+  display: block;
+  margin-top: 2px;
+  color: #667085;
+  font-size: 12px;
+}
+.stage-history-header {
+  padding-top: 4px;
+  border-top: 1px solid #eef2f7;
+}
+.stage-progress-cell {
+  width: 150px;
+}
+.text-muted {
+  color: #98a2b3;
+}
 @media (max-width: 900px) {
   .workbench-title {
     flex-direction: column;
@@ -2363,8 +2432,9 @@ function dateAfter(days: number) {
   .stage-kanban-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .stage-gate-row {
-    grid-template-columns: 1fr;
+  .stage-section-header {
+    align-items: flex-start;
+    flex-direction: column;
   }
   .project-inline-actions {
     grid-template-columns: 1fr;

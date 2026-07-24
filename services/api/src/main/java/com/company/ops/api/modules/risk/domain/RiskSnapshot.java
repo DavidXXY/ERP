@@ -4,11 +4,13 @@ import com.company.ops.api.common.domain.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
 @Entity
-@Table(name = "risk_snapshots")
+@Table(name = "risk_snapshots", uniqueConstraints = @UniqueConstraint(
+    name = "uk_risk_snapshot_tenant_date_key", columnNames = {"tenant_id", "snapshot_date", "risk_key"}))
 public class RiskSnapshot extends BaseEntity {
   @Column(name = "snapshot_date", nullable = false)
   private LocalDate snapshotDate;

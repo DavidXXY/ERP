@@ -4,6 +4,7 @@ import com.company.ops.api.common.exception.BusinessException;
 import com.company.ops.api.common.delete.DeleteGovernanceService;
 import com.company.ops.api.common.storage.FileStorageService;
 import com.company.ops.api.common.storage.FileStorageService.FilePolicy;
+import com.company.ops.api.common.tenant.TenantContext;
 import com.company.ops.api.modules.maintenance.domain.WorkOrder;
 import com.company.ops.api.modules.maintenance.repository.WorkOrderRepository;
 import com.company.ops.api.modules.ledger.dto.LedgerDtos.PostingLine;
@@ -651,7 +652,7 @@ public class OfficeService {
     List<RuntimeAssignee> exact = resolveExactDynamicAssignee(approval, config.getDynamicAssignee());
     if (!exact.isEmpty()) return exact;
     return dynamicRoleCodes(config.getDynamicAssignee()).stream()
-        .map(code -> roleRepository.findByCodeAndTenantId(code, "default"))
+        .map(code -> roleRepository.findByCodeAndTenantId(code, TenantContext.currentTenant()))
         .filter(java.util.Optional::isPresent)
         .map(java.util.Optional::get)
         .findFirst()

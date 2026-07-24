@@ -6,18 +6,20 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
 
 @Entity
-@Table(name = "procurement_cost_allocations")
+@Table(name = "procurement_cost_allocations", uniqueConstraints = @UniqueConstraint(
+    name = "uk_procurement_allocation_tenant_receipt", columnNames = {"tenant_id", "receipt_id"}))
 public class ProcurementCostAllocation extends BaseEntity {
 
   @Column(name = "order_id", nullable = false)
   private UUID orderId;
 
-  @Column(name = "receipt_id", nullable = false, unique = true)
+  @Column(name = "receipt_id", nullable = false)
   private UUID receiptId;
 
   @Enumerated(EnumType.STRING)

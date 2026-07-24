@@ -17,6 +17,8 @@ public class CollaborationController {
   public CollaborationController(CollaborationService service,CollaborationGovernanceService governance){this.service=service;this.governance=governance;}
   @GetMapping("/overview") @PreAuthorize("hasAnyAuthority('dashboard:view','project:view','office:approval:view')")
   public ApiResponse<Map<String,Object>> overview(@RequestParam(required=false) Integer year,@RequestParam(required=false) Integer month,@RequestParam(required=false) UUID departmentId){return ApiResponse.ok(service.overview(year,month,departmentId));}
+  @GetMapping("/todos") @PreAuthorize("hasAnyAuthority('dashboard:view','project:view','office:approval:view')")
+  public ApiResponse<List<Map<String,Object>>> todos(){return ApiResponse.ok(service.todos());}
   @GetMapping("/references") @PreAuthorize("hasAnyAuthority('project:view','system:user:view')")
   public ApiResponse<List<Map<String,Object>>> references(){return ApiResponse.ok(service.references());}
   @PostMapping("/responsibilities") @PreAuthorize("hasAnyAuthority('project:create','system:organization:update')")

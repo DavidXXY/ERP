@@ -2,6 +2,7 @@ package com.company.ops.api.modules.system.service;
 
 import com.company.ops.api.common.exception.BusinessException;
 import com.company.ops.api.common.service.CodeGenerator;
+import com.company.ops.api.common.tenant.TenantContext;
 import com.company.ops.api.modules.qualification.repository.QualificationEmployeeRepository;
 import com.company.ops.api.modules.system.domain.SystemOrganization;
 import com.company.ops.api.modules.system.domain.SystemPermission;
@@ -201,7 +202,7 @@ public class SystemService {
 
   @Transactional
   public RoleResponse createRole(CreateRoleRequest request) {
-    if (roleRepository.existsByCodeAndTenantId(request.code(), "default")) {
+    if (roleRepository.existsByCodeAndTenantId(request.code(), TenantContext.currentTenant())) {
       throw new BusinessException("角色代码已存在");
     }
     validateDataScope(request.dataScope(), request.dataOrganizationIds());
@@ -315,7 +316,7 @@ public class SystemService {
 
   @Transactional
   public PermissionResponse createPermission(CreatePermissionRequest request) {
-    if (permissionRepository.existsByCodeAndTenantId(request.code(), "default")) {
+    if (permissionRepository.existsByCodeAndTenantId(request.code(), TenantContext.currentTenant())) {
       throw new BusinessException("权限代码已存在");
     }
     SystemPermission permission = new SystemPermission();
@@ -365,7 +366,7 @@ public class SystemService {
   // Organization management
   @Transactional(readOnly = true)
   public List<OrganizationResponse> listOrganizations() {
-    List<SystemOrganization> all = organizationRepository.findByTenantIdOrderBySortOrderAsc("default");
+    List<SystemOrganization> all = organizationRepository.findByTenantIdOrderBySortOrderAsc(TenantContext.currentTenant());
     Map<UUID, List<SystemOrganization>> children = childOrganizations(all);
     Map<UUID, Long> directUsers = directUserCounts(all);
     Map<UUID, Long> directEmployees = directEmployeeCounts(all);
@@ -377,7 +378,7 @@ public class SystemService {
 
   @Transactional(readOnly = true)
   public List<OrganizationResponse> listOrganizationsFlat() {
-    List<SystemOrganization> all = organizationRepository.findByTenantIdOrderBySortOrderAsc("default");
+    List<SystemOrganization> all = organizationRepository.findByTenantIdOrderBySortOrderAsc(TenantContext.currentTenant());
     Map<UUID, List<SystemOrganization>> children = childOrganizations(all);
     Map<UUID, Long> directUsers = directUserCounts(all);
     Map<UUID, Long> directEmployees = directEmployeeCounts(all);
@@ -388,7 +389,7 @@ public class SystemService {
 
   @Transactional(readOnly = true)
   public OrganizationResponse getOrganization(UUID id) {
-    List<SystemOrganization> all = organizationRepository.findByTenantIdOrderBySortOrderAsc("default");
+    List<SystemOrganization> all = organizationRepository.findByTenantIdOrderBySortOrderAsc(TenantContext.currentTenant());
     SystemOrganization org = all.stream().filter(item -> item.getId().equals(id)).findFirst()
         .orElseThrow(() -> new BusinessException("组织不存在"));
     return toOrganizationResponse(org, childOrganizations(all), directUserCounts(all), directEmployeeCounts(all), true);
@@ -397,7 +398,7 @@ public class SystemService {
   @Transactional
   public OrganizationResponse createOrganization(CreateOrganizationRequest request) {
     String orgCode = request.code() != null ? request.code() : codeGenerator.generate("ORGANIZATION");
-    if (organizationRepository.existsByCodeAndTenantId(orgCode, "default")) {
+    if (organizationRepository.existsByCodeAndTenantId(orgCode, TenantContext.currentTenant())) {
       throw new BusinessException("组织代码已存在");
     }
     validateOrganizationType(request.type());

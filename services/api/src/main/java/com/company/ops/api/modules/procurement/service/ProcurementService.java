@@ -2,6 +2,7 @@ package com.company.ops.api.modules.procurement.service;
 
 import com.company.ops.api.common.exception.BusinessException;
 import com.company.ops.api.common.service.CodeGenerator;
+import com.company.ops.api.common.tenant.TenantContext;
 import com.company.ops.api.modules.inventory.domain.InventoryPart;
 import com.company.ops.api.modules.inventory.domain.StockMovement;
 import com.company.ops.api.modules.inventory.domain.StockMovementType;
@@ -21,6 +22,7 @@ import com.company.ops.api.modules.procurement.domain.PurchaseRequestStatus;
 import com.company.ops.api.modules.procurement.domain.Supplier;
 import com.company.ops.api.modules.procurement.domain.SupplierInvoice;
 import com.company.ops.api.modules.procurement.domain.SupplierQuotation;
+import com.company.ops.api.modules.procurement.domain.SupplierQuotationLine;
 import com.company.ops.api.modules.procurement.domain.ProcurementInquiry;
 import com.company.ops.api.modules.procurement.domain.ProcurementContract;
 import com.company.ops.api.modules.procurement.domain.SupplierRiskStatus;
@@ -50,16 +52,13 @@ import com.company.ops.api.modules.procurement.repository.PurchaseRequestReposit
 import com.company.ops.api.modules.procurement.repository.SupplierRepository;
 import com.company.ops.api.modules.procurement.repository.SupplierInvoiceRepository;
 import com.company.ops.api.modules.procurement.repository.SupplierQuotationRepository;
+import com.company.ops.api.modules.procurement.repository.SupplierQuotationLineRepository;
 import com.company.ops.api.modules.procurement.repository.ProcurementInquiryRepository;
 import com.company.ops.api.modules.procurement.repository.ProcurementInquiryRequestRepository;
 import com.company.ops.api.modules.procurement.repository.ProcurementContractRepository;
 import com.company.ops.api.modules.project.domain.Project;
 import com.company.ops.api.modules.project.domain.ProjectApprovalStatus;
-import com.company.ops.api.modules.project.domain.ProjectCostCategory;
-import com.company.ops.api.modules.project.domain.ProjectCostEntry;
-import com.company.ops.api.modules.project.domain.ProjectCostSource;
 import com.company.ops.api.modules.project.domain.ProjectStage;
-import com.company.ops.api.modules.project.repository.ProjectCostEntryRepository;
 import com.company.ops.api.modules.project.repository.ProjectRepository;
 import com.company.ops.api.modules.system.domain.SystemOrganization;
 import com.company.ops.api.modules.system.repository.SystemOrganizationRepository;
@@ -107,13 +106,14 @@ public class ProcurementService {
   private final InventoryPartRepository partRepository;
   private final StockMovementRepository movementRepository;
   private final ProjectRepository projectRepository;
-  private final ProjectCostEntryRepository projectCostRepository;
   private final SystemOrganizationRepository organizationRepository;
   private final SupplierInvoiceRepository invoiceRepository;
   private final ProcurementInquiryRepository inquiryRepository;
   private final ProcurementInquiryRequestRepository inquiryRequestRepository;
   private final SupplierQuotationRepository quoteRepository;
+  private final SupplierQuotationLineRepository quoteLineRepository;
   private final ProcurementContractRepository contractRepository;
+  private final ProcurementArrivalService arrivals;
 
   public ProcurementService(
       CodeGenerator codeGenerator,
@@ -127,13 +127,14 @@ public class ProcurementService {
       InventoryPartRepository partRepository,
       StockMovementRepository movementRepository,
       ProjectRepository projectRepository,
-      ProjectCostEntryRepository projectCostRepository,
       SystemOrganizationRepository organizationRepository,
       SupplierInvoiceRepository invoiceRepository,
       ProcurementInquiryRepository inquiryRepository,
       ProcurementInquiryRequestRepository inquiryRequestRepository,
       SupplierQuotationRepository quoteRepository,
-      ProcurementContractRepository contractRepository
+      SupplierQuotationLineRepository quoteLineRepository,
+      ProcurementContractRepository contractRepository,
+      ProcurementArrivalService arrivals
   ) {
     this.codeGenerator = codeGenerator;
     this.supplierRepository = supplierRepository;
@@ -146,13 +147,14 @@ public class ProcurementService {
     this.partRepository = partRepository;
     this.movementRepository = movementRepository;
     this.projectRepository = projectRepository;
-    this.projectCostRepository = projectCostRepository;
     this.organizationRepository = organizationRepository;
     this.invoiceRepository = invoiceRepository;
     this.inquiryRepository = inquiryRepository;
     this.inquiryRequestRepository = inquiryRequestRepository;
     this.quoteRepository = quoteRepository;
+    this.quoteLineRepository = quoteLineRepository;
     this.contractRepository = contractRepository;
+    this.arrivals = arrivals;
   }
 
   @Transactional(readOnly = true)
@@ -286,7 +288,7 @@ public class ProcurementService {
         ))
         .toList();
     List<ProcurementCostTargetOptionResponse> departments = organizationRepository
-        .findByTenantIdOrderBySortOrderAsc("default").stream()
+        .findByTenantIdOrderBySortOrderAsc(TenantContext.currentTenant()).stream()
         .filter(SystemOrganization::isEnabled)
         .filter(organization -> "DEPARTMENT".equals(organization.getType()))
         .map(organization -> new ProcurementCostTargetOptionResponse(
@@ -628,6 +630,7 @@ public class ProcurementService {
     }
 
     SupplierQuotation selectedQuote = null;
+    SupplierQuotationLine selectedQuoteLine = null;
     if (request.inquiryId() != null) {
       ProcurementInquiry inquiry = inquiryRepository.findById(request.inquiryId())
           .orElseThrow(() -> new BusinessException("询价单不存在"));
@@ -640,11 +643,20 @@ public class ProcurementService {
       }
       selectedQuote = quoteRepository.findById(inquiry.getSelectedQuoteId())
           .orElseThrow(() -> new BusinessException("定标报价不存在"));
+      selectedQuoteLine = quoteLineRepository
+          .findByQuoteIdAndRequestId(selectedQuote.getId(), purchaseRequest.getId())
+          .orElse(null);
       if (!selectedQuote.getSupplierId().equals(request.supplierId())) {
         throw new BusinessException("订单供应商必须与定标供应商一致");
       }
-      if (selectedQuote.getUnitPrice().compareTo(request.unitPrice()) != 0) {
+      BigDecimal awardedUnitPrice = selectedQuoteLine == null
+          ? selectedQuote.getUnitPrice() : selectedQuoteLine.getUnitPrice();
+      if (awardedUnitPrice.compareTo(request.unitPrice()) != 0) {
         throw new BusinessException("订单价格必须与定标报价一致");
+      }
+      if (selectedQuoteLine != null && request.taxRate() != null
+          && selectedQuoteLine.getTaxRate().compareTo(request.taxRate()) != 0) {
+        throw new BusinessException("订单税率必须与该物料的定标报价一致");
       }
     } else if (!StringUtils.hasText(request.sourceReason())) {
       throw new BusinessException("未关联询价单时必须填写直接采购原因");
@@ -668,13 +680,16 @@ public class ProcurementService {
     order.setOrderedQty(orderedQty);
     order.setReceivedQty(BigDecimal.ZERO);
     order.setUnitPrice(request.unitPrice());
-    order.setTaxRate(defaultTaxRate(request.taxRate() == null ? purchaseRequest.getTaxRate() : request.taxRate()));
+    BigDecimal awardedTaxRate = selectedQuoteLine == null
+        ? purchaseRequest.getTaxRate() : selectedQuoteLine.getTaxRate();
+    order.setTaxRate(defaultTaxRate(request.taxRate() == null ? awardedTaxRate : request.taxRate()));
     BigDecimal freight = request.freightAmount() == null
-        ? selectedQuote == null ? BigDecimal.ZERO : amount(selectedQuote.getFreightAmount())
+        ? allocatedQuoteFreight(selectedQuote, selectedQuoteLine, orderedQty)
         : request.freightAmount();
     order.setOrderAmount(orderedQty.multiply(request.unitPrice()).add(freight));
     order.setExpectedDeliveryDate(request.expectedDeliveryDate() == null
-        ? purchaseRequest.getExpectedDate()
+        ? selectedQuoteLine != null && selectedQuoteLine.getDeliveryDate() != null
+            ? selectedQuoteLine.getDeliveryDate() : purchaseRequest.getExpectedDate()
         : request.expectedDeliveryDate());
     order.setCostType(purchaseRequest.getCostType());
     order.setProjectId(purchaseRequest.getProjectId());
@@ -781,43 +796,11 @@ public class ProcurementService {
 
   @Transactional
   public ReceivePurchaseOrderResult receiveOrder(UUID id, ReceivePurchaseOrderRequest request) {
-    PurchaseOrder order = orderRepository.findByIdForUpdate(id)
+    GoodsReceipt savedReceipt = arrivals.register(id, request);
+    PurchaseOrder order = orderRepository.findById(id)
         .orElseThrow(() -> new BusinessException("采购订单不存在"));
-    if (order.getStatus() != PurchaseOrderStatus.ORDERED
-        && order.getStatus() != PurchaseOrderStatus.PARTIAL_RECEIVED) {
-      throw new BusinessException("当前订单状态不能收货");
-    }
-    if (order.getPartId() == null) {
-      throw new BusinessException("订单未关联物料，不能入库");
-    }
-    BigDecimal pending = receiptRepository.findByOrderId(id).stream()
-        .filter(item -> "PENDING".equals(item.getInspectionStatus()))
-        .map(GoodsReceipt::getQuantity).reduce(BigDecimal.ZERO, BigDecimal::add);
-    if (amount(order.getReceivedQty()).add(pending).add(request.quantity())
-        .compareTo(amount(order.getOrderedQty())) > 0) {
-      throw new BusinessException("本次收货数量超过订单剩余数量");
-    }
     InventoryPart part = partRepository.findById(order.getPartId())
         .orElseThrow(() -> new BusinessException("关联物料不存在"));
-    long sequence = receiptRepository.countByOrderId(order.getId()) + 1;
-    String receiptCode = "DH-" + order.getCode() + "-" + String.format("%02d", sequence);
-    BigDecimal receiptAmount = request.quantity().multiply(amount(order.getUnitPrice()));
-    GoodsReceipt receipt = new GoodsReceipt();
-    receipt.setCode(receiptCode);
-    receipt.setOrderId(order.getId());
-    receipt.setPartId(part.getId());
-    receipt.setQuantity(request.quantity());
-    receipt.setUnitPrice(order.getUnitPrice());
-    receipt.setTaxRate(defaultTaxRate(order.getTaxRate()));
-    receipt.setAmount(receiptAmount);
-    receipt.setReceivedDate(request.receivedDate());
-    receipt.setDeliveryNo(request.deliveryNo());
-    receipt.setReceiverName(currentName());
-    receipt.setPayableDueDate(request.payableDueDate());
-    receipt.setInspectionStatus("PENDING");
-    receipt.setClientRequestId(request.clientRequestId());
-    receipt.setAsnNo(request.asnNo());
-    GoodsReceipt savedReceipt = receiptRepository.save(receipt);
     PurchaseRequest purchaseRequest = requestRepository.findById(order.getRequestId()).orElse(null);
     Supplier supplier = supplierRepository.findById(order.getSupplierId())
         .orElseThrow(() -> new BusinessException("供应商不存在"));
@@ -1240,49 +1223,30 @@ public class ProcurementService {
     }
   }
 
-  private ProcurementCostAllocation postCostAllocation(
-      PurchaseOrder order,
-      GoodsReceipt receipt,
-      BigDecimal receiptAmount,
-      java.time.LocalDate incurredDate
-  ) {
-    ProcurementCostAllocation allocation = new ProcurementCostAllocation();
-    allocation.setOrderId(order.getId());
-    allocation.setReceiptId(receipt.getId());
-    allocation.setCostType(order.getCostType());
-    allocation.setProjectId(order.getProjectId());
-    allocation.setDepartmentId(order.getDepartmentId());
-    allocation.setTargetCode(order.getCostTargetCode());
-    allocation.setTargetName(order.getCostTargetName());
-    allocation.setPartName(order.getPartName());
-    allocation.setAmount(receiptAmount);
-    allocation.setIncurredDate(incurredDate);
-    ProcurementCostAllocation saved = costAllocationRepository.save(allocation);
-
-    if (order.getCostType() == ProcurementCostType.PROJECT) {
-      Project project = projectRepository.findById(order.getProjectId())
-          .orElseThrow(() -> new BusinessException("采购订单关联项目不存在"));
-      ProjectCostEntry entry = new ProjectCostEntry();
-      entry.setProjectId(project.getId());
-      entry.setCategory(ProjectCostCategory.MATERIAL);
-      entry.setSourceType(ProjectCostSource.PROCUREMENT);
-      entry.setSourceNo(receipt.getCode());
-      entry.setDescription("采购入库：" + order.getPartName());
-      entry.setAmount(receiptAmount);
-      entry.setIncurredDate(incurredDate);
-      projectCostRepository.save(entry);
-      project.setActualCost(amount(project.getActualCost()).add(receiptAmount));
-      projectRepository.save(project);
-    }
-    return saved;
-  }
-
   private UUID costTargetId(
       ProcurementCostType costType,
       UUID projectId,
       UUID departmentId
   ) {
     return costType == ProcurementCostType.PROJECT ? projectId : departmentId;
+  }
+
+  private BigDecimal allocatedQuoteFreight(
+      SupplierQuotation quote,
+      SupplierQuotationLine line,
+      BigDecimal orderedQty
+  ) {
+    if (quote == null) return BigDecimal.ZERO;
+    BigDecimal freight = amount(quote.getFreightAmount());
+    if (line == null || freight.compareTo(BigDecimal.ZERO) == 0) return freight;
+    BigDecimal totalMaterialAmount = quoteLineRepository
+        .findByQuoteIdOrderByCreatedAtAsc(quote.getId()).stream()
+        .map(item -> amount(item.getQuantity()).multiply(amount(item.getUnitPrice())))
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
+    if (totalMaterialAmount.compareTo(BigDecimal.ZERO) == 0) return BigDecimal.ZERO;
+    BigDecimal orderMaterialAmount = amount(orderedQty).multiply(amount(line.getUnitPrice()));
+    return freight.multiply(orderMaterialAmount)
+        .divide(totalMaterialAmount, 2, RoundingMode.HALF_UP);
   }
 
   private BigDecimal amount(BigDecimal value) {

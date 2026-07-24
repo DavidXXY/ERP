@@ -3,6 +3,7 @@ package com.company.ops.api.modules.qualification.service;
 import com.company.ops.api.common.delete.DeleteGovernanceService;
 import com.company.ops.api.common.exception.BusinessException;
 import com.company.ops.api.common.service.CodeGenerator;
+import com.company.ops.api.common.tenant.TenantContext;
 import com.company.ops.api.modules.qualification.domain.CompanyQualification;
 import com.company.ops.api.modules.qualification.domain.EmployeeContract;
 import com.company.ops.api.modules.qualification.domain.PersonnelCertificate;
@@ -122,7 +123,7 @@ public class QualificationService {
         distinct(certificates, PersonnelCertificate::getType), distinct(certificates, PersonnelCertificate::getSpecialty),
         distinct(performances, QualificationPerformance::getProjectType),
         employees.stream().map(item -> new EmployeeOption(item.getId(), item.getName(), item.getWorkNo())).toList(),
-        organizationRepository.findByTenantIdOrderBySortOrderAsc("default").stream()
+        organizationRepository.findByTenantIdOrderBySortOrderAsc(TenantContext.currentTenant()).stream()
             .map(item -> new OrganizationOption(item.getId(), item.getName(), organizationPath(item), item.isEnabled()))
             .toList()
     );

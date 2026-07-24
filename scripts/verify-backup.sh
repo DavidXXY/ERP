@@ -12,11 +12,8 @@ case "$backup_file" in
     command -v pg_restore >/dev/null || { echo "pg_restore is required" >&2; exit 1; }
     pg_restore --list "$backup_file" >/dev/null
     ;;
-  *.tar.gz|*.tgz)
-    tar -tzf "$backup_file" >/dev/null
-    ;;
   *)
-    echo "Unsupported backup format: $backup_file" >&2
+    echo "Unsupported backup format: expected a PostgreSQL .dump file" >&2
     exit 1
     ;;
 esac

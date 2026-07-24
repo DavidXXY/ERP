@@ -296,16 +296,40 @@ export type ProcurementInquiryRequestLine = {
   requestId: string;
   requestCode?: string;
   batchCode?: string;
+  partId?: string;
   partName?: string;
   requestedQty: number;
   costTargetName?: string;
   expectedDate?: string;
 };
-export type ProcurementInquiry = { id:string; code:string; requestId:string; requestIds?:string[]; requestCount?:number; totalRequestedQty?:number; requestLines?:ProcurementInquiryRequestLine[]; partName?:string; title:string; deadline?:string; status:"OPEN"|"AWARDED"|"CLOSED"; createdByName:string; sourcingMethod:string; minQuoteCount:number; exceptionReason?:string; selectedQuoteId?:string; selectionReason?:string; selectedByName?:string; selectedAt?:string; quotes:SupplierQuotation[] };
+export type ProcurementInquiry = {
+  id: string;
+  code: string;
+  requestId: string;
+  requestIds?: string[];
+  requestCount?: number;
+  materialCount?: number;
+  totalRequestedQty?: number;
+  requestLines?: ProcurementInquiryRequestLine[];
+  partName?: string;
+  title: string;
+  deadline?: string;
+  status: "OPEN" | "AWARDED" | "CLOSED";
+  createdByName: string;
+  sourcingMethod: string;
+  minQuoteCount: number;
+  exceptionReason?: string;
+  selectedQuoteId?: string;
+  selectionReason?: string;
+  selectedByName?: string;
+  selectedAt?: string;
+  quotes: SupplierQuotation[];
+};
 
 export type ProcurementPurchasePoolItem = {
   requestId: string;
   requestCode: string;
+  partName?: string;
   batchId: string;
   batchCode: string;
   batchName?: string;
@@ -344,10 +368,77 @@ export type ProcurementPurchasePool = {
   totalEstimatedAmount: number;
   groups: ProcurementPurchasePoolGroup[];
 };
-export type SupplierQuotation = { id:string; supplierId:string; supplierName:string; unitPrice:number; taxRate:number; deliveryDate?:string; paymentTerms?:string; remark?:string; selected:boolean; currency:string; freightAmount:number; otherCostAmount:number; technicalScore:number; commercialScore:number; totalScore:number; validUntil?:string };
-export type ProcurementReturnOrder = { id:string; code:string; orderId:string; receiptId:string; supplierId:string; quantity:number; amount:number; reason:string; returnDate:string; handlerName:string; status:string; replacementQty:number; creditAmount:number; claimAmount:number; correctiveAction?:string; supplierResponse?:string; completedAt?:string };
-export type SupplierInvoice = { id:string; code:string; invoiceNo:string; orderId:string; supplierId:string; payableId?:string; receiptId?:string; amount:number; matchedAmount:number; taxRate:number; invoiceDate:string; status:string; matchStatus:"MATCHED"|"MISMATCH"; differenceAmount:number; approvalStatus:string; verificationStatus:string; attachmentDocumentId?:string; remark?:string };
-
+export type SupplierQuotationLine = {
+  requestId: string;
+  requestCode?: string;
+  partName?: string;
+  quantity: number;
+  unitPrice: number;
+  taxRate: number;
+  deliveryDate?: string;
+  remark?: string;
+  amount: number;
+};
+export type SupplierQuotation = {
+  id: string;
+  supplierId: string;
+  supplierName: string;
+  unitPrice: number;
+  taxRate: number;
+  deliveryDate?: string;
+  paymentTerms?: string;
+  remark?: string;
+  selected: boolean;
+  currency: string;
+  freightAmount: number;
+  otherCostAmount: number;
+  technicalScore: number;
+  commercialScore: number;
+  totalScore: number;
+  validUntil?: string;
+  lines: SupplierQuotationLine[];
+  materialAmount: number;
+  totalAmount: number;
+};
+export type ProcurementReturnOrder = {
+  id: string;
+  code: string;
+  orderId: string;
+  receiptId: string;
+  supplierId: string;
+  quantity: number;
+  amount: number;
+  reason: string;
+  returnDate: string;
+  handlerName: string;
+  status: string;
+  replacementQty: number;
+  creditAmount: number;
+  claimAmount: number;
+  correctiveAction?: string;
+  supplierResponse?: string;
+  completedAt?: string;
+};
+export type SupplierInvoice = {
+  id: string;
+  code: string;
+  invoiceNo: string;
+  orderId: string;
+  supplierId: string;
+  payableId?: string;
+  receiptId?: string;
+  amount: number;
+  matchedAmount: number;
+  taxRate: number;
+  invoiceDate: string;
+  status: string;
+  matchStatus: "MATCHED" | "MISMATCH";
+  differenceAmount: number;
+  approvalStatus: string;
+  verificationStatus: string;
+  attachmentDocumentId?: string;
+  remark?: string;
+};
 
 export function listSuppliers(page?: number, size?: number) {
   return request<PageResponse<Supplier>>({
@@ -550,18 +641,200 @@ export function listProcurementPayables() {
   });
 }
 
-export function submitPurchaseOrder(id:string){return request<PurchaseOrder>({method:"POST",url:`/procurement/orders/${id}/submit`});}
-export function approvePurchaseOrder(id:string,payload:{decision:"APPROVED"|"REJECTED";approverName:string;comment:string}){return request<PurchaseOrder>({method:"POST",url:`/procurement/orders/${id}/approval`,data:payload});}
-export function registerPurchaseArrival(id:string,payload:{quantity:number;receivedDate:string;deliveryNo:string;receiverName:string;payableDueDate:string;clientRequestId?:string;asnNo?:string}){return request<GoodsReceipt>({method:"POST",url:`/procurement/orders/${id}/arrivals`,data:payload});}
-export function inspectGoodsReceipt(id:string,payload:{qualifiedQty:number;rejectedQty:number;inspectorName:string;comment?:string;payableDueDate:string}){return request<any>({method:"POST",url:`/procurement/receipts/${id}/inspection`,data:payload});}
-export function listProcurementInquiries(){return request<ProcurementInquiry[]>({method:"GET",url:"/procurement/inquiries"});}
-export function createProcurementInquiry(payload:{requestId:string;title:string;deadline?:string;createdByName:string;sourcingMethod?:string;minQuoteCount?:number;exceptionReason?:string}){return request<ProcurementInquiry>({method:"POST",url:"/procurement/inquiries",data:payload});}
-export function listProcurementPurchasePool(){return request<ProcurementPurchasePool>({method:"GET",url:"/procurement/purchase-pool"});}
-export function createConsolidatedProcurementInquiry(payload:{requestIds:string[];title:string;deadline?:string;sourcingMethod?:string;minQuoteCount?:number;exceptionReason?:string}){return request<ProcurementInquiry>({method:"POST",url:"/procurement/purchase-pool/inquiries",data:payload});}
-export function addSupplierQuotation(id:string,payload:{supplierId:string;unitPrice:number;taxRate:number;deliveryDate?:string;paymentTerms?:string;remark?:string;currency?:string;freightAmount?:number;otherCostAmount?:number;technicalScore?:number;commercialScore?:number;validUntil?:string}){return request<SupplierQuotation>({method:"POST",url:`/procurement/inquiries/${id}/quotes`,data:payload});}
-export function selectSupplierQuotation(id:string,quoteId:string,payload:{operatorName:string;reason:string}){return request<ProcurementInquiry>({method:"POST",url:`/procurement/inquiries/${id}/quotes/${quoteId}/select`,data:payload});}
-export function listProcurementReturns(){return request<ProcurementReturnOrder[]>({method:"GET",url:"/procurement/returns"});}
-export function listSupplierInvoices(){return request<SupplierInvoice[]>({method:"GET",url:"/procurement/supplier-invoices"});}
-export function createSupplierInvoice(payload:{orderId:string;invoiceNo:string;amount:number;taxRate:number;invoiceDate:string;remark?:string;payableId?:string;receiptId?:string;clientRequestId?:string;attachmentDocumentId?:string}){return request<SupplierInvoice>({method:"POST",url:"/procurement/supplier-invoices",data:payload});}
-export function reviewSupplierInvoice(id:string,payload:{decision:"APPROVED"|"REJECTED";reviewerName:string;comment?:string}){return request<SupplierInvoice>({method:"POST",url:`/procurement/supplier-invoices/${id}/review`,data:payload});}
-export function resolveProcurementReturn(id:string,payload:{replacementQty?:number;creditAmount?:number;claimAmount?:number;correctiveAction?:string;supplierResponse?:string;handlerName:string}){return request<ProcurementReturnOrder>({method:"POST",url:`/procurement/returns/${id}/resolve`,data:payload});}
+export function submitPurchaseOrder(id: string) {
+  return request<PurchaseOrder>({
+    method: "POST",
+    url: `/procurement/orders/${id}/submit`,
+  });
+}
+export function approvePurchaseOrder(
+  id: string,
+  payload: {
+    decision: "APPROVED" | "REJECTED";
+    approverName: string;
+    comment: string;
+  },
+) {
+  return request<PurchaseOrder>({
+    method: "POST",
+    url: `/procurement/orders/${id}/approval`,
+    data: payload,
+  });
+}
+export function registerPurchaseArrival(
+  id: string,
+  payload: {
+    quantity: number;
+    receivedDate: string;
+    deliveryNo: string;
+    receiverName: string;
+    payableDueDate: string;
+    clientRequestId?: string;
+    asnNo?: string;
+  },
+) {
+  return request<GoodsReceipt>({
+    method: "POST",
+    url: `/procurement/orders/${id}/arrivals`,
+    data: payload,
+  });
+}
+export function inspectGoodsReceipt(
+  id: string,
+  payload: {
+    qualifiedQty: number;
+    rejectedQty: number;
+    inspectorName: string;
+    comment?: string;
+    payableDueDate: string;
+  },
+) {
+  return request<any>({
+    method: "POST",
+    url: `/procurement/receipts/${id}/inspection`,
+    data: payload,
+  });
+}
+export function listProcurementInquiries() {
+  return request<ProcurementInquiry[]>({
+    method: "GET",
+    url: "/procurement/inquiries",
+  });
+}
+export function createProcurementInquiry(payload: {
+  requestId: string;
+  title: string;
+  deadline?: string;
+  createdByName: string;
+  sourcingMethod?: string;
+  minQuoteCount?: number;
+  exceptionReason?: string;
+}) {
+  return request<ProcurementInquiry>({
+    method: "POST",
+    url: "/procurement/inquiries",
+    data: payload,
+  });
+}
+export function listProcurementPurchasePool() {
+  return request<ProcurementPurchasePool>({
+    method: "GET",
+    url: "/procurement/purchase-pool",
+  });
+}
+export function createConsolidatedProcurementInquiry(payload: {
+  requestIds: string[];
+  title: string;
+  deadline?: string;
+  sourcingMethod?: string;
+  minQuoteCount?: number;
+  exceptionReason?: string;
+}) {
+  return request<ProcurementInquiry>({
+    method: "POST",
+    url: "/procurement/purchase-pool/inquiries",
+    data: payload,
+  });
+}
+export function addSupplierQuotation(
+  id: string,
+  payload: {
+    supplierId: string;
+    unitPrice?: number;
+    taxRate?: number;
+    deliveryDate?: string;
+    paymentTerms?: string;
+    remark?: string;
+    currency?: string;
+    freightAmount?: number;
+    otherCostAmount?: number;
+    technicalScore?: number;
+    commercialScore?: number;
+    validUntil?: string;
+    lines?: Array<{
+      requestId: string;
+      unitPrice: number;
+      taxRate: number;
+      deliveryDate?: string;
+      remark?: string;
+    }>;
+  },
+) {
+  return request<SupplierQuotation>({
+    method: "POST",
+    url: `/procurement/inquiries/${id}/quotes`,
+    data: payload,
+  });
+}
+export function selectSupplierQuotation(
+  id: string,
+  quoteId: string,
+  payload: { operatorName: string; reason: string },
+) {
+  return request<ProcurementInquiry>({
+    method: "POST",
+    url: `/procurement/inquiries/${id}/quotes/${quoteId}/select`,
+    data: payload,
+  });
+}
+export function listProcurementReturns() {
+  return request<ProcurementReturnOrder[]>({
+    method: "GET",
+    url: "/procurement/returns",
+  });
+}
+export function listSupplierInvoices() {
+  return request<SupplierInvoice[]>({
+    method: "GET",
+    url: "/procurement/supplier-invoices",
+  });
+}
+export function createSupplierInvoice(payload: {
+  orderId: string;
+  invoiceNo: string;
+  amount: number;
+  taxRate: number;
+  invoiceDate: string;
+  remark?: string;
+  payableId?: string;
+  receiptId?: string;
+  clientRequestId?: string;
+  attachmentDocumentId?: string;
+}) {
+  return request<SupplierInvoice>({
+    method: "POST",
+    url: "/procurement/supplier-invoices",
+    data: payload,
+  });
+}
+export function reviewSupplierInvoice(
+  id: string,
+  payload: {
+    decision: "APPROVED" | "REJECTED";
+    reviewerName: string;
+    comment?: string;
+  },
+) {
+  return request<SupplierInvoice>({
+    method: "POST",
+    url: `/procurement/supplier-invoices/${id}/review`,
+    data: payload,
+  });
+}
+export function resolveProcurementReturn(
+  id: string,
+  payload: {
+    replacementQty?: number;
+    creditAmount?: number;
+    claimAmount?: number;
+    correctiveAction?: string;
+    supplierResponse?: string;
+    handlerName: string;
+  },
+) {
+  return request<ProcurementReturnOrder>({
+    method: "POST",
+    url: `/procurement/returns/${id}/resolve`,
+    data: payload,
+  });
+}

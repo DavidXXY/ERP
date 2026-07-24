@@ -3,8 +3,10 @@ package com.company.ops.api.modules.procurement.repository;
 import com.company.ops.api.modules.procurement.domain.PurchaseOrder;
 import com.company.ops.api.modules.procurement.domain.PurchaseOrderStatus;
 import com.company.ops.api.modules.procurement.domain.ProcurementCostType;
+import com.company.ops.api.modules.procurement.domain.ApprovalStatus;
 import java.util.List;
 import java.util.UUID;
+import java.util.Collection;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -38,6 +40,8 @@ public interface PurchaseOrderRepository extends JpaRepository<PurchaseOrder, UU
   boolean existsByRequestId(UUID requestId);
   List<PurchaseOrder> findByRequestId(UUID requestId);
   List<PurchaseOrder> findBySupplierId(UUID supplierId);
+  List<PurchaseOrder> findByProjectIdIn(Collection<UUID> projectIds);
+  List<PurchaseOrder> findByApprovalStatus(ApprovalStatus approvalStatus);
 
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select order from PurchaseOrder order where order.id = :id")

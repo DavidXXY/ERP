@@ -1,5 +1,6 @@
 package com.company.ops.api.modules.procurement.dto;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -7,6 +8,7 @@ import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 public final class ProcurementControlDtos {
@@ -24,8 +26,8 @@ public final class ProcurementControlDtos {
 
   public record CreateSupplierQuote(
       @NotNull UUID supplierId,
-      @NotNull @Positive BigDecimal unitPrice,
-      @NotNull @PositiveOrZero BigDecimal taxRate,
+      @Positive BigDecimal unitPrice,
+      @PositiveOrZero BigDecimal taxRate,
       LocalDate deliveryDate,
       String paymentTerms,
       String remark,
@@ -34,7 +36,16 @@ public final class ProcurementControlDtos {
       @PositiveOrZero BigDecimal otherCostAmount,
       @PositiveOrZero BigDecimal technicalScore,
       @PositiveOrZero BigDecimal commercialScore,
-      LocalDate validUntil
+      LocalDate validUntil,
+      List<@Valid CreateSupplierQuoteLine> lines
+  ) {}
+
+  public record CreateSupplierQuoteLine(
+      @NotNull UUID requestId,
+      @NotNull @Positive BigDecimal unitPrice,
+      @NotNull @PositiveOrZero BigDecimal taxRate,
+      LocalDate deliveryDate,
+      String remark
   ) {}
 
   public record SelectSupplierQuote(@NotBlank String operatorName, @NotBlank String reason) {}

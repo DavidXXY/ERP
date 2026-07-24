@@ -26,20 +26,11 @@ src               现有 React 原型，作为产品交互参考保留
 
 当前机器需要先安装 Java 17、Maven 和 Docker Desktop。
 
-最快开发启动方式使用本地 H2 文件数据库，不依赖 Docker/PostgreSQL：
+本地开发统一使用 PostgreSQL、Redis、MinIO 基础设施：
 
 ```bash
 npm install
 npm run tools:install
-npm run api:dev:local
-npm run admin:dev
-```
-
-如果使用 PostgreSQL、Redis、MinIO 的完整本地基础设施：
-
-```bash
-npm install
-npm run api:check
 npm run infra:up
 npm run api:dev
 npm run admin:dev
@@ -71,12 +62,11 @@ npm run admin:dev
 - 本轮系统加固：JWT 短时令牌与登录限流、租户级 JPA 隔离、敏感字段 AES-GCM 加密、乐观锁、分布式任务锁、Flyway 空库集成测试、API 登录链路集成测试、前端单测/静态检查/500KB 分包预算、Prometheus 告警、HTTPS 安全响应头、可校验备份与受保护恢复演练。
 - 规划中：移动端代码实现，以及按真实业务租户接入独立域名/身份源。
 
-本地 H2 数据备份前先停止 API，然后运行 `npm run data:backup`。PostgreSQL 模式使用
-`BACKUP_MODE=postgres npm run data:backup`。
+运行 `npm run data:backup` 可生成并校验 PostgreSQL 备份。
 
-恢复前先做校验，并且必须显式指定全新的目标与同值确认。例如本地恢复演练：
+恢复前先做校验，并且必须显式指定演练数据库与同值确认：
 
 ```bash
-RESTORE_TARGET=/safe/new-data-dir RESTORE_CONFIRM=/safe/new-data-dir \
-  scripts/restore-backup.sh backups/ops-erp-local-YYYYMMDD-HHMMSS.tar.gz
+RESTORE_TARGET=ops_erp_restore_drill RESTORE_CONFIRM=ops_erp_restore_drill \
+  scripts/restore-backup.sh backups/ops-erp-postgres-YYYYMMDD-HHMMSS.dump
 ```

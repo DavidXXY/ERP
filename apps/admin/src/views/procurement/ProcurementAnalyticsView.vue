@@ -2,7 +2,11 @@
   <div class="page-stack">
     <a-card title="采购支出分析" style="margin-bottom: 16px">
       <template #extra
-        ><a-select v-model:value="selectedYear" :options="yearOptions" style="width: 110px" />
+        ><a-select
+          v-model:value="selectedYear"
+          :options="yearOptions"
+          style="width: 110px"
+        />
         <a-button @click="router.push('/procurement')">返回采购管理</a-button
         ><a-button :loading="loading" @click="loadData"
           ><template #icon><ReloadOutlined /></template>刷新</a-button
@@ -101,19 +105,37 @@
         <a-row :gutter="12" style="margin-top: 12px">
           <a-col :xs="24" :lg="14">
             <a-card title="月度采购支出" size="small">
-              <a-table :data-source="monthlySpend" :columns="monthlyColumns" row-key="month" size="small" :pagination="false">
+              <a-table
+                :data-source="monthlySpend"
+                :columns="monthlyColumns"
+                row-key="month"
+                size="small"
+                :pagination="false"
+              >
                 <template #bodyCell="{ column, record }">
-                  <template v-if="column.key === 'amount'">{{ formatMoney(record.amount) }}</template>
-                  <template v-else-if="column.key === 'share'">{{ record.share }}%</template>
+                  <template v-if="column.key === 'amount'">{{
+                    formatMoney(record.amount)
+                  }}</template>
+                  <template v-else-if="column.key === 'share'"
+                    >{{ record.share }}%</template
+                  >
                 </template>
               </a-table>
             </a-card>
           </a-col>
           <a-col :xs="24" :lg="10">
             <a-card title="供应商支出排名" size="small">
-              <a-table :data-source="supplierSpend" :columns="supplierColumns" row-key="name" size="small" :pagination="{ pageSize: 6 }">
+              <a-table
+                :data-source="supplierSpend"
+                :columns="supplierColumns"
+                row-key="name"
+                size="small"
+                :pagination="{ pageSize: 6 }"
+              >
                 <template #bodyCell="{ column, record }">
-                  <template v-if="column.key === 'amount'">{{ formatMoney(record.amount) }}</template>
+                  <template v-if="column.key === 'amount'">{{
+                    formatMoney(record.amount)
+                  }}</template>
                 </template>
               </a-table>
             </a-card>
@@ -140,11 +162,21 @@ const costs = ref<ProcurementCostAllocation[]>([]);
 const orders = ref<PurchaseOrder[]>([]);
 const selectedYear = ref(new Date().getFullYear());
 const yearOptions = computed(() => {
-  const years = new Set(costs.value.map(item => Number(item.incurredDate?.slice(0, 4))).filter(Boolean));
+  const years = new Set(
+    costs.value
+      .map((item) => Number(item.incurredDate?.slice(0, 4)))
+      .filter(Boolean),
+  );
   years.add(new Date().getFullYear());
-  return Array.from(years).sort((a, b) => b - a).map(value => ({ label: `${value}年`, value }));
+  return Array.from(years)
+    .sort((a, b) => b - a)
+    .map((value) => ({ label: `${value}年`, value }));
 });
-const filteredCosts = computed(() => costs.value.filter(item => Number(item.incurredDate?.slice(0, 4)) === selectedYear.value));
+const filteredCosts = computed(() =>
+  costs.value.filter(
+    (item) => Number(item.incurredDate?.slice(0, 4)) === selectedYear.value,
+  ),
+);
 
 const totalSpend = computed(() =>
   filteredCosts.value.reduce((s, c) => s + Number(c.amount || 0), 0),
@@ -192,23 +224,35 @@ const monthlySpend = computed(() => {
   return Array.from({ length: 12 }, (_, index) => {
     const month = String(index + 1).padStart(2, "0");
     const amount = filteredCosts.value
-      .filter(item => item.incurredDate?.slice(5, 7) === month)
+      .filter((item) => item.incurredDate?.slice(5, 7) === month)
       .reduce((sum, item) => sum + Number(item.amount || 0), 0);
-    return { month: `${month}月`, amount, share: total ? ((amount / total) * 100).toFixed(1) : "0.0" };
+    return {
+      month: `${month}月`,
+      amount,
+      share: total ? ((amount / total) * 100).toFixed(1) : "0.0",
+    };
   });
 });
 const supplierSpend = computed(() => {
-  const orderMap = new Map(orders.value.map(item => [item.id, item]));
+  const orderMap = new Map(orders.value.map((item) => [item.id, item]));
   const map = new Map<string, number>();
-  filteredCosts.value.forEach(item => {
+  filteredCosts.value.forEach((item) => {
     const name = orderMap.get(item.orderId)?.supplierName || "未知供应商";
     map.set(name, (map.get(name) || 0) + Number(item.amount || 0));
   });
-  return Array.from(map.entries()).map(([name, amount]) => ({ name, amount }))
+  return Array.from(map.entries())
+    .map(([name, amount]) => ({ name, amount }))
     .sort((a, b) => b.amount - a.amount);
 });
-const monthlyColumns = [{ title: "月份", dataIndex: "month" }, { title: "支出", key: "amount" }, { title: "年度占比", key: "share" }];
-const supplierColumns = [{ title: "供应商", dataIndex: "name" }, { title: "采购支出", key: "amount" }];
+const monthlyColumns = [
+  { title: "月份", dataIndex: "month" },
+  { title: "支出", key: "amount" },
+  { title: "年度占比", key: "share" },
+];
+const supplierColumns = [
+  { title: "供应商", dataIndex: "name" },
+  { title: "采购支出", key: "amount" },
+];
 
 function distPercent(value: number, data: { value: number }[]) {
   const max = Math.max(...data.map((d) => d.value), 1);

@@ -4,12 +4,14 @@ import com.company.ops.api.common.domain.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import java.math.BigDecimal;
 
 @Entity
-@Table(name = "risk_rule_configs")
+@Table(name = "risk_rule_configs", uniqueConstraints = @UniqueConstraint(
+    name = "uk_risk_rule_tenant_code", columnNames = {"tenant_id", "rule_code"}))
 public class RiskRuleConfig extends BaseEntity {
-  @Column(name = "rule_code", nullable = false, unique = true, length = 80)
+  @Column(name = "rule_code", nullable = false, length = 80)
   private String ruleCode;
   @Column(nullable = false, length = 120)
   private String name;

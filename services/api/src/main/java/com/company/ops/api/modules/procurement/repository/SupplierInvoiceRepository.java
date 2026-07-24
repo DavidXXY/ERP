@@ -3,6 +3,8 @@ import com.company.ops.api.modules.procurement.domain.SupplierInvoice; import or
 public interface SupplierInvoiceRepository extends JpaRepository<SupplierInvoice,UUID>{
   List<SupplierInvoice> findAllByOrderByInvoiceDateDesc();
   List<SupplierInvoice> findByOrderId(UUID id);
+  List<SupplierInvoice> findByOrderIdIn(Collection<UUID> orderIds);
+  List<SupplierInvoice> findByMatchStatusNot(String matchStatus);
   List<SupplierInvoice> findByPayableId(UUID id);
   boolean existsByInvoiceNo(String no);
   Optional<SupplierInvoice> findByClientRequestId(String clientRequestId);

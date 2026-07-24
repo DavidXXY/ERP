@@ -27,6 +27,7 @@ import com.company.ops.api.modules.procurement.repository.GoodsReceiptRepository
 import com.company.ops.api.modules.procurement.repository.ProcurementCostAllocationRepository;
 import com.company.ops.api.modules.procurement.repository.ProcurementPayableRepository;
 import com.company.ops.api.modules.procurement.repository.ProcurementInquiryRequestRepository;
+import com.company.ops.api.modules.procurement.repository.SupplierQuotationLineRepository;
 import com.company.ops.api.modules.procurement.repository.PurchaseOrderRepository;
 import com.company.ops.api.modules.procurement.repository.PurchaseRequestApprovalRecordRepository;
 import com.company.ops.api.modules.procurement.repository.PurchaseRequestRepository;
@@ -62,11 +63,13 @@ class ProcurementServiceTest {
   @Mock private ProcurementPayableRepository payableRepository;
   @Mock private ProcurementCostAllocationRepository costAllocationRepository;
   @Mock private ProcurementInquiryRequestRepository inquiryRequestRepository;
+  @Mock private SupplierQuotationLineRepository quoteLineRepository;
   @Mock private InventoryPartRepository partRepository;
   @Mock private StockMovementRepository movementRepository;
   @Mock private ProjectRepository projectRepository;
   @Mock private ProjectCostEntryRepository projectCostRepository;
   @Mock private SystemOrganizationRepository organizationRepository;
+  @Mock private ProcurementArrivalService arrivals;
   @InjectMocks private ProcurementService procurementService;
 
   @Test
@@ -196,14 +199,24 @@ class ProcurementServiceTest {
     order.setCostTargetCode(project.getCode());
     order.setCostTargetName(project.getName());
 
-    when(orderRepository.findByIdForUpdate(order.getId())).thenReturn(Optional.of(order));
+    GoodsReceipt receipt = new GoodsReceipt();
+    receipt.setId(UUID.randomUUID());
+    receipt.setCode("DH-CGDD-001-01");
+    receipt.setOrderId(order.getId());
+    receipt.setPartId(part.getId());
+    receipt.setQuantity(BigDecimal.ONE);
+    receipt.setUnitPrice(order.getUnitPrice());
+    receipt.setTaxRate(order.getTaxRate());
+    receipt.setAmount(BigDecimal.valueOf(120));
+    receipt.setReceivedDate(LocalDate.now());
+    receipt.setDeliveryNo("SH-001");
+    receipt.setReceiverName("Keeper");
+    receipt.setPayableDueDate(LocalDate.now().plusDays(30));
+    receipt.setInspectionStatus("PENDING");
+    when(arrivals.register(org.mockito.ArgumentMatchers.eq(order.getId()), any()))
+        .thenReturn(receipt);
+    when(orderRepository.findById(order.getId())).thenReturn(Optional.of(order));
     when(partRepository.findById(part.getId())).thenReturn(Optional.of(part));
-    when(receiptRepository.countByOrderId(order.getId())).thenReturn(0L);
-    when(receiptRepository.save(any(GoodsReceipt.class))).thenAnswer(invocation -> {
-      GoodsReceipt receipt = invocation.getArgument(0);
-      receipt.setId(UUID.randomUUID());
-      return receipt;
-    });
     when(requestRepository.findById(requestId)).thenReturn(Optional.empty());
     when(supplierRepository.findById(supplier.getId())).thenReturn(Optional.of(supplier));
 

@@ -1228,8 +1228,7 @@ const requestOptions = computed(() =>
   purchaseRequests.value
     .filter(
       (item) =>
-        item.approvalStatus === "APPROVED" &&
-        item.status === "APPROVED",
+        item.approvalStatus === "APPROVED" && item.status === "APPROVED",
     )
     .map((item) => ({
       label: `${item.code} · ${item.partName} · ${item.costTargetName}`,
@@ -1243,9 +1242,7 @@ const selectedOrderRequest = computed(
 );
 const orderAmount = computed(
   () =>
-    Number(
-      orderForm.orderedQty || selectedOrderRequest.value?.quantity || 0,
-    ) *
+    Number(orderForm.orderedQty || selectedOrderRequest.value?.quantity || 0) *
       Number(orderForm.unitPrice || 0) +
     Number(orderForm.freightAmount || 0),
 );
@@ -1500,7 +1497,9 @@ async function handleReceive() {
       clientRequestId: `arrival-${selectedOrder.value.id}-${Date.now()}`,
     });
     receiptOpen.value = false;
-    message.success("到货已登记，请在采购控制中心完成质检；合格后才入库并生成应付");
+    message.success(
+      "到货已登记，请在到货入库页面完成质检；合格后才入库并生成应付",
+    );
     await loadData();
   } catch (error) {
     message.error(error instanceof Error ? error.message : "到货入库失败");

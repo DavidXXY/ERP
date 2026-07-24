@@ -25,4 +25,5 @@ public interface SystemOrganizationRepository extends JpaRepository<SystemOrgani
 
   SystemOrganization findByCodeAndTenantId(String code, String tenantId);
   java.util.Optional<SystemOrganization> findFirstByName(String name);
+  List<SystemOrganization> findByEnabledTrueAndTypeOrderBySortOrderAsc(String type);
 }

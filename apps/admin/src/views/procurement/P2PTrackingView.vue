@@ -106,7 +106,9 @@
           }}</template>
           <template v-else-if="column.key === 'invoiceAmount'">
             {{ formatMoney(record.invoiceAmount) }}
-            <span class="table-subtitle">已审核匹配 {{ formatMoney(record.matchedInvoiceAmount) }}</span>
+            <span class="table-subtitle"
+              >已审核匹配 {{ formatMoney(record.matchedInvoiceAmount) }}</span
+            >
           </template>
           <template v-else-if="column.key === 'status'"
             ><a-tag :color="matchStatusColor(record.matchStatus)">{{
@@ -304,11 +306,12 @@ const matchingActions = computed(() => [
     key: "invoice",
     label: "发票待处理",
     count: matchingItems.value.filter((i) =>
-      ["INVOICE_PENDING", "INVOICE_MISMATCH", "INVOICE_REVIEW"].includes(i.matchStatus),
-    )
-      .length,
+      ["INVOICE_PENDING", "INVOICE_MISMATCH", "INVOICE_REVIEW"].includes(
+        i.matchStatus,
+      ),
+    ).length,
     action: "登记、复核并审核供应商发票",
-    link: "/procurement/controls",
+    link: "/procurement/invoices",
   },
 ]);
 
@@ -397,9 +400,9 @@ function matchAction(record: ProcurementMatching) {
         RECEIVING: { label: "去入库", link: "/procurement/receipts" },
         PAYABLE_MISSING: { label: "补应付", link: "/procurement/payables" },
         AMOUNT_MISMATCH: { label: "查差异", link: "/procurement/p2p" },
-        INVOICE_PENDING: { label: "登记发票", link: "/procurement/controls" },
-        INVOICE_MISMATCH: { label: "查发票", link: "/procurement/controls" },
-        INVOICE_REVIEW: { label: "审核发票", link: "/procurement/controls" },
+        INVOICE_PENDING: { label: "登记发票", link: "/procurement/invoices" },
+        INVOICE_MISMATCH: { label: "查发票", link: "/procurement/invoices" },
+        INVOICE_REVIEW: { label: "审核发票", link: "/procurement/invoices" },
         CANCELLED: { label: "看订单", link: "/procurement/orders" },
         MATCHED: { label: "已完成", link: "/procurement/p2p" },
       } as Record<string, { label: string; link: string }>

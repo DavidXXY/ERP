@@ -3,6 +3,7 @@ package com.company.ops.api.modules.bi.service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.company.ops.api.modules.bi.dto.BiDtos.*;
+import com.company.ops.api.common.exception.BusinessException;
 import com.company.ops.api.modules.crm.domain.*;
 import com.company.ops.api.modules.crm.repository.*;
 import com.company.ops.api.modules.inventory.domain.InventoryPart;
@@ -18,6 +19,8 @@ import com.company.ops.api.modules.project.repository.ProjectRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.ZoneOffset;
 import java.time.YearMonth;
 import java.util.*;
 import java.util.function.Function;
@@ -64,34 +67,19 @@ public class BiService {
   @Transactional(readOnly = true)
   public ExecutiveDashboard dashboard() {
     try {
-    List<Customer> customerRows = customers.findAllByOrderByCreatedAtDesc();
-    List<ServiceContract> contractRows = contracts.findAllByOrderByEndDateAsc();
-    List<Receivable> receivableRows = receivables.findAllByOrderByDueDateAsc();
-    List<Project> projectRows = projects.findAllByOrderByCreatedAtDesc();
-    List<WorkOrder> orderRows = orders.findAllByOrderByCreatedAtDesc();
-    List<InventoryPart> partRows = parts.findAllByOrderByCreatedAtDesc();
-    List<ProcurementPayable> payableRows = payables.findAllByOrderByDueDateAsc();
-
-    BigDecimal contractRevenue = sum(contractRows.stream().map(ServiceContract::getAmount).toList());
-    BigDecimal received = sum(receivableRows.stream().map(Receivable::getSettledAmount).toList());
-    BigDecimal receiveOutstanding = sum(receivableRows.stream()
-        .map(r -> amount(r.getAmount()).subtract(amount(r.getSettledAmount()))).toList());
-    BigDecimal payableOutstanding = sum(payableRows.stream()
-        .map(p -> amount(p.getAmount()).subtract(amount(p.getPaidAmount()))).toList());
-    BigDecimal projectCost = sum(projectRows.stream().map(Project::getActualCost).toList());
-    BigDecimal orderCost = sum(orderRows.stream().map(WorkOrder::getCostAmount).toList());
-    BigDecimal inventoryValue = sum(partRows.stream()
-        .map(p -> amount(p.getStockQty()).multiply(amount(p.getUnitCost()))).toList());
+    BigDecimal contractRevenue = amount(contracts.sumContractAmount());
+    BigDecimal received = amount(receivables.sumSettledAmount());
+    BigDecimal receiveOutstanding = amount(receivables.sumOutstandingAmount());
+    BigDecimal payableOutstanding = amount(payables.sumOutstandingAmount());
+    BigDecimal projectCost = amount(projects.sumActualCost());
+    BigDecimal orderCost = amount(orders.sumCostAmount());
+    BigDecimal inventoryValue = amount(parts.sumInventoryValue());
 
     FinancialCash cash = financialCash();
-    long activeProjects = projectRows.stream()
-        .filter(p -> p.getStage() != ProjectStage.CLOSED).count();
-    long openOrders = orderRows.stream()
-        .filter(o -> o.getStatus() != WorkOrderStatus.ACCEPTED
-            && o.getStatus() != WorkOrderStatus.CANCELLED).count();
-    long completed = orderRows.stream()
-        .filter(o -> o.getStatus() == WorkOrderStatus.ACCEPTED).count();
-    long lowStock = partRows.stream().filter(InventoryPart::isLowStock).count();
+    long activeProjects = projects.countByStageNot(ProjectStage.CLOSED);
+    long openOrders = orders.countByStatusNotIn(List.of(WorkOrderStatus.ACCEPTED, WorkOrderStatus.CANCELLED));
+    long completed = orders.countByStatus(WorkOrderStatus.ACCEPTED);
+    long lowStock = parts.countLowStock();
     
     // 使用 Repository 数据库查询（避免 Stream 过滤中的日期比较 bug）
     long renewals = contracts.countRenewalRisks(LocalDate.now().plusDays(90));
@@ -103,9 +91,7 @@ public class BiService {
         lowStock, renewals, complaints);
 
     return new ExecutiveDashboard(summary, monthlyTrends(),
-        customerProfits(customerRows, contractRows, receivableRows, orderRows),
-        equipmentPerformance(customerRows, orderRows),
-        workforcePerformance(orderRows));
+        customerProfits(), equipmentPerformance(), workforcePerformance());
     } catch (Exception e) {
       log.error("Dashboard query failed", e);
       throw new RuntimeException(e);
@@ -116,15 +102,14 @@ public class BiService {
   public CompanyKpiDashboard companyDashboard(LocalDate startDate, LocalDate endDate) {
     LocalDate end = endDate == null ? LocalDate.now() : endDate;
     LocalDate start = startDate == null ? end.minusMonths(6).withDayOfMonth(1) : startDate;
-    List<ServiceContract> contractRows = contracts.findAllByOrderByEndDateAsc().stream()
-        .filter(item -> inRange(firstDate(item.getStartDate(), item.getEndDate()), start, end)).toList();
-    List<Receivable> receivableRows = receivables.findAllByOrderByDueDateAsc().stream()
-        .filter(item -> inRange(item.getDueDate(), start, end)).toList();
-    List<Project> projectRows = projects.findAllByOrderByCreatedAtDesc();
-    List<WorkOrder> orderRows = orders.findAllByOrderByCreatedAtDesc().stream()
-        .filter(item -> inRange(item.getCreatedAt() == null ? null : item.getCreatedAt().toLocalDate(), start, end)).toList();
-    List<ProcurementPayable> payableRows = payables.findAllByOrderByDueDateAsc().stream()
-        .filter(item -> inRange(item.getDueDate(), start, end)).toList();
+    if(start.isAfter(end))throw new BusinessException("开始日期不能晚于结束日期");
+    List<ServiceContract> contractRows = contracts.findByBusinessDateBetween(start,end);
+    List<Receivable> receivableRows = receivables.findByDueDateBetweenOrderByDueDateAsc(start,end);
+    List<Project> projectRows = projects.findByPlannedStartDateBetween(start,end);
+    ZoneOffset businessOffset=ZoneOffset.ofHours(8);
+    List<WorkOrder> orderRows = orders.findByCreatedAtBetweenOrderByCreatedAtDesc(
+        start.atStartOfDay().atOffset(businessOffset),end.atTime(LocalTime.MAX).atOffset(businessOffset));
+    List<ProcurementPayable> payableRows = payables.findByDueDateBetweenOrderByDueDateAsc(start,end);
     BigDecimal revenue = sum(contractRows.stream().map(ServiceContract::getAmount).toList())
         .add(sum(orderRows.stream().map(WorkOrder::getBillableAmount).toList()));
     BigDecimal projectActualCost = sum(projectRows.stream().map(Project::getActualCost).toList());
@@ -144,10 +129,14 @@ public class BiService {
         percent(procurementAmount, revenue), inventoryValue,
         inventoryValue.compareTo(BigDecimal.ZERO) > 0 ? outboundCost.divide(inventoryValue, 2, RoundingMode.HALF_UP) : BigDecimal.ZERO,
         hours.compareTo(BigDecimal.ZERO) > 0 ? revenue.divide(hours, 2, RoundingMode.HALF_UP) : BigDecimal.ZERO,
-        monthlyTrends(), customerProfits(customers.findAllByOrderByCreatedAtDesc(), contractRows, receivableRows, orderRows));
+        monthlyTrends(YearMonth.from(end)), customerProfits(customers.findAllByOrderByCreatedAtDesc(), contractRows, receivableRows, orderRows));
   }
 
   private List<MonthlyTrend> monthlyTrends() {
+    return monthlyTrends(YearMonth.now());
+  }
+
+  private List<MonthlyTrend> monthlyTrends(YearMonth endMonth) {
     List<MonthlyTrend> result = new ArrayList<>();
     try {
       List<Object[]> rows = entries.aggregateMonthlyTrends();
@@ -158,9 +147,8 @@ public class BiService {
         String key = year + "-" + String.format("%02d", month);
         trendMap.put(key, row);
       }
-      YearMonth now = YearMonth.now();
       for (int i = 5; i >= 0; i--) {
-        YearMonth month = now.minusMonths(i);
+        YearMonth month = endMonth.minusMonths(i);
         String key = month.toString();
         Object[] row = trendMap.get(key);
         if (row != null) {
@@ -176,16 +164,15 @@ public class BiService {
       return result;
     } catch (Exception e) {
       log.warn("Database monthly trends failed, falling back to in-memory", e);
-      return inMemoryMonthlyTrends();
+      return inMemoryMonthlyTrends(endMonth);
     }
   }
 
-  private List<MonthlyTrend> inMemoryMonthlyTrends() {
+  private List<MonthlyTrend> inMemoryMonthlyTrends(YearMonth endMonth) {
     List<AccountingVoucher> voucherRows = vouchers.findAllByOrderByVoucherDateDescCreatedAtDesc();
     List<MonthlyTrend> result = new ArrayList<>();
-    YearMonth now = YearMonth.now();
     for (int i = 5; i >= 0; i--) {
-      YearMonth month = now.minusMonths(i);
+      YearMonth month = endMonth.minusMonths(i);
       BigDecimal revenue = BigDecimal.ZERO, expense = BigDecimal.ZERO,
           cashIn = BigDecimal.ZERO, cashOut = BigDecimal.ZERO;
       for (AccountingVoucher voucher : voucherRows) {
@@ -213,18 +200,18 @@ public class BiService {
   private List<CustomerProfit> customerProfits(List<Customer> customerRows,
       List<ServiceContract> contractRows, List<Receivable> receivableRows,
       List<WorkOrder> orderRows) {
-    Map<UUID, Long> complaints = followUps.findAllByOrderByFollowedAtDesc().stream()
-        .filter(f -> f.getType() == FollowUpType.COMPLAINT)
-        .collect(Collectors.groupingBy(FollowUp::getCustomerId, Collectors.counting()));
+    Map<UUID, Long> complaints = followUps.countByTypeGroupByCustomer(FollowUpType.COMPLAINT).stream()
+        .collect(Collectors.toMap(row->(UUID)row[0],row->((Number)row[1]).longValue()));
+    Map<UUID,BigDecimal> contractsByCustomer=contractRows.stream().collect(Collectors.groupingBy(
+        ServiceContract::getCustomerId,Collectors.reducing(BigDecimal.ZERO,c->amount(c.getAmount()),BigDecimal::add)));
+    Map<UUID,BigDecimal> receivedByCustomer=receivableRows.stream().collect(Collectors.groupingBy(
+        Receivable::getCustomerId,Collectors.reducing(BigDecimal.ZERO,r->amount(r.getSettledAmount()),BigDecimal::add)));
+    Map<UUID,List<WorkOrder>> ordersByCustomer=orderRows.stream().filter(o->o.getCustomerId()!=null)
+        .collect(Collectors.groupingBy(WorkOrder::getCustomerId));
     return customerRows.stream().map(c -> {
-      BigDecimal contractAmount = sum(contractRows.stream()
-          .filter(x -> x.getCustomerId().equals(c.getId()))
-          .map(ServiceContract::getAmount).toList());
-      BigDecimal received = sum(receivableRows.stream()
-          .filter(x -> x.getCustomerId().equals(c.getId()))
-          .map(Receivable::getSettledAmount).toList());
-      List<WorkOrder> customerOrders = orderRows.stream()
-          .filter(x -> c.getId().equals(x.getCustomerId())).toList();
+      BigDecimal contractAmount = contractsByCustomer.getOrDefault(c.getId(),BigDecimal.ZERO);
+      BigDecimal received = receivedByCustomer.getOrDefault(c.getId(),BigDecimal.ZERO);
+      List<WorkOrder> customerOrders = ordersByCustomer.getOrDefault(c.getId(),List.of());
       BigDecimal workRevenue = sum(customerOrders.stream().map(WorkOrder::getBillableAmount).toList());
       BigDecimal cost = sum(customerOrders.stream().map(WorkOrder::getCostAmount).toList());
       BigDecimal profit = contractAmount.add(workRevenue).subtract(cost);
@@ -238,25 +225,51 @@ public class BiService {
     }).sorted(Comparator.comparing(CustomerProfit::grossProfit).reversed()).limit(20).toList();
   }
 
-  private List<EquipmentPerformance> equipmentPerformance(List<Customer> customerRows,
-      List<WorkOrder> orderRows) {
-    Map<UUID, Customer> customerMap = customerRows.stream()
-        .collect(Collectors.toMap(Customer::getId, Function.identity()));
-    return equipment.findAllByOrderByNextMaintenanceDateAsc().stream().map(asset -> {
-      List<WorkOrder> history = orderRows.stream()
-          .filter(o -> asset.getId().equals(o.getEquipmentId())).toList();
-      BigDecimal cost = sum(history.stream().map(WorkOrder::getCostAmount).toList());
+  private List<CustomerProfit> customerProfits() {
+    Map<UUID,BigDecimal> contractsByCustomer=contracts.aggregateAmountByCustomer().stream().collect(
+        Collectors.toMap(row->(UUID)row[0],row->amount((BigDecimal)row[1])));
+    Map<UUID,BigDecimal> receivedByCustomer=receivables.aggregateSettledByCustomer().stream().collect(
+        Collectors.toMap(row->(UUID)row[0],row->amount((BigDecimal)row[1])));
+    Map<UUID,Object[]> ordersByCustomer=orders.aggregateByCustomer().stream().collect(
+        Collectors.toMap(row->(UUID)row[0],Function.identity()));
+    Map<UUID,Long> complaints=followUps.countByTypeGroupByCustomer(FollowUpType.COMPLAINT).stream().collect(
+        Collectors.toMap(row->(UUID)row[0],row->((Number)row[1]).longValue()));
+    Set<UUID> customerIds=new HashSet<>();
+    customerIds.addAll(contractsByCustomer.keySet());customerIds.addAll(receivedByCustomer.keySet());
+    customerIds.addAll(ordersByCustomer.keySet());customerIds.addAll(complaints.keySet());
+    return customers.findAllById(customerIds).stream().map(c->{
+      BigDecimal contractAmount=contractsByCustomer.getOrDefault(c.getId(),BigDecimal.ZERO);
+      BigDecimal received=receivedByCustomer.getOrDefault(c.getId(),BigDecimal.ZERO);
+      Object[] orderRow=ordersByCustomer.get(c.getId());
+      BigDecimal workRevenue=orderRow==null?BigDecimal.ZERO:amount((BigDecimal)orderRow[1]);
+      BigDecimal cost=orderRow==null?BigDecimal.ZERO:amount((BigDecimal)orderRow[2]);
+      BigDecimal profit=contractAmount.add(workRevenue).subtract(cost);
+      BigDecimal base=contractAmount.add(workRevenue);
+      return new CustomerProfit(c.getId(),c.getName(),contractAmount,received,workRevenue,cost,profit,
+          base.signum()>0?profit.multiply(BigDecimal.valueOf(100)).divide(base,2,RoundingMode.HALF_UP):BigDecimal.ZERO,
+          complaints.getOrDefault(c.getId(),0L));
+    }).sorted(Comparator.comparing(CustomerProfit::grossProfit).reversed()).limit(20).toList();
+  }
+
+  private List<EquipmentPerformance> equipmentPerformance() {
+    List<EquipmentAsset> assets=equipment.findAllByOrderByNextMaintenanceDateAsc();
+    Set<UUID> customerIds=assets.stream().map(EquipmentAsset::getCustomerId).filter(Objects::nonNull).collect(Collectors.toSet());
+    Map<UUID, Customer> customerMap = customers.findAllById(customerIds).stream().collect(Collectors.toMap(Customer::getId, Function.identity()));
+    Map<UUID,Object[]> performance=orders.aggregateByEquipment().stream().collect(Collectors.toMap(row->(UUID)row[0],Function.identity()));
+    return assets.stream().map(asset -> {
+      Object[] row=performance.get(asset.getId());
+      long total=row==null?0:((Number)row[1]).longValue();
+      long faults=row==null?0:((Number)row[2]).longValue();
+      BigDecimal cost=row==null?BigDecimal.ZERO:amount((BigDecimal)row[3]);
       return new EquipmentPerformance(asset.getId(), asset.getCode(), asset.getName(),
           customerMap.get(asset.getCustomerId()) == null ? null
               : customerMap.get(asset.getCustomerId()).getName(),
-          history.size(),
-          history.stream().filter(o -> o.getWorkType() == WorkOrderType.REPAIR).count(), cost,
-          history.isEmpty() ? BigDecimal.ZERO
-              : cost.divide(BigDecimal.valueOf(history.size()), 2, RoundingMode.HALF_UP));
+          total, faults, cost,
+          total==0 ? BigDecimal.ZERO : cost.divide(BigDecimal.valueOf(total), 2, RoundingMode.HALF_UP));
     }).sorted(Comparator.comparing(EquipmentPerformance::faultCount).reversed()).limit(20).toList();
   }
 
-  private List<WorkforcePerformance> workforcePerformance(List<WorkOrder> orderRows) {
+  private List<WorkforcePerformance> workforcePerformance() {
     try {
       return orders.aggregateByAssignee().stream().map(row -> {
         UUID assigneeId = (UUID) row[0];
@@ -273,7 +286,7 @@ public class BiService {
       }).sorted(Comparator.comparing(WorkforcePerformance::generatedRevenue).reversed()).toList();
     } catch (Exception e) {
       log.warn("Database workforce aggregation failed, falling back to in-memory", e);
-      return inMemoryWorkforcePerformance(orderRows);
+      return inMemoryWorkforcePerformance(orders.findAllByOrderByCreatedAtDesc());
     }
   }
 
@@ -320,14 +333,6 @@ public class BiService {
 
   private BigDecimal amount(BigDecimal v) {
     return v == null ? BigDecimal.ZERO : v;
-  }
-
-  private LocalDate firstDate(LocalDate primary, LocalDate fallback) {
-    return primary == null ? fallback : primary;
-  }
-
-  private boolean inRange(LocalDate value, LocalDate start, LocalDate end) {
-    return value == null || (!value.isBefore(start) && !value.isAfter(end));
   }
 
   private BigDecimal percent(BigDecimal numerator, BigDecimal denominator) {

@@ -12,6 +12,8 @@ import com.company.ops.api.modules.procurement.dto.CreateConsolidatedInquiryRequ
 import com.company.ops.api.modules.procurement.dto.ProcurementPurchasePoolResponse;
 import com.company.ops.api.modules.procurement.dto.ReceivePurchaseOrderRequest;
 import com.company.ops.api.modules.procurement.repository.*;
+import com.company.ops.api.modules.project.domain.Project;
+import com.company.ops.api.modules.project.repository.ProjectRepository;
 import com.company.ops.api.modules.system.security.UserPrincipal;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -21,7 +23,6 @@ import java.util.LinkedHashMap;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -37,6 +38,7 @@ public class ProcurementControlService {
   private final ProcurementInquiryRepository inquiries;
   private final ProcurementInquiryRequestRepository inquiryRequests;
   private final SupplierQuotationRepository quotes;
+  private final SupplierQuotationLineRepository quoteLines;
   private final PurchaseRequestRepository requests;
   private final SupplierRepository suppliers;
   private final PurchaseOrderRepository orders;
@@ -48,11 +50,14 @@ public class ProcurementControlService {
   private final ProcurementReturnOrderRepository returns;
   private final SupplierInvoiceRepository invoices;
   private final PurchaseRequestApprovalRecordRepository requestApprovals;
+  private final ProjectRepository projects;
+  private final ProcurementArrivalService arrivals;
 
   public ProcurementControlService(
       ProcurementInquiryRepository inquiries,
       ProcurementInquiryRequestRepository inquiryRequests,
       SupplierQuotationRepository quotes,
+      SupplierQuotationLineRepository quoteLines,
       PurchaseRequestRepository requests,
       SupplierRepository suppliers,
       PurchaseOrderRepository orders,
@@ -63,11 +68,14 @@ public class ProcurementControlService {
       ProcurementCostAllocationRepository costs,
       ProcurementReturnOrderRepository returns,
       SupplierInvoiceRepository invoices,
-      PurchaseRequestApprovalRecordRepository requestApprovals
+      PurchaseRequestApprovalRecordRepository requestApprovals,
+      ProjectRepository projects,
+      ProcurementArrivalService arrivals
   ) {
     this.inquiries = inquiries;
     this.inquiryRequests = inquiryRequests;
     this.quotes = quotes;
+    this.quoteLines = quoteLines;
     this.requests = requests;
     this.suppliers = suppliers;
     this.orders = orders;
@@ -79,6 +87,8 @@ public class ProcurementControlService {
     this.returns = returns;
     this.invoices = invoices;
     this.requestApprovals = requestApprovals;
+    this.projects = projects;
+    this.arrivals = arrivals;
   }
 
   @Transactional(readOnly = true)
@@ -197,10 +207,6 @@ public class ProcurementControlService {
             || item.getStatus() != PurchaseRequestStatus.APPROVED)) {
       throw new BusinessException("只能选择已审批且尚未完成下单的采购申请");
     }
-    Set<String> groupKeys = selected.stream().map(this::sourcingGroupKey).collect(Collectors.toSet());
-    if (groupKeys.size() != 1) {
-      throw new BusinessException("集中采购必须选择相同物料编码或相同物料名称的申请");
-    }
     Set<UUID> activeRequestIds = activeInquiryRequestIds();
     if (selected.stream().anyMatch(item -> activeRequestIds.contains(item.getId()))) {
       throw new BusinessException("部分采购申请已进入询价，请刷新待采购清单");
@@ -301,14 +307,58 @@ public class ProcurementControlService {
     if (duplicated) {
       throw new BusinessException("同一供应商只能提交一份报价");
     }
+    List<ProcurementInquiryRequest> inquiryLinks =
+        inquiryRequests.findByInquiryIdOrderByCreatedAtAsc(inquiryId);
+    if (inquiryLinks.isEmpty()) {
+      ProcurementInquiryRequest fallback = new ProcurementInquiryRequest();
+      fallback.setInquiryId(inquiryId);
+      fallback.setRequestId(inquiry.getRequestId());
+      PurchaseRequest source = requests.findById(inquiry.getRequestId()).orElse(null);
+      fallback.setRequestedQty(source == null ? BigDecimal.ZERO : source.getQuantity());
+      inquiryLinks = List.of(fallback);
+    }
+    Map<UUID, ProcurementInquiryRequest> linkMap = inquiryLinks.stream()
+        .collect(Collectors.toMap(ProcurementInquiryRequest::getRequestId, item -> item));
+    List<CreateSupplierQuoteLine> submittedLines = request.lines() == null
+        ? new ArrayList<>() : new ArrayList<>(request.lines());
+    if (submittedLines.isEmpty()) {
+      if (request.unitPrice() == null || request.taxRate() == null) {
+        throw new BusinessException("请填写每项物料的报价");
+      }
+      for (ProcurementInquiryRequest link : inquiryLinks) {
+        submittedLines.add(new CreateSupplierQuoteLine(
+            link.getRequestId(), request.unitPrice(), request.taxRate(),
+            request.deliveryDate(), request.remark()));
+      }
+    }
+    Set<UUID> submittedRequestIds = submittedLines.stream()
+        .map(CreateSupplierQuoteLine::requestId).collect(Collectors.toSet());
+    if (submittedRequestIds.size() != submittedLines.size()
+        || !submittedRequestIds.equals(linkMap.keySet())) {
+      throw new BusinessException("报价分项必须完整覆盖询价包中的全部采购申请");
+    }
+    BigDecimal totalQuantity = inquiryLinks.stream()
+        .map(ProcurementInquiryRequest::getRequestedQty)
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
+    BigDecimal materialAmount = submittedLines.stream()
+        .map(line -> linkMap.get(line.requestId()).getRequestedQty().multiply(line.unitPrice()))
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
+    BigDecimal averageUnitPrice = totalQuantity.compareTo(BigDecimal.ZERO) == 0
+        ? BigDecimal.ZERO
+        : materialAmount.divide(totalQuantity, 2, RoundingMode.HALF_UP);
+    LocalDate latestDelivery = submittedLines.stream()
+        .map(CreateSupplierQuoteLine::deliveryDate)
+        .filter(java.util.Objects::nonNull)
+        .max(LocalDate::compareTo)
+        .orElse(request.deliveryDate());
     BigDecimal technical = valueOr(request.technicalScore(), BigDecimal.valueOf(100));
     BigDecimal commercial = valueOr(request.commercialScore(), BigDecimal.valueOf(100));
     SupplierQuotation quote = new SupplierQuotation();
     quote.setInquiryId(inquiryId);
     quote.setSupplierId(request.supplierId());
-    quote.setUnitPrice(request.unitPrice());
-    quote.setTaxRate(request.taxRate());
-    quote.setDeliveryDate(request.deliveryDate());
+    quote.setUnitPrice(averageUnitPrice);
+    quote.setTaxRate(submittedLines.get(0).taxRate());
+    quote.setDeliveryDate(latestDelivery);
     quote.setPaymentTerms(request.paymentTerms());
     quote.setRemark(request.remark());
     quote.setCurrency(defaultText(request.currency(), "CNY"));
@@ -319,7 +369,20 @@ public class ProcurementControlService {
     quote.setTotalScore(technical.multiply(BigDecimal.valueOf(.4))
         .add(commercial.multiply(BigDecimal.valueOf(.6))).setScale(2, RoundingMode.HALF_UP));
     quote.setValidUntil(request.validUntil());
-    return quoteView(quotes.save(quote));
+    SupplierQuotation saved = quotes.save(quote);
+    List<SupplierQuotationLine> persistedLines = submittedLines.stream().map(line -> {
+      SupplierQuotationLine entity = new SupplierQuotationLine();
+      entity.setQuoteId(saved.getId());
+      entity.setRequestId(line.requestId());
+      entity.setQuantity(linkMap.get(line.requestId()).getRequestedQty());
+      entity.setUnitPrice(line.unitPrice());
+      entity.setTaxRate(line.taxRate());
+      entity.setDeliveryDate(line.deliveryDate());
+      entity.setRemark(line.remark());
+      return entity;
+    }).toList();
+    quoteLines.saveAll(persistedLines);
+    return quoteView(saved);
   }
 
   @Transactional
@@ -359,42 +422,7 @@ public class ProcurementControlService {
 
   @Transactional
   public GoodsReceipt registerArrival(UUID orderId, ReceivePurchaseOrderRequest request) {
-    if (!isBlank(request.clientRequestId())) {
-      Optional<GoodsReceipt> existing = receipts.findByClientRequestId(request.clientRequestId());
-      if (existing.isPresent()) {
-        return existing.get();
-      }
-    }
-    PurchaseOrder order = orders.findByIdForUpdate(orderId)
-        .orElseThrow(() -> new BusinessException("采购订单不存在"));
-    if (order.getApprovalStatus() != ApprovalStatus.APPROVED
-        || (order.getStatus() != PurchaseOrderStatus.ORDERED
-        && order.getStatus() != PurchaseOrderStatus.PARTIAL_RECEIVED)) {
-      throw new BusinessException("只有审批通过且未关闭的订单可以登记到货");
-    }
-    BigDecimal pending = receipts.findByOrderId(orderId).stream()
-        .filter(item -> "PENDING".equals(item.getInspectionStatus()))
-        .map(GoodsReceipt::getQuantity)
-        .reduce(BigDecimal.ZERO, BigDecimal::add);
-    if (order.getReceivedQty().add(pending).add(request.quantity()).compareTo(order.getOrderedQty()) > 0) {
-      throw new BusinessException("到货数量超过订单剩余数量");
-    }
-    GoodsReceipt receipt = new GoodsReceipt();
-    receipt.setCode("DH-" + order.getCode() + "-" + String.format("%02d", receipts.countByOrderId(orderId) + 1));
-    receipt.setOrderId(orderId);
-    receipt.setPartId(order.getPartId());
-    receipt.setQuantity(request.quantity());
-    receipt.setUnitPrice(order.getUnitPrice());
-    receipt.setTaxRate(order.getTaxRate());
-    receipt.setAmount(request.quantity().multiply(order.getUnitPrice()));
-    receipt.setReceivedDate(request.receivedDate());
-    receipt.setDeliveryNo(request.deliveryNo());
-    receipt.setReceiverName(currentName());
-    receipt.setPayableDueDate(request.payableDueDate());
-    receipt.setInspectionStatus("PENDING");
-    receipt.setClientRequestId(request.clientRequestId());
-    receipt.setAsnNo(request.asnNo());
-    return receipts.save(receipt);
+    return arrivals.register(orderId, request);
   }
 
   @Transactional
@@ -641,22 +669,28 @@ public class ProcurementControlService {
       line.put("requestId", link.getRequestId());
       line.put("requestCode", source == null ? null : source.getCode());
       line.put("batchCode", source == null ? null : source.getBatchCode());
+      line.put("partId", source == null ? null : source.getPartId());
       line.put("partName", source == null ? null : source.getPartName());
       line.put("requestedQty", link.getRequestedQty());
       line.put("costTargetName", source == null ? null : source.getCostTargetName());
       line.put("expectedDate", source == null ? null : source.getExpectedDate());
       return line;
     }).toList();
+    int materialCount = (int) requestMap.values().stream()
+        .map(this::sourcingGroupKey).distinct().count();
     Map<String, Object> view = new LinkedHashMap<>();
     view.put("id", inquiry.getId());
     view.put("code", inquiry.getCode());
     view.put("requestId", inquiry.getRequestId());
     view.put("requestIds", links.stream().map(ProcurementInquiryRequest::getRequestId).toList());
     view.put("requestCount", links.size());
+    view.put("materialCount", materialCount);
     view.put("totalRequestedQty", links.stream().map(ProcurementInquiryRequest::getRequestedQty)
         .reduce(BigDecimal.ZERO, BigDecimal::add));
     view.put("requestLines", requestLines);
-    view.put("partName", requestLines.isEmpty() ? null : requestLines.get(0).get("partName"));
+    view.put("partName", materialCount <= 1
+        ? requestLines.isEmpty() ? null : requestLines.get(0).get("partName")
+        : materialCount + "种物料");
     view.put("title", inquiry.getTitle());
     view.put("deadline", inquiry.getDeadline());
     view.put("status", inquiry.getStatus());
@@ -708,6 +742,39 @@ public class ProcurementControlService {
 
   private Map<String, Object> quoteView(SupplierQuotation quote) {
     Supplier supplier = suppliers.findById(quote.getSupplierId()).orElse(null);
+    List<SupplierQuotationLine> persistedLines =
+        quoteLines.findByQuoteIdOrderByCreatedAtAsc(quote.getId());
+    List<ProcurementInquiryRequest> inquiryLinks =
+        inquiryRequests.findByInquiryIdOrderByCreatedAtAsc(quote.getInquiryId());
+    if (inquiryLinks.isEmpty()) {
+      ProcurementInquiry inquiry = inquiries.findById(quote.getInquiryId()).orElse(null);
+      if (inquiry != null) {
+        ProcurementInquiryRequest fallback = new ProcurementInquiryRequest();
+        fallback.setInquiryId(inquiry.getId());
+        fallback.setRequestId(inquiry.getRequestId());
+        PurchaseRequest source = requests.findById(inquiry.getRequestId()).orElse(null);
+        fallback.setRequestedQty(source == null ? BigDecimal.ZERO : source.getQuantity());
+        inquiryLinks = List.of(fallback);
+      }
+    }
+    Map<UUID, PurchaseRequest> requestMap = requests.findAllById(
+        inquiryLinks.stream().map(ProcurementInquiryRequest::getRequestId).toList()
+    ).stream().collect(Collectors.toMap(PurchaseRequest::getId, item -> item));
+    List<Map<String, Object>> lineViews;
+    if (persistedLines.isEmpty()) {
+      lineViews = inquiryLinks.stream().map(link -> quoteLineView(
+          link.getRequestId(), requestMap.get(link.getRequestId()), link.getRequestedQty(),
+          quote.getUnitPrice(), quote.getTaxRate(), quote.getDeliveryDate(), quote.getRemark()
+      )).toList();
+    } else {
+      lineViews = persistedLines.stream().map(line -> quoteLineView(
+          line.getRequestId(), requestMap.get(line.getRequestId()), line.getQuantity(),
+          line.getUnitPrice(), line.getTaxRate(), line.getDeliveryDate(), line.getRemark()
+      )).toList();
+    }
+    BigDecimal materialAmount = lineViews.stream()
+        .map(line -> (BigDecimal) line.get("amount"))
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
     Map<String, Object> view = new LinkedHashMap<>();
     view.put("id", quote.getId());
     view.put("supplierId", quote.getSupplierId());
@@ -725,6 +792,34 @@ public class ProcurementControlService {
     view.put("commercialScore", quote.getCommercialScore());
     view.put("totalScore", quote.getTotalScore());
     view.put("validUntil", quote.getValidUntil());
+    view.put("lines", lineViews);
+    view.put("materialAmount", materialAmount);
+    view.put("totalAmount", materialAmount
+        .add(valueOr(quote.getFreightAmount(), BigDecimal.ZERO))
+        .add(valueOr(quote.getOtherCostAmount(), BigDecimal.ZERO)));
+    return view;
+  }
+
+  private Map<String, Object> quoteLineView(
+      UUID requestId,
+      PurchaseRequest request,
+      BigDecimal quantity,
+      BigDecimal unitPrice,
+      BigDecimal taxRate,
+      LocalDate deliveryDate,
+      String remark
+  ) {
+    Map<String, Object> view = new LinkedHashMap<>();
+    view.put("requestId", requestId);
+    view.put("requestCode", request == null ? null : request.getCode());
+    view.put("partName", request == null ? null : request.getPartName());
+    view.put("quantity", quantity);
+    view.put("unitPrice", unitPrice);
+    view.put("taxRate", taxRate);
+    view.put("deliveryDate", deliveryDate);
+    view.put("remark", remark);
+    view.put("amount", valueOr(quantity, BigDecimal.ZERO)
+        .multiply(valueOr(unitPrice, BigDecimal.ZERO)));
     return view;
   }
 

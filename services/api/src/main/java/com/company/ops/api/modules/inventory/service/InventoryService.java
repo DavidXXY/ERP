@@ -32,11 +32,10 @@ import com.company.ops.api.modules.inventory.repository.StockMovementRepository;
 import com.company.ops.api.modules.project.domain.Project;
 import com.company.ops.api.modules.project.domain.ProjectApprovalStatus;
 import com.company.ops.api.modules.project.domain.ProjectCostCategory;
-import com.company.ops.api.modules.project.domain.ProjectCostEntry;
 import com.company.ops.api.modules.project.domain.ProjectCostSource;
 import com.company.ops.api.modules.project.domain.ProjectStage;
-import com.company.ops.api.modules.project.repository.ProjectCostEntryRepository;
 import com.company.ops.api.modules.project.repository.ProjectRepository;
+import com.company.ops.api.modules.project.service.ProjectCostLedgerService;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.Comparator;
@@ -62,7 +61,7 @@ public class InventoryService {
   private final InventoryReturnOrderRepository returnRepository;
   private final InventoryReturnLineRepository returnLineRepository;
   private final ProjectRepository projectRepository;
-  private final ProjectCostEntryRepository projectCostRepository;
+  private final ProjectCostLedgerService costLedger;
 
   public InventoryService(InventoryPartRepository partRepository,
       StockMovementRepository movementRepository,
@@ -71,8 +70,8 @@ public class InventoryService {
       InventoryReturnOrderRepository returnRepository,
       InventoryReturnLineRepository returnLineRepository,
       ProjectRepository projectRepository,
-      ProjectCostEntryRepository projectCostRepository,
-                              CodeGenerator codeGenerator) {
+      ProjectCostLedgerService costLedger,
+      CodeGenerator codeGenerator) {
     this.codeGenerator = codeGenerator;
     this.partRepository = partRepository;
     this.movementRepository = movementRepository;
@@ -81,7 +80,7 @@ public class InventoryService {
     this.returnRepository = returnRepository;
     this.returnLineRepository = returnLineRepository;
     this.projectRepository = projectRepository;
-    this.projectCostRepository = projectCostRepository;
+    this.costLedger = costLedger;
   }
 
   @Transactional(readOnly = true)
@@ -94,13 +93,9 @@ public class InventoryService {
   @Transactional(readOnly = true)
   public List<ReplenishmentSuggestionResponse> replenishmentSuggestions() {
     OffsetDateTime since = OffsetDateTime.now().minusDays(30);
-    Map<UUID, BigDecimal> outboundByPart = movementRepository.findAll().stream()
-        .filter(item -> item.getCreatedAt() != null && item.getCreatedAt().isAfter(since))
-        .filter(item -> item.getMovementType() == StockMovementType.OUTBOUND || item.getMovementType() == StockMovementType.SCRAP)
-        .collect(Collectors.groupingBy(
-            StockMovement::getPartId,
-            Collectors.mapping(StockMovement::getQuantity, Collectors.reducing(BigDecimal.ZERO, BigDecimal::add))
-        ));
+    Map<UUID, BigDecimal> outboundByPart = movementRepository.sumQuantityByPartSince(
+        since, List.of(StockMovementType.OUTBOUND, StockMovementType.SCRAP)).stream()
+        .collect(Collectors.toMap(row -> (UUID) row[0], row -> amount((BigDecimal) row[1])));
     return partRepository.findAllByOrderByCreatedAtDesc().stream()
         .map(part -> toReplenishmentSuggestion(part, outboundByPart.getOrDefault(part.getId(), BigDecimal.ZERO)))
         .filter(item -> item.suggestedQty().compareTo(BigDecimal.ZERO) > 0)
@@ -338,17 +333,15 @@ public class InventoryService {
       String description
   ) {
     BigDecimal signedAmount = reversal ? costAmount.negate() : costAmount;
-    ProjectCostEntry entry = new ProjectCostEntry();
-    entry.setProjectId(project.getId());
-    entry.setCategory(ProjectCostCategory.MATERIAL);
-    entry.setSourceType(ProjectCostSource.INVENTORY);
-    entry.setSourceNo(sourceNo);
-    entry.setDescription(description);
-    entry.setAmount(signedAmount);
-    entry.setIncurredDate(incurredDate);
-    projectCostRepository.save(entry);
-    project.setActualCost(amount(project.getActualCost()).add(signedAmount));
-    projectRepository.save(project);
+    costLedger.record(
+        project.getId(),
+        ProjectCostCategory.MATERIAL,
+        ProjectCostSource.INVENTORY,
+        sourceNo,
+        description,
+        signedAmount,
+        incurredDate
+    );
   }
 
   private Map<UUID, InventoryPart> lockParts(List<UUID> partIds) {

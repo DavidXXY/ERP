@@ -2,6 +2,7 @@ package com.company.ops.api.modules.system.service;
 
 import com.company.ops.api.common.exception.BusinessException;
 import com.company.ops.api.common.service.CodeGenerator;
+import com.company.ops.api.common.tenant.TenantContext;
 import com.company.ops.api.modules.system.domain.SystemOrganization;
 import com.company.ops.api.modules.system.dto.CreateOrganizationRequest;
 import com.company.ops.api.modules.system.dto.UpdateOrganizationRequest;
@@ -48,7 +49,7 @@ public class OrganizationService {
 
   @Transactional(readOnly = true)
   public List<OrganizationResponse> listOrganizations() {
-    List<SystemOrganization> all = organizationRepository.findByTenantIdOrderBySortOrderAsc("default");
+    List<SystemOrganization> all = organizationRepository.findByTenantIdOrderBySortOrderAsc(TenantContext.currentTenant());
     Map<UUID, List<SystemOrganization>> children = childOrganizations(all);
     Map<UUID, Long> directUsers = directUserCounts(all);
     Map<UUID, Long> directEmployees = directEmployeeCounts(all);
@@ -60,7 +61,7 @@ public class OrganizationService {
 
   @Transactional(readOnly = true)
   public List<OrganizationResponse> listOrganizationsFlat() {
-    List<SystemOrganization> all = organizationRepository.findByTenantIdOrderBySortOrderAsc("default");
+    List<SystemOrganization> all = organizationRepository.findByTenantIdOrderBySortOrderAsc(TenantContext.currentTenant());
     Map<UUID, List<SystemOrganization>> children = childOrganizations(all);
     Map<UUID, Long> directUsers = directUserCounts(all);
     Map<UUID, Long> directEmployees = directEmployeeCounts(all);
@@ -71,7 +72,7 @@ public class OrganizationService {
 
   @Transactional(readOnly = true)
   public OrganizationResponse getOrganization(UUID id) {
-    List<SystemOrganization> all = organizationRepository.findByTenantIdOrderBySortOrderAsc("default");
+    List<SystemOrganization> all = organizationRepository.findByTenantIdOrderBySortOrderAsc(TenantContext.currentTenant());
     SystemOrganization org = all.stream().filter(item -> item.getId().equals(id)).findFirst()
         .orElseThrow(() -> new BusinessException("组织不存在"));
     return toOrganizationResponse(org, childOrganizations(all), directUserCounts(all), directEmployeeCounts(all), true);
@@ -80,7 +81,7 @@ public class OrganizationService {
   @Transactional
   public OrganizationResponse createOrganization(CreateOrganizationRequest request) {
     String orgCode = request.code() != null ? request.code() : codeGenerator.generate("ORGANIZATION");
-    if (organizationRepository.existsByCodeAndTenantId(orgCode, "default")) {
+    if (organizationRepository.existsByCodeAndTenantId(orgCode, TenantContext.currentTenant())) {
       throw new BusinessException("组织代码已存在");
     }
     validateOrganizationType(request.type());

@@ -1,5 +1,6 @@
 package com.company.ops.api.modules.system.security;
 
+import com.company.ops.api.common.tenant.TenantContext;
 import com.company.ops.api.modules.system.domain.SystemUser;
 import com.company.ops.api.modules.system.domain.SystemOrganization;
 import com.company.ops.api.modules.system.repository.SystemOrganizationRepository;
@@ -102,7 +103,7 @@ public class DataScopeService {
 
   private Set<UUID> organizationAndDescendantIds(UUID rootId) {
     List<SystemOrganization> organizations = organizationRepository
-        .findByTenantIdOrderBySortOrderAsc("default");
+        .findByTenantIdOrderBySortOrderAsc(TenantContext.currentTenant());
     Set<UUID> visible = new HashSet<>();
     visible.add(rootId);
     boolean changed;

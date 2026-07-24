@@ -110,12 +110,24 @@
                     money(order.orderAmount)
                   }}</strong></a-descriptions-item
                 >
-                <a-descriptions-item label="订单版本">V{{ order.orderVersion || 1 }}</a-descriptions-item>
-                <a-descriptions-item label="币种">{{ order.currency || "CNY" }}</a-descriptions-item>
-                <a-descriptions-item label="运费">{{ money(order.freightAmount || 0) }}</a-descriptions-item>
-                <a-descriptions-item label="询价单">{{ order.inquiryId || "未关联" }}</a-descriptions-item>
-                <a-descriptions-item label="采购合同">{{ order.contractId || "未关联" }}</a-descriptions-item>
-                <a-descriptions-item label="寻源/直接采购依据" :span="2">{{ order.sourceReason || "-" }}</a-descriptions-item>
+                <a-descriptions-item label="订单版本"
+                  >V{{ order.orderVersion || 1 }}</a-descriptions-item
+                >
+                <a-descriptions-item label="币种">{{
+                  order.currency || "CNY"
+                }}</a-descriptions-item>
+                <a-descriptions-item label="运费">{{
+                  money(order.freightAmount || 0)
+                }}</a-descriptions-item>
+                <a-descriptions-item label="询价单">{{
+                  order.inquiryId || "未关联"
+                }}</a-descriptions-item>
+                <a-descriptions-item label="采购合同">{{
+                  order.contractId || "未关联"
+                }}</a-descriptions-item>
+                <a-descriptions-item label="寻源/直接采购依据" :span="2">{{
+                  order.sourceReason || "-"
+                }}</a-descriptions-item>
               </a-descriptions>
             </a-col>
             <a-col :xs="24" :xl="10">
@@ -341,21 +353,6 @@
           </a-table>
         </a-tab-pane>
 
-        <a-tab-pane key="cost" :tab="`成本归集 (${costs.length})`">
-          <a-table
-            :columns="costColumns"
-            :data-source="costs"
-            row-key="id"
-            :pagination="false"
-          >
-            <template #bodyCell="{ column, record }"
-              ><template v-if="column.key === 'amount'"
-                ><strong>{{ money(record.amount) }}</strong></template
-              ></template
-            >
-          </a-table>
-        </a-tab-pane>
-
         <a-tab-pane key="audit" tab="审批与审计">
           <a-timeline>
             <a-timeline-item color="green"
@@ -441,7 +438,6 @@ import { useAuthStore } from "@/stores/auth";
 import {
   approvePurchaseOrder,
   listGoodsReceipts,
-  listProcurementCostAllocations,
   listProcurementInquiries,
   listProcurementMatching,
   listProcurementPayables,
@@ -451,7 +447,6 @@ import {
   listSupplierInvoices,
   submitPurchaseOrder,
   type GoodsReceipt,
-  type ProcurementCostAllocation,
   type ProcurementInquiry,
   type ProcurementMatching,
   type ProcurementPayable,
@@ -475,7 +470,6 @@ const route = useRoute(),
   inquiry = ref<ProcurementInquiry | null>(null),
   receipts = ref<GoodsReceipt[]>([]),
   payables = ref<ProcurementPayable[]>([]),
-  costs = ref<ProcurementCostAllocation[]>([]),
   returns = ref<ProcurementReturnOrder[]>([]),
   invoices = ref<SupplierInvoice[]>([]),
   applications = ref<PaymentApplication[]>([]),
@@ -509,10 +503,6 @@ const metrics = computed<DetailMetric[]>(() =>
           label: "待付金额",
           value: money(outstanding.value),
           warning: outstanding.value > 0,
-        },
-        {
-          label: "成本归集",
-          value: money(costs.value.reduce((s, i) => s + i.amount, 0)),
         },
       ]
     : [],
@@ -594,23 +584,15 @@ const applicationColumns = [
   { title: "申请日期", dataIndex: "requestedDate", width: 120 },
   { title: "状态", dataIndex: "status", width: 120 },
 ];
-const costColumns = [
-  { title: "成本归属", dataIndex: "costTargetName" },
-  { title: "物料", dataIndex: "partName" },
-  { title: "金额", key: "amount", width: 150 },
-  { title: "归集日期", dataIndex: "incurredDate", width: 120 },
-  { title: "收货单", dataIndex: "receiptCode", width: 180 },
-];
 onMounted(loadData);
 async function loadData() {
   loading.value = true;
   try {
     const id = String(route.params.id);
-    const [os, rs, ps, cs, qs, rts, isx, ms, prs, apps] = await Promise.all([
+    const [os, rs, ps, qs, rts, isx, ms, prs, apps] = await Promise.all([
       listPurchaseOrders({ page: 0, size: 999 }),
       listGoodsReceipts(),
       listProcurementPayables(),
-      listProcurementCostAllocations(),
       listProcurementInquiries(),
       listProcurementReturns(),
       listSupplierInvoices(),
@@ -626,7 +608,6 @@ async function loadData() {
         qs.find((i) => i.requestId === order.value!.requestId) || null;
       receipts.value = rs.filter((i) => i.orderId === id);
       payables.value = ps.filter((i) => i.orderId === id);
-      costs.value = cs.filter((i) => i.orderId === id);
       returns.value = rts.filter((i) => i.orderId === id);
       invoices.value = isx.filter((i) => i.orderId === id);
       matching.value = ms.find((i) => i.orderId === id) || null;

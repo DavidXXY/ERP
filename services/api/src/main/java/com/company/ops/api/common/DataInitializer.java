@@ -1,6 +1,8 @@
 package com.company.ops.api.common;
 
 import com.company.ops.api.modules.system.domain.SystemPermission;
+import com.company.ops.api.modules.system.domain.SystemRole;
+import com.company.ops.api.modules.system.domain.SystemUser;
 import com.company.ops.api.modules.system.repository.ApprovalAssigneeConfigRepository;
 import com.company.ops.api.modules.system.repository.SystemOrganizationRepository;
 import com.company.ops.api.modules.system.repository.SystemPermissionRepository;
@@ -12,6 +14,7 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
@@ -31,14 +34,32 @@ public class DataInitializer implements CommandLineRunner {
 
   private final SystemPermissionRepository permissionRepository;
   private final SystemRoleRepository roleRepository;
+  private final SystemUserRepository userRepository;
+  private final SystemOrganizationRepository organizationRepository;
+  private final PasswordEncoder passwordEncoder;
+  private final String bootstrapUsername;
+  private final String bootstrapPassword;
+  private final String bootstrapDisplayName;
 
   @Autowired
   public DataInitializer(
+      SystemUserRepository userRepository,
+      SystemRoleRepository roleRepository,
       SystemPermissionRepository permissionRepository,
-      SystemRoleRepository roleRepository
+      SystemOrganizationRepository organizationRepository,
+      PasswordEncoder passwordEncoder,
+      @Value("${ops.bootstrap-admin.username:admin}") String bootstrapUsername,
+      @Value("${ops.bootstrap-admin.password:}") String bootstrapPassword,
+      @Value("${ops.bootstrap-admin.display-name:系统管理员}") String bootstrapDisplayName
   ) {
+    this.userRepository = userRepository;
     this.permissionRepository = permissionRepository;
     this.roleRepository = roleRepository;
+    this.organizationRepository = organizationRepository;
+    this.passwordEncoder = passwordEncoder;
+    this.bootstrapUsername = bootstrapUsername;
+    this.bootstrapPassword = bootstrapPassword;
+    this.bootstrapDisplayName = bootstrapDisplayName;
   }
 
   public DataInitializer(
@@ -49,13 +70,61 @@ public class DataInitializer implements CommandLineRunner {
       ApprovalAssigneeConfigRepository approvalAssigneeConfigRepository,
       PasswordEncoder passwordEncoder
   ) {
-    this(permissionRepository, roleRepository);
+    this(
+        userRepository,
+        roleRepository,
+        permissionRepository,
+        organizationRepository,
+        passwordEncoder,
+        "admin",
+        "",
+        "系统管理员"
+    );
   }
 
   @Override
   @Transactional
   public void run(String... args) {
     ensureRequiredAdminPermissions();
+    ensureBootstrapAdmin();
+  }
+
+  private void ensureBootstrapAdmin() {
+    if (bootstrapPassword == null || bootstrapPassword.isBlank()) {
+      if (userRepository.count() == 0) {
+        log.warn("No system user exists. Set BOOTSTRAP_ADMIN_PASSWORD for the first deployment");
+      }
+      return;
+    }
+    if (bootstrapPassword.length() < 12) {
+      throw new IllegalStateException("BOOTSTRAP_ADMIN_PASSWORD must contain at least 12 characters");
+    }
+
+    String username = bootstrapUsername == null || bootstrapUsername.isBlank()
+        ? "admin"
+        : bootstrapUsername.trim();
+    if (userRepository.existsByUsername(username)) {
+      log.info("Bootstrap administrator already exists; credentials were not changed");
+      return;
+    }
+
+    SystemRole adminRole = roleRepository.findByCodeAndTenantIdWithPermissions("ADMIN", TENANT_ID)
+        .orElseThrow(() -> new IllegalStateException("ADMIN role is missing from the database baseline"));
+
+    SystemUser administrator = new SystemUser();
+    administrator.setTenantId(TENANT_ID);
+    administrator.setUsername(username);
+    administrator.setDisplayName(
+        bootstrapDisplayName == null || bootstrapDisplayName.isBlank()
+            ? "系统管理员"
+            : bootstrapDisplayName.trim()
+    );
+    administrator.setPasswordHash(passwordEncoder.encode(bootstrapPassword));
+    administrator.setEnabled(true);
+    administrator.setOrganization(organizationRepository.findByCodeAndTenantId("ROOT", TENANT_ID));
+    administrator.getRoles().add(adminRole);
+    userRepository.save(administrator);
+    log.info("Created bootstrap administrator account: {}", username);
   }
 
   private void ensureRequiredAdminPermissions() {

@@ -1,6 +1,7 @@
 package com.company.ops.api.modules.system.service;
 
 import com.company.ops.api.common.exception.BusinessException;
+import com.company.ops.api.common.tenant.TenantContext;
 import com.company.ops.api.modules.system.domain.SystemPermission;
 import com.company.ops.api.modules.system.dto.CreatePermissionRequest;
 import com.company.ops.api.modules.system.dto.UpdatePermissionRequest;
@@ -11,7 +12,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
-import org.springframework.data.domain.Sort;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -57,7 +57,7 @@ public class PermissionService {
 
   @Transactional
   public PermissionResponse createPermission(CreatePermissionRequest request) {
-    if (permissionRepository.existsByCodeAndTenantId(request.code(), "default")) {
+    if (permissionRepository.existsByCodeAndTenantId(request.code(), TenantContext.currentTenant())) {
       throw new BusinessException("权限代码已存在");
     }
     SystemPermission permission = new SystemPermission();

@@ -424,8 +424,14 @@ const onTimeRate = computed(() => {
   if (!evaluated.length) return 100;
   const onTime = evaluated.filter((order) => {
     const related = receipts.value
-      .filter((receipt) => receipt.orderId === order.id && receipt.inspectionStatus !== "PENDING")
-      .sort((a, b) => String(b.receivedDate).localeCompare(String(a.receivedDate)));
+      .filter(
+        (receipt) =>
+          receipt.orderId === order.id &&
+          receipt.inspectionStatus !== "PENDING",
+      )
+      .sort((a, b) =>
+        String(b.receivedDate).localeCompare(String(a.receivedDate)),
+      );
     return (
       Number(order.receivedQty) >= Number(order.orderedQty) &&
       !!related[0]?.receivedDate &&
@@ -435,9 +441,17 @@ const onTimeRate = computed(() => {
   return Math.round((onTime / evaluated.length) * 100);
 });
 const qualityRate = computed(() => {
-  const inspected = receipts.value.filter((item) => item.inspectionStatus !== "PENDING");
-  const received = inspected.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
-  const qualified = inspected.reduce((sum, item) => sum + Number(item.qualifiedQty || 0), 0);
+  const inspected = receipts.value.filter(
+    (item) => item.inspectionStatus !== "PENDING",
+  );
+  const received = inspected.reduce(
+    (sum, item) => sum + Number(item.quantity || 0),
+    0,
+  );
+  const qualified = inspected.reduce(
+    (sum, item) => sum + Number(item.qualifiedQty || 0),
+    0,
+  );
   return received ? Math.round((qualified / received) * 100) : 100;
 });
 const invoiceRate = computed(() =>

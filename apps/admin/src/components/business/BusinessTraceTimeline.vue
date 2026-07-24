@@ -754,9 +754,7 @@ async function loadData() {
         ? [collect("库存领料", loadInventoryChain)]
         : []),
       collect("应收回款", loadReceivableChain),
-      ...(auth.can("project:view")
-        ? [collect("利润", loadProfitability)]
-        : []),
+      ...(auth.can("project:view") ? [collect("利润", loadProfitability)] : []),
     ]);
   } finally {
     loading.value = false;
@@ -903,7 +901,9 @@ function formatPercent(value: number) {
   return `${Number(value || 0).toFixed(1)}%`;
 }
 
-function projectSummaryFromContract(contract?: ServiceContract | null): Project | null {
+function projectSummaryFromContract(
+  contract?: ServiceContract | null,
+): Project | null {
   if (!contract?.projectId) return null;
   return {
     id: contract.projectId,

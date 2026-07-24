@@ -55,6 +55,10 @@ fi
 
 export JAVA_HOME="$JAVA_HOME_VALUE"
 export PATH="$JAVA_HOME/bin:$(dirname "$MAVEN_BIN"):$PATH"
+if [[ -z "${OPS_COMMIT:-}" ]]; then
+  OPS_COMMIT="$(git -C "$ROOT_DIR" rev-parse --short=8 HEAD 2>/dev/null || true)"
+  export OPS_COMMIT
+fi
 
 cd "$ROOT_DIR/services/api"
 exec "$MAVEN_BIN" spring-boot:run

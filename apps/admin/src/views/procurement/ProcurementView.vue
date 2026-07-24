@@ -319,7 +319,8 @@
                     v-if="
                       auth.can('procurement:purchase:create') &&
                       record.status === 'DRAFT' &&
-                      (!record.submittedAt || record.approvalStatus === 'REJECTED')
+                      (!record.submittedAt ||
+                        record.approvalStatus === 'REJECTED')
                     "
                     type="link"
                     size="small"
@@ -1445,7 +1446,8 @@ function syncOrderRequest(requestId: string) {
       item.status === "AWARDED" &&
       (item.requestId === requestId || item.requestIds?.includes(requestId)),
   );
-  const inquiry = awardedInquiries.length === 1 ? awardedInquiries[0] : undefined;
+  const inquiry =
+    awardedInquiries.length === 1 ? awardedInquiries[0] : undefined;
   const quote = inquiry?.quotes.find(
     (item) => item.id === inquiry.selectedQuoteId || item.selected,
   );
@@ -1457,11 +1459,12 @@ function syncOrderRequest(requestId: string) {
     Number(quoteLine?.unitPrice || quote?.unitPrice || 0) > 0
       ? Number(quoteLine?.unitPrice || quote?.unitPrice)
       : Number(request?.unitPrice || 0) > 0
-      ? Number(request?.unitPrice)
-      : Number(part?.unitCost || 0) > 0
-        ? Number(part?.unitCost)
-        : 0.01;
-  orderForm.taxRate = quoteLine?.taxRate ?? quote?.taxRate ?? request?.taxRate ?? 13;
+        ? Number(request?.unitPrice)
+        : Number(part?.unitCost || 0) > 0
+          ? Number(part?.unitCost)
+          : 0.01;
+  orderForm.taxRate =
+    quoteLine?.taxRate ?? quote?.taxRate ?? request?.taxRate ?? 13;
   orderForm.orderedQty = request?.quantity || 1;
   orderForm.currency = quote?.currency || "CNY";
   orderForm.freightAmount = Number(quote?.freightAmount || 0);
@@ -1503,7 +1506,6 @@ async function handleSaveRequest() {
   } finally {
     savingRequest.value = false;
   }
-
 }
 async function handleApproval() {
   if (!selectedRequest.value) return;

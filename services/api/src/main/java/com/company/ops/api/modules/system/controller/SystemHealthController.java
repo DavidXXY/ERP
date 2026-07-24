@@ -1,6 +1,7 @@
 package com.company.ops.api.modules.system.controller;
 
 import com.company.ops.api.common.api.ApiResponse;
+import com.company.ops.api.common.version.ApplicationVersion;
 import java.io.File;
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
@@ -23,15 +24,10 @@ import org.springframework.web.bind.annotation.RestController;
 public class SystemHealthController {
 
   private final Environment environment;
+  private final ApplicationVersion applicationVersion;
 
   @Value("${spring.application.name:ops-erp-api}")
   private String appName;
-
-  @Value("${ops.version:0.1.0}")
-  private String version;
-
-  @Value("${ops.build-time:}")
-  private String buildTime;
 
   @Value("${ops.storage.type:local}")
   private String storageType;
@@ -51,8 +47,9 @@ public class SystemHealthController {
   @Value("${spring.data.redis.port:}")
   private String redisPort;
 
-  public SystemHealthController(Environment environment) {
+  public SystemHealthController(Environment environment, ApplicationVersion applicationVersion) {
     this.environment = environment;
+    this.applicationVersion = applicationVersion;
   }
 
   @GetMapping
@@ -71,8 +68,10 @@ public class SystemHealthController {
   private Map<String, Object> getApplicationInfo() {
     Map<String, Object> app = new LinkedHashMap<>();
     app.put("appName", appName);
-    app.put("version", version);
-    app.put("buildTime", buildTime);
+    app.put("version", applicationVersion.getDisplayVersion());
+    app.put("productVersion", applicationVersion.getProductVersion());
+    app.put("commitId", applicationVersion.getCommitId());
+    app.put("buildTime", applicationVersion.getBuildTime());
     app.put("activeProfiles", getActiveProfiles());
     app.put("storageType", storageType);
     return app;

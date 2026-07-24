@@ -43,8 +43,7 @@
         >
         <a-col :xs="12" :lg="6"
           ><div class="self-metric-card warn">
-            <span>待审批请假</span
-            ><strong>{{ pendingLeaveCount }}</strong>
+            <span>待审批请假</span><strong>{{ pendingLeaveCount }}</strong>
           </div></a-col
         >
       </a-row>

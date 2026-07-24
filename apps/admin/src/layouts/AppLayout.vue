@@ -519,7 +519,7 @@ function onOpenChange(keys: string[]) {
   openKeys.value = keys;
 }
 
-const sysVersion = ref("0.1.0");
+const sysVersion = ref(__APP_VERSION__);
 onMounted(async () => {
   try {
     const versionData = await request<{ version: string }>({

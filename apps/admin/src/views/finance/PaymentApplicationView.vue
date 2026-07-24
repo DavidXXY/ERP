@@ -155,8 +155,7 @@
             <a-space size="small">
               <a-button
                 v-if="
-                  canCurrentUserApprove &&
-                  record.status === 'PENDING_APPROVAL'
+                  canCurrentUserApprove && record.status === 'PENDING_APPROVAL'
                 "
                 type="link"
                 size="small"
@@ -568,10 +567,10 @@ async function loadData() {
   try {
     [applications.value, payments.value, canCurrentUserApprove.value] =
       await Promise.all([
-      listPaymentApplications(),
-      listPaymentRecords(),
-      getPaymentApprovalCapability(),
-    ]);
+        listPaymentApplications(),
+        listPaymentRecords(),
+        getPaymentApprovalCapability(),
+      ]);
   } catch (error) {
     message.error(error instanceof Error ? error.message : "付款数据加载失败");
   } finally {
@@ -646,8 +645,7 @@ async function handlePayment() {
 
 function hasAction(item: PaymentApplication) {
   return (
-    (canCurrentUserApprove.value &&
-      item.status === "PENDING_APPROVAL") ||
+    (canCurrentUserApprove.value && item.status === "PENDING_APPROVAL") ||
     (auth.can("finance:payment:execute") && item.status === "APPROVED")
   );
 }

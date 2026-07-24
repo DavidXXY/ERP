@@ -1,8 +1,8 @@
 package com.company.ops.api.modules.system.controller;
 
 import com.company.ops.api.common.api.ApiResponse;
+import com.company.ops.api.common.version.ApplicationVersion;
 import java.util.Map;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -11,17 +11,19 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/system")
 public class SystemVersionController {
 
-    @Value("${ops.version:0.1.0}")
-    private String version;
+    private final ApplicationVersion applicationVersion;
 
-    @Value("${ops.build-time:}")
-    private String buildTime;
+    public SystemVersionController(ApplicationVersion applicationVersion) {
+        this.applicationVersion = applicationVersion;
+    }
 
     @GetMapping("/version")
     public ApiResponse<Map<String, String>> getVersion() {
         return ApiResponse.ok(Map.of(
-            "version", version,
-            "buildTime", buildTime,
+            "version", applicationVersion.getDisplayVersion(),
+            "productVersion", applicationVersion.getProductVersion(),
+            "commitId", applicationVersion.getCommitId(),
+            "buildTime", applicationVersion.getBuildTime(),
             "appName", "工程运维一体化管理系统"
         ));
     }

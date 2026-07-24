@@ -57,8 +57,9 @@ springdoc:
     path: /swagger-ui
 
 ops:
-  version: 0.1.0
-  build-time: 2026-07-10
+  version: ${OPS_VERSION:}
+  commit: ${OPS_COMMIT:}
+  build-time: ${OPS_BUILD_TIME:}
   bootstrap-admin:
     username: ${BOOTSTRAP_ADMIN_USERNAME:admin}
     password: ${BOOTSTRAP_ADMIN_PASSWORD:}

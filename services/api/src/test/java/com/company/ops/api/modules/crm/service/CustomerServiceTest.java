@@ -17,6 +17,7 @@ import com.company.ops.api.modules.crm.repository.FollowUpRepository;
 import com.company.ops.api.modules.crm.repository.OpportunityRepository;
 import com.company.ops.api.modules.crm.repository.ReceivableRepository;
 import com.company.ops.api.modules.crm.repository.ServiceContractRepository;
+import com.company.ops.api.modules.project.repository.ProjectRepository;
 import com.company.ops.api.modules.system.security.DataScopeService;
 import com.company.ops.api.modules.system.domain.SystemUser;
 import com.company.ops.api.modules.system.repository.SystemUserRepository;
@@ -46,6 +47,8 @@ class CustomerServiceTest {
   private DataScopeService dataScopeService;
   @Mock
   private SystemUserRepository userRepository;
+  @Mock
+  private ProjectRepository projectRepository;
   @Mock
   private DeleteGovernanceService deleteGovernanceService;
 

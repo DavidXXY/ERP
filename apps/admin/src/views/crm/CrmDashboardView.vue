@@ -32,9 +32,10 @@
         </div>
         <div class="closure-score">
           <span>闭环健康度</span>
-          <strong :class="{ 'text-danger': detailComplete && closureHealth < 70 }">{{
-            detailComplete ? closureHealth : "--"
-          }}</strong>
+          <strong
+            :class="{ 'text-danger': detailComplete && closureHealth < 70 }"
+            >{{ detailComplete ? closureHealth : "--" }}</strong
+          >
         </div>
       </div>
       <div class="closure-grid">
@@ -200,9 +201,14 @@
                 isCompanyDashboard ? "今日优先级" : "销售优先级"
               }}</strong>
             </div>
-            <a-tag :color="!detailComplete ? 'default' : riskScore > 0 ? 'red' : 'green'">{{
-              !detailComplete ? "数据受限" : riskScore > 0 ? "需关注" : "平稳"
-            }}</a-tag>
+            <a-tag
+              :color="
+                !detailComplete ? 'default' : riskScore > 0 ? 'red' : 'green'
+              "
+              >{{
+                !detailComplete ? "数据受限" : riskScore > 0 ? "需关注" : "平稳"
+              }}</a-tag
+            >
           </div>
           <div class="health-card">
             <div>
@@ -888,10 +894,9 @@ const closureLoops = computed(() => [
     desc: detailAccess.projects
       ? `${projectProfitItems.value.length} 个项目纳入利润跟踪`
       : "当前角色无项目明细权限",
-    value:
-      !detailAccess.projects
-        ? "数据受限"
-        : projectRiskItems.value.length > 0
+    value: !detailAccess.projects
+      ? "数据受限"
+      : projectRiskItems.value.length > 0
         ? `${projectRiskItems.value.length} 项`
         : "达标",
     percent: projectProfitItems.value.length
@@ -914,10 +919,9 @@ const closureLoops = computed(() => [
     desc: detailAccess.procurement
       ? `${procurementMatchItems.value.length} 张订单完成 P2P 勾稽`
       : "当前角色无采购明细权限",
-    value:
-      !detailAccess.procurement
-        ? "数据受限"
-        : procurementRiskItems.value.length > 0
+    value: !detailAccess.procurement
+      ? "数据受限"
+      : procurementRiskItems.value.length > 0
         ? `${procurementRiskItems.value.length} 条`
         : "匹配",
     percent: procurementMatchItems.value.length
@@ -941,10 +945,9 @@ const closureLoops = computed(() => [
     desc: detailAccess.inventory
       ? `${replenishmentItems.value.length} 条补货建议，优先保障交付`
       : "当前角色无库存明细权限",
-    value:
-      !detailAccess.inventory
-        ? "数据受限"
-        : urgentReplenishmentItems.value.length > 0
+    value: !detailAccess.inventory
+      ? "数据受限"
+      : urgentReplenishmentItems.value.length > 0
         ? `${urgentReplenishmentItems.value.length} 项`
         : "充足",
     percent: replenishmentItems.value.length

@@ -345,7 +345,10 @@ export function listUsersApi(
   size: number = 20,
   filters: { keyword?: string; enabled?: boolean; roleId?: string } = {},
 ) {
-  const params = new URLSearchParams({ page: String(page), size: String(size) });
+  const params = new URLSearchParams({
+    page: String(page),
+    size: String(size),
+  });
   if (filters.keyword) params.set("keyword", filters.keyword);
   if (filters.enabled !== undefined)
     params.set("enabled", String(filters.enabled));

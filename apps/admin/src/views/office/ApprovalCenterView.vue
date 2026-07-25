@@ -269,7 +269,11 @@
       </a-table>
     </a-card>
 
-    <a-drawer v-model:open="detailOpen" title="审批详情" width="760px">
+    <a-drawer
+      v-model:open="detailOpen"
+      title="审批详情"
+      width="min(760px, 100vw)"
+    >
       <template v-if="detailApproval">
         <a-space direction="vertical" class="detail-stack" size="middle">
           <a-descriptions bordered size="small" :column="2" title="审批单信息">
@@ -401,6 +405,41 @@
               >{{ line.value }}</a-descriptions-item
             >
           </a-descriptions>
+
+          <section
+            v-if="sealAttachments(detailApproval).length"
+            class="approval-attachments"
+          >
+            <h4>用印附件</h4>
+            <a-list
+              size="small"
+              bordered
+              :data-source="sealAttachments(detailApproval)"
+            >
+              <template #renderItem="{ item }">
+                <a-list-item>
+                  <a-list-item-meta
+                    :title="item.fileName"
+                    :description="formatFileSize(item.sizeBytes)"
+                  />
+                  <template #actions>
+                    <a-button
+                      type="link"
+                      size="small"
+                      @click="previewDocument(item)"
+                      >预览</a-button
+                    >
+                    <a-button
+                      type="link"
+                      size="small"
+                      @click="downloadDocument(item)"
+                      >下载</a-button
+                    >
+                  </template>
+                </a-list-item>
+              </template>
+            </a-list>
+          </section>
 
           <a-card size="small" title="审批流节点">
             <ApprovalProgressFlow
@@ -737,9 +776,12 @@ import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
 import {
   addSignApproval,
   createApproval,
+  downloadDocument,
+  getApproval,
   getOfficeReferences,
   listApprovals,
   processApproval,
+  previewDocument,
   resubmitApproval,
   returnApproval,
   transferApproval,
@@ -751,6 +793,7 @@ import {
   type Expense,
   type ExpenseStatus,
   type ExpenseType,
+  type DocumentRecord,
 } from "@/api/office";
 import {
   listQuotes,
@@ -906,6 +949,7 @@ const mergedList = computed(() => {
       matchedRuleText: a.matchedRuleText,
       approvalConfigVersion: a.approvalConfigVersion,
       nodes: a.nodes || [],
+      actions: a.actions || [],
       _slaLevel: slaLevel(a.createdAt, a.status === "PENDING"),
       _riskLevel: approvalRiskLevel(
         a.amount,
@@ -1110,7 +1154,9 @@ async function loadData() {
     const canLoadReferences =
       auth.can("office:view") ||
       auth.can("office:expense:create") ||
-      auth.can("office:outsource:create");
+      auth.can("office:outsource:create") ||
+      auth.can("office:travel:create") ||
+      auth.can("office:seal:create");
     const [referenceData, approvalData, quoteData, contractData] =
       await Promise.all([
         canLoadReferences ? getOfficeReferences() : Promise.resolve(null),
@@ -1220,9 +1266,26 @@ function openDetail(item: any) {
 
 async function openApprovalById(id: string) {
   if (!officeApprovals.value.length) await loadData();
-  const target = mergedList.value.find(
+  let target = mergedList.value.find(
     (item) => item._source === "office" && item.id === id,
   );
+  if (!target) {
+    try {
+      const approval = await getApproval(id);
+      officeApprovals.value = [
+        approval,
+        ...officeApprovals.value.filter((item) => item.id !== id),
+      ];
+      target = mergedList.value.find(
+        (item) => item._source === "office" && item.id === id,
+      );
+    } catch (error) {
+      message.warning(
+        error instanceof Error ? error.message : "当前账号无权限查看该审批事项",
+      );
+      return;
+    }
+  }
   if (!target) {
     message.warning("未找到对应审批事项，可能已被处理或当前账号无权限查看");
     return;
@@ -1466,6 +1529,19 @@ function expenseDetail(record: any) {
   return record.sourceDetail as Expense | null | undefined;
 }
 
+function sealAttachments(record: any): DocumentRecord[] {
+  return record.approvalType === "SEAL"
+    ? record.sourceDetail?.attachments || []
+    : [];
+}
+
+function formatFileSize(value?: number) {
+  const bytes = Number(value || 0);
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
 function approvalBusinessTypeLabel(value?: string) {
   if (!value) return "-";
   return (
@@ -1483,15 +1559,52 @@ function approvalBusinessTypeLabel(value?: string) {
 
 function sourceDetailLines(record: any) {
   const detail = record.sourceDetail || {};
-  return Object.entries(detail)
+  const lines = Object.entries(detail)
     .filter(
-      ([, value]) => value !== null && value !== undefined && value !== "",
+      ([key, value]) =>
+        value !== null &&
+        value !== undefined &&
+        value !== "" &&
+        ![
+          "id",
+          "applicantId",
+          "projectId",
+          "approvalRequestId",
+          "createdAt",
+        ].includes(key) &&
+        typeof value !== "object",
     )
     .map(([key, value]) => ({
       label: sourceDetailLabel(key),
-      value: String(value),
-      span: key === "description" || key === "acceptanceNote" ? 2 : 1,
+      value: sourceDetailValue(key, value),
+      span: [
+        "description",
+        "purpose",
+        "documentPurpose",
+        "acceptanceNote",
+      ].includes(key)
+        ? 2
+        : 1,
     }));
+
+  return normalizeDescriptionSpans(lines);
+}
+
+function normalizeDescriptionSpans<T extends { span: number }>(lines: T[]) {
+  let pendingSingleIndex = -1;
+
+  lines.forEach((line, index) => {
+    if (line.span === 2) {
+      if (pendingSingleIndex >= 0) lines[pendingSingleIndex].span = 2;
+      pendingSingleIndex = -1;
+      return;
+    }
+
+    pendingSingleIndex = pendingSingleIndex >= 0 ? -1 : index;
+  });
+
+  if (pendingSingleIndex >= 0) lines[pendingSingleIndex].span = 2;
+  return lines;
 }
 
 function sourceDetailLabel(key: string) {
@@ -1500,6 +1613,8 @@ function sourceDetailLabel(key: string) {
       {
         code: "单号",
         claimantName: "申请人",
+        applicantName: "申请人",
+        departmentName: "部门",
         supplierName: "服务商",
         projectCode: "项目",
         workOrderCode: "工单",
@@ -1509,9 +1624,54 @@ function sourceDetailLabel(key: string) {
         status: "状态",
         description: "说明",
         acceptanceNote: "验收说明",
+        destination: "目的地",
+        purpose: "出差事由",
+        transportType: "交通方式",
+        startDate: "开始日期",
+        endDate: "结束日期",
+        travelDays: "出差天数",
+        estimatedAmount: "预算金额",
+        companionNames: "同行人员",
+        sealType: "印章类型",
+        documentName: "文件名称",
+        documentPurpose: "用印用途",
+        counterparty: "对方单位",
+        copyCount: "文件份数",
+        useDate: "用印日期",
+        takeOut: "是否外带",
+        expectedReturnDate: "预计归还日期",
+        returnedAt: "实际归还时间",
       } as Record<string, string>
     )[key] || key
   );
+}
+
+function sourceDetailValue(key: string, value: unknown) {
+  if (typeof value === "boolean") return value ? "是" : "否";
+  if (key === "returnedAt") {
+    return new Intl.DateTimeFormat("zh-CN", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).format(new Date(String(value)));
+  }
+  if (key === "status") {
+    return (
+      (
+        {
+          PENDING_APPROVAL: "待审批",
+          APPROVED: "已通过",
+          REJECTED: "已驳回",
+          COMPLETED: "已完成",
+          CANCELLED: "已取消",
+        } as Record<string, string>
+      )[String(value)] || String(value)
+    );
+  }
+  return String(value);
 }
 
 function parseChangeData(record: any) {

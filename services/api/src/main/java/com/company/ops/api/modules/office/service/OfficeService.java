@@ -21,7 +21,10 @@ import com.company.ops.api.modules.office.domain.ExpenseStatus;
 import com.company.ops.api.modules.office.domain.ExpenseType;
 import com.company.ops.api.modules.office.domain.OutsourceOrder;
 import com.company.ops.api.modules.office.domain.OutsourceStatus;
+import com.company.ops.api.modules.office.domain.OfficeApplicationStatus;
+import com.company.ops.api.modules.office.domain.SealApplication;
 import com.company.ops.api.modules.office.domain.SystemNotification;
+import com.company.ops.api.modules.office.domain.TravelApplication;
 import com.company.ops.api.modules.office.dto.OfficeDtos.AuditResponse;
 import com.company.ops.api.modules.office.dto.OfficeDtos.ApprovalActionResponse;
 import com.company.ops.api.modules.office.dto.OfficeDtos.ApprovalAddSignRequest;
@@ -35,6 +38,8 @@ import com.company.ops.api.modules.office.dto.OfficeDtos.CompleteOutsourceReques
 import com.company.ops.api.modules.office.dto.OfficeDtos.CreateApprovalRequest;
 import com.company.ops.api.modules.office.dto.OfficeDtos.CreateExpenseRequest;
 import com.company.ops.api.modules.office.dto.OfficeDtos.CreateOutsourceRequest;
+import com.company.ops.api.modules.office.dto.OfficeDtos.CreateSealRequest;
+import com.company.ops.api.modules.office.dto.OfficeDtos.CreateTravelRequest;
 import com.company.ops.api.modules.office.dto.OfficeDtos.DocumentResponse;
 import com.company.ops.api.modules.office.dto.OfficeDtos.CreateExpenseLineRequest;
 import com.company.ops.api.modules.office.dto.OfficeDtos.ExpenseLineResponse;
@@ -43,6 +48,8 @@ import com.company.ops.api.modules.office.dto.OfficeDtos.NotificationResponse;
 import com.company.ops.api.modules.office.dto.OfficeDtos.OfficeOverview;
 import com.company.ops.api.modules.office.dto.OfficeDtos.OfficeReferenceResponse;
 import com.company.ops.api.modules.office.dto.OfficeDtos.OutsourceResponse;
+import com.company.ops.api.modules.office.dto.OfficeDtos.SealResponse;
+import com.company.ops.api.modules.office.dto.OfficeDtos.TravelResponse;
 import com.company.ops.api.modules.office.dto.OfficeDtos.ProcessApprovalRequest;
 import com.company.ops.api.modules.office.dto.OfficeDtos.SupplierOption;
 import com.company.ops.api.modules.office.dto.OfficeDtos.ProjectOption;
@@ -58,7 +65,9 @@ import com.company.ops.api.modules.office.repository.DocumentFileRepository;
 import com.company.ops.api.modules.office.repository.ExpenseClaimLineRepository;
 import com.company.ops.api.modules.office.repository.ExpenseClaimRepository;
 import com.company.ops.api.modules.office.repository.OutsourceOrderRepository;
+import com.company.ops.api.modules.office.repository.SealApplicationRepository;
 import com.company.ops.api.modules.office.repository.SystemNotificationRepository;
+import com.company.ops.api.modules.office.repository.TravelApplicationRepository;
 import com.company.ops.api.modules.crm.repository.CustomerRepository;
 import com.company.ops.api.modules.procurement.domain.Supplier;
 import com.company.ops.api.modules.procurement.repository.SupplierRepository;
@@ -83,6 +92,7 @@ import jakarta.persistence.PersistenceContext;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.ArrayList;
@@ -95,6 +105,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import static com.company.ops.api.common.util.MoneyUtils.amount;
@@ -114,6 +126,8 @@ public class OfficeService {
   private final ExpenseClaimRepository expenseRepository;
   private final ExpenseClaimLineRepository expenseLineRepository;
   private final OutsourceOrderRepository outsourceRepository;
+  private final TravelApplicationRepository travelRepository;
+  private final SealApplicationRepository sealRepository;
   private final DocumentFileRepository documentRepository;
   private final SystemNotificationRepository notificationRepository;
   private final SupplierRepository supplierRepository;
@@ -134,6 +148,7 @@ public class OfficeService {
 
   public OfficeService(ApprovalRequestRepository approvalRepository, ApprovalActionRepository actionRepository, ApprovalRuntimeNodeRepository runtimeNodeRepository,
                        ExpenseClaimRepository expenseRepository, ExpenseClaimLineRepository expenseLineRepository, OutsourceOrderRepository outsourceRepository,
+                       TravelApplicationRepository travelRepository, SealApplicationRepository sealRepository,
                        DocumentFileRepository documentRepository, SystemNotificationRepository notificationRepository,
 	                       SupplierRepository supplierRepository, CustomerRepository customerRepository,
 	                       ProjectRepository projectRepository, WorkOrderRepository workOrderRepository,
@@ -142,6 +157,7 @@ public class OfficeService {
 	                       DeleteGovernanceService deleteGovernanceService) {
     this.approvalRepository = approvalRepository; this.actionRepository = actionRepository; this.runtimeNodeRepository = runtimeNodeRepository;
     this.expenseRepository = expenseRepository; this.expenseLineRepository = expenseLineRepository; this.outsourceRepository = outsourceRepository;
+    this.travelRepository = travelRepository; this.sealRepository = sealRepository;
     this.documentRepository = documentRepository; this.notificationRepository = notificationRepository;
     this.supplierRepository = supplierRepository; this.customerRepository = customerRepository;
     this.projectRepository = projectRepository; this.workOrderRepository = workOrderRepository;
@@ -180,6 +196,15 @@ public class OfficeService {
 
   @Transactional(readOnly = true)
   public List<ApprovalResponse> listApprovals() { return approvalRepository.findAllByOrderByCreatedAtDesc().stream().map(this::toApproval).toList(); }
+
+  @Transactional(readOnly = true)
+  public ApprovalResponse getApproval(UUID id) {
+    ApprovalRequest item = approvalRepository.findById(id).orElseThrow(() -> new BusinessException("审批单不存在"));
+    if (!hasCurrentAuthority("office:approval:view") && !isCurrentApplicant(item) && !canCurrentUserApprove(item)) {
+      throw new AccessDeniedException("当前账号无权查看该审批单");
+    }
+    return toApproval(item);
+  }
 
   @Transactional(readOnly = true)
   public List<ApprovalResponse> listMyPendingApprovals() {
@@ -225,6 +250,14 @@ public class OfficeService {
         .filter(item -> item.getPlannedDate() != null && item.getPlannedDate().isBefore(today))
         .forEach(item -> warnings.add(new WarningItemResponse(
             "OUTSOURCE_OVERDUE", item.getId(), "外包服务逾期", item.getCode() + " 计划日期 " + item.getPlannedDate(), "MEDIUM", "/office/outsourcing", item.getCreatedAt()
+        )));
+    sealRepository.findAllByOrderByUseDateDescCreatedAtDesc().stream()
+        .filter(SealApplication::isTakeOut)
+        .filter(item -> item.getStatus() == OfficeApplicationStatus.APPROVED)
+        .filter(item -> item.getExpectedReturnDate() != null && item.getExpectedReturnDate().isBefore(today))
+        .forEach(item -> warnings.add(new WarningItemResponse(
+            "SEAL_RETURN_OVERDUE", item.getId(), "外带印章逾期未归还",
+            item.getCode() + " 预计归还日期 " + item.getExpectedReturnDate(), "HIGH", "/office/seals", item.getCreatedAt()
         )));
     return new WorkbenchResponse(
         todos.stream().sorted((a, b) -> b.createdAt().compareTo(a.createdAt())).toList(),
@@ -279,6 +312,8 @@ public class OfficeService {
     action.setStepNo(completedApprovals + 1); actionRepository.save(action);
     if (saved.getApprovalType() == ApprovalType.EXPENSE) processExpenseSource(saved);
     if (saved.getApprovalType() == ApprovalType.OUTSOURCE) processOutsourceSource(saved);
+    if (saved.getApprovalType() == ApprovalType.TRAVEL) processTravelSource(saved);
+    if (saved.getApprovalType() == ApprovalType.SEAL) processSealSource(saved);
     if ("DELETE".equals(saved.getBusinessType())) processDeleteApproval(saved);
     notify("APPROVAL_RESULT", "审批结果：" + saved.getTitle(), request.decision() == ApprovalStatus.APPROVED ? "审批已通过" : "审批已驳回", "APPROVAL", saved.getId());
     return toApproval(saved);
@@ -329,6 +364,8 @@ public class OfficeService {
     saveRuntimeAction(saved.getId(), "WITHDRAW", request.operatorName(), request.comment(), completedApprovals(id) + 1);
     if (saved.getApprovalType() == ApprovalType.EXPENSE) processExpenseSource(saved);
     if (saved.getApprovalType() == ApprovalType.OUTSOURCE) processOutsourceSource(saved);
+    if (saved.getApprovalType() == ApprovalType.TRAVEL) processTravelSource(saved);
+    if (saved.getApprovalType() == ApprovalType.SEAL) processSealSource(saved);
     notify("APPROVAL_RESULT", "审批已撤回：" + saved.getTitle(), request.comment(), "APPROVAL", saved.getId());
     return toApproval(saved);
   }
@@ -382,6 +419,18 @@ public class OfficeService {
       outsourceRepository.findByApprovalRequestId(id).ifPresent(item -> {
         item.setStatus(autoApproved ? OutsourceStatus.APPROVED : OutsourceStatus.PENDING_APPROVAL);
         outsourceRepository.save(item);
+      });
+    }
+    if (saved.getApprovalType() == ApprovalType.TRAVEL) {
+      travelRepository.findByApprovalRequestId(id).ifPresent(item -> {
+        item.setStatus(autoApproved ? OfficeApplicationStatus.APPROVED : OfficeApplicationStatus.PENDING_APPROVAL);
+        travelRepository.save(item);
+      });
+    }
+    if (saved.getApprovalType() == ApprovalType.SEAL) {
+      sealRepository.findByApprovalRequestId(id).ifPresent(item -> {
+        item.setStatus(autoApproved ? OfficeApplicationStatus.APPROVED : OfficeApplicationStatus.PENDING_APPROVAL);
+        sealRepository.save(item);
       });
     }
     notify("APPROVAL", "审批重新提交", saved.getTitle(), "APPROVAL", saved.getId());
@@ -472,6 +521,89 @@ public class OfficeService {
     WorkOrder order = saved.getWorkOrderId() == null ? null : workOrderRepository.findById(saved.getWorkOrderId()).orElse(null);
     notify("OUTSOURCE", "外包服务已验收", saved.getCode(), "OUTSOURCE", saved.getId());
     return toOutsource(saved, supplier, project, order);
+  }
+
+  @Transactional(readOnly = true)
+  public List<TravelResponse> listTravels() {
+    List<TravelApplication> items = travelRepository.findAllByOrderByStartDateDescCreatedAtDesc();
+    Map<UUID, Project> projects = projectMap(items.stream().map(TravelApplication::getProjectId).filter(id -> id != null).toList());
+    return items.stream().map(item -> toTravel(item, item.getProjectId() == null ? null : projects.get(item.getProjectId()))).toList();
+  }
+
+  @Transactional
+  public TravelResponse createTravel(CreateTravelRequest request) {
+    if (travelRepository.existsByCode(request.code())) throw new BusinessException("出差申请单号已存在");
+    if (request.endDate().isBefore(request.startDate())) throw new BusinessException("结束日期不能早于开始日期");
+    userRepository.findById(request.applicantId()).orElseThrow(() -> new BusinessException("申请人不存在"));
+    Project project = request.projectId() == null ? null : projectRepository.findById(request.projectId())
+        .orElseThrow(() -> new BusinessException("项目不存在"));
+    int travelDays = Math.toIntExact(ChronoUnit.DAYS.between(request.startDate(), request.endDate()) + 1);
+    TravelApplication item = new TravelApplication();
+    item.setCode(request.code()); item.setApplicantId(request.applicantId()); item.setApplicantName(request.applicantName());
+    item.setDepartmentName(request.departmentName()); item.setProjectId(request.projectId()); item.setDestination(request.destination());
+    item.setPurpose(request.purpose()); item.setTransportType(request.transportType()); item.setStartDate(request.startDate());
+    item.setEndDate(request.endDate()); item.setTravelDays(travelDays); item.setEstimatedAmount(request.estimatedAmount());
+    item.setCompanionNames(trimToNull(request.companionNames())); item.setStatus(OfficeApplicationStatus.PENDING_APPROVAL);
+    TravelApplication saved = travelRepository.save(item);
+    String content = request.destination() + " · " + request.startDate() + " 至 " + request.endDate() + " · " + request.purpose();
+    ApprovalRequest approval = createApprovalEntity(
+        "SP-" + request.code(), ApprovalType.TRAVEL, "出差申请 " + request.code(), request.code(), request.estimatedAmount(),
+        request.applicantName(), content, request.departmentName(), request.transportType(),
+        project == null ? null : project.getCode(), null, null);
+    saved.setApprovalRequestId(approval.getId());
+    travelRepository.save(saved);
+    if (approval.getStatus() == ApprovalStatus.APPROVED) processTravelSource(approval);
+    notify("APPROVAL", "出差申请待审批", request.code() + " · " + request.applicantName() + " · " + request.destination(), "TRAVEL", saved.getId());
+    return toTravel(saved, project);
+  }
+
+  @Transactional(readOnly = true)
+  public List<SealResponse> listSeals() {
+    return sealRepository.findAllByOrderByUseDateDescCreatedAtDesc().stream().map(this::toSeal).toList();
+  }
+
+  @Transactional
+  public SealResponse createSeal(CreateSealRequest request, List<MultipartFile> files) {
+    if (files == null || files.isEmpty() || files.stream().allMatch(MultipartFile::isEmpty)) {
+      throw new BusinessException("请至少上传一份用印附件");
+    }
+    if (files.stream().anyMatch(MultipartFile::isEmpty)) throw new BusinessException("用印附件不能为空");
+    if (sealRepository.existsByCode(request.code())) throw new BusinessException("用印申请单号已存在");
+    if (request.takeOut() && request.expectedReturnDate() == null) throw new BusinessException("外带用印必须填写预计归还日期");
+    if (request.takeOut() && request.expectedReturnDate().isBefore(request.useDate())) throw new BusinessException("预计归还日期不能早于用印日期");
+    if (!request.takeOut() && request.expectedReturnDate() != null) throw new BusinessException("非外带用印不应填写归还日期");
+    userRepository.findById(request.applicantId()).orElseThrow(() -> new BusinessException("申请人不存在"));
+    SealApplication item = new SealApplication();
+    item.setCode(request.code()); item.setApplicantId(request.applicantId()); item.setApplicantName(request.applicantName());
+    item.setDepartmentName(request.departmentName()); item.setSealType(request.sealType()); item.setDocumentName(request.documentName());
+    item.setDocumentPurpose(request.documentPurpose()); item.setCounterparty(trimToNull(request.counterparty())); item.setCopyCount(request.copyCount());
+    item.setUseDate(request.useDate()); item.setTakeOut(request.takeOut()); item.setExpectedReturnDate(request.expectedReturnDate());
+    item.setStatus(OfficeApplicationStatus.PENDING_APPROVAL);
+    SealApplication saved = sealRepository.save(item);
+    storeDocuments("SEAL_APPLICATION", saved.getId(), files);
+    String businessType = sealBusinessType(request.documentName(), request.documentPurpose());
+    String content = request.sealType() + " · " + request.documentName() + " · " + request.documentPurpose()
+        + (request.takeOut() ? " · 外带至 " + request.expectedReturnDate() : " · 现场用印");
+    ApprovalRequest approval = createApprovalEntity(
+        "SP-" + request.code(), ApprovalType.SEAL, "用印申请 " + request.code(), request.code(), BigDecimal.ZERO,
+        request.applicantName(), content, request.departmentName(), businessType, null, null, null);
+    saved.setApprovalRequestId(approval.getId());
+    sealRepository.save(saved);
+    if (approval.getStatus() == ApprovalStatus.APPROVED) processSealSource(approval);
+    notify("APPROVAL", "用印申请待审批", request.code() + " · " + request.applicantName() + " · " + request.documentName(), "SEAL", saved.getId());
+    return toSeal(saved);
+  }
+
+  @Transactional
+  public SealResponse returnSeal(UUID id) {
+    SealApplication item = sealRepository.findById(id).orElseThrow(() -> new BusinessException("用印申请不存在"));
+    if (!item.isTakeOut()) throw new BusinessException("该申请不是外带用印，无需归还");
+    if (item.getStatus() != OfficeApplicationStatus.APPROVED) throw new BusinessException("仅审批通过且未归还的外带用印可以确认归还");
+    item.setReturnedAt(OffsetDateTime.now());
+    item.setStatus(OfficeApplicationStatus.COMPLETED);
+    SealApplication saved = sealRepository.save(item);
+    notify("SEAL", "外带印章已归还", saved.getCode() + " · " + saved.getDocumentName(), "SEAL", saved.getId());
+    return toSeal(saved);
   }
 
   @Transactional(readOnly = true)
@@ -732,11 +864,20 @@ public class OfficeService {
   }
 
   private void requireCurrentApplicant(ApprovalRequest approval) {
+    if (!isCurrentApplicant(approval)) throw new AccessDeniedException("只有申请人本人可以撤回或重新提交");
+  }
+
+  private boolean isCurrentApplicant(ApprovalRequest approval) {
     UUID currentUserId = approvalFlowSecurity.currentUserId();
-    boolean applicantMatches = currentUserId != null && userRepository.findById(currentUserId)
+    return currentUserId != null && userRepository.findById(currentUserId)
         .map(user -> user.getDisplayName().equals(approval.getApplicantName()))
         .orElse(false);
-    if (!applicantMatches) throw new org.springframework.security.access.AccessDeniedException("只有申请人本人可以撤回或重新提交");
+  }
+
+  private boolean hasCurrentAuthority(String authority) {
+    var authentication = SecurityContextHolder.getContext().getAuthentication();
+    return authentication != null && authentication.getAuthorities().stream()
+        .anyMatch(item -> authority.equals(item.getAuthority()));
   }
 
   private ApprovalRuntimeNode selectRuntimeNode(List<ApprovalRuntimeNode> nodes, UUID delegatedUserId) {
@@ -872,6 +1013,7 @@ public class OfficeService {
   }
 
   private void processExpenseSource(ApprovalRequest approval) {
+    if (approval.getStatus() == ApprovalStatus.PENDING) return;
     expenseRepository.findByApprovalRequestId(approval.getId()).ifPresent(expense -> {
       if (approval.getStatus() == ApprovalStatus.APPROVED) {
         expense.setStatus(ExpenseStatus.APPROVED);
@@ -898,8 +1040,27 @@ public class OfficeService {
   }
 
   private void processOutsourceSource(ApprovalRequest approval) {
+    if (approval.getStatus() == ApprovalStatus.PENDING) return;
     outsourceRepository.findByApprovalRequestId(approval.getId()).ifPresent(item -> {
       item.setStatus(approval.getStatus() == ApprovalStatus.APPROVED ? OutsourceStatus.APPROVED : OutsourceStatus.REJECTED);
+    });
+  }
+
+  private void processTravelSource(ApprovalRequest approval) {
+    if (approval.getStatus() == ApprovalStatus.PENDING) return;
+    travelRepository.findByApprovalRequestId(approval.getId()).ifPresent(item -> {
+      item.setStatus(approval.getStatus() == ApprovalStatus.APPROVED
+          ? OfficeApplicationStatus.APPROVED : OfficeApplicationStatus.REJECTED);
+      travelRepository.save(item);
+    });
+  }
+
+  private void processSealSource(ApprovalRequest approval) {
+    if (approval.getStatus() == ApprovalStatus.PENDING) return;
+    sealRepository.findByApprovalRequestId(approval.getId()).ifPresent(item -> {
+      item.setStatus(approval.getStatus() == ApprovalStatus.APPROVED
+          ? OfficeApplicationStatus.APPROVED : OfficeApplicationStatus.REJECTED);
+      sealRepository.save(item);
     });
   }
 
@@ -1065,12 +1226,32 @@ public class OfficeService {
           ))
           .orElse(null);
     }
+    if (item.getApprovalType() == ApprovalType.TRAVEL) {
+      return travelRepository.findByApprovalRequestId(item.getId())
+          .map(travel -> toTravel(
+              travel,
+              travel.getProjectId() == null ? null : projectRepository.findById(travel.getProjectId()).orElse(null)
+          ))
+          .orElse(null);
+    }
+    if (item.getApprovalType() == ApprovalType.SEAL) {
+      return sealRepository.findByApprovalRequestId(item.getId()).map(this::toSeal).orElse(null);
+    }
     return null;
   }
   private ApprovalRuntimeNodeResponse toRuntimeNode(ApprovalRuntimeNode item) { return new ApprovalRuntimeNodeResponse(item.getId(), item.getStepNo(), item.getNodeStatus(), item.getApprovalMode(), item.getStepPolicy(), item.getAssigneeType(), item.getAssigneeId(), item.getAssigneeName(), item.getSourceType(), item.getSourceValue(), item.getConditionText(), item.getSlaHours(), item.getDueAt(), item.getRemindedAt(), item.getEscalatedAt(), item.getCompletedAt(), item.getApproverName(), item.getApprovalComment()); }
   private ExpenseResponse toExpense(ExpenseClaim item, Project project, WorkOrder order, List<ExpenseClaimLine> lines) { return new ExpenseResponse(item.getId(), item.getCode(), item.getClaimantId(), item.getClaimantName(), item.getProjectId(), project == null ? null : project.getCode(), item.getWorkOrderId(), order == null ? null : order.getCode(), item.getExpenseType(), item.getAmount(), item.getExpenseDate(), item.getDescription(), item.getStatus(), item.getApprovalRequestId(), lines.stream().map(this::toExpenseLine).toList()); }
   private ExpenseLineResponse toExpenseLine(ExpenseClaimLine item) { return new ExpenseLineResponse(item.getId(), item.getLineNo(), item.getExpenseType(), item.getAmount(), item.getExpenseDate(), item.getDescription(), item.getInvoiceFileName(), item.getInvoiceContentType(), item.getInvoiceSizeBytes()); }
   private OutsourceResponse toOutsource(OutsourceOrder item, Supplier supplier, Project project, WorkOrder order) { return new OutsourceResponse(item.getId(), item.getCode(), item.getSupplierId(), supplier == null ? null : supplier.getName(), item.getProjectId(), project == null ? null : project.getCode(), item.getWorkOrderId(), order == null ? null : order.getCode(), item.getServiceType(), item.getDescription(), item.getAmount(), item.getPlannedDate(), item.getStatus(), item.getApprovalRequestId(), item.getAcceptanceNote()); }
+  private TravelResponse toTravel(TravelApplication item, Project project) { return new TravelResponse(item.getId(), item.getCode(), item.getApplicantId(), item.getApplicantName(), item.getDepartmentName(), item.getProjectId(), project == null ? null : project.getCode(), item.getDestination(), item.getPurpose(), item.getTransportType(), item.getStartDate(), item.getEndDate(), item.getTravelDays(), item.getEstimatedAmount(), item.getCompanionNames(), item.getStatus(), item.getApprovalRequestId(), item.getCreatedAt()); }
+  private SealResponse toSeal(SealApplication item) {
+    List<DocumentResponse> attachments = documentRepository
+        .findByBizTypeAndBizIdOrderByCreatedAtDesc("SEAL_APPLICATION", item.getId()).stream()
+        .filter(document -> !deleteGovernanceService.isHidden("OFFICE_DOCUMENT", document.getId()))
+        .map(this::toDocument)
+        .toList();
+    return new SealResponse(item.getId(), item.getCode(), item.getApplicantId(), item.getApplicantName(), item.getDepartmentName(), item.getSealType(), item.getDocumentName(), item.getDocumentPurpose(), item.getCounterparty(), item.getCopyCount(), item.getUseDate(), item.isTakeOut(), item.getExpectedReturnDate(), item.getReturnedAt(), item.getStatus(), item.getApprovalRequestId(), item.getCreatedAt(), attachments);
+  }
   private DocumentResponse toDocument(DocumentFile item) { return new DocumentResponse(item.getId(), item.getBizType(), item.getBizId(), item.getFileName(), item.getContentType(), item.getSizeBytes(), item.getCreatedAt()); }
   private NotificationResponse toNotification(SystemNotification item) { return new NotificationResponse(item.getId(), item.getType(), item.getTitle(), item.getContent(), item.getRelatedType(), item.getRelatedId(), item.isRead(), item.getReadAt(), item.getCreatedAt()); }
   private BigDecimal amount(BigDecimal value) { return value == null ? BigDecimal.ZERO : value; }
@@ -1078,6 +1259,9 @@ public class OfficeService {
   private String expenseAccount(ExpenseType type) { return type == ExpenseType.TOOL ? "6602" : "6601"; }
   private String expenseAccountName(ExpenseType type) { return type == ExpenseType.TOOL ? "工具及办公费" : "差旅交通费"; }
   private String trimToNull(String value) { return value == null || value.isBlank() ? null : value.trim(); }
+  private String sealBusinessType(String documentName, String purpose) {
+    return (documentName != null && documentName.contains("合同")) || (purpose != null && purpose.contains("合同")) ? "合同" : "普通文件";
+  }
   private Map<UUID, Supplier> supplierMap(List<UUID> ids) { return ids.isEmpty() ? Map.of() : supplierRepository.findAllById(ids.stream().distinct().toList()).stream().collect(Collectors.toMap(Supplier::getId, Function.identity())); }
   private Map<UUID, Project> projectMap(List<UUID> ids) { return ids.isEmpty() ? Map.of() : projectRepository.findAllById(ids.stream().distinct().toList()).stream().collect(Collectors.toMap(Project::getId, Function.identity())); }
   private Map<UUID, WorkOrder> workOrderMap(List<UUID> ids) { return ids.isEmpty() ? Map.of() : workOrderRepository.findAllById(ids.stream().distinct().toList()).stream().collect(Collectors.toMap(WorkOrder::getId, Function.identity())); }

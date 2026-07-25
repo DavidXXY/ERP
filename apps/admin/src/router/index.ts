@@ -462,6 +462,18 @@ const rootRoutes: RouteRecordRaw[] = [
     },
   },
   {
+    path: "office/travels",
+    name: "office-travels",
+    component: () => import("@/views/office/TravelApplicationView.vue"),
+    meta: { title: "出差申请", permission: "office:travel:view" },
+  },
+  {
+    path: "office/seals",
+    name: "office-seals",
+    component: () => import("@/views/office/SealApplicationView.vue"),
+    meta: { title: "用印申请", permission: "office:seal:view" },
+  },
+  {
     path: "office/outsourcing",
     name: "office-outsourcing",
     component: () => import("@/views/office/OutsourceView.vue"),

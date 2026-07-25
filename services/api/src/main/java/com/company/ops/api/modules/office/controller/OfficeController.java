@@ -13,12 +13,16 @@ import com.company.ops.api.modules.office.dto.OfficeDtos.CompleteOutsourceReques
 import com.company.ops.api.modules.office.dto.OfficeDtos.CreateApprovalRequest;
 import com.company.ops.api.modules.office.dto.OfficeDtos.CreateExpenseRequest;
 import com.company.ops.api.modules.office.dto.OfficeDtos.CreateOutsourceRequest;
+import com.company.ops.api.modules.office.dto.OfficeDtos.CreateSealRequest;
+import com.company.ops.api.modules.office.dto.OfficeDtos.CreateTravelRequest;
 import com.company.ops.api.modules.office.dto.OfficeDtos.DocumentResponse;
 import com.company.ops.api.modules.office.dto.OfficeDtos.ExpenseResponse;
 import com.company.ops.api.modules.office.dto.OfficeDtos.NotificationResponse;
 import com.company.ops.api.modules.office.dto.OfficeDtos.OfficeOverview;
 import com.company.ops.api.modules.office.dto.OfficeDtos.OfficeReferenceResponse;
 import com.company.ops.api.modules.office.dto.OfficeDtos.OutsourceResponse;
+import com.company.ops.api.modules.office.dto.OfficeDtos.SealResponse;
+import com.company.ops.api.modules.office.dto.OfficeDtos.TravelResponse;
 import com.company.ops.api.modules.office.dto.OfficeDtos.ProcessApprovalRequest;
 import com.company.ops.api.modules.office.dto.OfficeDtos.SupplierOption;
 import com.company.ops.api.modules.office.dto.OfficeDtos.WorkbenchResponse;
@@ -60,10 +64,12 @@ public class OfficeController {
   public ApiResponse<OfficeOverview> overview() { return ApiResponse.ok(service.overview()); }
   @GetMapping("/workbench") @PreAuthorize("hasAnyAuthority('office:view', 'office:approval:view', 'office:notification:view')")
   public ApiResponse<WorkbenchResponse> workbench() { return ApiResponse.ok(service.workbench()); }
-  @GetMapping("/references") @PreAuthorize("hasAnyAuthority('office:view', 'office:expense:create', 'office:outsource:create')")
+  @GetMapping("/references") @PreAuthorize("hasAnyAuthority('office:view', 'office:expense:create', 'office:outsource:create', 'office:travel:create', 'office:seal:create')")
   public ApiResponse<OfficeReferenceResponse> references() { return ApiResponse.ok(service.references()); }
   @GetMapping("/approvals") @PreAuthorize("hasAuthority('office:approval:view')")
   public ApiResponse<List<ApprovalResponse>> approvals() { return ApiResponse.ok(service.listApprovals()); }
+  @GetMapping("/approvals/{id}") @PreAuthorize("hasAnyAuthority('office:approval:view', 'office:approval:create')")
+  public ApiResponse<ApprovalResponse> approval(@PathVariable UUID id) { return ApiResponse.ok(service.getApproval(id)); }
   @PostMapping("/approvals") @ResponseStatus(HttpStatus.CREATED) @PreAuthorize("hasAuthority('office:approval:create')")
   public ApiResponse<ApprovalResponse> createApproval(@Valid @RequestBody CreateApprovalRequest request) { return ApiResponse.ok(service.createApproval(request)); }
   @PostMapping("/approvals/{id}/process") @PreAuthorize("hasAuthority('office:approval:process')")
@@ -88,6 +94,21 @@ public class OfficeController {
   public ApiResponse<OutsourceResponse> createOutsource(@Valid @RequestBody CreateOutsourceRequest request) { return ApiResponse.ok(service.createOutsource(request)); }
   @PostMapping("/outsourcing/{id}/complete") @PreAuthorize("hasAuthority('office:outsource:complete')")
   public ApiResponse<OutsourceResponse> completeOutsource(@PathVariable UUID id, @Valid @RequestBody CompleteOutsourceRequest request) { return ApiResponse.ok(service.completeOutsource(id, request)); }
+  @GetMapping("/travels") @PreAuthorize("hasAuthority('office:travel:view')")
+  public ApiResponse<List<TravelResponse>> travels() { return ApiResponse.ok(service.listTravels()); }
+  @PostMapping("/travels") @ResponseStatus(HttpStatus.CREATED) @PreAuthorize("hasAuthority('office:travel:create')")
+  public ApiResponse<TravelResponse> createTravel(@Valid @RequestBody CreateTravelRequest request) { return ApiResponse.ok(service.createTravel(request)); }
+  @GetMapping("/seals") @PreAuthorize("hasAuthority('office:seal:view')")
+  public ApiResponse<List<SealResponse>> seals() { return ApiResponse.ok(service.listSeals()); }
+  @PostMapping(value = "/seals", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  @ResponseStatus(HttpStatus.CREATED) @PreAuthorize("hasAuthority('office:seal:create')")
+  public ApiResponse<SealResponse> createSeal(
+      @Valid @RequestPart("request") CreateSealRequest request,
+      @RequestPart("files") List<MultipartFile> files) {
+    return ApiResponse.ok(service.createSeal(request, files));
+  }
+  @PostMapping("/seals/{id}/return") @PreAuthorize("hasAuthority('office:seal:return')")
+  public ApiResponse<SealResponse> returnSeal(@PathVariable UUID id) { return ApiResponse.ok(service.returnSeal(id)); }
   @GetMapping("/suppliers") @PreAuthorize("hasAnyAuthority('office:view', 'office:outsource:create')")
   public ApiResponse<List<SupplierOption>> suppliers() { return ApiResponse.ok(service.suppliers()); }
   @GetMapping("/documents") @PreAuthorize("hasAuthority('office:document:view')")
@@ -122,7 +143,7 @@ public class OfficeController {
   @PreAuthorize("hasAuthority('office:document:upload') or (hasAuthority('procurement:purchase:create') and @officeDocumentSecurity.isProcurementBizType(#bizType))")
   public ApiResponse<List<DocumentResponse>> uploadBatch(@RequestParam String bizType, @RequestParam(required = false) UUID bizId, @RequestPart List<MultipartFile> files) { return ApiResponse.ok(service.storeDocuments(bizType, bizId, files)); }
   @GetMapping("/documents/{id}/download")
-  @PreAuthorize("hasAuthority('office:document:view') or (hasAuthority('procurement:view') and @officeDocumentSecurity.isProcurementDocument(#id))")
+  @PreAuthorize("hasAuthority('office:document:view') or (hasAuthority('procurement:view') and @officeDocumentSecurity.isProcurementDocument(#id)) or (hasAuthority('office:seal:view') and @officeDocumentSecurity.isSealDocument(#id))")
   public ResponseEntity<Resource> download(@PathVariable UUID id) {
     DocumentFile item = service.requireDocument(id); Resource resource = service.loadDocument(item);
     return ResponseEntity.ok().contentType(item.getContentType() == null ? MediaType.APPLICATION_OCTET_STREAM : MediaType.parseMediaType(item.getContentType()))
@@ -130,7 +151,7 @@ public class OfficeController {
         .body(resource);
   }
   @GetMapping("/documents/{id}/preview")
-  @PreAuthorize("hasAuthority('office:document:view') or (hasAuthority('procurement:view') and @officeDocumentSecurity.isProcurementDocument(#id))")
+  @PreAuthorize("hasAuthority('office:document:view') or (hasAuthority('procurement:view') and @officeDocumentSecurity.isProcurementDocument(#id)) or (hasAuthority('office:seal:view') and @officeDocumentSecurity.isSealDocument(#id))")
   public ResponseEntity<Resource> preview(@PathVariable UUID id) {
     DocumentFile item = service.requireDocument(id); Resource resource = service.loadDocumentForPreview(item);
     String contentType = item.getContentType() != null && (item.getContentType().startsWith("image/") || item.getContentType().equals("application/pdf"))

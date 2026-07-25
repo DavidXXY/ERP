@@ -30,4 +30,11 @@ public class OfficeDocumentSecurity {
             .map(document -> isProcurementBizType(document.getBizType()))
             .orElse(false);
   }
+
+  public boolean isSealDocument(UUID documentId) {
+    return documentId != null
+        && documentRepository.findById(documentId)
+            .map(document -> "SEAL_APPLICATION".equals(document.getBizType()))
+            .orElse(false);
+  }
 }

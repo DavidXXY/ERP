@@ -30,6 +30,12 @@ export type OutsourceStatus =
   | "COMPLETED"
   | "SETTLED"
   | "REJECTED";
+export type OfficeApplicationStatus =
+  | "PENDING_APPROVAL"
+  | "APPROVED"
+  | "REJECTED"
+  | "COMPLETED"
+  | "CANCELLED";
 export type OfficeOverview = {
   pendingApprovals: number;
   pendingExpenseAmount: number;
@@ -110,6 +116,46 @@ export type Outsource = {
   approvalRequestId: string;
   acceptanceNote?: string;
 };
+export type TravelApplication = {
+  id: string;
+  code: string;
+  applicantId: string;
+  applicantName: string;
+  departmentName: string;
+  projectId?: string;
+  projectCode?: string;
+  destination: string;
+  purpose: string;
+  transportType: string;
+  startDate: string;
+  endDate: string;
+  travelDays: number;
+  estimatedAmount: number;
+  companionNames?: string;
+  status: OfficeApplicationStatus;
+  approvalRequestId: string;
+  createdAt: string;
+};
+export type SealApplication = {
+  id: string;
+  code: string;
+  applicantId: string;
+  applicantName: string;
+  departmentName: string;
+  sealType: string;
+  documentName: string;
+  documentPurpose: string;
+  counterparty?: string;
+  copyCount: number;
+  useDate: string;
+  takeOut: boolean;
+  expectedReturnDate?: string;
+  returnedAt?: string;
+  status: OfficeApplicationStatus;
+  approvalRequestId: string;
+  createdAt: string;
+  attachments: DocumentRecord[];
+};
 export type Approval = {
   id: string;
   code: string;
@@ -136,7 +182,13 @@ export type Approval = {
   matchedRuleText?: string;
   approvalConfigVersion?: number;
   approvalPlanSnapshot?: string;
-  sourceDetail?: Expense | Outsource | Record<string, unknown> | null;
+  sourceDetail?:
+    | Expense
+    | Outsource
+    | TravelApplication
+    | SealApplication
+    | Record<string, unknown>
+    | null;
   nodes?: ApprovalRuntimeNode[];
   actions: Array<{
     id: string;
@@ -219,6 +271,9 @@ export function getOfficeReferences() {
 }
 export function listApprovals() {
   return request<Approval[]>({ method: "GET", url: "/office/approvals" });
+}
+export function getApproval(id: string) {
+  return request<Approval>({ method: "GET", url: `/office/approvals/${id}` });
 }
 export function createApproval(data: {
   code: string;
@@ -345,6 +400,70 @@ export function completeOutsource(
     method: "POST",
     url: `/office/outsourcing/${id}/complete`,
     data,
+  });
+}
+export function listTravelApplications() {
+  return request<TravelApplication[]>({
+    method: "GET",
+    url: "/office/travels",
+  });
+}
+export function createTravelApplication(data: {
+  code: string;
+  applicantId: string;
+  applicantName: string;
+  departmentName: string;
+  projectId?: string;
+  destination: string;
+  purpose: string;
+  transportType: string;
+  startDate: string;
+  endDate: string;
+  estimatedAmount: number;
+  companionNames?: string;
+}) {
+  return request<TravelApplication>({
+    method: "POST",
+    url: "/office/travels",
+    data,
+  });
+}
+export function listSealApplications() {
+  return request<SealApplication[]>({ method: "GET", url: "/office/seals" });
+}
+export function createSealApplication(
+  data: {
+    code: string;
+    applicantId: string;
+    applicantName: string;
+    departmentName: string;
+    sealType: string;
+    documentName: string;
+    documentPurpose: string;
+    counterparty?: string;
+    copyCount: number;
+    useDate: string;
+    takeOut: boolean;
+    expectedReturnDate?: string;
+  },
+  files: File[],
+) {
+  const form = new FormData();
+  form.append(
+    "request",
+    new Blob([JSON.stringify(data)], { type: "application/json" }),
+  );
+  files.forEach((file) => form.append("files", file));
+  return request<SealApplication>({
+    method: "POST",
+    url: "/office/seals",
+    data: form,
+  });
+}
+export function returnSealApplication(id: string) {
+  return request<SealApplication>({
+    method: "POST",
+    url: `/office/seals/${id}/return`,
   });
 }
 export function listDocuments() {

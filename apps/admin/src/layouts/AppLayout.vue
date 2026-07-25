@@ -176,6 +176,14 @@
             >费用报销</a-menu-item
           >
           <a-menu-item
+            v-if="auth.can('office:travel:view')"
+            key="/office/travels"
+            >出差申请</a-menu-item
+          >
+          <a-menu-item v-if="auth.can('office:seal:view')" key="/office/seals"
+            >用印申请</a-menu-item
+          >
+          <a-menu-item
             v-if="auth.can('office:outsource:view')"
             key="/office/outsourcing"
             >外包服务</a-menu-item
@@ -454,6 +462,8 @@ const canAccessRiskCenter = computed(() =>
     "office:notification:view",
     "office:expense:view",
     "office:outsource:view",
+    "office:travel:view",
+    "office:seal:view",
     "inventory:view",
     "procurement:view",
     "project:view",
@@ -509,6 +519,8 @@ const canAccessOffice = computed(() =>
     "office:view",
     "office:expense:view",
     "office:outsource:view",
+    "office:travel:view",
+    "office:seal:view",
     "office:document:view",
     "office:notification:view",
     "office:audit:view",

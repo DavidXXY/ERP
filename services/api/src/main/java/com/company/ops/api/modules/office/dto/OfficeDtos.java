@@ -5,6 +5,7 @@ import com.company.ops.api.modules.office.domain.ApprovalType;
 import com.company.ops.api.modules.office.domain.ExpenseStatus;
 import com.company.ops.api.modules.office.domain.ExpenseType;
 import com.company.ops.api.modules.office.domain.OutsourceStatus;
+import com.company.ops.api.modules.office.domain.OfficeApplicationStatus;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
@@ -91,6 +92,39 @@ public final class OfficeDtos {
                                   String projectCode, UUID workOrderId, String workOrderCode, String serviceType,
                                   String description, BigDecimal amount, LocalDate plannedDate, OutsourceStatus status,
                                   UUID approvalRequestId, String acceptanceNote) {}
+  public record CreateTravelRequest(@NotBlank @Size(max=64) String code, @NotNull UUID applicantId,
+                                    @NotBlank @Size(max=80) String applicantName,
+                                    @NotBlank @Size(max=120) String departmentName, UUID projectId,
+                                    @NotBlank @Size(max=160) String destination,
+                                    @NotBlank @Size(max=800) String purpose,
+                                    @NotBlank @Size(max=60) String transportType,
+                                    @NotNull LocalDate startDate, @NotNull LocalDate endDate,
+                                    @NotNull @DecimalMin("0.00") BigDecimal estimatedAmount,
+                                    @Size(max=500) String companionNames) {}
+  public record TravelResponse(UUID id, String code, UUID applicantId, String applicantName,
+                               String departmentName, UUID projectId, String projectCode,
+                               String destination, String purpose, String transportType,
+                               LocalDate startDate, LocalDate endDate, Integer travelDays,
+                               BigDecimal estimatedAmount, String companionNames,
+                               OfficeApplicationStatus status, UUID approvalRequestId,
+                               OffsetDateTime createdAt) {}
+  public record CreateSealRequest(@NotBlank @Size(max=64) String code, @NotNull UUID applicantId,
+                                  @NotBlank @Size(max=80) String applicantName,
+                                  @NotBlank @Size(max=120) String departmentName,
+                                  @NotBlank @Size(max=60) String sealType,
+                                  @NotBlank @Size(max=240) String documentName,
+                                  @NotBlank @Size(max=800) String documentPurpose,
+                                  @Size(max=240) String counterparty,
+                                  @NotNull @DecimalMin("1") Integer copyCount,
+                                  @NotNull LocalDate useDate, boolean takeOut,
+                                  LocalDate expectedReturnDate) {}
+  public record SealResponse(UUID id, String code, UUID applicantId, String applicantName,
+                             String departmentName, String sealType, String documentName,
+                             String documentPurpose, String counterparty, Integer copyCount,
+                             LocalDate useDate, boolean takeOut, LocalDate expectedReturnDate,
+                             OffsetDateTime returnedAt, OfficeApplicationStatus status,
+                             UUID approvalRequestId, OffsetDateTime createdAt,
+                             List<DocumentResponse> attachments) {}
   public record DocumentResponse(UUID id, String bizType, UUID bizId, String fileName, String contentType,
                                  Long sizeBytes, OffsetDateTime createdAt) {}
   public record NotificationResponse(UUID id, String type, String title, String content, String relatedType,

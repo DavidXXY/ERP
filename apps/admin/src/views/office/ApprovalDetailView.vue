@@ -136,6 +136,33 @@
             >
           </a-descriptions>
           <a-empty v-else description="该审批未保存业务快照" />
+          <section v-if="sealAttachments.length" class="source-attachments">
+            <h3>用印附件</h3>
+            <a-list size="small" bordered :data-source="sealAttachments">
+              <template #renderItem="{ item }">
+                <a-list-item>
+                  <a-list-item-meta
+                    :title="item.fileName"
+                    :description="formatFileSize(item.sizeBytes)"
+                  />
+                  <template #actions>
+                    <a-button
+                      type="link"
+                      size="small"
+                      @click="previewDocument(item)"
+                      >预览</a-button
+                    >
+                    <a-button
+                      type="link"
+                      size="small"
+                      @click="downloadDocument(item)"
+                      >下载</a-button
+                    >
+                  </template>
+                </a-list-item>
+              </template>
+            </a-list>
+          </section>
         </a-tab-pane>
         <a-tab-pane
           key="nodes"
@@ -237,10 +264,13 @@ import BusinessDetailPage, {
   type DetailMetric,
 } from "@/components/BusinessDetailPage.vue";
 import {
+  downloadDocument,
   listApprovals,
   processApproval,
+  previewDocument,
   type Approval,
   type ApprovalRuntimeNode,
+  type DocumentRecord,
 } from "@/api/office";
 import { useAuthStore } from "@/stores/auth";
 const route = useRoute(),
@@ -304,6 +334,8 @@ const sourceRoute = computed(() => {
     return `/crm/contracts/${source.id}`;
   if (a.approvalType === "QUOTE" && source?.id)
     return `/crm/quotes/${source.id}`;
+  if (a.approvalType === "TRAVEL") return "/office/travels";
+  if (a.approvalType === "SEAL") return "/office/seals";
   return "";
 });
 const sourceLines = computed(() => {
@@ -315,6 +347,8 @@ const sourceLines = computed(() => {
     customerName: "客户",
     projectName: "项目",
     claimantName: "报销人",
+    applicantName: "申请人",
+    departmentName: "部门",
     amount: "金额",
     description: "说明",
     serviceType: "服务类型",
@@ -323,8 +357,24 @@ const sourceLines = computed(() => {
     status: "业务状态",
     purpose: "用途",
     requestedAmount: "申请金额",
+    destination: "目的地",
+    transportType: "交通方式",
+    startDate: "开始日期",
+    endDate: "结束日期",
+    travelDays: "出差天数",
+    estimatedAmount: "预算金额",
+    companionNames: "同行人员",
+    sealType: "印章类型",
+    documentName: "文件名称",
+    documentPurpose: "用印用途",
+    counterparty: "对方单位",
+    copyCount: "文件份数",
+    useDate: "用印日期",
+    takeOut: "是否外带",
+    expectedReturnDate: "预计归还日期",
+    returnedAt: "实际归还时间",
   };
-  return Object.entries(source)
+  const lines = Object.entries(source)
     .filter(
       ([key, value]) =>
         labels[key] && value != null && typeof value !== "object",
@@ -334,9 +384,39 @@ const sourceLines = computed(() => {
       value: key.toLowerCase().includes("amount")
         ? money(Number(value))
         : String(value),
-      span: ["description", "purpose"].includes(key) ? 2 : 1,
+      span: ["description", "purpose", "documentPurpose"].includes(key) ? 2 : 1,
     }));
+
+  return normalizeDescriptionSpans(lines);
 });
+const sealAttachments = computed<DocumentRecord[]>(() => {
+  if (approval.value?.approvalType !== "SEAL") return [];
+  return (approval.value.sourceDetail as any)?.attachments || [];
+});
+
+function formatFileSize(value?: number) {
+  const bytes = Number(value || 0);
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function normalizeDescriptionSpans<T extends { span: number }>(lines: T[]) {
+  let pendingSingleIndex = -1;
+
+  lines.forEach((line, index) => {
+    if (line.span === 2) {
+      if (pendingSingleIndex >= 0) lines[pendingSingleIndex].span = 2;
+      pendingSingleIndex = -1;
+      return;
+    }
+
+    pendingSingleIndex = pendingSingleIndex >= 0 ? -1 : index;
+  });
+
+  if (pendingSingleIndex >= 0) lines[pendingSingleIndex].span = 2;
+  return lines;
+}
 const nodeColumns = [
   { title: "节点", key: "step", width: 100 },
   { title: "审批人", key: "assignee", width: 160 },

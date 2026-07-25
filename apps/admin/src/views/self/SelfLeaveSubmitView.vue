@@ -184,9 +184,6 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.self-page {
-  max-width: 700px;
-}
 .balance-hint {
   margin-bottom: 16px;
 }

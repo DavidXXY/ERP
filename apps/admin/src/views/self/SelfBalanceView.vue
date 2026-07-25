@@ -2,7 +2,9 @@
   <div class="page-stack self-page">
     <a-card title="我的请假额度">
       <template #extra>
-        <a-button :loading="loading" @click="loadData">刷新</a-button>
+        <a-button :loading="loading" @click="loadData">
+          <template #icon><ReloadOutlined /></template>刷新
+        </a-button>
       </template>
 
       <a-row :gutter="[16, 16]">
@@ -48,6 +50,7 @@
 import { onMounted, ref } from "vue";
 import { getSelfLeaveBalances, type LeaveBalanceRecord } from "@/api/hr";
 import { message } from "ant-design-vue";
+import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
 
 const loading = ref(false);
 const balances = ref<LeaveBalanceRecord[]>([]);
@@ -83,9 +86,6 @@ onMounted(loadData);
 </script>
 
 <style scoped>
-.self-page {
-  max-width: 1000px;
-}
 .balance-tile {
   height: 100%;
   padding: 16px;

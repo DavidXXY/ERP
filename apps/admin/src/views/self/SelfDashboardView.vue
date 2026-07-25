@@ -349,9 +349,6 @@ onMounted(loadData);
 </script>
 
 <style scoped>
-.self-page {
-  max-width: 1200px;
-}
 .self-hero-card {
   background: #f8fafc;
 }

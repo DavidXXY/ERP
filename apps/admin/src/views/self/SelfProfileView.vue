@@ -2,7 +2,9 @@
   <div class="page-stack self-page">
     <a-card title="我的档案">
       <template #extra>
-        <a-button :loading="loading" @click="loadData">刷新</a-button>
+        <a-button :loading="loading" @click="loadData">
+          <template #icon><ReloadOutlined /></template>刷新
+        </a-button>
       </template>
 
       <div v-if="loading"><a-skeleton active :paragraph="{ rows: 10 }" /></div>
@@ -66,6 +68,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import { message } from "ant-design-vue";
+import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
 import { getSelfProfile } from "@/api/hr";
 import type { EmployeeDetail } from "@/api/qualification";
 
@@ -103,9 +106,6 @@ onMounted(loadData);
 </script>
 
 <style scoped>
-.self-page {
-  max-width: 900px;
-}
 .profile-section {
   margin-bottom: 12px;
 }

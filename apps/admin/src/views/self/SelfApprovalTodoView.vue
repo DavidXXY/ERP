@@ -320,10 +320,6 @@ function formatCompactMoney(value: number) {
 </script>
 
 <style scoped>
-.self-approval-page {
-  max-width: 1200px;
-}
-
 .approval-hero-card {
   background: #f8fafc;
 }

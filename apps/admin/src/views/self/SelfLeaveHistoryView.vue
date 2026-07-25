@@ -186,9 +186,6 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.self-page {
-  max-width: 1000px;
-}
 .self-inline-metrics {
   margin-bottom: 14px;
 }

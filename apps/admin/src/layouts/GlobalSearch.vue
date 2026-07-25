@@ -5,7 +5,7 @@
     :filter-option="false"
     :options="searchOptions"
     placeholder="搜索客户、合同、商机、报价..."
-    style="min-width: 280px; max-width: 360px"
+    class="global-search"
     :loading="searching"
     dropdown-match-select-width
     @search="handleSearch"
@@ -100,3 +100,18 @@ function handleFocus() {
   if (selectedValue.value) handleSearch(selectedValue.value);
 }
 </script>
+
+<style scoped>
+.global-search {
+  width: 100%;
+  min-width: 280px;
+  max-width: 360px;
+}
+
+@media (max-width: 768px) {
+  .global-search {
+    min-width: 0;
+    max-width: none;
+  }
+}
+</style>

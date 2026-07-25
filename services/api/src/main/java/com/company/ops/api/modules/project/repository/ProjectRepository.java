@@ -34,8 +34,6 @@ public interface ProjectRepository extends JpaRepository<Project, UUID> {
   List<Project> findByContractIdIn(java.util.Collection<UUID> contractIds);
   List<Project> findByPlannedStartDateBetween(LocalDate startDate,LocalDate endDate);
 
-  int countByCodeStartingWith(String prefix);
-
   @Query("select coalesce(sum(p.actualCost), 0) from Project p")
   BigDecimal sumActualCost();
 

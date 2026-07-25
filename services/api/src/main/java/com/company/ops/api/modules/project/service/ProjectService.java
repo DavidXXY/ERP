@@ -2,6 +2,7 @@ package com.company.ops.api.modules.project.service;
 
 import com.company.ops.api.common.delete.DeleteGovernanceService;
 import com.company.ops.api.common.exception.BusinessException;
+import com.company.ops.api.common.service.CodeGenerator;
 import com.company.ops.api.modules.crm.domain.Customer;
 import com.company.ops.api.modules.crm.domain.ServiceContract;
 import com.company.ops.api.modules.crm.repository.CustomerRepository;
@@ -64,6 +65,7 @@ public class ProjectService {
   private final ServiceContractRepository contractRepository;
   private final DeleteGovernanceService deleteGovernanceService;
   private final SystemUserRepository userRepository;
+  private final CodeGenerator codeGenerator;
   @PersistenceContext
   private EntityManager entityManager;
 
@@ -77,7 +79,8 @@ public class ProjectService {
       CustomerRepository customerRepository,
       DataScopeService dataScopeService,
       DeleteGovernanceService deleteGovernanceService,
-      SystemUserRepository userRepository
+      SystemUserRepository userRepository,
+      CodeGenerator codeGenerator
   ) {
     this.projectRepository = projectRepository;
     this.budgetRepository = budgetRepository;
@@ -89,6 +92,7 @@ public class ProjectService {
     this.contractRepository = contractRepository;
     this.deleteGovernanceService = deleteGovernanceService;
     this.userRepository = userRepository;
+    this.codeGenerator = codeGenerator;
   }
 
   @Transactional(readOnly = true)
@@ -133,9 +137,6 @@ public class ProjectService {
 
   @Transactional
   public ProjectDetailResponse createProject(CreateProjectRequest request) {
-    if (projectRepository.existsByCode(request.code())) {
-      throw new BusinessException("项目编码已存在");
-    }
     Customer customer = customerRepository.findById(request.customerId())
         .orElseThrow(() -> new BusinessException("客户不存在"));
     if (request.plannedEndDate().isBefore(request.plannedStartDate())) {
@@ -146,11 +147,20 @@ public class ProjectService {
     BigDecimal budgetAmount = request.budgetItems().stream()
         .map(ProjectBudgetItemRequest::plannedAmount)
         .reduce(BigDecimal.ZERO, BigDecimal::add);
+    ServiceContract contract = null;
+    if (request.contractId() != null) {
+      contract = contractRepository.findById(request.contractId())
+          .orElseThrow(() -> new BusinessException("关联合同不存在"));
+    }
+    String projectCode = resolveProjectCode(request.code(), contract);
+    if (projectRepository.existsByCode(projectCode)) {
+      throw new BusinessException("项目编码已存在");
+    }
+
     Project project = new Project();
     project.setCustomerId(request.customerId());
-    project.setCode(request.code() != null && !request.code().isBlank() ? request.code() : generateProjectCode());
-    if (request.contractId() != null) {
-      ServiceContract contract = contractRepository.findById(request.contractId()).orElseThrow(() -> new BusinessException("关联合同不存在"));
+    project.setCode(projectCode);
+    if (contract != null) {
       project.setContractId(request.contractId());
     }
     project.setName(request.name());
@@ -521,9 +531,16 @@ public class ProjectService {
 
 
 
-  private String generateProjectCode() {
-    int count = projectRepository.countByCodeStartingWith("PRJ-");
-    String seq = String.format("%05d", count + 1);
-    return "PRJ-" + seq;
+  private String resolveProjectCode(String requestedCode, ServiceContract contract) {
+    if (requestedCode != null && !requestedCode.isBlank()) {
+      return requestedCode.trim();
+    }
+    if (contract != null && contract.getCode() != null) {
+      int firstDash = contract.getCode().indexOf('-');
+      if (firstDash >= 0 && firstDash < contract.getCode().length() - 1) {
+        return "XM" + contract.getCode().substring(firstDash);
+      }
+    }
+    return codeGenerator.generate("PROJECT");
   }
 }

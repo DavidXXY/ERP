@@ -1,0 +1,43 @@
+{
+  "easycom": { "autoscan": false },
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "工程运维ERP",
+    "navigationBarBackgroundColor": "#ffffff",
+    "backgroundColor": "#f3f5f7"
+  },
+  "pages": [
+    { "path": "pages/login/index", "style": { "navigationStyle": "custom" } },
+    { "path": "pages/home/index", "style": { "navigationStyle": "custom", "enablePullDownRefresh": true } },
+    { "path": "pages/approvals/index", "style": { "navigationBarTitleText": "审批待办", "enablePullDownRefresh": true } },
+    { "path": "pages/approvals/detail", "style": { "navigationBarTitleText": "审批详情" } },
+    { "path": "pages/work-orders/index", "style": { "navigationBarTitleText": "现场工单", "enablePullDownRefresh": true } },
+    { "path": "pages/work-orders/detail", "style": { "navigationBarTitleText": "工单详情" } },
+    { "path": "pages/work-orders/check-in", "style": { "navigationBarTitleText": "现场签到" } },
+    { "path": "pages/work-orders/complete", "style": { "navigationBarTitleText": "完工记录" } },
+    { "path": "pages/spares/index", "style": { "navigationBarTitleText": "备件库存", "enablePullDownRefresh": true } },
+    { "path": "pages/spares/issue", "style": { "navigationBarTitleText": "备件领用" } },
+    { "path": "pages/spares/return", "style": { "navigationBarTitleText": "备件归还" } },
+    { "path": "pages/spares/scrap", "style": { "navigationBarTitleText": "备件报废" } },
+    { "path": "pages/applications/index", "style": { "navigationBarTitleText": "发起申请" } },
+    { "path": "pages/applications/leave", "style": { "navigationBarTitleText": "请假申请" } },
+    { "path": "pages/applications/expense", "style": { "navigationBarTitleText": "费用报销" } },
+    { "path": "pages/applications/travel", "style": { "navigationBarTitleText": "出差申请" } },
+    { "path": "pages/applications/history", "style": { "navigationBarTitleText": "我的申请" } },
+    { "path": "pages/notifications/index", "style": { "navigationBarTitleText": "消息通知", "enablePullDownRefresh": true } },
+    { "path": "pages/profile/index", "style": { "navigationStyle": "custom" } },
+    { "path": "pages/offline/index", "style": { "navigationBarTitleText": "离线任务" } }
+  ],
+  "tabBar": {
+    "color": "#77808b",
+    "selectedColor": "#176b5b",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "white",
+    "list": [
+      { "pagePath": "pages/home/index", "text": "工作台" },
+      { "pagePath": "pages/approvals/index", "text": "审批" },
+      { "pagePath": "pages/work-orders/index", "text": "工单" },
+      { "pagePath": "pages/profile/index", "text": "我的" }
+    ]
+  }
+}

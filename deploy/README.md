@@ -103,6 +103,8 @@ docker compose -f docker-compose.yml up -d
 
 ## 验证部署
 
+微信小程序的 AppID、域名、构建和审核步骤见 `docs/WECHAT_MINIPROGRAM_DEPLOYMENT.md`。小程序使用同一套 Spring Boot API，不需要单独部署应用服务器。
+
 全新空库首次启动只执行 `V33__fresh_install_baseline.sql`，一次性创建完整结构和基础权限配置。后续数据库变更从 `V100` 开始编号，以兼容曾经执行到 V77 的旧部署。
 
 已有 V77 数据库首次切换到基线构建时，需要在环境文件中增加 `SPRING_FLYWAY_IGNORE_MIGRATION_PATTERNS=*:missing,*:ignored` 和 `SPRING_FLYWAY_VALIDATE_ON_MIGRATE=false`。这只用于兼容已执行但不再随包发布的旧迁移，以及跳过低于 V77 的 V33 基线；全新数据库不应设置这两项，仍使用严格校验。

@@ -29,6 +29,8 @@ public class DataInitializer implements CommandLineRunner {
       new RequiredPermission("project:stage:update", "项目阶段推进", "project"),
       new RequiredPermission("project:cost:create", "项目成本归集", "project"),
       new RequiredPermission("crm:quote:cost", "报价成本询价", "crm"),
+      new RequiredPermission("maintenance:view", "服务管理查看", "maintenance"),
+      new RequiredPermission("maintenance:order:manage", "工单管理", "maintenance"),
       new RequiredPermission("maintenance:order:delete", "工单删除", "maintenance")
   );
 

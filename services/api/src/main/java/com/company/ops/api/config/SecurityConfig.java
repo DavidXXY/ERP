@@ -51,7 +51,7 @@ public class SecurityConfig {
                 response.sendError(HttpStatus.FORBIDDEN.value(), "没有权限访问该资源")))
         .authorizeHttpRequests(auth -> auth
             .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-            .requestMatchers("/api/auth/login").permitAll()
+            .requestMatchers("/api/auth/login", "/api/auth/wechat/login", "/api/auth/wechat/bind").permitAll()
             .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
             .requestMatchers("/api-docs/**").permitAll()
             .requestMatchers("/qualification-files/**").authenticated()

@@ -215,6 +215,18 @@ public class OfficeService {
   }
 
   @Transactional(readOnly = true)
+  public List<ApprovalResponse> listMobileApprovals() {
+    UUID currentUserId = approvalFlowSecurity.currentUserId();
+    return approvalRepository.findAllByOrderByCreatedAtDesc().stream()
+        .filter(item -> isCurrentApplicant(item)
+            || canCurrentUserApprove(item)
+            || (currentUserId != null && actionRepository.findByApprovalIdOrderByCreatedAtAsc(item.getId()).stream()
+                .anyMatch(action -> currentUserId.equals(action.getOperatorId()))))
+        .map(this::toApproval)
+        .toList();
+  }
+
+  @Transactional(readOnly = true)
   public WorkbenchResponse workbench() {
     List<TodoItemResponse> todos = new ArrayList<>();
     approvalRepository.findAllByOrderByCreatedAtDesc().stream()
@@ -707,10 +719,16 @@ public class OfficeService {
   }
 
   @Transactional(readOnly = true)
-  public List<NotificationResponse> notifications() { return notificationRepository.findAllByOrderByCreatedAtDesc().stream().map(this::toNotification).toList(); }
+  public List<NotificationResponse> notifications() {
+    UUID currentUserId = approvalFlowSecurity.currentUserId();
+    if (currentUserId == null) return List.of();
+    return notificationRepository.findVisibleForUser(currentUserId).stream().map(this::toNotification).toList();
+  }
   @Transactional
   public NotificationResponse readNotification(UUID id) {
     SystemNotification item = notificationRepository.findById(id).orElseThrow(() -> new BusinessException("消息不存在"));
+    UUID currentUserId = approvalFlowSecurity.currentUserId();
+    if (item.getTargetUserId() != null && !item.getTargetUserId().equals(currentUserId)) throw new AccessDeniedException("无权查看该消息");
     item.setRead(true); item.setReadAt(OffsetDateTime.now()); return toNotification(notificationRepository.save(item));
   }
   @Transactional(readOnly = true)
@@ -1095,7 +1113,8 @@ public class OfficeService {
   }
 
   public int getUnreadNotificationCount() {
-    return (int) notificationRepository.countByReadFalse();
+    UUID currentUserId = approvalFlowSecurity.currentUserId();
+    return currentUserId == null ? 0 : (int) notificationRepository.countUnreadForUser(currentUserId);
   }
 
   public int refreshNotifications() {

@@ -81,3 +81,7 @@ ops:
     local-path: ${LOCAL_STORAGE_PATH:.local-data/uploads}
   qualification:
     import: ${QUALIFICATION_IMPORT_ENABLED:false}
+  wechat:
+    enabled: ${WECHAT_ENABLED:false}
+    app-id: ${WECHAT_APP_ID:}
+    app-secret: ${WECHAT_APP_SECRET:}

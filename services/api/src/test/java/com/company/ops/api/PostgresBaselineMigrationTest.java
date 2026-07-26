@@ -26,7 +26,7 @@ class PostgresBaselineMigrationTest {
         .load();
 
     var result = flyway.migrate();
-    assertThat(result.targetSchemaVersion).isEqualTo("78");
+    assertThat(result.targetSchemaVersion).isEqualTo("85");
 
     var dataSource = new DriverManagerDataSource(
         POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
@@ -34,8 +34,9 @@ class PostgresBaselineMigrationTest {
     assertThat(jdbc.queryForObject(
         "select count(*) from information_schema.tables where table_schema='public' "
             + "and table_name in ('sys_users','project_projects','project_cost_entries',"
-            + "'procurement_goods_receipts','biz_collaboration_task_controls','shedlock')",
-        Integer.class)).isEqualTo(6);
+            + "'procurement_goods_receipts','biz_collaboration_task_controls','shedlock',"
+            + "'work_order_attachments','work_order_mobile_operations','sys_wechat_bindings')",
+        Integer.class)).isEqualTo(9);
     assertThat(jdbc.queryForObject(
         "select count(*) from pg_indexes where schemaname='public' "
             + "and indexname='uk_proc_receipt_client_request'",

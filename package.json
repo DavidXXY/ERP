@@ -4,12 +4,12 @@
   "private": true,
   "type": "module",
   "workspaces": [
-    "apps/admin"
+    "apps/admin",
+    "apps/mobile"
   ],
   "overrides": {
     "@redocly/openapi-core": "1.34.7",
     "js-yaml": "4.3.0",
-    "vue": "3.5.13",
     "vue-router": "4.5.0",
     "typescript": "5.5.4",
     "vue-tsc": "2.1.10"
@@ -24,6 +24,12 @@
     "admin:dev": "npm --workspace apps/admin run dev",
     "admin:build": "npm --workspace apps/admin run build",
     "admin:preview": "npm --workspace apps/admin run preview",
+    "mobile:dev": "npm --workspace apps/mobile run dev:h5",
+    "mobile:dev:mp-weixin": "npm --workspace apps/mobile run dev:mp-weixin",
+    "mobile:build": "npm --workspace apps/mobile run build:mp-weixin",
+    "mobile:build:h5": "npm --workspace apps/mobile run build:h5",
+    "mobile:typecheck": "npm --workspace apps/mobile run typecheck",
+    "mobile:test": "npm --workspace apps/mobile run test",
     "api:check": "bash scripts/check-backend.sh",
     "api:dev": "bash scripts/start-api.sh",
     "infra:up": "docker compose -f infra/docker-compose.yml up -d",
@@ -41,7 +47,7 @@
     "version:minor": "node scripts/version.mjs minor",
     "version:major": "node scripts/version.mjs major",
     "version:set": "node scripts/version.mjs set",
-    "verify": "npm run lint && npm run format:check && npm run test && npm --workspace apps/admin run typecheck && npm run build"
+    "verify": "npm run lint && npm run format:check && npm run test && npm --workspace apps/admin run typecheck && npm run build && npm run mobile:typecheck && npm run mobile:test && npm run mobile:build:h5 && npm run mobile:build"
   },
   "dependencies": {
     "@vitejs/plugin-react": "6.0.3",

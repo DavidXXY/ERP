@@ -35,6 +35,10 @@ public class WorkOrder extends BaseEntity {
   @Column(name = "required_cert", length = 120) private String requiredCertificate;
   @Column(name = "check_in_at") private OffsetDateTime checkInAt;
   @Column(name = "check_in_location", length = 300) private String checkInLocation;
+  @Column(name = "check_in_latitude", precision = 10, scale = 7) private BigDecimal checkInLatitude;
+  @Column(name = "check_in_longitude", precision = 10, scale = 7) private BigDecimal checkInLongitude;
+  @Column(name = "check_in_accuracy", precision = 10, scale = 2) private BigDecimal checkInAccuracy;
+  @Column(name = "assignment_accepted_at") private OffsetDateTime assignmentAcceptedAt;
   @Column(name = "started_at") private OffsetDateTime startedAt;
   @Column(name = "completed_at") private OffsetDateTime completedAt;
   @Column(name = "accepted_at") private OffsetDateTime acceptedAt;
@@ -70,6 +74,10 @@ public class WorkOrder extends BaseEntity {
   public String getRequiredCertificate() { return requiredCertificate; } public void setRequiredCertificate(String value) { requiredCertificate = value; }
   public OffsetDateTime getCheckInAt() { return checkInAt; } public void setCheckInAt(OffsetDateTime value) { checkInAt = value; }
   public String getCheckInLocation() { return checkInLocation; } public void setCheckInLocation(String value) { checkInLocation = value; }
+  public BigDecimal getCheckInLatitude() { return checkInLatitude; } public void setCheckInLatitude(BigDecimal value) { checkInLatitude = value; }
+  public BigDecimal getCheckInLongitude() { return checkInLongitude; } public void setCheckInLongitude(BigDecimal value) { checkInLongitude = value; }
+  public BigDecimal getCheckInAccuracy() { return checkInAccuracy; } public void setCheckInAccuracy(BigDecimal value) { checkInAccuracy = value; }
+  public OffsetDateTime getAssignmentAcceptedAt() { return assignmentAcceptedAt; } public void setAssignmentAcceptedAt(OffsetDateTime value) { assignmentAcceptedAt = value; }
   public OffsetDateTime getStartedAt() { return startedAt; } public void setStartedAt(OffsetDateTime value) { startedAt = value; }
   public OffsetDateTime getCompletedAt() { return completedAt; } public void setCompletedAt(OffsetDateTime value) { completedAt = value; }
   public OffsetDateTime getAcceptedAt() { return acceptedAt; } public void setAcceptedAt(OffsetDateTime value) { acceptedAt = value; }

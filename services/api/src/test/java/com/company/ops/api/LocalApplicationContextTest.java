@@ -65,7 +65,7 @@ class LocalApplicationContextTest {
         "select max(cast(version as integer)) from flyway_schema_history where success = true",
         Integer.class
     );
-    assertThat(version).isEqualTo(78);
+    assertThat(version).isEqualTo(85);
     assertThat(jdbc.queryForObject("select count(*) from shedlock", Integer.class)).isZero();
   }
 
@@ -73,6 +73,11 @@ class LocalApplicationContextTest {
   void enforcesAuthenticationAndCompletesLoginFlow() throws Exception {
     var anonymous = rest.getForEntity("http://localhost:" + port + "/api/auth/me", String.class);
     assertThat(anonymous.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    var anonymousWorkbench = rest.getForEntity(
+        "http://localhost:" + port + "/api/mobile/workbench",
+        String.class
+    );
+    assertThat(anonymousWorkbench.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
 
     var login = rest.postForEntity(
         "http://localhost:" + port + "/api/auth/login",
@@ -94,6 +99,29 @@ class LocalApplicationContextTest {
     );
     assertThat(currentUser.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(currentUser.getBody()).contains("\"username\":\"admin\"");
+
+    var workbench = rest.exchange(
+        "http://localhost:" + port + "/api/mobile/workbench",
+        org.springframework.http.HttpMethod.GET,
+        new HttpEntity<>(headers),
+        String.class
+    );
+    assertThat(workbench.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(workbench.getBody()).contains(
+        "\"success\":true",
+        "\"pendingApprovals\"",
+        "\"unreadNotifications\"",
+        "\"activeWorkOrders\""
+    );
+
+    var mobileWorkOrders = rest.exchange(
+        "http://localhost:" + port + "/api/maintenance/mobile/work-orders",
+        org.springframework.http.HttpMethod.GET,
+        new HttpEntity<>(headers),
+        String.class
+    );
+    assertThat(mobileWorkOrders.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(mobileWorkOrders.getBody()).contains("\"success\":true", "\"data\"");
   }
 
   @Test

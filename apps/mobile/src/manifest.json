@@ -1,0 +1,18 @@
+{
+  "name": "工程运维ERP",
+  "appid": "__UNI__OPSERP",
+  "description": "工程运维 ERP 移动工作台",
+  "versionName": "0.1.0",
+  "versionCode": "100",
+  "transformPx": false,
+  "h5": { "router": { "mode": "hash" }, "title": "工程运维ERP" },
+  "mp-weixin": {
+    "appid": "wx0000000000000000",
+    "setting": { "urlCheck": true, "es6": true, "postcss": true, "minified": true },
+    "usingComponents": true,
+    "permission": {
+      "scope.userLocation": { "desc": "用于外勤工单现场签到并记录服务地点" }
+    },
+    "requiredPrivateInfos": ["getLocation", "chooseLocation", "chooseMedia"]
+  }
+}

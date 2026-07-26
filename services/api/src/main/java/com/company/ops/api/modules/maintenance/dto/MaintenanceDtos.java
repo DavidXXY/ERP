@@ -5,6 +5,7 @@ import com.company.ops.api.modules.maintenance.domain.WorkOrderSource;
 import com.company.ops.api.modules.maintenance.domain.WorkOrderStatus;
 import com.company.ops.api.modules.maintenance.domain.WorkOrderType;
 import com.company.ops.api.modules.maintenance.domain.EquipmentStatus;
+import com.company.ops.api.modules.maintenance.domain.WorkOrderAttachmentCategory;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -24,6 +25,7 @@ public final class MaintenanceDtos {
   public record CustomerOption(UUID id, String name) {}
   public record EquipmentOption(UUID id, String code, String name) {}
   public record ContractOption(UUID id, String name) {}
+  public record AssigneeOption(UUID id, String displayName) {}
 
   // -- Work Order --
   public record WorkOrderResponse(
@@ -35,11 +37,16 @@ public final class MaintenanceDtos {
       UUID assigneeId, String assigneeName,
       BigDecimal laborHours, BigDecimal laborCost, BigDecimal costAmount,
       BigDecimal billableAmount, BigDecimal actualCost,
-      LocalDate plannedDate,
+      LocalDate plannedDate, String siteAddress,
+      OffsetDateTime assignmentAcceptedAt,
+      OffsetDateTime checkInAt, String checkInLocation,
+      BigDecimal checkInLatitude, BigDecimal checkInLongitude, BigDecimal checkInAccuracy,
       OffsetDateTime startedAt,
       OffsetDateTime completedAt, OffsetDateTime acceptedAt,
       OffsetDateTime createdAt, OffsetDateTime updatedAt,
-      String remarks,
+      String serviceResult, String customerSigner, String remarks,
+      List<AttachmentResponse> attachments,
+      List<MaterialResponse> materials,
       List<StatusLogResponse> statusLogs) {}
 
   public record CreateWorkOrderRequest(
@@ -50,11 +57,46 @@ public final class MaintenanceDtos {
 
   public record CheckInRequest(OffsetDateTime checkInAt, String checkInLocation) {}
 
+  public record MobileOperationRequest(
+      @jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Size(max = 100) String operationId) {}
+
+  public record MobileCheckInRequest(
+      @jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Size(max = 100) String operationId,
+      @jakarta.validation.constraints.NotNull OffsetDateTime checkInAt,
+      @jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Size(max = 300) String checkInLocation,
+      @jakarta.validation.constraints.NotNull BigDecimal latitude,
+      @jakarta.validation.constraints.NotNull BigDecimal longitude,
+      BigDecimal accuracy) {}
+
   public record CompleteWorkOrderRequest(
       BigDecimal laborHours, BigDecimal laborCost, BigDecimal materialCost,
       BigDecimal travelCost, BigDecimal outsourcingCost,
       BigDecimal costAmount, BigDecimal billableAmount,
       String serviceResult, String remarks) {}
+
+  public record MobileCompleteWorkOrderRequest(
+      @jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Size(max = 100) String operationId,
+      BigDecimal laborHours, BigDecimal laborCost, BigDecimal materialCost,
+      BigDecimal travelCost, BigDecimal outsourcingCost,
+      BigDecimal costAmount, BigDecimal billableAmount,
+      @jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Size(max = 1500) String serviceResult,
+      @jakarta.validation.constraints.Size(max = 500) String remarks,
+      @jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Size(max = 80) String customerSigner,
+      List<@jakarta.validation.Valid MaterialRequest> materials) {}
+
+  public record MaterialRequest(
+      UUID partId,
+      @jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Size(max = 160) String partName,
+      @jakarta.validation.constraints.NotNull @jakarta.validation.constraints.DecimalMin("0.01") BigDecimal quantity,
+      @jakarta.validation.constraints.NotNull @jakarta.validation.constraints.DecimalMin("0.00") BigDecimal unitCost,
+      @jakarta.validation.constraints.NotNull @jakarta.validation.constraints.DecimalMin("0.00") BigDecimal amount) {}
+
+  public record MaterialResponse(
+      UUID id, UUID partId, String partName, BigDecimal quantity, BigDecimal unitCost, BigDecimal amount) {}
+
+  public record AttachmentResponse(
+      UUID id, WorkOrderAttachmentCategory category, String fileName, String contentType,
+      long fileSize, String uploadedBy, OffsetDateTime createdAt, String previewUrl) {}
 
   public record AcceptWorkOrderRequest(BigDecimal actualCost, String remarks) {}
 

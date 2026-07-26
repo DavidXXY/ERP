@@ -5,6 +5,7 @@
 ## 技术路线
 
 - 管理端：Vue 3 + TypeScript + Vite + Ant Design Vue
+- 微信小程序：uni-app + Vue 3 + TypeScript
 - 后端：Spring Boot 3 + Spring Data JPA + Spring Security + Flyway
 - 数据库：PostgreSQL
 - 缓存：Redis
@@ -15,7 +16,7 @@
 
 ```text
 apps/admin        PC 管理后台
-apps/mobile       移动办公端规划入口
+apps/mobile       微信小程序与 H5 移动办公端
 services/api      Spring Boot 后端服务
 infra             本地数据库、缓存、对象存储配置
 docs              架构和业务建模文档
@@ -34,9 +35,10 @@ npm run tools:install
 npm run infra:up
 npm run api:dev
 npm run admin:dev
+npm run mobile:dev
 ```
 
-管理端默认访问 `http://localhost:5174`，后端 API 默认访问 `http://localhost:8080/api`。
+管理端默认访问 `http://localhost:5174`，移动 H5 默认访问 `http://localhost:5180`，后端 API 默认访问 `http://localhost:8080/api`。
 
 开发环境默认管理员账号：
 
@@ -55,12 +57,13 @@ npm run admin:dev
 - 人员：证书到期预警、人员排班、移动签到与工时统计
 - 资质：公司资质、人员档案、人员证书、项目业绩、投标组合查询与到期预警
 - BI：经营趋势、客户利润、设备故障成本、人员产值
+- 移动端：审批、消息、请假/报销/出差申请、工单接单/改派、定位签到、现场照片、材料消耗、客户签字、完工、备件领退报废、弱网离线补传、微信账号绑定登录
 
 ## 生产加强状态
 
 - 已加强：维修模块细粒度权限、维保超期风险沉淀、历史环境权限补齐、CRM/OA/资质附件统一存储、MinIO/S3 兼容对象存储适配、预签名临时链接、上传文件白名单与路径穿越防护、统一待办预警、后端统一风险聚合、风险规则配置、自动责任人、SLA 超时升级、每日风险快照、风险趋势与模块分布、统一风险中心批量处理、持久化闭环与处理轨迹、采购三单匹配、库存补货建议、项目利润摘要、经营驾驶舱时间筛选与公司级 KPI、统一编号规则接口与组织维度编号生成、条件化多级审批、审批转交/加签/撤回、审计详情与导出、审计模块/对象/操作类型追踪、核心后端测试覆盖。
 - 本轮系统加固：JWT 短时令牌与登录限流、租户级 JPA 隔离、敏感字段 AES-GCM 加密、乐观锁、分布式任务锁、Flyway 空库集成测试、API 登录链路集成测试、前端单测/静态检查/500KB 分包预算、Prometheus 告警、HTTPS 安全响应头、可校验备份与受保护恢复演练。
-- 规划中：移动端代码实现，以及按真实业务租户接入独立域名/身份源。
+- 待生产配置：替换正式小程序 AppID，配置已备案 HTTPS API 域名及微信 AppSecret，并提交微信平台隐私声明和版本审核。
 
 运行 `npm run data:backup` 可生成并校验 PostgreSQL 备份。
 

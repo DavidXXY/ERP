@@ -40,9 +40,11 @@ class DataInitializerTest {
     SystemRole admin = new SystemRole();
     admin.setCode("ADMIN");
     SystemPermission deletePermission = permission("maintenance:order:delete");
+    SystemPermission viewPermission = permission("maintenance:view");
+    SystemPermission managePermission = permission("maintenance:order:manage");
     when(permissionRepository.existsByCodeAndTenantId(any(), eq("default"))).thenReturn(true);
     when(permissionRepository.existsByCodeAndTenantId(eq("maintenance:order:delete"), eq("default"))).thenReturn(false);
-    when(permissionRepository.findAll()).thenReturn(List.of(deletePermission));
+    when(permissionRepository.findAll()).thenReturn(List.of(deletePermission, viewPermission, managePermission));
     when(roleRepository.findByCodeAndTenantIdWithPermissions("ADMIN", "default")).thenReturn(Optional.of(admin));
 
     new DataInitializer(userRepository, roleRepository, permissionRepository, organizationRepository, approvalConfigRepository, passwordEncoder).run();
@@ -51,7 +53,7 @@ class DataInitializerTest {
     verify(permissionRepository, atLeastOnce()).save(captor.capture());
     assertThat(captor.getAllValues()).extracting(SystemPermission::getCode).contains("maintenance:order:delete");
     assertThat(admin.getPermissions()).extracting(SystemPermission::getCode)
-        .contains("maintenance:order:delete");
+        .contains("maintenance:view", "maintenance:order:manage", "maintenance:order:delete");
     verify(roleRepository).save(admin);
   }
 

@@ -5,6 +5,7 @@ import com.company.ops.api.modules.system.dto.LoginResponse;
 import com.company.ops.api.modules.system.security.JwtService;
 import com.company.ops.api.modules.system.security.LoginAttemptService;
 import com.company.ops.api.modules.system.security.UserPrincipal;
+import com.company.ops.api.modules.system.domain.SystemUser;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -47,6 +48,11 @@ public class AuthService {
       return null;
     }
     return toCurrentUser(principal);
+  }
+
+  public LoginResponse issueSession(SystemUser user) {
+    UserPrincipal principal = new UserPrincipal(user);
+    return new LoginResponse(jwtService.createToken(principal), toCurrentUser(principal));
   }
 
   private LoginResponse.CurrentUserResponse toCurrentUser(UserPrincipal principal) {

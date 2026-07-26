@@ -27,6 +27,7 @@ Engineering Ops ERP 是一套企业一体化经营管理系统，覆盖 CRM、�
 
 ```bash
 npm install
+npm run deps:install
 npm run tools:install
 npm run infra:up
 npm run api:dev

@@ -2,7 +2,8 @@ export function escapeCsvCell(
   value: string | number | undefined | null,
 ): string {
   if (value == null) return "";
-  const text = String(value);
+  const raw = String(value);
+  const text = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
   return `"${text.replace(/"/g, '""')}"`;
 }
 

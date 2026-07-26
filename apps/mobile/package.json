@@ -3,6 +3,27 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "overrides": {
+    "@babel/core": "7.29.7",
+    "@intlify/core-base": "9.14.5",
+    "@intlify/message-resolver": "9.1.11",
+    "adm-zip": "0.6.0",
+    "body-parser": "1.20.6",
+    "cookie": "0.7.2",
+    "esbuild": "0.25.0",
+    "express": "4.22.1",
+    "jpeg-js": "0.4.4",
+    "minimatch": "10.2.5",
+    "path-to-regexp": "0.1.13",
+    "phin": "3.7.1",
+    "postcss": "8.5.23",
+    "qs": "6.15.3",
+    "send": "0.19.0",
+    "ws": "8.21.1"
+  },
   "scripts": {
     "dev:h5": "uni -p h5 --host 0.0.0.0 --port 5180",
     "dev:mp-weixin": "uni -p mp-weixin",
@@ -12,21 +33,21 @@
     "test": "vitest run --config vitest.config.ts"
   },
   "dependencies": {
-    "@dcloudio/uni-app": "3.0.0-alpha-5020120260710001",
-    "@dcloudio/uni-components": "3.0.0-alpha-5020120260710001",
-    "@dcloudio/uni-h5": "3.0.0-alpha-5020120260710001",
-    "@dcloudio/uni-mp-weixin": "3.0.0-alpha-5020120260710001",
+    "@dcloudio/uni-app": "3.0.0-alpha-5020220260725001",
+    "@dcloudio/uni-components": "3.0.0-alpha-5020220260725001",
+    "@dcloudio/uni-h5": "3.0.0-alpha-5020220260725001",
+    "@dcloudio/uni-mp-weixin": "3.0.0-alpha-5020220260725001",
     "pinia": "2.1.7",
     "vue": "3.4.21",
     "vue-demi": "0.14.8"
   },
   "devDependencies": {
     "@dcloudio/types": "3.4.31",
-    "@dcloudio/vite-plugin-uni": "3.0.0-alpha-5020120260710001",
+    "@dcloudio/vite-plugin-uni": "3.0.0-alpha-5020220260725001",
     "@types/node": "^22.10.2",
     "sass": "^1.83.0",
     "typescript": "5.5.4",
-    "vite": "5.2.8",
+    "vite": "6.4.3",
     "vitest": "^3.2.6",
     "vue-tsc": "2.1.10"
   }

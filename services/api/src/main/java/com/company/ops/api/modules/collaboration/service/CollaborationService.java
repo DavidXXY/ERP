@@ -491,7 +491,7 @@ public class CollaborationService {
   private BigDecimal sum(List<Map<String,Object>> rows,String key){return rows.stream().map(x->x.get(key) instanceof BigDecimal b?b:BigDecimal.ZERO).reduce(BigDecimal.ZERO,BigDecimal::add);}
   private int percent(long part,long total){return total==0?0:(int)Math.round(part*100.0/total);}
   private int percent(BigDecimal part,BigDecimal total){return total.signum()==0?0:part.multiply(BigDecimal.valueOf(100)).divide(total,0,java.math.RoundingMode.HALF_UP).intValue();}
-  private void csvRow(StringBuilder out,Object... values){for(int i=0;i<values.length;i++){if(i>0)out.append(',');String v=Objects.toString(values[i],"").replace("\"","\"\"");out.append('"').append(v).append('"');}out.append('\n');}
+  private void csvRow(StringBuilder out,Object... values){for(int i=0;i<values.length;i++){if(i>0)out.append(',');out.append(com.company.ops.api.common.util.CsvUtils.cell(values[i]));}out.append('\n');}
   private void assertDepartment(UUID id){SystemOrganization o=organizations.findById(id).orElseThrow(()->new BusinessException("部门不存在"));if(!o.isEnabled()||!"DEPARTMENT".equals(o.getType()))throw new BusinessException("请选择有效部门");}
   private void assertSource(String type,UUID id){switch(type.toUpperCase()){case"PROJECT"->projects.findById(id).orElseThrow(()->new BusinessException("项目不存在"));case"CONTRACT"->contracts.findById(id).orElseThrow(()->new BusinessException("合同不存在"));case"CUSTOMER"->customers.findById(id).orElseThrow(()->new BusinessException("客户不存在"));default->throw new BusinessException("暂不支持该责任对象");}}
 }

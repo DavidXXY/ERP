@@ -1,7 +1,9 @@
 package com.company.ops.api.config;
 
 import com.company.ops.api.modules.system.interceptor.AuditInterceptor;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.web.config.PageableHandlerMethodArgumentResolverCustomizer;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
@@ -11,6 +13,11 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
   public WebMvcConfig(AuditInterceptor auditInterceptor) {
     this.auditInterceptor = auditInterceptor;
+  }
+
+  @Bean
+  PageableHandlerMethodArgumentResolverCustomizer pageableCustomizer() {
+    return resolver -> resolver.setMaxPageSize(200);
   }
 
   @Override

@@ -121,7 +121,10 @@ public class SystemService {
     if (request.displayName() != null) user.setDisplayName(request.displayName());
     if (request.phone() != null) user.setPhone(request.phone());
     if (request.email() != null) user.setEmail(request.email());
-    if (request.enabled() != null) user.setEnabled(request.enabled());
+    if (request.enabled() != null && request.enabled() != user.isEnabled()) {
+      user.setEnabled(request.enabled());
+      user.bumpAuthVersion();
+    }
 
     if (request.roleIds() != null) {
       user.getRoles().clear();
@@ -152,6 +155,7 @@ public class SystemService {
   public void resetPassword(UUID id, String newPassword) {
     SystemUser user = userRepository.findById(id).orElseThrow();
     user.setPasswordHash(passwordEncoder.encode(newPassword));
+    user.bumpAuthVersion();
     userRepository.save(user);
   }
 

@@ -1,13 +1,5 @@
 /** CSV export utility for CRM list views */
-
-function escapeCsv(value: string | number | undefined | null): string {
-  if (value == null) return "";
-  const str = String(value);
-  if (str.includes(",") || str.includes('"') || str.includes("\n")) {
-    return `"${str.replace(/"/g, '""')}"`;
-  }
-  return str;
-}
+import { escapeCsvCell } from "@/utils/csv";
 
 export function downloadCsv(
   filename: string,
@@ -17,7 +9,9 @@ export function downloadCsv(
   const bom = "\uFEFF";
   const csv =
     bom +
-    [headers, ...rows].map((row) => row.map(escapeCsv).join(",")).join("\n");
+    [headers, ...rows]
+      .map((row) => row.map(escapeCsvCell).join(","))
+      .join("\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;bom" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");

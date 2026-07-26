@@ -48,6 +48,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import static com.company.ops.api.common.util.MoneyUtils.amount;
 
 @Service
@@ -88,6 +90,11 @@ public class InventoryService {
     return partRepository.findAllByOrderByCreatedAtDesc().stream()
         .map(this::toPartResponse)
         .toList();
+  }
+
+  @Transactional(readOnly = true)
+  public Page<InventoryPartResponse> listParts(Pageable pageable) {
+    return partRepository.findAllByOrderByCreatedAtDesc(pageable).map(this::toPartResponse);
   }
 
   @Transactional(readOnly = true)
@@ -147,6 +154,12 @@ public class InventoryService {
         .toList();
   }
 
+  @Transactional(readOnly = true)
+  public Page<StockMovementResponse> listMovements(UUID partId, Pageable pageable) {
+    if (!partRepository.existsById(partId)) throw new BusinessException("物料不存在");
+    return movementRepository.findByPartIdOrderByCreatedAtDesc(partId, pageable).map(this::toMovementResponse);
+  }
+
   @Transactional
   public InventoryPartResponse createMovement(UUID partId, CreateStockMovementRequest request) {
     if (request.movementType() == StockMovementType.OUTBOUND
@@ -172,6 +185,15 @@ public class InventoryService {
     return orders.stream()
         .map(order -> toIssueResponse(order, projects.get(order.getProjectId()), lines.getOrDefault(order.getId(), List.of())))
         .toList();
+  }
+
+  @Transactional(readOnly = true)
+  public Page<MaterialIssueResponse> listIssues(Pageable pageable) {
+    Page<InventoryIssueOrder> orders = issueRepository.findAllByOrderByIssueDateDescCreatedAtDesc(pageable);
+    Map<UUID, Project> projects = projectMap(orders.stream().map(InventoryIssueOrder::getProjectId).distinct().toList());
+    Map<UUID, List<InventoryIssueLine>> lines = issueLinesByOrder(orders.stream().map(InventoryIssueOrder::getId).toList());
+    return orders.map(order -> toIssueResponse(order, projects.get(order.getProjectId()),
+        lines.getOrDefault(order.getId(), List.of())));
   }
 
   @Transactional
@@ -211,7 +233,7 @@ public class InventoryService {
       line.setUnitCost(amount(part.getUnitCost()));
       line.setAmount(lineAmount);
       part.setStockQty(part.getStockQty().subtract(item.quantity()));
-      saveMovement(part.getId(), StockMovementType.OUTBOUND, item.quantity(), request.code(),
+      saveMovement(part.getId(), StockMovementType.OUTBOUND, item.quantity(), issueCode,
           "项目领料 " + project.getCode() + " · " + request.purpose());
       return line;
     }).toList();
@@ -220,7 +242,7 @@ public class InventoryService {
     total = lines.stream().map(InventoryIssueLine::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
     savedOrder.setTotalAmount(total);
     issueRepository.save(savedOrder);
-    createProjectCost(project, request.code(), request.issueDate(), total, false,
+    createProjectCost(project, issueCode, request.issueDate(), total, false,
         "项目领料：" + request.purpose());
     return toIssueResponse(savedOrder, project, lines);
   }
@@ -241,6 +263,18 @@ public class InventoryService {
             lines.getOrDefault(order.getId(), List.of())
         ))
         .toList();
+  }
+
+  @Transactional(readOnly = true)
+  public Page<MaterialReturnResponse> listReturns(Pageable pageable) {
+    Page<InventoryReturnOrder> orders = returnRepository.findAllByOrderByReturnDateDescCreatedAtDesc(pageable);
+    Map<UUID, InventoryIssueOrder> issues = issueRepository.findAllById(
+        orders.stream().map(InventoryReturnOrder::getIssueId).distinct().toList())
+        .stream().collect(Collectors.toMap(InventoryIssueOrder::getId, Function.identity()));
+    Map<UUID, Project> projects = projectMap(orders.stream().map(InventoryReturnOrder::getProjectId).distinct().toList());
+    Map<UUID, List<InventoryReturnLine>> lines = returnLinesByOrder(orders.stream().map(InventoryReturnOrder::getId).toList());
+    return orders.map(order -> toReturnResponse(order, issues.get(order.getIssueId()),
+        projects.get(order.getProjectId()), lines.getOrDefault(order.getId(), List.of())));
   }
 
   @Transactional

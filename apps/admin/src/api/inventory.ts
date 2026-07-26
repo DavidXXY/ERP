@@ -1,4 +1,4 @@
-import { request } from "./http";
+import { request, requestAllPages } from "./http";
 import { type ProjectStage } from "./project";
 
 export type StockMovementType =
@@ -133,7 +133,10 @@ export type ReplenishmentSuggestion = {
 };
 
 export function listInventoryParts() {
-  return request<InventoryPart[]>({ method: "GET", url: "/inventory/parts" });
+  return requestAllPages<InventoryPart>({
+    method: "GET",
+    url: "/inventory/parts",
+  });
 }
 
 export function listReplenishmentSuggestions() {
@@ -152,7 +155,7 @@ export function createInventoryPart(payload: CreateInventoryPartPayload) {
 }
 
 export function listStockMovements(partId: string) {
-  return request<StockMovement[]>({
+  return requestAllPages<StockMovement>({
     method: "GET",
     url: `/inventory/parts/${partId}/movements`,
   });
@@ -170,7 +173,10 @@ export function createStockMovement(
 }
 
 export function listMaterialIssues() {
-  return request<MaterialIssue[]>({ method: "GET", url: "/inventory/issues" });
+  return requestAllPages<MaterialIssue>({
+    method: "GET",
+    url: "/inventory/issues",
+  });
 }
 
 export function listInventoryProjectOptions() {
@@ -189,7 +195,7 @@ export function createMaterialIssue(payload: CreateMaterialIssuePayload) {
 }
 
 export function listMaterialReturns() {
-  return request<MaterialReturn[]>({
+  return requestAllPages<MaterialReturn>({
     method: "GET",
     url: "/inventory/returns",
   });

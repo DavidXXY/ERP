@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import com.company.ops.api.common.security.ClientIpResolver;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -25,15 +26,18 @@ public class AuthController {
 
   private final AuthService authService;
   private final WechatAuthService wechatAuthService;
+  private final ClientIpResolver clientIpResolver;
 
-  public AuthController(AuthService authService, WechatAuthService wechatAuthService) {
+  public AuthController(AuthService authService, WechatAuthService wechatAuthService,
+      ClientIpResolver clientIpResolver) {
     this.authService = authService;
     this.wechatAuthService = wechatAuthService;
+    this.clientIpResolver = clientIpResolver;
   }
 
   @PostMapping("/login")
   public ApiResponse<LoginResponse> login(@Valid @RequestBody LoginRequest request, HttpServletRequest servletRequest) {
-    return ApiResponse.ok(authService.login(request, servletRequest.getRemoteAddr()));
+    return ApiResponse.ok(authService.login(request, clientIpResolver.resolve(servletRequest)));
   }
 
   @PostMapping("/wechat/login")
@@ -44,7 +48,7 @@ public class AuthController {
   @PostMapping("/wechat/bind")
   public ApiResponse<LoginResponse> bindWechat(@Valid @RequestBody WechatBindRequest request,
       HttpServletRequest servletRequest) {
-    return ApiResponse.ok(wechatAuthService.bind(request, servletRequest.getRemoteAddr()));
+    return ApiResponse.ok(wechatAuthService.bind(request, clientIpResolver.resolve(servletRequest)));
   }
 
   @PostMapping("/wechat/bind-current")

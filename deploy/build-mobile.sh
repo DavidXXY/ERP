@@ -15,6 +15,7 @@ if rg -q 'wx0000000000000000' "$MANIFEST"; then
 fi
 
 cd "$ROOT_DIR"
+npm ci --prefix apps/mobile
 npm run mobile:typecheck
 npm run mobile:test
 VITE_API_BASE_URL="$MOBILE_API_BASE_URL" npm run mobile:build

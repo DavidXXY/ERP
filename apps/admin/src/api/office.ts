@@ -1,4 +1,4 @@
-import { http, request } from "./http";
+import { http, request, requestAllPages } from "./http";
 
 export type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED";
 export type ApprovalType =
@@ -270,7 +270,10 @@ export function getOfficeReferences() {
   });
 }
 export function listApprovals() {
-  return request<Approval[]>({ method: "GET", url: "/office/approvals" });
+  return requestAllPages<Approval>({
+    method: "GET",
+    url: "/office/approvals",
+  });
 }
 export function getApproval(id: string) {
   return request<Approval>({ method: "GET", url: `/office/approvals/${id}` });
@@ -577,7 +580,7 @@ export async function previewDocument(item: DocumentRecord) {
   window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 export function listNotifications() {
-  return request<NotificationRecord[]>({
+  return requestAllPages<NotificationRecord>({
     method: "GET",
     url: "/office/notifications",
   });

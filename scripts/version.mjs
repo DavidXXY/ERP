@@ -5,7 +5,10 @@ import { fileURLToPath } from "node:url";
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const rootPackagePath = resolve(rootDir, "package.json");
 const adminPackagePath = resolve(rootDir, "apps/admin/package.json");
-const lockPath = resolve(rootDir, "package-lock.json");
+const mobilePackagePath = resolve(rootDir, "apps/mobile/package.json");
+const rootLockPath = resolve(rootDir, "package-lock.json");
+const adminLockPath = resolve(rootDir, "apps/admin/package-lock.json");
+const mobileLockPath = resolve(rootDir, "apps/mobile/package-lock.json");
 const pomPath = resolve(rootDir, "services/api/pom.xml");
 const semverPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
@@ -43,13 +46,20 @@ function writePomVersion(version) {
 function collectVersions() {
   const rootPackage = readJson(rootPackagePath);
   const adminPackage = readJson(adminPackagePath);
-  const lock = readJson(lockPath);
+  const mobilePackage = readJson(mobilePackagePath);
+  const rootLock = readJson(rootLockPath);
+  const adminLock = readJson(adminLockPath);
+  const mobileLock = readJson(mobileLockPath);
   return {
     "package.json": rootPackage.version,
     "apps/admin/package.json": adminPackage.version,
-    "package-lock.json": lock.version,
-    "package-lock.json#root": lock.packages?.[""]?.version,
-    "package-lock.json#admin": lock.packages?.["apps/admin"]?.version,
+    "apps/mobile/package.json": mobilePackage.version,
+    "package-lock.json": rootLock.version,
+    "package-lock.json#root": rootLock.packages?.[""]?.version,
+    "apps/admin/package-lock.json": adminLock.version,
+    "apps/admin/package-lock.json#root": adminLock.packages?.[""]?.version,
+    "apps/mobile/package-lock.json": mobileLock.version,
+    "apps/mobile/package-lock.json#root": mobileLock.packages?.[""]?.version,
     "services/api/pom.xml": readPomVersion(),
   };
 }
@@ -102,15 +112,23 @@ function updateVersions(version) {
   }
   const rootPackage = readJson(rootPackagePath);
   const adminPackage = readJson(adminPackagePath);
-  const lock = readJson(lockPath);
+  const mobilePackage = readJson(mobilePackagePath);
+  const rootLock = readJson(rootLockPath);
+  const adminLock = readJson(adminLockPath);
+  const mobileLock = readJson(mobileLockPath);
   rootPackage.version = version;
   adminPackage.version = version;
-  lock.version = version;
-  lock.packages[""].version = version;
-  lock.packages["apps/admin"].version = version;
+  mobilePackage.version = version;
+  for (const lock of [rootLock, adminLock, mobileLock]) {
+    lock.version = version;
+    lock.packages[""].version = version;
+  }
   writeJson(rootPackagePath, rootPackage);
   writeJson(adminPackagePath, adminPackage);
-  writeJson(lockPath, lock);
+  writeJson(mobilePackagePath, mobilePackage);
+  writeJson(rootLockPath, rootLock);
+  writeJson(adminLockPath, adminLock);
+  writeJson(mobileLockPath, mobileLock);
   writePomVersion(version);
   console.log(`Product version updated to ${version}`);
 }

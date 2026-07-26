@@ -90,6 +90,7 @@ public class PersonalSettingsService {
       throw new BusinessException("新密码不能与当前密码相同");
     }
     user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+    user.bumpAuthVersion();
     userRepository.save(user);
   }
 

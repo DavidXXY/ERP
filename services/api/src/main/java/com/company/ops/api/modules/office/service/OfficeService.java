@@ -24,6 +24,7 @@ import com.company.ops.api.modules.office.domain.OutsourceStatus;
 import com.company.ops.api.modules.office.domain.OfficeApplicationStatus;
 import com.company.ops.api.modules.office.domain.SealApplication;
 import com.company.ops.api.modules.office.domain.SystemNotification;
+import com.company.ops.api.modules.office.domain.SystemNotificationRead;
 import com.company.ops.api.modules.office.domain.TravelApplication;
 import com.company.ops.api.modules.office.dto.OfficeDtos.AuditResponse;
 import com.company.ops.api.modules.office.dto.OfficeDtos.ApprovalActionResponse;
@@ -67,6 +68,7 @@ import com.company.ops.api.modules.office.repository.ExpenseClaimRepository;
 import com.company.ops.api.modules.office.repository.OutsourceOrderRepository;
 import com.company.ops.api.modules.office.repository.SealApplicationRepository;
 import com.company.ops.api.modules.office.repository.SystemNotificationRepository;
+import com.company.ops.api.modules.office.repository.SystemNotificationReadRepository;
 import com.company.ops.api.modules.office.repository.TravelApplicationRepository;
 import com.company.ops.api.modules.crm.repository.CustomerRepository;
 import com.company.ops.api.modules.procurement.domain.Supplier;
@@ -79,6 +81,7 @@ import com.company.ops.api.modules.project.repository.ProjectRepository;
 import com.company.ops.api.modules.project.service.ProjectService;
 import com.company.ops.api.modules.system.domain.SystemAuditLog;
 import com.company.ops.api.modules.system.domain.SystemRole;
+import com.company.ops.api.modules.system.security.UserPrincipal;
 import com.company.ops.api.modules.system.domain.SystemUser;
 import com.company.ops.api.modules.system.repository.SystemAuditLogRepository;
 import com.company.ops.api.modules.system.repository.SystemOrganizationRepository;
@@ -97,6 +100,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.ArrayList;
 import java.util.Set;
+import java.util.LinkedHashSet;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -130,6 +134,7 @@ public class OfficeService {
   private final SealApplicationRepository sealRepository;
   private final DocumentFileRepository documentRepository;
   private final SystemNotificationRepository notificationRepository;
+  private final SystemNotificationReadRepository notificationReadRepository;
   private final SupplierRepository supplierRepository;
   private final ProjectRepository projectRepository;
   private final WorkOrderRepository workOrderRepository;
@@ -150,6 +155,7 @@ public class OfficeService {
                        ExpenseClaimRepository expenseRepository, ExpenseClaimLineRepository expenseLineRepository, OutsourceOrderRepository outsourceRepository,
                        TravelApplicationRepository travelRepository, SealApplicationRepository sealRepository,
                        DocumentFileRepository documentRepository, SystemNotificationRepository notificationRepository,
+                       SystemNotificationReadRepository notificationReadRepository,
 	                       SupplierRepository supplierRepository, CustomerRepository customerRepository,
 	                       ProjectRepository projectRepository, WorkOrderRepository workOrderRepository,
 	                       ProjectService projectService, SystemUserRepository userRepository, SystemRoleRepository roleRepository, SystemOrganizationRepository organizationRepository, LedgerService ledgerService, SystemAuditLogRepository auditLogRepository, ApprovalFlowSecurity approvalFlowSecurity,
@@ -159,6 +165,7 @@ public class OfficeService {
     this.expenseRepository = expenseRepository; this.expenseLineRepository = expenseLineRepository; this.outsourceRepository = outsourceRepository;
     this.travelRepository = travelRepository; this.sealRepository = sealRepository;
     this.documentRepository = documentRepository; this.notificationRepository = notificationRepository;
+    this.notificationReadRepository = notificationReadRepository;
     this.supplierRepository = supplierRepository; this.customerRepository = customerRepository;
     this.projectRepository = projectRepository; this.workOrderRepository = workOrderRepository;
     this.projectService = projectService; this.userRepository = userRepository; this.roleRepository = roleRepository; this.organizationRepository = organizationRepository;
@@ -180,7 +187,7 @@ public class OfficeService {
         expenses.stream().filter(item -> item.getStatus() == ExpenseStatus.APPROVED || item.getStatus() == ExpenseStatus.PAID).map(ExpenseClaim::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add),
         outsourcing.stream().filter(item -> item.getStatus() != OutsourceStatus.COMPLETED && item.getStatus() != OutsourceStatus.SETTLED && item.getStatus() != OutsourceStatus.REJECTED).count(),
         outsourcing.stream().map(OutsourceOrder::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add),
-        notificationRepository.countByReadFalse(), documentRepository.count()
+        getUnreadNotificationCount(), documentRepository.count()
     );
   }
 
@@ -198,9 +205,15 @@ public class OfficeService {
   public List<ApprovalResponse> listApprovals() { return approvalRepository.findAllByOrderByCreatedAtDesc().stream().map(this::toApproval).toList(); }
 
   @Transactional(readOnly = true)
+  public Page<ApprovalResponse> listApprovals(Pageable pageable) {
+    return approvalRepository.findAllByOrderByCreatedAtDesc(pageable).map(this::toApproval);
+  }
+
+  @Transactional(readOnly = true)
   public ApprovalResponse getApproval(UUID id) {
     ApprovalRequest item = approvalRepository.findById(id).orElseThrow(() -> new BusinessException("审批单不存在"));
-    if (!hasCurrentAuthority("office:approval:view") && !isCurrentApplicant(item) && !canCurrentUserApprove(item)) {
+    if (!hasCurrentAuthority("office:approval:view") && !isCurrentApplicant(item)
+        && !canCurrentUserApprove(item) && !hasCurrentUserActed(item)) {
       throw new AccessDeniedException("当前账号无权查看该审批单");
     }
     return toApproval(item);
@@ -215,15 +228,11 @@ public class OfficeService {
   }
 
   @Transactional(readOnly = true)
-  public List<ApprovalResponse> listMobileApprovals() {
-    UUID currentUserId = approvalFlowSecurity.currentUserId();
-    return approvalRepository.findAllByOrderByCreatedAtDesc().stream()
-        .filter(item -> isCurrentApplicant(item)
-            || canCurrentUserApprove(item)
-            || (currentUserId != null && actionRepository.findByApprovalIdOrderByCreatedAtAsc(item.getId()).stream()
-                .anyMatch(action -> currentUserId.equals(action.getOperatorId()))))
-        .map(this::toApproval)
-        .toList();
+  public Page<ApprovalResponse> listMobileApprovals(Pageable pageable) {
+    UserPrincipal principal = currentPrincipal();
+    if (principal == null) return Page.empty(pageable);
+    return approvalRepository.findMobileVisible(
+        principal.id(), principal.displayName(), principal.roleIds(), pageable).map(this::toApproval);
   }
 
   @Transactional(readOnly = true)
@@ -722,14 +731,35 @@ public class OfficeService {
   public List<NotificationResponse> notifications() {
     UUID currentUserId = approvalFlowSecurity.currentUserId();
     if (currentUserId == null) return List.of();
-    return notificationRepository.findVisibleForUser(currentUserId).stream().map(this::toNotification).toList();
+    List<SystemNotification> visible = notificationRepository.findVisibleForUser(currentUserId);
+    if (visible.isEmpty()) return List.of();
+    Map<UUID, SystemNotificationRead> reads = notificationReadRepository
+        .findByUserIdAndNotificationIdIn(currentUserId, visible.stream().map(SystemNotification::getId).toList())
+        .stream().collect(Collectors.toMap(SystemNotificationRead::getNotificationId, Function.identity()));
+    return visible.stream().map(item -> toNotification(item, reads.get(item.getId()))).toList();
+  }
+
+  @Transactional(readOnly = true)
+  public Page<NotificationResponse> notifications(Pageable pageable) {
+    UUID currentUserId = approvalFlowSecurity.currentUserId();
+    if (currentUserId == null) return Page.empty(pageable);
+    Page<SystemNotification> visible = notificationRepository.findVisibleForUser(currentUserId, pageable);
+    if (visible.isEmpty()) return visible.map(item -> toNotification(item, null));
+    Map<UUID, SystemNotificationRead> reads = notificationReadRepository
+        .findByUserIdAndNotificationIdIn(currentUserId, visible.stream().map(SystemNotification::getId).toList())
+        .stream().collect(Collectors.toMap(SystemNotificationRead::getNotificationId, Function.identity()));
+    return visible.map(item -> toNotification(item, reads.get(item.getId())));
   }
   @Transactional
   public NotificationResponse readNotification(UUID id) {
     SystemNotification item = notificationRepository.findById(id).orElseThrow(() -> new BusinessException("消息不存在"));
     UUID currentUserId = approvalFlowSecurity.currentUserId();
     if (item.getTargetUserId() != null && !item.getTargetUserId().equals(currentUserId)) throw new AccessDeniedException("无权查看该消息");
-    item.setRead(true); item.setReadAt(OffsetDateTime.now()); return toNotification(notificationRepository.save(item));
+    SystemNotificationRead receipt = notificationReadRepository
+        .findByNotificationIdAndUserId(id, currentUserId)
+        .orElseGet(SystemNotificationRead::new);
+    receipt.setNotificationId(id); receipt.setUserId(currentUserId); receipt.setReadAt(OffsetDateTime.now());
+    return toNotification(item, notificationReadRepository.save(receipt));
   }
   @Transactional(readOnly = true)
 
@@ -738,6 +768,7 @@ public class OfficeService {
     if (approvalRepository.existsByCode(code)) throw new BusinessException("审批单号已存在");
     ApprovalRequest item = new ApprovalRequest(); item.setCode(code); item.setApprovalType(type); item.setTitle(title);
     item.setSourceNo(sourceNo); item.setAmount(amount(amount)); item.setApplicantName(applicant); item.setContent(content); item.setStatus(ApprovalStatus.PENDING);
+    item.setApplicantUserId(approvalFlowSecurity.currentUserId());
     item.setDepartmentName(trimToNull(departmentName)); item.setBusinessType(trimToNull(businessType)); item.setProjectCode(trimToNull(projectCode));
     item.setSupplierRisk(trimToNull(supplierRisk)); item.setCustomerLevel(trimToNull(customerLevel));
     ApprovalPlan plan = approvalFlowSecurity.resolve(approvalContext(item));
@@ -887,9 +918,22 @@ public class OfficeService {
 
   private boolean isCurrentApplicant(ApprovalRequest approval) {
     UUID currentUserId = approvalFlowSecurity.currentUserId();
+    if (currentUserId == null) return false;
+    if (approval.getApplicantUserId() != null) return currentUserId.equals(approval.getApplicantUserId());
     return currentUserId != null && userRepository.findById(currentUserId)
         .map(user -> user.getDisplayName().equals(approval.getApplicantName()))
         .orElse(false);
+  }
+
+  private boolean hasCurrentUserActed(ApprovalRequest approval) {
+    UUID currentUserId = approvalFlowSecurity.currentUserId();
+    return currentUserId != null && actionRepository.findByApprovalIdOrderByCreatedAtAsc(approval.getId()).stream()
+        .anyMatch(action -> currentUserId.equals(action.getOperatorId()));
+  }
+
+  private UserPrincipal currentPrincipal() {
+    var authentication = SecurityContextHolder.getContext().getAuthentication();
+    return authentication != null && authentication.getPrincipal() instanceof UserPrincipal principal ? principal : null;
   }
 
   private boolean hasCurrentAuthority(String authority) {
@@ -1114,7 +1158,7 @@ public class OfficeService {
 
   public int getUnreadNotificationCount() {
     UUID currentUserId = approvalFlowSecurity.currentUserId();
-    return currentUserId == null ? 0 : (int) notificationRepository.countUnreadForUser(currentUserId);
+    return currentUserId == null ? 0 : Math.toIntExact(notificationReadRepository.countUnreadForUser(currentUserId));
   }
 
   public int refreshNotifications() {
@@ -1189,8 +1233,59 @@ public class OfficeService {
 
 
   private void notify(String type, String title, String content, String relatedType, UUID relatedId) {
+    Set<UUID> recipients = notificationRecipients(relatedType, relatedId);
+    if (recipients.isEmpty()) return;
+    notificationRepository.saveAll(recipients.stream()
+        .map(userId -> notification(type, title, content, relatedType, relatedId, userId)).toList());
+  }
+
+  private SystemNotification notification(String type, String title, String content,
+      String relatedType, UUID relatedId, UUID userId) {
     SystemNotification item = new SystemNotification(); item.setType(type); item.setTitle(title); item.setContent(content);
-    item.setRelatedType(relatedType); item.setRelatedId(relatedId); item.setRead(false); notificationRepository.save(item);
+    item.setRelatedType(relatedType); item.setRelatedId(relatedId); item.setTargetUserId(userId); item.setRead(false);
+    return item;
+  }
+
+  private Set<UUID> notificationRecipients(String relatedType, UUID relatedId) {
+    Set<UUID> recipients = new LinkedHashSet<>();
+    if (relatedId == null) return recipients;
+    switch (relatedType == null ? "" : relatedType) {
+      case "APPROVAL" -> addApprovalRecipients(relatedId, recipients);
+      case "EXPENSE" -> expenseRepository.findById(relatedId).ifPresent(item -> {
+        if (item.getClaimantId() != null) recipients.add(item.getClaimantId());
+        if (item.getApprovalRequestId() != null) addApprovalRecipients(item.getApprovalRequestId(), recipients);
+      });
+      case "OUTSOURCE" -> outsourceRepository.findById(relatedId).ifPresent(item -> {
+        if (item.getApprovalRequestId() != null) addApprovalRecipients(item.getApprovalRequestId(), recipients);
+      });
+      case "TRAVEL" -> travelRepository.findById(relatedId).ifPresent(item -> {
+        recipients.add(item.getApplicantId());
+        if (item.getApprovalRequestId() != null) addApprovalRecipients(item.getApprovalRequestId(), recipients);
+      });
+      case "SEAL" -> sealRepository.findById(relatedId).ifPresent(item -> {
+        recipients.add(item.getApplicantId());
+        if (item.getApprovalRequestId() != null) addApprovalRecipients(item.getApprovalRequestId(), recipients);
+      });
+      default -> { }
+    }
+    recipients.remove(null);
+    return recipients;
+  }
+
+  private void addApprovalRecipients(UUID approvalId, Set<UUID> recipients) {
+    approvalRepository.findById(approvalId).ifPresent(approval -> {
+      if (approval.getApplicantUserId() != null) recipients.add(approval.getApplicantUserId());
+      if (approval.getDelegatedUserId() != null) recipients.add(approval.getDelegatedUserId());
+    });
+    runtimeNodeRepository.findByApprovalIdAndNodeStatusOrderByStepNoAscCreatedAtAsc(approvalId, "PENDING")
+        .forEach(node -> {
+          if ("USER".equals(node.getAssigneeType()) && node.getAssigneeId() != null) {
+            recipients.add(node.getAssigneeId());
+          } else if ("ROLE".equals(node.getAssigneeType()) && node.getAssigneeId() != null) {
+            roleRepository.findById(node.getAssigneeId()).ifPresent(role -> userRepository
+                .findEnabledByRoleCode(role.getCode()).forEach(user -> recipients.add(user.getId())));
+          }
+        });
   }
   private List<CreateExpenseLineRequest> normalizeExpenseLines(CreateExpenseRequest request) {
     List<CreateExpenseLineRequest> lines = request.lines() == null ? List.of() : request.lines().stream()
@@ -1272,7 +1367,11 @@ public class OfficeService {
     return new SealResponse(item.getId(), item.getCode(), item.getApplicantId(), item.getApplicantName(), item.getDepartmentName(), item.getSealType(), item.getDocumentName(), item.getDocumentPurpose(), item.getCounterparty(), item.getCopyCount(), item.getUseDate(), item.isTakeOut(), item.getExpectedReturnDate(), item.getReturnedAt(), item.getStatus(), item.getApprovalRequestId(), item.getCreatedAt(), attachments);
   }
   private DocumentResponse toDocument(DocumentFile item) { return new DocumentResponse(item.getId(), item.getBizType(), item.getBizId(), item.getFileName(), item.getContentType(), item.getSizeBytes(), item.getCreatedAt()); }
-  private NotificationResponse toNotification(SystemNotification item) { return new NotificationResponse(item.getId(), item.getType(), item.getTitle(), item.getContent(), item.getRelatedType(), item.getRelatedId(), item.isRead(), item.getReadAt(), item.getCreatedAt()); }
+  private NotificationResponse toNotification(SystemNotification item, SystemNotificationRead receipt) {
+    return new NotificationResponse(item.getId(), item.getType(), item.getTitle(), item.getContent(),
+        item.getRelatedType(), item.getRelatedId(), receipt != null,
+        receipt == null ? null : receipt.getReadAt(), item.getCreatedAt());
+  }
   private BigDecimal amount(BigDecimal value) { return value == null ? BigDecimal.ZERO : value; }
   private boolean isTravelExpense(ExpenseType type) { return type == ExpenseType.TRAVEL || type == ExpenseType.TRANSPORT || type == ExpenseType.ACCOMMODATION; }
   private String expenseAccount(ExpenseType type) { return type == ExpenseType.TOOL ? "6602" : "6601"; }

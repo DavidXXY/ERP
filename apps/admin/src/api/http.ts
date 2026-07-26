@@ -8,6 +8,14 @@ export type ApiResponse<T> = {
   data: T;
 };
 
+export type PageResponse<T> = {
+  content: T[];
+  totalElements: number;
+  totalPages: number;
+  number: number;
+  size: number;
+};
+
 export const http = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || "/api",
   timeout: 12000,
@@ -58,4 +66,21 @@ export async function request<T>(config: AxiosRequestConfig) {
     throw new Error(response.data.message || "接口处理失败");
   }
   return response.data.data;
+}
+
+export async function requestAllPages<T>(
+  config: AxiosRequestConfig,
+  size = 200,
+): Promise<T[]> {
+  const pageConfig = (page: number): AxiosRequestConfig => ({
+    ...config,
+    params: { ...config.params, page, size },
+  });
+  const first = await request<PageResponse<T>>(pageConfig(0));
+  const items = [...first.content];
+  for (let page = 1; page < first.totalPages; page += 1) {
+    const next = await request<PageResponse<T>>(pageConfig(page));
+    items.push(...next.content);
+  }
+  return items;
 }

@@ -2,7 +2,6 @@ package com.company.ops.api.modules.system.security;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.io.DecodingException;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import java.nio.charset.StandardCharsets;
@@ -36,6 +35,7 @@ public class JwtService {
         .claim("name", principal.displayName())
         .claim("roles", principal.roleCodes())
         .claim("permissions", principal.permissions())
+        .claim("ver", principal.authVersion())
         .issuedAt(Date.from(now))
         .expiration(Date.from(expiresAt))
         .signWith(secretKey)
@@ -52,7 +52,11 @@ public class JwtService {
 
   public boolean isValid(String token, UserPrincipal principal) {
     Claims claims = parseClaims(token);
-    return principal.getUsername().equals(claims.getSubject())
+    Number tokenVersion = claims.get("ver", Number.class);
+    return principal.isEnabled()
+        && principal.getUsername().equals(claims.getSubject())
+        && tokenVersion != null
+        && tokenVersion.longValue() == principal.authVersion()
         && claims.getExpiration().after(new Date());
   }
 
@@ -65,12 +69,9 @@ public class JwtService {
   }
 
   private SecretKey buildKey(String secret) {
-    byte[] bytes;
-    try {
-      bytes = Decoders.BASE64.decode(secret);
-    } catch (DecodingException | IllegalArgumentException ignored) {
-      bytes = secret.getBytes(StandardCharsets.UTF_8);
-    }
+    byte[] bytes = secret.startsWith("base64:")
+        ? Decoders.BASE64.decode(secret.substring("base64:".length()))
+        : secret.getBytes(StandardCharsets.UTF_8);
     return Keys.hmacShaKeyFor(bytes);
   }
 }

@@ -27,18 +27,27 @@ public class AuthService {
   }
 
   public LoginResponse login(LoginRequest request, String clientAddress) {
-    String attemptKey = request.username().trim().toLowerCase() + "|" + clientAddress;
+    String normalizedUsername = request.username().trim().toLowerCase();
+    String accountKey = "user|" + normalizedUsername;
+    String attemptKey = "user-ip|" + normalizedUsername + "|" + clientAddress;
+    String addressKey = "ip|" + clientAddress;
+    loginAttemptService.assertAllowed(accountKey);
     loginAttemptService.assertAllowed(attemptKey);
+    loginAttemptService.assertAllowed(addressKey);
     Authentication authentication;
     try {
       authentication = authenticationManager.authenticate(
           new UsernamePasswordAuthenticationToken(request.username(), request.password())
       );
     } catch (AuthenticationException exception) {
+      loginAttemptService.failed(accountKey);
       loginAttemptService.failed(attemptKey);
+      loginAttemptService.failed(addressKey);
       throw exception;
     }
+    loginAttemptService.succeeded(accountKey);
     loginAttemptService.succeeded(attemptKey);
+    loginAttemptService.succeeded(addressKey);
     UserPrincipal principal = (UserPrincipal) authentication.getPrincipal();
     return new LoginResponse(jwtService.createToken(principal), toCurrentUser(principal));
   }

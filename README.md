@@ -31,6 +31,7 @@ src               现有 React 原型，作为产品交互参考保留
 
 ```bash
 npm install
+npm run deps:install
 npm run tools:install
 npm run infra:up
 npm run api:dev

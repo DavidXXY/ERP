@@ -6,7 +6,13 @@ import com.company.ops.api.common.tenant.TenantContext;
 import com.company.ops.api.common.exception.BusinessException;
 import com.company.ops.api.modules.bi.service.BiService;
 import com.company.ops.api.modules.system.domain.SystemPermission;
+import com.company.ops.api.modules.system.domain.SystemUser;
 import com.company.ops.api.modules.system.repository.SystemPermissionRepository;
+import com.company.ops.api.modules.system.repository.SystemUserRepository;
+import com.company.ops.api.modules.office.domain.SystemNotification;
+import com.company.ops.api.modules.office.domain.SystemNotificationRead;
+import com.company.ops.api.modules.office.repository.SystemNotificationRepository;
+import com.company.ops.api.modules.office.repository.SystemNotificationReadRepository;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ApplyInvoiceRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.RegisterInvoiceRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ReviewInvoiceRequest;
@@ -49,6 +55,9 @@ class LocalApplicationContextTest {
   @Autowired private DataSource dataSource;
   @Autowired private TestRestTemplate rest;
   @Autowired private SystemPermissionRepository permissionRepository;
+  @Autowired private SystemUserRepository userRepository;
+  @Autowired private SystemNotificationRepository notificationRepository;
+  @Autowired private SystemNotificationReadRepository notificationReadRepository;
   @Autowired private TransactionTemplate transactions;
   @Autowired private ObjectMapper objectMapper;
   @Autowired private CrmOperationsService crmOperationsService;
@@ -65,8 +74,60 @@ class LocalApplicationContextTest {
         "select max(cast(version as integer)) from flyway_schema_history where success = true",
         Integer.class
     );
-    assertThat(version).isEqualTo(85);
+    assertThat(version).isEqualTo(86);
     assertThat(jdbc.queryForObject("select count(*) from shedlock", Integer.class)).isZero();
+  }
+
+  @Test
+  void keepsGlobalNotificationReadStateIndependentPerUser() {
+    record Fixture(UUID firstUserId, UUID secondUserId, UUID notificationId,
+                   long firstUnreadBefore, long secondUnreadBefore) {}
+
+    Fixture fixture = transactions.execute(status -> {
+      String suffix = UUID.randomUUID().toString().substring(0, 8);
+      SystemUser first = testUser("notify-a-" + suffix);
+      SystemUser second = testUser("notify-b-" + suffix);
+      userRepository.saveAll(List.of(first, second));
+
+      long firstBefore = notificationReadRepository.countUnreadForUser(first.getId());
+      long secondBefore = notificationReadRepository.countUnreadForUser(second.getId());
+      SystemNotification notification = new SystemNotification();
+      notification.setType("TEST");
+      notification.setTitle("Global notification");
+      notification.setContent("Read receipts must be isolated");
+      notification.setRead(false);
+      notificationRepository.save(notification);
+      return new Fixture(first.getId(), second.getId(), notification.getId(), firstBefore, secondBefore);
+    });
+
+    transactions.executeWithoutResult(status -> {
+      assertThat(notificationReadRepository.countUnreadForUser(fixture.firstUserId()))
+          .isEqualTo(fixture.firstUnreadBefore() + 1);
+      assertThat(notificationReadRepository.countUnreadForUser(fixture.secondUserId()))
+          .isEqualTo(fixture.secondUnreadBefore() + 1);
+
+      SystemNotificationRead receipt = new SystemNotificationRead();
+      receipt.setNotificationId(fixture.notificationId());
+      receipt.setUserId(fixture.firstUserId());
+      receipt.setReadAt(java.time.OffsetDateTime.now());
+      notificationReadRepository.save(receipt);
+    });
+
+    transactions.executeWithoutResult(status -> {
+      assertThat(notificationReadRepository.countUnreadForUser(fixture.firstUserId()))
+          .isEqualTo(fixture.firstUnreadBefore());
+      assertThat(notificationReadRepository.countUnreadForUser(fixture.secondUserId()))
+          .isEqualTo(fixture.secondUnreadBefore() + 1);
+    });
+  }
+
+  private SystemUser testUser(String username) {
+    SystemUser user = new SystemUser();
+    user.setUsername(username);
+    user.setDisplayName(username);
+    user.setPasswordHash("not-used");
+    user.setEnabled(true);
+    return user;
   }
 
   @Test
@@ -122,6 +183,17 @@ class LocalApplicationContextTest {
     );
     assertThat(mobileWorkOrders.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(mobileWorkOrders.getBody()).contains("\"success\":true", "\"data\"");
+
+    var mobileApprovals = rest.exchange(
+        "http://localhost:" + port + "/api/mobile/approvals?size=1000",
+        org.springframework.http.HttpMethod.GET,
+        new HttpEntity<>(headers),
+        String.class
+    );
+    assertThat(mobileApprovals.getStatusCode()).isEqualTo(HttpStatus.OK);
+    var approvalsPage = objectMapper.readTree(mobileApprovals.getBody()).path("data");
+    assertThat(approvalsPage.path("size").asInt()).isEqualTo(200);
+    assertThat(approvalsPage.path("content").isArray()).isTrue();
   }
 
   @Test

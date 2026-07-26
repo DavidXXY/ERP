@@ -1,21 +1,24 @@
 package com.company.ops.api.modules.system.interceptor;
 
-import com.company.ops.api.modules.system.domain.SystemAuditLog;
-import com.company.ops.api.modules.system.repository.SystemAuditLogRepository;
+import com.company.ops.api.modules.system.service.AuditLogWriter;
+import com.company.ops.api.modules.system.service.AuditLogWriter.AuditEvent;
+import com.company.ops.api.common.tenant.TenantContext;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import java.time.OffsetDateTime;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
+import com.company.ops.api.common.security.ClientIpResolver;
 
 @Component
 public class AuditInterceptor implements HandlerInterceptor {
-  private final SystemAuditLogRepository auditLogRepository;
+  private final AuditLogWriter auditLogWriter;
+  private final ClientIpResolver clientIpResolver;
 
-  public AuditInterceptor(SystemAuditLogRepository auditLogRepository) {
-    this.auditLogRepository = auditLogRepository;
+  public AuditInterceptor(AuditLogWriter auditLogWriter, ClientIpResolver clientIpResolver) {
+    this.auditLogWriter = auditLogWriter;
+    this.clientIpResolver = clientIpResolver;
   }
 
   @Override
@@ -36,23 +39,13 @@ public class AuditInterceptor implements HandlerInterceptor {
       username = auth.getName();
     }
 
-    String clientIp = request.getHeader("X-Forwarded-For");
-    if (clientIp == null || clientIp.isEmpty()) {
-      clientIp = request.getRemoteAddr();
-    }
+    String clientIp = clientIpResolver.resolve(request);
 
-    SystemAuditLog log = new SystemAuditLog();
-    log.setUsername(username);
-    log.setHttpMethod(request.getMethod());
-    log.setRequestPath(request.getRequestURI());
-    log.setQueryString(truncate(request.getQueryString(), 1000));
-    log.setOperationType(operationType(request.getMethod()));
-    log.setBizModule(module(request.getRequestURI()));
-    log.setBizObject(objectId(request.getRequestURI()));
-    log.setResponseStatus(response.getStatus());
-    log.setDurationMs(duration);
-    log.setClientIp(clientIp);
-    auditLogRepository.save(log);
+    auditLogWriter.write(new AuditEvent(
+        TenantContext.currentTenant(), username, request.getMethod(), request.getRequestURI(),
+        truncate(request.getQueryString(), 1000), operationType(request.getMethod()),
+        module(request.getRequestURI()), objectId(request.getRequestURI()), response.getStatus(),
+        duration, clientIp));
   }
 
   private String operationType(String method) {

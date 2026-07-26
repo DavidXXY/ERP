@@ -17,15 +17,27 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            apps/admin/package-lock.json
+            apps/mobile/package-lock.json
       - run: npm run version:check
       - run: npm ci
+      - run: npm ci --prefix apps/admin
+      - run: npm ci --prefix apps/mobile
       - run: npm audit --audit-level=high
+      - run: npm audit --audit-level=high --prefix apps/admin
+      - run: npm audit --audit-level=high --prefix apps/mobile
       - run: npm run lint
       - run: npm run test
-      - run: npm --workspace apps/admin run typecheck
+      - run: npm --prefix apps/admin run typecheck
       - run: npm run build
       - name: Enforce bundle budget
         run: node scripts/check-bundle-size.js
+      - run: npm run mobile:typecheck
+      - run: npm run mobile:test
+      - run: npm run mobile:build:h5
+      - run: npm run mobile:build
 
   backend:
     runs-on: ubuntu-latest

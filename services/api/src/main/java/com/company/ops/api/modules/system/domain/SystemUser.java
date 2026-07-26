@@ -39,6 +39,9 @@ public class SystemUser extends BaseEntity {
   @Column(nullable = false)
   private boolean enabled = true;
 
+  @Column(name = "auth_version", nullable = false)
+  private long authVersion;
+
   @ManyToMany(fetch = FetchType.EAGER)
   @JoinTable(
       name = "sys_user_roles",
@@ -103,8 +106,11 @@ public class SystemUser extends BaseEntity {
     this.enabled = enabled;
   }
 
+  public long getAuthVersion() { return authVersion; }
+
+  public void bumpAuthVersion() { authVersion++; }
+
   public Set<SystemRole> getRoles() {
     return roles;
   }
 }
-

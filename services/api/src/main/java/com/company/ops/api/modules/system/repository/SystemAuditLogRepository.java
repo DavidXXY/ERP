@@ -8,6 +8,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.data.jpa.repository.Modifying;
 
 public interface SystemAuditLogRepository extends JpaRepository<SystemAuditLog, UUID> {
   Page<SystemAuditLog> findAllByOrderByCreatedAtDesc(Pageable pageable);
@@ -28,4 +29,8 @@ public interface SystemAuditLogRepository extends JpaRepository<SystemAuditLog, 
       @Param("startTime") OffsetDateTime startTime,
       @Param("endTime") OffsetDateTime endTime,
       Pageable pageable);
+
+  @Modifying
+  @Query("delete from SystemAuditLog log where log.createdAt < :cutoff")
+  int deleteBefore(@Param("cutoff") OffsetDateTime cutoff);
 }

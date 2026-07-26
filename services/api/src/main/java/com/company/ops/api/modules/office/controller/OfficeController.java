@@ -67,7 +67,10 @@ public class OfficeController {
   @GetMapping("/references") @PreAuthorize("hasAnyAuthority('office:view', 'office:expense:create', 'office:outsource:create', 'office:travel:create', 'office:seal:create')")
   public ApiResponse<OfficeReferenceResponse> references() { return ApiResponse.ok(service.references()); }
   @GetMapping("/approvals") @PreAuthorize("hasAuthority('office:approval:view')")
-  public ApiResponse<List<ApprovalResponse>> approvals() { return ApiResponse.ok(service.listApprovals()); }
+  public ApiResponse<org.springframework.data.domain.Page<ApprovalResponse>> approvals(
+      @org.springframework.data.web.PageableDefault(size = 100) org.springframework.data.domain.Pageable pageable) {
+    return ApiResponse.ok(service.listApprovals(pageable));
+  }
   @GetMapping("/approvals/{id}") @PreAuthorize("hasAnyAuthority('office:approval:view', 'office:approval:create')")
   public ApiResponse<ApprovalResponse> approval(@PathVariable UUID id) { return ApiResponse.ok(service.getApproval(id)); }
   @PostMapping("/approvals") @ResponseStatus(HttpStatus.CREATED) @PreAuthorize("hasAuthority('office:approval:create')")
@@ -171,7 +174,10 @@ public class OfficeController {
     service.deleteDocumentsByBiz(bizType, bizId); return ApiResponse.ok();
   }
   @GetMapping("/notifications") @PreAuthorize("hasAuthority('office:notification:view')")
-  public ApiResponse<List<NotificationResponse>> notifications() { return ApiResponse.ok(service.notifications()); }
+  public ApiResponse<org.springframework.data.domain.Page<NotificationResponse>> notifications(
+      @org.springframework.data.web.PageableDefault(size = 50) org.springframework.data.domain.Pageable pageable) {
+    return ApiResponse.ok(service.notifications(pageable));
+  }
   @PostMapping("/notifications/refresh") @PreAuthorize("hasAuthority('office:notification:view')")
   public ApiResponse<Integer> refreshNotifications() {
     return ApiResponse.ok(reminderScheduler.refresh());

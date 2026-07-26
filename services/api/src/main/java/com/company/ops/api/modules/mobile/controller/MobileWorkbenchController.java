@@ -5,8 +5,10 @@ import com.company.ops.api.modules.mobile.dto.MobileWorkbenchResponse;
 import com.company.ops.api.modules.mobile.service.MobileWorkbenchService;
 import com.company.ops.api.modules.office.dto.OfficeDtos.ApprovalResponse;
 import com.company.ops.api.modules.office.service.OfficeService;
-import java.util.List;
 import com.company.ops.api.modules.system.security.UserPrincipal;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -29,7 +31,7 @@ public class MobileWorkbenchController {
   }
 
   @GetMapping("/approvals")
-  public ApiResponse<List<ApprovalResponse>> approvals() {
-    return ApiResponse.ok(officeService.listMobileApprovals());
+  public ApiResponse<Page<ApprovalResponse>> approvals(@PageableDefault(size = 100) Pageable pageable) {
+    return ApiResponse.ok(officeService.listMobileApprovals(pageable));
   }
 }

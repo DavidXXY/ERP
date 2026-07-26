@@ -44,6 +44,21 @@ export function request<T>(options: RequestOptions): Promise<T> {
   });
 }
 
+export async function requestAllPages<T>(url: string, size = 200): Promise<T[]> {
+  const separator = url.includes("?") ? "&" : "?";
+  const first = await request<{ content: T[]; totalPages: number }>({
+    url: `${url}${separator}page=0&size=${size}`,
+  });
+  const items = [...first.content];
+  for (let page = 1; page < first.totalPages; page += 1) {
+    const next = await request<{ content: T[] }>({
+      url: `${url}${separator}page=${page}&size=${size}`,
+    });
+    items.push(...next.content);
+  }
+  return items;
+}
+
 export function upload<T>(url: string, filePath: string, name = "file", formData: Record<string, string> = {}): Promise<T> {
   const token = readStorage(TOKEN_KEY, "");
   return new Promise((resolve, reject) => {

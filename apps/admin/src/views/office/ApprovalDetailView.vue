@@ -265,7 +265,7 @@ import BusinessDetailPage, {
 } from "@/components/BusinessDetailPage.vue";
 import {
   downloadDocument,
-  listApprovals,
+  getApproval,
   processApproval,
   previewDocument,
   type Approval,
@@ -429,8 +429,7 @@ onMounted(loadData);
 async function loadData() {
   loading.value = true;
   try {
-    const list = await listApprovals();
-    approval.value = list.find((i) => i.id === String(route.params.id)) || null;
+    approval.value = await getApproval(String(route.params.id));
   } catch (e) {
     message.error(e instanceof Error ? e.message : "审批详情加载失败");
   } finally {

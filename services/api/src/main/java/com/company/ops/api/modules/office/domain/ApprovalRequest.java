@@ -18,6 +18,7 @@ public class ApprovalRequest extends BaseEntity {
   @Column(precision = 14, scale = 2) private BigDecimal amount;
   @Enumerated(EnumType.STRING) @Column(nullable = false, length = 40) private ApprovalStatus status = ApprovalStatus.PENDING;
   @Column(name = "applicant_name", length = 80) private String applicantName;
+  @Column(name = "applicant_user_id") private java.util.UUID applicantUserId;
   @Column(length = 1000) private String content;
   @Column(name = "approver_name", length = 80) private String approverName;
   @Column(name = "approval_comment", length = 500) private String approvalComment;
@@ -42,6 +43,7 @@ public class ApprovalRequest extends BaseEntity {
   public BigDecimal getAmount() { return amount; } public void setAmount(BigDecimal v) { amount = v; }
   public ApprovalStatus getStatus() { return status; } public void setStatus(ApprovalStatus v) { status = v; }
   public String getApplicantName() { return applicantName; } public void setApplicantName(String v) { applicantName = v; }
+  public java.util.UUID getApplicantUserId() { return applicantUserId; } public void setApplicantUserId(java.util.UUID v) { applicantUserId = v; }
   public String getContent() { return content; } public void setContent(String v) { content = v; }
   public String getApproverName() { return approverName; } public void setApproverName(String v) { approverName = v; }
   public String getApprovalComment() { return approvalComment; } public void setApprovalComment(String v) { approvalComment = v; }

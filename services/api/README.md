@@ -1,6 +1,6 @@
 # 后端服务
 
-Spring Boot 3 模块化单体，第一阶段先建设 CRM 客户档案和系统底座。
+Spring Boot 3 模块化单体，提供 ERP 全业务 API、认证授权、审批、通知、审计、文件存储和跨模块事务。
 
 ## 运行要求
 
@@ -13,6 +13,11 @@ Spring Boot 3 模块化单体，第一阶段先建设 CRM 客户档案和系统�
 ## 启动
 
 ```bash
+# 从仓库根目录启动本地基础设施和 API
+npm run infra:up
+npm run api:dev
+
+# 或直接启动后端
 cd services/api
 mvn spring-boot:run
 ```
@@ -29,19 +34,34 @@ API 文档：
 http://localhost:8080/swagger-ui
 ```
 
-## 已实现接口
+OpenAPI JSON：
 
 ```text
-GET  /api/crm/customers
-GET  /api/crm/customers/{id}
-POST /api/crm/customers
+http://localhost:8080/api-docs
 ```
 
-## 后续扩展顺序
+## 模块
 
-1. 系统权限：用户、角色、菜单、数据范围、登录认证。
-2. CRM：线索、商机、报价、合同审批。
-3. 项目与工单：项目立项、工单派发、设备台账、外勤执行。
-4. 库存与采购：备件台账、出入库、安全库存、采购申请。
-5. 财务：应收、开票、回款核销、应付、凭证。
+- `crm`：客户、商机、报价、合同和应收联动
+- `project`：立项、预算、阶段、成本和利润
+- `procurement` / `inventory`：供应商、采购、到货、库存、领退料和项目成本
+- `finance` / `ledger`：应收应付、开票回款、付款、凭证和报表
+- `maintenance` / `mobile`：设备、工单和移动作业
+- `office` / `collaboration`：审批、报销、档案、通知、审计和协作
+- `hr` / `qualification`：员工、人事、证书、资质和投标查询
+- `risk` / `bi`：风险闭环、快照和经营分析
+- `system`：认证、组织、用户、角色、权限和数据范围
 
+## 数据库迁移
+
+生产使用 PostgreSQL 16 和 Flyway。新数据库从 `B77__fresh_install_baseline.sql` 建立基线，再执行 V78 之后的增量迁移；当前增量版本为 V86。不要手工修改数据库结构或已执行迁移。
+
+## 验证
+
+```bash
+mvn test
+```
+
+PostgreSQL 基线迁移测试使用 Testcontainers，需要本机或 CI 的 Docker 可用。其余集成测试使用 H2 专用迁移链。
+
+关键生产配置和 V86 说明见 `../../docs/system-hardening-2026-07-26.md`。

@@ -36,6 +36,9 @@ deploy/
 **第 1 步 — 在开发机本地构建**
 
 ```bash
+npm ci
+npm ci --prefix apps/admin
+npm ci --prefix apps/mobile
 ./deploy/build.sh
 ```
 
@@ -69,7 +72,9 @@ sudo chmod 600 /etc/ops-erp/ops-erp.env
 sudo vi /etc/ops-erp/ops-erp.env   # 修改密码等敏感信息
 ```
 
-必须配置 `JWT_SECRET`、`DATA_ENCRYPTION_KEY`、`REDIS_PASSWORD`、数据库密码和首次启动管理员密码 `BOOTSTRAP_ADMIN_PASSWORD`；两个应用密钥建议分别用 `openssl rand -hex 32` 生成。管理员只会在用户名不存在时创建，后续重启不会覆盖已经修改过的密码。将证书链和私钥安装为 `/etc/nginx/tls/fullchain.pem`、`/etc/nginx/tls/privkey.pem` 后再启用 Nginx。
+必须配置 `JWT_SECRET`、`DATA_ENCRYPTION_KEY`、`REDIS_PASSWORD`、数据库密码和首次启动管理员密码 `BOOTSTRAP_ADMIN_PASSWORD`；两个应用密钥建议分别用 `openssl rand -hex 32` 生成。JWT 密钥默认按原始文本使用，只有 Base64 密钥才添加 `base64:` 前缀。管理员只会在用户名不存在时创建，后续重启不会覆盖已经修改过的密码。将证书链和私钥安装为 `/etc/nginx/tls/fullchain.pem`、`/etc/nginx/tls/privkey.pem` 后再启用 Nginx。
+
+登录安全还需配置 `LOGIN_MAX_ATTEMPTS`、`LOGIN_LOCK_MINUTES` 和 `TRUSTED_PROXY_CIDRS`。可信代理只填写实际 Nginx、Ingress 或负载均衡器网段，不得使用全网段。`AUDIT_RETENTION_DAYS` 控制审计日志保留期，默认 365 天。
 
 `STORAGE_TYPE=minio` 时后端使用 MinIO/S3 兼容对象存储，`MINIO_ENDPOINT`、`MINIO_ACCESS_KEY`、`MINIO_SECRET_KEY`、`MINIO_BUCKET` 必须与 Docker Compose 或外部对象存储服务一致。`MINIO_PRESIGNED_EXPIRY_SECONDS` 控制附件临时下载链接有效期，建议生产保持 5-15 分钟。开发或单机调试可改为 `STORAGE_TYPE=local`，文件会写入 `LOCAL_STORAGE_PATH` 或默认本地目录。
 
@@ -105,9 +110,9 @@ docker compose -f docker-compose.yml up -d
 
 微信小程序的 AppID、域名、构建和审核步骤见 `docs/WECHAT_MINIPROGRAM_DEPLOYMENT.md`。小程序使用同一套 Spring Boot API，不需要单独部署应用服务器。
 
-全新空库首次启动只执行 `V33__fresh_install_baseline.sql`，一次性创建完整结构和基础权限配置。后续数据库变更从 `V100` 开始编号，以兼容曾经执行到 V77 的旧部署。
+全新空库首先执行 `B77__fresh_install_baseline.sql`，一次性创建截至 V77 的完整结构和基础权限配置，随后继续执行 V78 之后的增量迁移。当前增量版本为 V86。
 
-已有 V77 数据库首次切换到基线构建时，需要在环境文件中增加 `SPRING_FLYWAY_IGNORE_MIGRATION_PATTERNS=*:missing,*:ignored` 和 `SPRING_FLYWAY_VALIDATE_ON_MIGRATE=false`。这只用于兼容已执行但不再随包发布的旧迁移，以及跳过低于 V77 的 V33 基线；全新数据库不应设置这两项，仍使用严格校验。
+已有 V77 数据库会跳过 B77 基线并继续执行增量迁移。应用默认仅忽略已合并且不再随包发布的历史迁移缺失记录，仍校验当前发布迁移的顺序和校验和。升级前必须备份数据库，并先在预发布副本验证 V78 至 V86；不要关闭 Flyway 当前迁移校验。
 
 ```bash
 # 后端健康检查
@@ -147,6 +152,9 @@ RESTORE_TARGET=ops_erp_restore_drill RESTORE_CONFIRM=ops_erp_restore_drill \
 
 - [ ] 修改 `/etc/ops-erp/ops-erp.env` 中所有默认密码
 - [ ] 生成随机 JWT 密钥：`openssl rand -hex 32`
+- [ ] 配置登录失败阈值和锁定窗口，并验证 Redis 正常工作
+- [ ] `TRUSTED_PROXY_CIDRS` 只包含实际反向代理网段，不包含全公网
+- [ ] 验证修改密码、重置密码和停用账号后旧 JWT 立即失效
 - [ ] 生成独立的数据加密密钥并离线托管；轮换前制定旧密钥解密与重加密方案
 - [ ] 确认 `application-prod.yml` 中 `ddl-auto: validate`（不会自动改表结构）
 - [ ] 确认 Nginx 已配置 HTTPS（Let's Encrypt 或自签名）
@@ -157,3 +165,5 @@ RESTORE_TARGET=ops_erp_restore_drill RESTORE_CONFIRM=ops_erp_restore_drill \
 - [ ] 关闭 Docker 基础设施端口的外部访问（已配置 `127.0.0.1:`）
 - [ ] MinIO bucket 保持私有读写，通过后端接口或预签名链接访问附件
 - [ ] 配置 MinIO 生命周期策略，按公司档案保留制度清理临时/过期对象
+- [ ] 按公司制度设置 `AUDIT_RETENTION_DAYS`，确认每日清理任务正常运行
+- [ ] 使用两个账号验证通知已读状态隔离和审批通知私有投递

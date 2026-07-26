@@ -25,7 +25,7 @@ src               现有 React 原型，作为产品交互参考保留
 
 ## 本地启动
 
-当前机器需要先安装 Java 17、Maven 和 Docker Desktop。
+当前机器需要先安装 Node.js 22、Java 17、Maven 3.9+ 和 Docker Desktop。
 
 本地开发统一使用 PostgreSQL、Redis、MinIO 基础设施：
 
@@ -63,8 +63,26 @@ npm run mobile:dev
 ## 生产加强状态
 
 - 已加强：维修模块细粒度权限、维保超期风险沉淀、历史环境权限补齐、CRM/OA/资质附件统一存储、MinIO/S3 兼容对象存储适配、预签名临时链接、上传文件白名单与路径穿越防护、统一待办预警、后端统一风险聚合、风险规则配置、自动责任人、SLA 超时升级、每日风险快照、风险趋势与模块分布、统一风险中心批量处理、持久化闭环与处理轨迹、采购三单匹配、库存补货建议、项目利润摘要、经营驾驶舱时间筛选与公司级 KPI、统一编号规则接口与组织维度编号生成、条件化多级审批、审批转交/加签/撤回、审计详情与导出、审计模块/对象/操作类型追踪、核心后端测试覆盖。
-- 本轮系统加固：JWT 短时令牌与登录限流、租户级 JPA 隔离、敏感字段 AES-GCM 加密、乐观锁、分布式任务锁、Flyway 空库集成测试、API 登录链路集成测试、前端单测/静态检查/500KB 分包预算、Prometheus 告警、HTTPS 安全响应头、可校验备份与受保护恢复演练。
+- 本轮系统加固：JWT 版本失效、Redis/本地降级登录限流、可信代理 IP 解析、按用户通知回执与审批私有投递、库存/项目成本编号一致性、CSV 公式注入防护、数据库级分页与 200 条单页上限、移动审批可见范围索引、异步审计与 365 天默认保留、三套独立前端依赖锁及完整 CI 构建。
 - 待生产配置：替换正式小程序 AppID，配置已备案 HTTPS API 域名及微信 AppSecret，并提交微信平台隐私声明和版本审核。
+
+## 文档
+
+- [系统详细使用教程](docs/system-usage.md)
+- [系统架构说明](docs/architecture.md)
+- [2026-07-26 系统加固与优化记录](docs/system-hardening-2026-07-26.md)
+- [生产部署指南](deploy/README.md)
+- [微信小程序发布指南](docs/WECHAT_MINIPROGRAM_DEPLOYMENT.md)
+
+## 验证
+
+```bash
+npm run verify
+node scripts/check-bundle-size.js
+cd services/api && mvn test
+```
+
+前端依赖分为根目录、管理端和移动端三套。CI 和可复现安装使用 `npm ci`、`npm ci --prefix apps/admin`、`npm ci --prefix apps/mobile`；不要删除子项目锁文件后只安装根目录依赖。
 
 运行 `npm run data:backup` 可生成并校验 PostgreSQL 备份。
 

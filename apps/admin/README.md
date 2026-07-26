@@ -4,7 +4,10 @@ Vue 3 + TypeScript + Vite + Ant Design Vue。
 
 ## 启动
 
+以下命令从仓库根目录执行：
+
 ```bash
+npm ci --prefix apps/admin
 npm run admin:dev
 ```
 
@@ -24,14 +27,19 @@ http://localhost:5174
 VITE_API_BASE_URL=http://your-host:8080/api npm run admin:dev
 ```
 
-## 当前页面
+## 验证
 
-- 经营驾驶舱
-- CRM / 客户池
-- CRM / 线索商机占位
-- CRM / 客户合同
-- 供应链采购占位
-- 项目管理占位
-- 库存管理
-- 财务资金占位
-- 系统设置占位
+以下命令从仓库根目录执行：
+
+```bash
+npm run lint
+npm run format:check
+npm run test
+npm --prefix apps/admin run typecheck
+npm run admin:build
+node scripts/check-bundle-size.js
+```
+
+管理端已覆盖经营驾驶舱、CRM、项目、采购、库存、维修、人事、资质、OA、财务、风险、BI 和系统管理。列表接口使用分页结构，需要完整数据的导出或聚合通过 `src/api/http.ts` 的 `requestAllPages` 逐页拉取。
+
+CSV 导出必须使用 `src/utils/csv.ts`，不要在页面内自行拼接未转义的 CSV 单元格。

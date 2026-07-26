@@ -1,8 +1,8 @@
 # Engineering Ops ERP 系统详细使用教程与运行逻辑
 
 > 适用对象：业务管理员、实施人员、开发维护人员  
-> 最后更新：2026-07-17  
-> 当前主系统：`apps/admin` Vue 管理后台 + `services/api` Spring Boot 后端
+> 最后更新：2026-07-26
+> 当前主系统：`apps/admin` Vue 管理后台 + `apps/mobile` uni-app 移动端 + `services/api` Spring Boot 后端
 
 ## 1. 系统定位
 
@@ -13,6 +13,7 @@ Engineering Ops ERP 是一套企业一体化经营管理系统，覆盖 CRM、�
 | 目录 | 作用 |
 | --- | --- |
 | `apps/admin` | PC 管理后台，当前主要使用入口 |
+| `apps/mobile` | 微信小程序与 H5 移动办公端 |
 | `services/api` | Spring Boot 后端 API |
 | `infra` | 本地 PostgreSQL、Redis、MinIO 基础设施 |
 | `deploy` | 生产构建、部署、Nginx、systemd 与环境变量模板 |
@@ -66,12 +67,16 @@ npm run admin:dev
 | `npm run admin:dev` | 启动 Vue 管理后台 |
 | `npm run admin:build` | 构建管理后台 |
 | `npm run admin:preview` | 预览构建产物 |
+| `npm run mobile:dev` | 启动移动 H5，默认端口 5180 |
+| `npm run mobile:build` | 构建微信小程序 |
+| `npm run mobile:build:h5` | 构建移动 H5 |
 | `npm run api:dev` | 启动 PostgreSQL 后端，默认端口 8080 |
 | `npm run api:check` | 检查 Java、Maven、端口和健康检查 |
 | `npm run infra:up` | 启动 PostgreSQL、Redis、MinIO |
 | `npm run infra:down` | 停止本地基础设施 |
 | `npm run data:backup` | 备份本地数据 |
 | `npm run gen:api` | 按 OpenAPI 生成 TypeScript 类型 |
+| `npm run verify` | 管理端与移动端 lint、测试、类型检查和生产构建 |
 
 ## 3. 登录、权限与页面进入逻辑
 
@@ -84,6 +89,8 @@ npm run admin:dev
 7. 刷新页面后，前端调用 `GET /api/auth/me` 重新加载用户、角色和权限。
 8. 前端菜单和路由按 `permission` 或 `permissions` 判断是否可见；后端接口再用 `@PreAuthorize` 做最终权限校验。
 9. 如果接口返回 401，前端清除令牌并回到登录页；403 显示无权限提示。
+
+JWT 包含用户认证版本。修改密码、管理员重置密码或账号启停会提升版本，使此前签发的令牌立即失效。登录失败按账号、账号与 IP、IP 三个维度限流；生产环境必须正确配置可信反向代理网段。
 
 管理员角色 `ADMIN` 在前端被视为拥有所有权限。普通角色通过系统管理中的角色与权限配置决定菜单和操作范围。
 
@@ -115,7 +122,7 @@ npm run admin:dev
 
 ### 4.5 消息提醒
 
-顶部消息角标每 30 秒调用 `/api/office/notifications/count` 刷新未读数量。消息中心可查看通知列表、手动刷新通知、标记已读。
+顶部消息角标每 30 秒调用 `/api/office/notifications/count` 刷新未读数量。消息中心可查看通知列表、手动刷新通知、标记已读。通知已读状态按当前用户独立保存；审批等业务通知只投递给申请人、当前审批人或相关处理人，不会因接收人解析失败而公开给全员。
 
 ## 5. CRM 使用教程
 
@@ -372,13 +379,13 @@ CRM 侧可从合同视角查看应收，支持开票申请、登记发票、记�
 
 入口：`OA协同 / 消息中心`
 
-查看系统通知、刷新通知、标记已读。顶部消息角标来自未读数量接口。
+查看系统通知、刷新通知、标记已读。顶部消息角标来自未读数量接口。全员提醒共享通知内容，但每个用户拥有独立已读回执；私有业务通知还会校验 `target_user_id`。
 
 ### 11.6 操作审计
 
 入口：`OA协同 / 操作审计`
 
-展示用户、请求路径、HTTP 方法、业务模块、对象 ID、状态码、耗时和客户端 IP。审计数据由后端拦截器自动写入。
+展示用户、请求路径、HTTP 方法、业务模块、对象 ID、状态码、耗时和客户端 IP。审计数据由后端拦截器采集并通过有界异步执行器写入；默认保留 365 天，可通过 `AUDIT_RETENTION_DAYS` 调整。
 
 ## 12. 财务资金使用教程
 
@@ -485,7 +492,7 @@ CRM 侧可从合同视角查看应收，支持开票申请、登记发票、记�
 3. 启用 Flyway 迁移 PostgreSQL 数据库结构。
 4. 扫描 Controller、Service、Repository、配置类和拦截器。
 5. 注册 JWT 认证过滤器和方法级权限。
-6. 注册审计拦截器，对 `/api/**` 请求记录操作日志。
+6. 注册审计拦截器和有界异步写入器，对 `/api/**` 请求记录操作日志。
 7. 执行启动初始化逻辑，例如补齐 `project:delete` 权限并授权给 `ADMIN`。
 
 ### 15.3 配置优先级
@@ -502,6 +509,10 @@ CRM 侧可从合同视角查看应收，支持开票申请、登记发票、记�
 | `REDIS_PORT` | Redis 端口 | 6379 |
 | `JWT_SECRET` | JWT 签名密钥 | 本地开发默认密钥 |
 | `JWT_EXPIRE_MINUTES` | JWT 有效期 | 720 |
+| `LOGIN_MAX_ATTEMPTS` | 登录失败阈值 | 5 |
+| `LOGIN_LOCK_MINUTES` | 登录限流窗口/锁定分钟数 | 15 |
+| `TRUSTED_PROXY_CIDRS` | 可提供转发客户端 IP 的代理网段 | `127.0.0.0/8,::1/128` |
+| `AUDIT_RETENTION_DAYS` | 审计日志保留天数 | 365 |
 | `STORAGE_TYPE` | 文件存储类型 | `local` |
 | `LOCAL_STORAGE_PATH` | 本地文件目录 | `.local-data/uploads` |
 | `MINIO_ENDPOINT` | MinIO/S3 地址 | `http://localhost:9000` |
@@ -534,6 +545,8 @@ CRM 侧可从合同视角查看应收，支持开票申请、登记发票、记�
 - 响应状态码
 - 请求耗时
 - 客户端 IP
+
+审计写库不会无限创建线程或无限堆积任务。队列满时由请求线程执行写入，优先保证审计不丢失。每日清理任务删除超过保留期的记录。
 
 ## 16. 前端运行逻辑
 
@@ -651,7 +664,7 @@ main.ts
 
 ### 19.1 数据库
 
-运行环境统一使用 PostgreSQL，并通过 Flyway 管理结构迁移。迁移文件位于 `services/api/src/main/resources/db/migration`。H2 仅作为自动化测试的内存数据库，不提供开发运行入口。
+运行环境统一使用 PostgreSQL，并通过 Flyway 管理结构迁移。迁移文件位于 `services/api/src/main/resources/db/migration`。当前增量迁移到 V86；H2 仅作为自动化测试的内存数据库，不提供开发运行入口。
 
 所有核心表按当前设计预留租户、创建人、更新人、创建时间和更新时间等字段，为后续多公司、多账套扩展留接口。
 
@@ -668,10 +681,18 @@ main.ts
 ### 19.3 安全
 
 - 后端关闭 Session，使用无状态 JWT。
+- JWT 使用 `auth_version` 支持密码修改、密码重置和账号启停后的即时失效。
+- 登录限流优先使用 Redis，并提供有容量和 TTL 限制的单实例降级实现。
+- 只有可信代理网段可以提供 `X-Forwarded-For`；生产禁止把全部公网配置为可信代理。
+- CSV 导出会中和公式起始字符，避免表格软件执行不可信单元格。
 - 登录、健康检查、OpenAPI 可匿名访问，其余接口需要认证。
 - 业务接口通过 `@PreAuthorize` 做权限控制。
 - CORS 允许本地开发端口和已配置的生产域名。
 - 生产必须替换默认 JWT 密钥和所有默认密码。
+
+### 19.4 分页约定
+
+库存物料、库存流水、领退料、审批和通知使用 Spring Data 分页结构，常用字段包括 `content`、`number`、`size`、`totalElements` 和 `totalPages`。所有接口单页最多 200 条。管理端和移动端需要完整列表时由公共 `requestAllPages` 按页获取，不应把接口 `size` 调大到无限值。
 
 ## 20. 部署说明
 
@@ -715,41 +736,10 @@ main.ts
 4. 定期检查操作审计、风险中心、低库存、逾期应收和合同续约。
 5. 生产使用 MinIO/S3 存储附件，并配置数据库与对象存储备份。
 
-## 23. 测试报告核对说明
+## 23. 测试与交付记录
 
-`SYSTEM_TEST_REPORT.md` 中有一部分失败来自旧接口路径、聚合页误解或权限名称口径不一致，并不代表后端接口缺失。后续 API 测试建议优先以 `apps/admin/src/api/*.ts` 和 Controller 映射为准。
+- `SYSTEM_TEST_REPORT.md`：2026-07-24 多部门角色真实浏览器全流程测试，只代表该批次和当时 V83 环境。
+- `docs/full-flow-test-report.md`：2026-07-17 API 级全流程部门角色测试历史记录。
+- `docs/system-hardening-2026-07-26.md`：V86 系统加固范围、配置、迁移和自动化验证结果。
 
-### 23.1 明确误报或测试口径需调整
-
-| 报告项 | 测试报告口径 | 当前正确口径 | 结论 |
-| --- | --- | --- | --- |
-| 采购申请接口不存在 | `/api/procurement/purchase-requests` | `/api/procurement/requests`、`/api/procurement/requests/{id}/approval` | 误报，接口存在但路径不同 |
-| 库存移动接口不存在 | `/api/inventory/movements` | `/api/inventory/parts/{partId}/movements` | 误报，库存流水按物料查询和写入 |
-| 库存分析接口不存在 | `/api/inventory/analytics` | 页面聚合 `/api/inventory/parts` 和 `/api/inventory/replenishment-suggestions` | 误报，当前没有单独 analytics API |
-| 员工中心接口不存在 | `/api/hr/employees` | 员工基础档案在 `/api/qualifications/employees`，HR 扩展资料在 `/api/hr/employees/{employeeId}/...` | 误报，员工中心复用资质员工档案 |
-| 入转调离接口不存在 | `/api/hr/lifecycle` | `/api/hr/lifecycles`、`/api/hr/employees/{employeeId}/lifecycles` | 误报，路径为复数并支持员工维度 |
-| 资质总览接口不存在 | `/api/qualifications` | `/api/qualifications/dashboard` | 误报，根路径不提供资源 |
-| 总账报表接口不存在 | `/api/finance/ledger` | `/api/finance/ledger/overview`、`/vouchers`、`/statements` | 误报，根路径不提供资源 |
-| 合同创建 API 异常 | 独立创建合同 | 当前业务从报价执行 `POST /api/crm/quotes/{id}/convert` 转合同 | 大概率为测试口径问题；若 convert 返回 500 才是后端缺陷 |
-| 报价审批失败：需先成本审批 | 直接审批报价 | 报价需先完成成本请求/提交/审批，再提交报价审批 | 业务规则，不是缺陷 |
-
-### 23.2 确实存在或需要治理的问题
-
-| 问题 | 判断 | 解决方案 |
-| --- | --- | --- |
-| 成本提交/审批账号无权限 | 真实权限配置问题 | 给项目交付、售前或总经办相关角色授予 `crm:quote:cost`；报价审批人还需 `crm:quote:approve` 并满足审批流 `QUOTE` 的审批人配置 |
-| 报告中的成本权限名不匹配 | 文档/测试口径问题 | 当前代码使用单一权限 `crm:quote:cost`，不是 `crm:quote:cost:submit` 和 `crm:quote:cost:approve`；如要区分提交/审批，需要新增权限点并改 Controller |
-| 跟进回访、费用报销、外包、人事、资质、系统设置多处 403 | 多数是角色权限配置问题 | 按岗位补齐 `crm:followup:view/create`、`office:expense:view/create`、`office:outsource:view/create/complete`、`qualification:*`、`system:*` 等权限 |
-| 总经办账号不能管理用户/角色/权限 | 真实角色设计问题 | 若总经办应承担系统管理职责，授予 `system:user:view/create/update/delete/reset-password`、`system:role:view/create/update/delete`、`system:permission:view` 等权限；否则报告应改为“预期无权限” |
-| 错误提示“系统繁忙”定位困难 | 真实体验问题 | 后端对可预期业务异常继续抛 `BusinessException`；未知异常保留通用文案但在审计日志/应用日志记录 requestId、异常类型和堆栈 |
-| 参数校验提示不够明确 | 真实体验问题 | 对枚举参数转换失败、阶段流转非法、金额/日期字段校验失败补充明确错误消息 |
-| 测试数据不足 | 真实测试覆盖问题 | 增加供应商、采购订单、库存物料、员工、证书、费用、外包、付款申请等种子数据或测试前置脚本 |
-
-### 23.3 建议测试脚本修正
-
-1. API 路径直接复用 `apps/admin/src/api/*.ts` 中的 URL，不要按页面路径推断接口路径。
-2. 用不同角色测试时先列出预期权限，403 只有在“该角色应该能做”时才记为缺陷。
-3. 合同流程测试应走 `报价客户结果接受 -> POST /api/crm/quotes/{id}/convert -> 合同审批 -> 签署文件审批`。
-4. 库存移动测试需先创建或查询一个物料，再对该物料调用 `/api/inventory/parts/{partId}/movements`。
-5. 员工中心测试应先调用 `/api/qualifications/employees` 获取员工，再测试 `/api/hr/employees/{employeeId}/educations`、`/lifecycles`、`/leaves` 等 HR 扩展接口。
-6. 财务总账测试不要请求 `/api/finance/ledger` 根路径，应分别请求 `/overview`、`/vouchers`、`/statements`。
+后续 API 测试应以 `apps/admin/src/api`、`apps/mobile/src/api` 和后端 Controller 映射为准，不要按页面路径推断接口。角色测试应先定义预期权限，只有预期允许的操作返回 403 才作为缺陷。自动化测试、API 测试和真实 UI 测试是三个不同层级，交付结论必须明确实际执行了哪一层。

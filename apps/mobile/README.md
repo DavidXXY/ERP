@@ -4,8 +4,10 @@
 
 ## 本地运行
 
+以下命令从仓库根目录执行：
+
 ```bash
-npm install
+npm ci --prefix apps/mobile
 npm run mobile:dev
 ```
 
@@ -29,9 +31,22 @@ VITE_API_BASE_URL=https://your-api.example.com/api npm run mobile:dev:mp-weixin
 
 ## 构建
 
+以下命令从仓库根目录执行：
+
 ```bash
 npm run mobile:build
 npm run mobile:build:h5
 ```
 
 正式微信产物位于 `apps/mobile/dist/build/mp-weixin`。
+
+## 验证
+
+```bash
+npm run mobile:typecheck
+npm run mobile:test
+npm run mobile:build:h5
+npm run mobile:build
+```
+
+审批与通知列表使用分页接口并由移动端公共 `requestAllPages` 聚合。审批可见范围包括申请人、当前审批人/角色、被转交人和历史处理人；通知已读状态按用户隔离。

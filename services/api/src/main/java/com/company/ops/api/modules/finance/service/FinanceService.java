@@ -49,6 +49,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.security.core.context.SecurityContextHolder;
 import com.company.ops.api.modules.system.security.UserPrincipal;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import static com.company.ops.api.common.util.MoneyUtils.amount;
 
 @Service
@@ -97,27 +99,18 @@ public class FinanceService {
 
   @Transactional(readOnly = true)
   public FinanceOverviewResponse overview() {
-    List<Receivable> receivables = receivableRepository.findAllByOrderByDueDateAsc();
-    List<ProcurementPayable> payables = payableRepository.findAllByOrderByDueDateAsc();
-    BigDecimal receivableAmount = receivables.stream().map(Receivable::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
-    BigDecimal receivedAmount = receivables.stream().map(Receivable::getSettledAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+    var receivableTotals = receivableRepository.aggregateFinanceOverview(LocalDate.now());
+    var payableTotals = payableRepository.aggregateFinanceOverview(
+        LocalDate.now(), PayableStatus.PAID, PayableStatus.CANCELLED);
+    BigDecimal receivableAmount = amount(receivableTotals.getTotalAmount());
+    BigDecimal receivedAmount = amount(receivableTotals.getSettledAmount());
     BigDecimal receivableOutstanding = receivableAmount.subtract(receivedAmount);
-    BigDecimal receivableOverdue = receivables.stream()
-        .filter(item -> item.getStatus() != ReceivableStatus.SETTLED)
-        .filter(item -> item.getDueDate().isBefore(LocalDate.now()))
-        .map(item -> amount(item.getAmount()).subtract(amount(item.getSettledAmount())))
-        .reduce(BigDecimal.ZERO, BigDecimal::add);
-    BigDecimal payableAmount = payables.stream().map(ProcurementPayable::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
-    BigDecimal paidAmount = payables.stream().map(ProcurementPayable::getPaidAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+    BigDecimal receivableOverdue = amount(receivableTotals.getOverdueAmount());
+    BigDecimal payableAmount = amount(payableTotals.getTotalAmount());
+    BigDecimal paidAmount = amount(payableTotals.getPaidAmount());
     BigDecimal payableOutstanding = payableAmount.subtract(paidAmount);
-    BigDecimal payableOverdue = payables.stream()
-        .filter(item -> item.getStatus() != PayableStatus.PAID && item.getStatus() != PayableStatus.CANCELLED)
-        .filter(item -> item.getDueDate().isBefore(LocalDate.now()))
-        .map(item -> amount(item.getAmount()).subtract(amount(item.getPaidAmount())))
-        .reduce(BigDecimal.ZERO, BigDecimal::add);
-    long pendingApplications = applicationRepository.findAllByOrderByCreatedAtDesc().stream()
-        .filter(item -> item.getStatus() == PaymentApplicationStatus.PENDING_APPROVAL)
-        .count();
+    BigDecimal payableOverdue = amount(payableTotals.getOverdueAmount());
+    long pendingApplications = applicationRepository.countByStatus(PaymentApplicationStatus.PENDING_APPROVAL);
     return new FinanceOverviewResponse(
         receivableAmount,
         receivedAmount,
@@ -133,22 +126,20 @@ public class FinanceService {
   }
 
   @Transactional(readOnly = true)
-  public List<FinancePayableResponse> listPayables() {
-    List<ProcurementPayable> payables = payableRepository.findAllByOrderByDueDateAsc();
-    Map<UUID, Supplier> suppliers = supplierMap(payables.stream().map(ProcurementPayable::getSupplierId).toList());
-    Map<UUID, PurchaseOrder> orders = orderMap(payables.stream().map(ProcurementPayable::getOrderId).toList());
-    Map<UUID, BigDecimal> reserved = applicationRepository.findAllByOrderByCreatedAtDesc().stream()
-        .filter(item -> RESERVED_STATUSES.contains(item.getStatus()))
-        .collect(Collectors.groupingBy(
-            PaymentApplication::getPayableId,
-            Collectors.reducing(BigDecimal.ZERO, PaymentApplication::getRequestedAmount, BigDecimal::add)
-        ));
-    return payables.stream().map(item -> toPayableResponse(
+  public Page<FinancePayableResponse> listPayables(Pageable pageable) {
+    Page<ProcurementPayable> payables = payableRepository.findAllByOrderByDueDateAsc(pageable);
+    Map<UUID, Supplier> suppliers = supplierMap(payables.getContent().stream().map(ProcurementPayable::getSupplierId).toList());
+    Map<UUID, PurchaseOrder> orders = orderMap(payables.getContent().stream().map(ProcurementPayable::getOrderId).toList());
+    Map<UUID, BigDecimal> reserved = payables.isEmpty() ? Map.of() : applicationRepository
+        .aggregateRequestedAmountByPayableIdInAndStatusIn(
+            payables.getContent().stream().map(ProcurementPayable::getId).toList(), RESERVED_STATUSES).stream()
+        .collect(Collectors.toMap(row -> (UUID) row[0], row -> amount((BigDecimal) row[1])));
+    return payables.map(item -> toPayableResponse(
         item,
         suppliers.get(item.getSupplierId()),
         orders.get(item.getOrderId()),
         reserved.getOrDefault(item.getId(), BigDecimal.ZERO)
-    )).toList();
+    ));
   }
 
   @Transactional(readOnly = true)
@@ -169,20 +160,20 @@ public class FinanceService {
   }
 
   @Transactional(readOnly = true)
-  public List<PaymentApplicationResponse> listApplications() {
-    List<PaymentApplication> applications = applicationRepository.findAllByOrderByCreatedAtDesc();
-    Map<UUID, ProcurementPayable> payables = payableMap(applications.stream().map(PaymentApplication::getPayableId).toList());
-    Map<UUID, Supplier> suppliers = supplierMap(applications.stream().map(PaymentApplication::getSupplierId).toList());
-    Map<UUID, PaymentRecord> payments = paymentMap(applications.stream()
+  public Page<PaymentApplicationResponse> listApplications(Pageable pageable) {
+    Page<PaymentApplication> applications = applicationRepository.findAllByOrderByCreatedAtDesc(pageable);
+    Map<UUID, ProcurementPayable> payables = payableMap(applications.getContent().stream().map(PaymentApplication::getPayableId).toList());
+    Map<UUID, Supplier> suppliers = supplierMap(applications.getContent().stream().map(PaymentApplication::getSupplierId).toList());
+    Map<UUID, PaymentRecord> payments = paymentMap(applications.getContent().stream()
         .map(PaymentApplication::getPaymentId)
         .filter(id -> id != null)
         .toList());
-    return applications.stream().map(item -> toApplicationResponse(
+    return applications.map(item -> toApplicationResponse(
         item,
         payables.get(item.getPayableId()),
         suppliers.get(item.getSupplierId()),
         item.getPaymentId() == null ? null : payments.get(item.getPaymentId())
-    )).toList();
+    ));
   }
 
   @Transactional
@@ -310,25 +301,23 @@ public class FinanceService {
   }
 
   @Transactional(readOnly = true)
-  public List<PaymentRecordResponse> listPayments() {
-    List<PaymentRecord> payments = paymentRepository.findAllByOrderByPaidDateDescCreatedAtDesc();
+  public Page<PaymentRecordResponse> listPayments(Pageable pageable) {
+    Page<PaymentRecord> payments = paymentRepository.findAllByOrderByPaidDateDescCreatedAtDesc(pageable);
     Map<UUID, PaymentApplication> applications = applicationRepository.findAllById(
-        payments.stream().map(PaymentRecord::getApplicationId).distinct().toList()
+        payments.getContent().stream().map(PaymentRecord::getApplicationId).distinct().toList()
     ).stream().collect(Collectors.toMap(PaymentApplication::getId, Function.identity()));
-    Map<UUID, ProcurementPayable> payables = payableMap(payments.stream().map(PaymentRecord::getPayableId).toList());
-    Map<UUID, Supplier> suppliers = supplierMap(payments.stream().map(PaymentRecord::getSupplierId).toList());
-    return payments.stream().map(item -> toPaymentResponse(
+    Map<UUID, ProcurementPayable> payables = payableMap(payments.getContent().stream().map(PaymentRecord::getPayableId).toList());
+    Map<UUID, Supplier> suppliers = supplierMap(payments.getContent().stream().map(PaymentRecord::getSupplierId).toList());
+    return payments.map(item -> toPaymentResponse(
         item,
         applications.get(item.getApplicationId()),
         payables.get(item.getPayableId()),
         suppliers.get(item.getSupplierId())
-    )).toList();
+    ));
   }
 
   private BigDecimal reservedAmount(UUID payableId) {
-    return applicationRepository.findByPayableIdAndStatusIn(payableId, RESERVED_STATUSES).stream()
-        .map(PaymentApplication::getRequestedAmount)
-        .reduce(BigDecimal.ZERO, BigDecimal::add);
+    return amount(applicationRepository.sumRequestedAmountByPayableAndStatusIn(payableId, RESERVED_STATUSES));
   }
 
   private ReceivableResponse toReceivableResponse(Receivable receivable, Customer customer, ServiceContract contract) {

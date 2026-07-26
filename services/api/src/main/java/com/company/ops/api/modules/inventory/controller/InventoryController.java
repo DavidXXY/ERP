@@ -1,6 +1,7 @@
 package com.company.ops.api.modules.inventory.controller;
 
 import com.company.ops.api.common.api.ApiResponse;
+import com.company.ops.api.common.api.PageResponse;
 import com.company.ops.api.modules.inventory.dto.CreateInventoryPartRequest;
 import com.company.ops.api.modules.inventory.dto.CreateMaterialIssueRequest;
 import com.company.ops.api.modules.inventory.dto.CreateMaterialReturnRequest;
@@ -24,7 +25,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 
@@ -40,8 +40,8 @@ public class InventoryController {
 
   @GetMapping("/parts")
   @PreAuthorize("hasAuthority('inventory:view')")
-  public ApiResponse<Page<InventoryPartResponse>> listParts(@PageableDefault(size = 100) Pageable pageable) {
-    return ApiResponse.ok(inventoryService.listParts(pageable));
+  public ApiResponse<PageResponse<InventoryPartResponse>> listParts(@PageableDefault(size = 100) Pageable pageable) {
+    return ApiResponse.ok(PageResponse.from(inventoryService.listParts(pageable)));
   }
 
   @GetMapping("/replenishment-suggestions")
@@ -65,9 +65,9 @@ public class InventoryController {
 
   @GetMapping("/parts/{partId}/movements")
   @PreAuthorize("hasAuthority('inventory:view')")
-  public ApiResponse<Page<StockMovementResponse>> listMovements(@PathVariable UUID partId,
+  public ApiResponse<PageResponse<StockMovementResponse>> listMovements(@PathVariable UUID partId,
       @PageableDefault(size = 100) Pageable pageable) {
-    return ApiResponse.ok(inventoryService.listMovements(partId, pageable));
+    return ApiResponse.ok(PageResponse.from(inventoryService.listMovements(partId, pageable)));
   }
 
   @PostMapping("/parts/{partId}/movements")
@@ -82,8 +82,8 @@ public class InventoryController {
 
   @GetMapping("/issues")
   @PreAuthorize("hasAuthority('inventory:view')")
-  public ApiResponse<Page<MaterialIssueResponse>> listIssues(@PageableDefault(size = 100) Pageable pageable) {
-    return ApiResponse.ok(inventoryService.listIssues(pageable));
+  public ApiResponse<PageResponse<MaterialIssueResponse>> listIssues(@PageableDefault(size = 100) Pageable pageable) {
+    return ApiResponse.ok(PageResponse.from(inventoryService.listIssues(pageable)));
   }
 
   @PostMapping("/issues")
@@ -97,8 +97,8 @@ public class InventoryController {
 
   @GetMapping("/returns")
   @PreAuthorize("hasAuthority('inventory:view')")
-  public ApiResponse<Page<MaterialReturnResponse>> listReturns(@PageableDefault(size = 100) Pageable pageable) {
-    return ApiResponse.ok(inventoryService.listReturns(pageable));
+  public ApiResponse<PageResponse<MaterialReturnResponse>> listReturns(@PageableDefault(size = 100) Pageable pageable) {
+    return ApiResponse.ok(PageResponse.from(inventoryService.listReturns(pageable)));
   }
 
   @PostMapping("/issues/{issueId}/returns")

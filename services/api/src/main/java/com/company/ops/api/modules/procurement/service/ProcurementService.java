@@ -159,16 +159,20 @@ public class ProcurementService {
 
   @Transactional(readOnly = true)
   public List<SupplierResponse> listSuppliers() {
-    Map<UUID, SupplierFinancialSummary> summaries = supplierFinancialSummaries();
-    return supplierRepository.findAllByOrderByCreatedAtDesc().stream()
+    List<Supplier> suppliers = supplierRepository.findAllByOrderByCreatedAtDesc();
+    Map<UUID, SupplierFinancialSummary> summaries = supplierFinancialSummaries(
+        suppliers.stream().map(Supplier::getId).toList());
+    return suppliers.stream()
         .map(supplier -> toSupplierResponse(supplier, summaries.get(supplier.getId())))
         .toList();
   }
 
   @Transactional(readOnly = true)
   public Page<SupplierResponse> listSuppliers(Pageable pageable) {
-    Map<UUID, SupplierFinancialSummary> summaries = supplierFinancialSummaries();
-    return supplierRepository.findAll(pageable)
+    Page<Supplier> suppliers = supplierRepository.findAll(pageable);
+    Map<UUID, SupplierFinancialSummary> summaries = supplierFinancialSummaries(
+        suppliers.getContent().stream().map(Supplier::getId).toList());
+    return suppliers
         .map(supplier -> toSupplierResponse(supplier, summaries.get(supplier.getId())));
   }
 
@@ -205,7 +209,7 @@ public class ProcurementService {
       supplier.setAdmissionReviewComment(null);
     }
     Supplier saved = supplierRepository.save(supplier);
-    return toSupplierResponse(saved, supplierFinancialSummaries().get(saved.getId()));
+    return toSupplierResponse(saved, supplierFinancialSummaries(List.of(saved.getId())).get(saved.getId()));
   }
 
   @Transactional
@@ -241,7 +245,7 @@ public class ProcurementService {
     supplier.setAdmissionReviewerName(currentName());
     supplier.setAdmissionReviewComment(request.comment());
     Supplier saved = supplierRepository.save(supplier);
-    return toSupplierResponse(saved, supplierFinancialSummaries().get(saved.getId()));
+    return toSupplierResponse(saved, supplierFinancialSummaries(List.of(saved.getId())).get(saved.getId()));
   }
 
   private void applySupplierRequest(Supplier supplier, CreateSupplierRequest request) {
@@ -903,11 +907,12 @@ public class ProcurementService {
     Map<UUID, Supplier> suppliers = supplierRepository.findAllById(
         orders.stream().map(PurchaseOrder::getSupplierId).distinct().toList()
     ).stream().collect(Collectors.toMap(Supplier::getId, Function.identity()));
-    Map<UUID, List<GoodsReceipt>> receiptsByOrder = receiptRepository.findAll().stream()
+    List<UUID> orderIds = orders.stream().map(PurchaseOrder::getId).toList();
+    Map<UUID, List<GoodsReceipt>> receiptsByOrder = receiptRepository.findByOrderIdIn(orderIds).stream()
         .collect(Collectors.groupingBy(GoodsReceipt::getOrderId));
-    Map<UUID, List<ProcurementPayable>> payablesByOrder = payableRepository.findAll().stream()
+    Map<UUID, List<ProcurementPayable>> payablesByOrder = payableRepository.findByOrderIdIn(orderIds).stream()
         .collect(Collectors.groupingBy(ProcurementPayable::getOrderId));
-    Map<UUID, List<SupplierInvoice>> invoicesByOrder = invoiceRepository.findAll().stream()
+    Map<UUID, List<SupplierInvoice>> invoicesByOrder = invoiceRepository.findByOrderIdIn(orderIds).stream()
         .collect(Collectors.groupingBy(SupplierInvoice::getOrderId));
     return orders.stream()
         .map(order -> toMatchingResponse(
@@ -970,34 +975,21 @@ public class ProcurementService {
     );
   }
 
-  private Map<UUID, SupplierFinancialSummary> supplierFinancialSummaries() {
-    Map<UUID, BigDecimal> contractedAmounts = orderRepository.findAll().stream()
-        .filter(order -> order.getStatus() != PurchaseOrderStatus.CANCELLED)
-        .collect(Collectors.groupingBy(
-            PurchaseOrder::getSupplierId,
-            Collectors.reducing(BigDecimal.ZERO, order -> amount(order.getOrderAmount()), BigDecimal::add)
-        ));
-    Map<UUID, List<ProcurementPayable>> payablesBySupplier = payableRepository.findAll().stream()
-        .filter(payable -> payable.getStatus() != PayableStatus.CANCELLED)
-        .collect(Collectors.groupingBy(ProcurementPayable::getSupplierId));
-    return supplierRepository.findAll().stream().collect(Collectors.toMap(
-        Supplier::getId,
-        supplier -> {
-          List<ProcurementPayable> payables = payablesBySupplier.getOrDefault(supplier.getId(), List.of());
-          BigDecimal payableAmount = payables.stream()
-              .map(ProcurementPayable::getAmount).map(this::amount)
-              .reduce(BigDecimal.ZERO, BigDecimal::add);
-          BigDecimal paidAmount = payables.stream()
-              .map(ProcurementPayable::getPaidAmount).map(this::amount)
-              .reduce(BigDecimal.ZERO, BigDecimal::add);
-          return new SupplierFinancialSummary(
-              contractedAmounts.getOrDefault(supplier.getId(), BigDecimal.ZERO),
-              payableAmount,
-              paidAmount,
-              payableAmount.subtract(paidAmount)
-          );
-        }
-    ));
+  private Map<UUID, SupplierFinancialSummary> supplierFinancialSummaries(List<UUID> supplierIds) {
+    if (supplierIds.isEmpty()) return Map.of();
+    Map<UUID, BigDecimal> contractedAmounts = orderRepository
+        .aggregateAmountBySupplierIdIn(supplierIds, PurchaseOrderStatus.CANCELLED).stream()
+        .collect(Collectors.toMap(row -> (UUID) row[0], row -> amount((BigDecimal) row[1])));
+    Map<UUID, Object[]> payableTotals = payableRepository
+        .aggregateBySupplierIdIn(supplierIds, PayableStatus.CANCELLED).stream()
+        .collect(Collectors.toMap(row -> (UUID) row[0], Function.identity()));
+    return supplierIds.stream().distinct().collect(Collectors.toMap(Function.identity(), supplierId -> {
+      Object[] totals = payableTotals.get(supplierId);
+      BigDecimal payableAmount = totals == null ? BigDecimal.ZERO : amount((BigDecimal) totals[1]);
+      BigDecimal paidAmount = totals == null ? BigDecimal.ZERO : amount((BigDecimal) totals[2]);
+      return new SupplierFinancialSummary(contractedAmounts.getOrDefault(supplierId, BigDecimal.ZERO),
+          payableAmount, paidAmount, payableAmount.subtract(paidAmount));
+    }));
   }
 
   private record SupplierFinancialSummary(

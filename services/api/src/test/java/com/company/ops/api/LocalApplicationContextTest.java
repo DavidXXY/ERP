@@ -4,7 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.company.ops.api.common.tenant.TenantContext;
 import com.company.ops.api.common.exception.BusinessException;
+import com.company.ops.api.common.delete.DeleteGovernanceService;
 import com.company.ops.api.modules.bi.service.BiService;
+import com.company.ops.api.modules.finance.service.FinanceService;
+import com.company.ops.api.modules.ledger.service.LedgerService;
 import com.company.ops.api.modules.system.domain.SystemPermission;
 import com.company.ops.api.modules.system.domain.SystemUser;
 import com.company.ops.api.modules.system.repository.SystemPermissionRepository;
@@ -13,6 +16,8 @@ import com.company.ops.api.modules.office.domain.SystemNotification;
 import com.company.ops.api.modules.office.domain.SystemNotificationRead;
 import com.company.ops.api.modules.office.repository.SystemNotificationRepository;
 import com.company.ops.api.modules.office.repository.SystemNotificationReadRepository;
+import com.company.ops.api.modules.qualification.domain.CompanyQualification;
+import com.company.ops.api.modules.qualification.repository.CompanyQualificationRepository;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ApplyInvoiceRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.RegisterInvoiceRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ReviewInvoiceRequest;
@@ -40,6 +45,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.data.domain.PageRequest;
 
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
@@ -58,10 +64,14 @@ class LocalApplicationContextTest {
   @Autowired private SystemUserRepository userRepository;
   @Autowired private SystemNotificationRepository notificationRepository;
   @Autowired private SystemNotificationReadRepository notificationReadRepository;
+  @Autowired private CompanyQualificationRepository companyQualificationRepository;
+  @Autowired private DeleteGovernanceService deleteGovernanceService;
   @Autowired private TransactionTemplate transactions;
   @Autowired private ObjectMapper objectMapper;
   @Autowired private CrmOperationsService crmOperationsService;
   @Autowired private BiService biService;
+  @Autowired private FinanceService financeService;
+  @Autowired private LedgerService ledgerService;
   @Autowired private OrganizationService organizationService;
   @Autowired private PermissionService permissionService;
   @Autowired private RoleService roleService;
@@ -74,8 +84,94 @@ class LocalApplicationContextTest {
         "select max(cast(version as integer)) from flyway_schema_history where success = true",
         Integer.class
     );
-    assertThat(version).isEqualTo(86);
+    assertThat(version).isEqualTo(87);
     assertThat(jdbc.queryForObject("select count(*) from shedlock", Integer.class)).isZero();
+  }
+
+  @Test
+  void loadsFinanceAndLedgerOverviewThroughTypedAggregateProjections() {
+    var finance = financeService.overview();
+    var ledger = ledgerService.overview();
+
+    assertThat(finance.receivableAmount()).isNotNull();
+    assertThat(finance.payableAmount()).isNotNull();
+    assertThat(ledger.totalDebit()).isNotNull();
+    assertThat(ledger.totalCredit()).isNotNull();
+  }
+
+  @Test
+  void filtersQualificationStatusAndHiddenIdsBeforePagination() {
+    LocalDate today = LocalDate.now();
+    String marker = "page-filter-" + UUID.randomUUID().toString().substring(0, 8);
+    List<CompanyQualification> fixtures = transactions.execute(status -> companyQualificationRepository.saveAll(List.of(
+        companyQualification(marker, "voided", "VOIDED", false, null),
+        companyQualification(marker, "locked", "NORMAL", true, null),
+        companyQualification(marker, "unverified", "NORMAL", false, null),
+        companyQualification(marker, "expired", "NORMAL", false, today.minusDays(1)),
+        companyQualification(marker, "expiring", "NORMAL", false, today.plusDays(30)),
+        companyQualification(marker, "valid-visible", "NORMAL", false, today.plusDays(120)),
+        companyQualification(marker, "valid-hidden", "NORMAL", false, today.plusDays(120))
+    )));
+
+    UUID hiddenId = fixtures.get(6).getId();
+    transactions.executeWithoutResult(status -> {
+      assertThat(companyQualificationRepository.search(
+          marker, "", "VOIDED", today, today.plusDays(90), List.of(hiddenId), PageRequest.of(0, 20)))
+          .hasSize(1).allMatch(item -> item.getName().endsWith("voided"));
+      assertThat(companyQualificationRepository.search(
+          marker, "", "LOCKED", today, today.plusDays(90), List.of(hiddenId), PageRequest.of(0, 20)))
+          .hasSize(1).allMatch(item -> item.getName().endsWith("locked"));
+      assertThat(companyQualificationRepository.search(
+          marker, "", "UNVERIFIED", today, today.plusDays(90), List.of(hiddenId), PageRequest.of(0, 20)))
+          .hasSize(1).allMatch(item -> item.getName().endsWith("unverified"));
+      assertThat(companyQualificationRepository.search(
+          marker, "", "EXPIRED", today, today.plusDays(90), List.of(hiddenId), PageRequest.of(0, 20)))
+          .hasSize(1).allMatch(item -> item.getName().endsWith("expired"));
+      assertThat(companyQualificationRepository.search(
+          marker, "", "EXPIRING", today, today.plusDays(90), List.of(hiddenId), PageRequest.of(0, 20)))
+          .hasSize(1).allMatch(item -> item.getName().endsWith("expiring"));
+      var validPage = companyQualificationRepository.search(
+          marker, "", "VALID", today, today.plusDays(90), List.of(hiddenId), PageRequest.of(0, 20));
+      assertThat(validPage.getTotalElements()).isEqualTo(1);
+      assertThat(validPage.getContent()).extracting(CompanyQualification::getName)
+          .containsExactly(marker + "-valid-visible");
+    });
+  }
+
+  @Test
+  void isolatesSoftDeleteGovernanceByTenant() {
+    UUID tenantAEntity = UUID.randomUUID();
+    UUID tenantBEntity = UUID.randomUUID();
+
+    try (var ignored = TenantContext.use("delete-tenant-a")) {
+      transactions.executeWithoutResult(status ->
+          assertThat(deleteGovernanceService.allowPhysicalDelete("TEST_ENTITY", tenantAEntity, "Tenant A"))
+              .isFalse());
+      assertThat(deleteGovernanceService.hiddenIds("TEST_ENTITY"))
+          .contains(tenantAEntity)
+          .doesNotContain(tenantBEntity);
+    }
+    try (var ignored = TenantContext.use("delete-tenant-b")) {
+      transactions.executeWithoutResult(status ->
+          assertThat(deleteGovernanceService.allowPhysicalDelete("TEST_ENTITY", tenantBEntity, "Tenant B"))
+              .isFalse());
+      assertThat(deleteGovernanceService.hiddenIds("TEST_ENTITY"))
+          .contains(tenantBEntity)
+          .doesNotContain(tenantAEntity);
+    }
+  }
+
+  private CompanyQualification companyQualification(
+      String marker, String suffix, String manualStatus, boolean locked, LocalDate validTo) {
+    CompanyQualification item = new CompanyQualification();
+    item.setExternalId(UUID.randomUUID().toString());
+    item.setSubjectCompany("Test Company");
+    item.setName(marker + "-" + suffix);
+    item.setCategory("Test");
+    item.setManualStatus(manualStatus);
+    item.setLocked(locked);
+    item.setValidTo(validTo);
+    return item;
   }
 
   @Test

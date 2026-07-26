@@ -1,4 +1,4 @@
-import { request } from "./http";
+import { request, requestAllPages } from "./http";
 import type { ContractStatus, Receivable, ReceivableStatus } from "./crm";
 
 export type FinanceOverview = {
@@ -117,7 +117,10 @@ export function getFinanceOverview() {
 }
 
 export function listFinanceReceivables() {
-  return request<Receivable[]>({ method: "GET", url: "/finance/receivables" });
+  return requestAllPages<Receivable>(
+    { method: "GET", url: "/finance/receivables" },
+    200,
+  );
 }
 
 export function getFinanceReceivableDetail(id: string) {
@@ -170,14 +173,20 @@ export function recordFinanceReceipt(
 }
 
 export function listFinancePayables() {
-  return request<FinancePayable[]>({ method: "GET", url: "/finance/payables" });
+  return requestAllPages<FinancePayable>(
+    { method: "GET", url: "/finance/payables" },
+    200,
+  );
 }
 
 export function listPaymentApplications() {
-  return request<PaymentApplication[]>({
-    method: "GET",
-    url: "/finance/payment-applications",
-  });
+  return requestAllPages<PaymentApplication>(
+    {
+      method: "GET",
+      url: "/finance/payment-applications",
+    },
+    200,
+  );
 }
 
 export function getPaymentApprovalCapability() {
@@ -236,5 +245,8 @@ export function executePayment(
 }
 
 export function listPaymentRecords() {
-  return request<PaymentRecord[]>({ method: "GET", url: "/finance/payments" });
+  return requestAllPages<PaymentRecord>(
+    { method: "GET", url: "/finance/payments" },
+    200,
+  );
 }

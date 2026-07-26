@@ -1,6 +1,7 @@
 package com.company.ops.api.modules.project.controller;
 
 import com.company.ops.api.common.api.ApiResponse;
+import com.company.ops.api.common.api.PageResponse;
 import com.company.ops.api.modules.project.dto.AdvanceProjectStageRequest;
 import com.company.ops.api.modules.project.dto.AssignProjectManagerRequest;
 import com.company.ops.api.modules.project.dto.CreateProjectCostRequest;
@@ -20,7 +21,6 @@ import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.SubmitQuoteCostRequ
 import com.company.ops.api.modules.crm.service.CrmOperationsService;
 import jakarta.validation.Valid;
 import java.util.List;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import java.util.UUID;
@@ -52,8 +52,8 @@ public class ProjectController {
 
   @GetMapping
   @PreAuthorize("hasAuthority('project:view')")
-  public ApiResponse<Page<ProjectResponse>> listProjects(@PageableDefault(size = 20) Pageable pageable) {
-    return ApiResponse.ok(projectService.listProjects(pageable));
+  public ApiResponse<PageResponse<ProjectResponse>> listProjects(@PageableDefault(size = 20) Pageable pageable) {
+    return ApiResponse.ok(PageResponse.from(projectService.listProjects(pageable)));
   }
 
   @GetMapping("/profitability")

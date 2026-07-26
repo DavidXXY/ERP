@@ -1,6 +1,7 @@
 package com.company.ops.api.modules.system.controller;
 
 import com.company.ops.api.common.api.ApiResponse;
+import com.company.ops.api.common.api.PageResponse;
 import com.company.ops.api.modules.system.dto.CreateUserRequest;
 import com.company.ops.api.modules.system.dto.ResetPasswordRequest;
 import com.company.ops.api.modules.system.dto.UpdateUserRequest;
@@ -9,7 +10,6 @@ import com.company.ops.api.modules.system.service.UserService;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -35,12 +35,12 @@ public class UserController {
 
   @GetMapping
   @PreAuthorize("hasAuthority('system:user:view')")
-  public ApiResponse<Page<UserResponse>> list(
+  public ApiResponse<PageResponse<UserResponse>> list(
       @RequestParam(required = false) String keyword,
       @RequestParam(required = false) Boolean enabled,
       @RequestParam(required = false) UUID roleId,
       @PageableDefault(size = 20) Pageable pageable) {
-    return ApiResponse.ok(userService.listUsers(keyword, enabled, roleId, pageable));
+    return ApiResponse.ok(PageResponse.from(userService.listUsers(keyword, enabled, roleId, pageable)));
   }
 
   @GetMapping("/options")

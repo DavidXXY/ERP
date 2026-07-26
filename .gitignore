@@ -14,6 +14,8 @@ services/api/target/
 .DS_Store
 .vscode/
 *.tsbuildinfo
+playwright-report/
+test-results/
 
 # Local H2 database
 *.mv.db

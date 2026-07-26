@@ -568,6 +568,17 @@ public class CrmOperationsService {
     return receivables.stream().map(item -> toReceivable(item, customers, contracts)).toList();
   }
 
+  @Transactional(readOnly = true)
+  public org.springframework.data.domain.Page<ReceivableResponse> listReceivables(
+      org.springframework.data.domain.Pageable pageable) {
+    var receivables = receivableRepository.findAllByOrderByDueDateAsc(pageable);
+    Map<UUID, Customer> customers = customerMap(receivables.getContent().stream()
+        .map(Receivable::getCustomerId).toList());
+    Map<UUID, ServiceContract> contracts = contractMap(receivables.getContent().stream()
+        .map(Receivable::getContractId).toList());
+    return receivables.map(item -> toReceivable(item, customers, contracts));
+  }
+
   @Transactional
   public ReceivableResponse applyInvoice(UUID id, ApplyInvoiceRequest request) {
     Receivable receivable = receivableRepository.findByIdForUpdate(id)

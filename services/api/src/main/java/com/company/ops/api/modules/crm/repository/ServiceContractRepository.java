@@ -16,6 +16,8 @@ public interface ServiceContractRepository extends JpaRepository<ServiceContract
   List<ServiceContract> findByCustomerIdOrderByStartDateDesc(UUID customerId);
 
   List<ServiceContract> findAllByOrderByEndDateAsc();
+  List<ServiceContract> findByStatusNotAndEndDateLessThanEqualOrderByEndDateAsc(
+      com.company.ops.api.modules.crm.domain.ContractStatus status, LocalDate deadline);
 
   @Query("select c from ServiceContract c where coalesce(c.startDate,c.endDate) between :startDate and :endDate order by c.endDate")
   List<ServiceContract> findByBusinessDateBetween(@Param("startDate") LocalDate startDate,@Param("endDate") LocalDate endDate);

@@ -52,24 +52,31 @@ spring:
 
 # 服务端端口（Nginx 反向代理用）
 server:
+  address: 127.0.0.1
   port: 8080
   compression:
     enabled: true
     mime-types: application/json,application/javascript,text/css,text/html
     min-response-size: 1024
 
-# Actuator — 生产环境只暴露 health
+# Actuator — 仅绑定回环地址，由 Nginx 控制健康检查与指标访问
 management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,prometheus
       base-path: /actuator
   endpoint:
     health:
       probes:
         enabled: true
       show-details: when-authorized
+  metrics:
+    tags:
+      application: ops-erp-api
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
 
 # Swagger — 生产环境建议关闭，或加权限控制
 springdoc:
@@ -86,6 +93,8 @@ ops:
     jwt-expire-minutes: ${JWT_EXPIRE_MINUTES:30}
     allowed-origins: ${ALLOWED_ORIGINS}
     data-encryption-key: ${DATA_ENCRYPTION_KEY}
+    data-encryption-key-id: ${DATA_ENCRYPTION_KEY_ID:primary}
+    data-encryption-previous-keys: ${DATA_ENCRYPTION_PREVIOUS_KEYS:}
   storage:
     type: ${STORAGE_TYPE:minio}
     endpoint: ${MINIO_ENDPOINT}

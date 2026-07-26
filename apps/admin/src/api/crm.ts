@@ -1,4 +1,4 @@
-import { http, request } from "./http";
+import { http, request, requestAllPages } from "./http";
 
 export type CustomerLevel = "STRATEGIC" | "KEY" | "NORMAL";
 export type RiskStatus = "NORMAL" | "OVERDUE" | "RENEWAL_RISK";
@@ -729,7 +729,10 @@ export function listRenewals() {
 }
 
 export function listReceivables() {
-  return request<Receivable[]>({ method: "GET", url: "/crm/receivables" });
+  return requestAllPages<Receivable>(
+    { method: "GET", url: "/crm/receivables" },
+    200,
+  );
 }
 
 export function getQuote(id: string) {

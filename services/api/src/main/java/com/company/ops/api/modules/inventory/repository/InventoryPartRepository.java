@@ -34,4 +34,7 @@ public interface InventoryPartRepository extends JpaRepository<InventoryPart, UU
   @Query("select count(p) from InventoryPart p where p.stockQty < p.safetyQty")
   long countLowStock();
 
+  @Query("select p from InventoryPart p where p.stockQty < p.safetyQty order by p.createdAt desc")
+  List<InventoryPart> findLowStock();
+
 }

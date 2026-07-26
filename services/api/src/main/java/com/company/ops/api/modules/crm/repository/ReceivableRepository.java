@@ -11,12 +11,15 @@ import java.util.Optional;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.math.BigDecimal;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 public interface ReceivableRepository extends JpaRepository<Receivable, UUID> {
 
   List<Receivable> findByCustomerIdOrderByDueDateAsc(UUID customerId);
 
   List<Receivable> findAllByOrderByDueDateAsc();
+  Page<Receivable> findAllByOrderByDueDateAsc(Pageable pageable);
   List<Receivable> findByDueDateBetweenOrderByDueDateAsc(LocalDate startDate,LocalDate endDate);
 
   boolean existsByCode(String code);
@@ -35,6 +38,21 @@ public interface ReceivableRepository extends JpaRepository<Receivable, UUID> {
 
   @Query("select coalesce(sum(r.amount - r.settledAmount), 0) from Receivable r")
   BigDecimal sumOutstandingAmount();
+
+  @Query("""
+      select coalesce(sum(r.amount), 0) as totalAmount,
+             coalesce(sum(r.settledAmount), 0) as settledAmount,
+             coalesce(sum(case when r.dueDate < :today and r.amount > r.settledAmount
+               then r.amount - r.settledAmount else 0 end), 0) as overdueAmount
+      from Receivable r
+      """)
+  FinanceOverviewTotals aggregateFinanceOverview(LocalDate today);
+
+  interface FinanceOverviewTotals {
+    BigDecimal getTotalAmount();
+    BigDecimal getSettledAmount();
+    BigDecimal getOverdueAmount();
+  }
 
   @Query("select r.customerId, coalesce(sum(r.settledAmount), 0) from Receivable r group by r.customerId")
   List<Object[]> aggregateSettledByCustomer();

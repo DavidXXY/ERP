@@ -1,4 +1,41 @@
 package com.company.ops.api.modules.ledger.controller;
-import com.company.ops.api.common.api.ApiResponse; import com.company.ops.api.modules.ledger.dto.LedgerDtos.*; import com.company.ops.api.modules.ledger.service.LedgerService; import java.util.List; import org.springframework.security.access.prepost.PreAuthorize; import org.springframework.web.bind.annotation.*;
-@RestController @RequestMapping("/api/finance/ledger") @PreAuthorize("hasAuthority('finance:ledger:view')")
-public class LedgerController {private final LedgerService service;public LedgerController(LedgerService service){this.service=service;}@GetMapping("/overview") public ApiResponse<LedgerOverview> overview(){return ApiResponse.ok(service.overview());}@GetMapping("/vouchers") public ApiResponse<List<VoucherResponse>> vouchers(){return ApiResponse.ok(service.vouchers());}@GetMapping("/statements") public ApiResponse<FinancialStatements> statements(){return ApiResponse.ok(service.statements());}}
+
+import static com.company.ops.api.modules.ledger.dto.LedgerDtos.*;
+
+import com.company.ops.api.common.api.ApiResponse;
+import com.company.ops.api.common.api.PageResponse;
+import com.company.ops.api.modules.ledger.service.LedgerService;
+import jakarta.validation.Valid;
+import java.util.UUID;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/finance/ledger")
+@PreAuthorize("hasAuthority('finance:ledger:view')")
+public class LedgerController {
+  private final LedgerService service;
+  public LedgerController(LedgerService service) { this.service = service; }
+
+  @GetMapping("/overview") public ApiResponse<LedgerOverview> overview() { return ApiResponse.ok(service.overview()); }
+  @GetMapping("/vouchers") public ApiResponse<PageResponse<VoucherResponse>> vouchers(@PageableDefault(size=100) Pageable pageable) { return ApiResponse.ok(PageResponse.from(service.vouchers(pageable))); }
+  @GetMapping("/statements") public ApiResponse<FinancialStatements> statements() { return ApiResponse.ok(service.statements()); }
+
+  @PostMapping("/vouchers")
+  @PreAuthorize("hasAuthority('finance:voucher:create')")
+  public ApiResponse<VoucherResponse> createDraft(@Valid @RequestBody CreateVoucherRequest request) { return ApiResponse.ok(service.createDraft(request)); }
+
+  @PostMapping("/vouchers/{id}/review")
+  @PreAuthorize("hasAuthority('finance:voucher:review')")
+  public ApiResponse<VoucherResponse> review(@PathVariable UUID id) { return ApiResponse.ok(service.review(id)); }
+
+  @PostMapping("/vouchers/{id}/post")
+  @PreAuthorize("hasAuthority('finance:voucher:post')")
+  public ApiResponse<VoucherResponse> post(@PathVariable UUID id) { return ApiResponse.ok(service.postReviewed(id)); }
+
+  @PostMapping("/vouchers/{id}/reverse")
+  @PreAuthorize("hasAuthority('finance:voucher:reverse')")
+  public ApiResponse<VoucherResponse> reverse(@PathVariable UUID id, @Valid @RequestBody ReverseVoucherRequest request) { return ApiResponse.ok(service.reverse(id, request)); }
+}

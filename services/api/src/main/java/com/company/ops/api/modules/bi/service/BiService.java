@@ -116,8 +116,7 @@ public class BiService {
     BigDecimal projectBudget = sum(projectRows.stream().map(Project::getBudgetAmount).toList());
     BigDecimal workOrderCost = sum(orderRows.stream().map(WorkOrder::getCostAmount).toList());
     BigDecimal procurementAmount = sum(payableRows.stream().map(ProcurementPayable::getAmount).toList());
-    BigDecimal inventoryValue = sum(parts.findAllByOrderByCreatedAtDesc().stream()
-        .map(part -> amount(part.getStockQty()).multiply(amount(part.getUnitCost()))).toList());
+    BigDecimal inventoryValue = amount(parts.sumInventoryValue());
     BigDecimal cashIn = sum(receivableRows.stream().map(Receivable::getSettledAmount).toList());
     BigDecimal cashOut = sum(payableRows.stream().map(ProcurementPayable::getPaidAmount).toList());
     BigDecimal grossProfit = revenue.subtract(projectActualCost).subtract(workOrderCost);
@@ -129,7 +128,7 @@ public class BiService {
         percent(procurementAmount, revenue), inventoryValue,
         inventoryValue.compareTo(BigDecimal.ZERO) > 0 ? outboundCost.divide(inventoryValue, 2, RoundingMode.HALF_UP) : BigDecimal.ZERO,
         hours.compareTo(BigDecimal.ZERO) > 0 ? revenue.divide(hours, 2, RoundingMode.HALF_UP) : BigDecimal.ZERO,
-        monthlyTrends(YearMonth.from(end)), customerProfits(customers.findAllByOrderByCreatedAtDesc(), contractRows, receivableRows, orderRows));
+        monthlyTrends(YearMonth.from(end)), customerProfitsForPeriod(contractRows, receivableRows, orderRows));
   }
 
   private List<MonthlyTrend> monthlyTrends() {
@@ -169,7 +168,9 @@ public class BiService {
   }
 
   private List<MonthlyTrend> inMemoryMonthlyTrends(YearMonth endMonth) {
-    List<AccountingVoucher> voucherRows = vouchers.findAllByOrderByVoucherDateDescCreatedAtDesc();
+    List<AccountingVoucher> voucherRows = vouchers
+        .findAllByOrderByVoucherDateDescCreatedAtDesc(org.springframework.data.domain.Pageable.unpaged())
+        .getContent();
     List<MonthlyTrend> result = new ArrayList<>();
     for (int i = 5; i >= 0; i--) {
       YearMonth month = endMonth.minusMonths(i);
@@ -225,6 +226,15 @@ public class BiService {
     }).sorted(Comparator.comparing(CustomerProfit::grossProfit).reversed()).limit(20).toList();
   }
 
+  private List<CustomerProfit> customerProfitsForPeriod(List<ServiceContract> contractRows,
+      List<Receivable> receivableRows, List<WorkOrder> orderRows) {
+    Set<UUID> customerIds = new HashSet<>();
+    contractRows.stream().map(ServiceContract::getCustomerId).filter(Objects::nonNull).forEach(customerIds::add);
+    receivableRows.stream().map(Receivable::getCustomerId).filter(Objects::nonNull).forEach(customerIds::add);
+    orderRows.stream().map(WorkOrder::getCustomerId).filter(Objects::nonNull).forEach(customerIds::add);
+    return customerProfits(customers.findAllById(customerIds), contractRows, receivableRows, orderRows);
+  }
+
   private List<CustomerProfit> customerProfits() {
     Map<UUID,BigDecimal> contractsByCustomer=contracts.aggregateAmountByCustomer().stream().collect(
         Collectors.toMap(row->(UUID)row[0],row->amount((BigDecimal)row[1])));
@@ -252,10 +262,10 @@ public class BiService {
   }
 
   private List<EquipmentPerformance> equipmentPerformance() {
-    List<EquipmentAsset> assets=equipment.findAllByOrderByNextMaintenanceDateAsc();
+    Map<UUID,Object[]> performance=orders.aggregateByEquipment().stream().collect(Collectors.toMap(row->(UUID)row[0],Function.identity()));
+    List<EquipmentAsset> assets=equipment.findAllById(performance.keySet());
     Set<UUID> customerIds=assets.stream().map(EquipmentAsset::getCustomerId).filter(Objects::nonNull).collect(Collectors.toSet());
     Map<UUID, Customer> customerMap = customers.findAllById(customerIds).stream().collect(Collectors.toMap(Customer::getId, Function.identity()));
-    Map<UUID,Object[]> performance=orders.aggregateByEquipment().stream().collect(Collectors.toMap(row->(UUID)row[0],Function.identity()));
     return assets.stream().map(asset -> {
       Object[] row=performance.get(asset.getId());
       long total=row==null?0:((Number)row[1]).longValue();
@@ -315,7 +325,7 @@ public class BiService {
     } catch (Exception e) {
       log.warn("Database cash aggregation failed, falling back to in-memory", e);
       BigDecimal in = BigDecimal.ZERO, out = BigDecimal.ZERO;
-      for (AccountingEntry entry : entries.findAllByOrderByAccountCodeAsc())
+      for (AccountingEntry entry : entries.findAll())
         if (entry.getAccountCode().equals("1002")) {
           in = in.add(amount(entry.getDebit()));
           out = out.add(amount(entry.getCredit()));

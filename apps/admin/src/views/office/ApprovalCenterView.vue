@@ -1254,8 +1254,18 @@ function openProcess(item: any) {
   });
   processOpen.value = true;
 }
-function openDetail(item: any) {
+async function openDetail(item: any) {
   detailApproval.value = item;
+  if (item._source === "office" || item.approvalType) {
+    try {
+      detailApproval.value = await getApproval(item.id);
+    } catch (error) {
+      message.error(
+        error instanceof Error ? error.message : "审批详情加载失败",
+      );
+      return;
+    }
+  }
   Object.assign(detailProcessForm, {
     decision: "APPROVED",
     comment: "同意",

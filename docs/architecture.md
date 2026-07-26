@@ -25,6 +25,7 @@
 - `modules.office`：条件审批、费用报销、出差、用章、外包、档案、通知和操作审计。
 - `modules.collaboration`：跨部门责任绑定、协作待办、动作日志和导出。
 - `modules.risk`：统一风险项、规则、责任人、SLA、升级、闭环和快照。
+- `modules.governance`：跨模块经营控制、会计期间、关账守卫、银行流水和对账。
 - `modules.mobile`：移动工作台聚合。
 - `modules.bi`：经营驾驶舱和跨模块分析。
 - `modules.system`：组织、用户、角色、权限、数据范围、认证版本和系统运行状态。
@@ -45,10 +46,13 @@
 ## 数据策略
 
 - 所有业务主表包含 `tenant_id`，JPA 查询和写入通过租户上下文隔离。
+- 软删除治理使用原生 SQL 的路径同样绑定当前租户，包括隐藏判断、回收站、审批、恢复和删除申请创建。
 - 所有核心表保留 `created_at`、`updated_at`、`created_by`、`updated_by`。
 - 使用 Flyway 管理数据库结构，禁止生产环境手工改表。
-- 列表接口优先使用数据库分页，所有 Spring Data 分页请求单页最多 200 条。
+- 列表接口优先使用数据库分页，所有 Spring Data 分页请求单页最多 200 条。控制器通过自有 `PageResponse` 输出稳定字段，不直接暴露 Spring Data 的序列化结构。
+- 财务、总账、采购、资质、BI、删除治理和提醒任务优先按当前页 ID 或业务条件批量查询，并由数据库完成求和、计数和分组，避免整表加载及逐行 N+1 查询。
 - V86 引入按用户通知回执、审批申请人 ID、JWT 认证版本和移动审批查询索引。
+- V87 引入经营控制台账、治理动作日志、会计期间、银行对账和凭证复核/记账/冲销审计字段。交易模块通过 `AccountingPeriodGuard` 共享期间开关，不各自实现关账判断。
 - 文件只在数据库保存元数据。当前实现通过统一存储接口保存原文件，并对文件大小、扩展名和路径穿越做统一校验；`ops.storage.type=local` 使用本地磁盘，`ops.storage.type=minio` 使用 MinIO/S3 兼容对象存储，生产 profile 默认启用 MinIO。
 
 ## 权限策略
@@ -57,6 +61,7 @@
 - 登录限流优先使用 Redis，并有受限的本地降级计数器；客户端 IP 只接受可信代理网段提供的转发链。
 - 前端菜单按权限展示，后端接口使用 `@PreAuthorize` 兜底。
 - 维修工单、证书和排班已拆分为细粒度权限；新增权限通过 Flyway 和启动初始化双路径补齐，历史 ADMIN 角色会自动获得缺失权限。
+- 经营治理拆分查看、维护、关账和银行对账权限；手工凭证拆分制单、复核、记账和冲销权限，服务层同时校验不相容操作人。
 - 业务闭环提供可复用聚合接口：OA 统一待办/预警、采购三单匹配、库存补货建议、项目利润摘要，前端可直接接入形成经营看板和异常处理入口。
 - 当前种子角色包括 `ADMIN` 和 `CRM_MANAGER`；`ADMIN` 拥有全部已落地权限。
 - 开发环境默认管理员为 `admin / Admin@123`，生产环境必须改为正式密码策略和用户初始化流程。
@@ -77,13 +82,27 @@
 - 健康检查走 Spring Actuator：`/actuator/health`。
 - 分页响应位于 `data`，包含 `content`、`number`、`size`、`totalElements` 和 `totalPages`。
 - 管理端和移动端需要完整数据时使用公共 `requestAllPages` 逐页获取。
+- OA 审批列表只返回可扫描的摘要；用户打开抽屉后再读取来源单据、审批节点和动作历史，避免列表请求重复加载详情集合。
 
 ## 通知与审计
 
 - 系统级提醒可以全员可见，但已读状态由 `system_notification_reads` 按用户独立保存。
 - 审批等业务通知必须解析到明确接收人；无法解析时不创建全员通知。
 - 审计拦截器在请求结束时采集信息，并交给有界异步执行器写库。
-- 审计日志默认保留 365 天，由每日任务清理，保留期通过 `AUDIT_RETENTION_DAYS` 配置。
+- 审计日志默认保留 365 天，由每日任务按短事务分批清理；保留期、批大小和最大批次数分别通过 `AUDIT_RETENTION_DAYS`、`AUDIT_CLEANUP_BATCH_SIZE`、`AUDIT_CLEANUP_MAX_BATCHES` 配置。
+
+## 可观测性与灾备
+
+- 生产后端仅绑定回环地址，由 Nginx 代理业务 API 和健康检查。
+- Actuator 只暴露 `health,prometheus`；Prometheus 指标带 `application=ops-erp-api` 标签和 HTTP 请求直方图。Nginx 的指标路径只允许本机访问，其他 Actuator 路径返回 404。
+- V2 备份将 PostgreSQL custom dump、MinIO/S3 对象、清单和逐文件 SHA-256 打包为 `.tar.gz`，并生成外层归档校验文件。
+- 恢复先写入对象存储，再恢复数据库，避免数据库记录先出现而附件尚未就绪。恢复目标必须使用隔离数据库和 bucket，并分别显式确认。
+- 敏感字段使用带 key ID 的 `ENC2` 密文；当前密钥负责新写入，历史密钥仅用于读取轮换前数据，并兼容无 key ID 的 `ENC1`。
+
+## 质量门禁
+
+- 管理端单元测试只收集 `src`，浏览器关键流程由 Playwright 分别在 Chromium 桌面和移动视口验证登录、路由权限和按钮权限。
+- CI 安装 Chromium、上传 Playwright 报告，并检查 PostgreSQL Testcontainers 测试报告的 `skipped="0"`，防止 Docker 缺失导致迁移测试被误判为通过。
 
 ## 前端原型说明
 
@@ -104,6 +123,12 @@
 - `GET /api/finance/ledger/overview`：总账科目概览
 - `GET /api/finance/ledger/vouchers`：会计凭证列表
 - `GET /api/finance/ledger/statements`：财务报表（资产/负债/收入/费用）
+- `POST /api/finance/ledger/vouchers`：新建手工凭证草稿
+- `POST /api/finance/ledger/vouchers/{id}/review|post|reverse`：凭证复核、记账和冲销
+- `GET /api/governance/overview`：经营治理总览
+- `GET/POST /api/governance/controls`：经营控制台账
+- `GET/POST /api/governance/periods/**`：会计期间与关账控制
+- `GET/POST /api/governance/bank-lines/**`：银行流水与对账
 
 ### 前端 API 客户端
 

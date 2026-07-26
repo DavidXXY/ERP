@@ -202,11 +202,11 @@ public class OfficeService {
   }
 
   @Transactional(readOnly = true)
-  public List<ApprovalResponse> listApprovals() { return approvalRepository.findAllByOrderByCreatedAtDesc().stream().map(this::toApproval).toList(); }
+  public List<ApprovalResponse> listApprovals() { return approvalRepository.findAllByOrderByCreatedAtDesc().stream().map(this::toApprovalSummary).toList(); }
 
   @Transactional(readOnly = true)
   public Page<ApprovalResponse> listApprovals(Pageable pageable) {
-    return approvalRepository.findAllByOrderByCreatedAtDesc(pageable).map(this::toApproval);
+    return approvalRepository.findAllByOrderByCreatedAtDesc(pageable).map(this::toApprovalSummary);
   }
 
   @Transactional(readOnly = true)
@@ -223,7 +223,7 @@ public class OfficeService {
   public List<ApprovalResponse> listMyPendingApprovals() {
     return approvalRepository.findByStatusOrderByCreatedAtDesc(ApprovalStatus.PENDING).stream()
         .filter(this::canCurrentUserApprove)
-        .map(this::toApproval)
+        .map(this::toApprovalSummary)
         .toList();
   }
 
@@ -232,7 +232,7 @@ public class OfficeService {
     UserPrincipal principal = currentPrincipal();
     if (principal == null) return Page.empty(pageable);
     return approvalRepository.findMobileVisible(
-        principal.id(), principal.displayName(), principal.roleIds(), pageable).map(this::toApproval);
+        principal.id(), principal.displayName(), principal.roleIds(), pageable).map(this::toApprovalSummary);
   }
 
   @Transactional(readOnly = true)
@@ -1317,7 +1317,33 @@ public class OfficeService {
     if (lines.size() == 1) return lines.get(0).description();
     return "多行报销（" + lines.size() + "项）：" + lines.stream().map(CreateExpenseLineRequest::description).limit(3).collect(Collectors.joining("；")) + (lines.size() > 3 ? "；..." : "");
   }
-  private ApprovalResponse toApproval(ApprovalRequest item) { return new ApprovalResponse(item.getId(), item.getCode(), item.getApprovalType(), item.getTitle(), item.getSourceNo(), amount(item.getAmount()), item.getStatus(), item.getApplicantName(), item.getContent(), item.getApproverName(), item.getApprovalComment(), item.getProcessedAt(), item.getCreatedAt(), item.getDepartmentName(), item.getBusinessType(), item.getProjectCode(), item.getSupplierRisk(), item.getCustomerLevel(), item.getApprovalMode(), item.getCurrentStep(), item.getTotalSteps(), item.getCurrentApproverName(), item.getMatchedRuleText(), item.getApprovalConfigVersion(), item.getApprovalPlanSnapshot(), approvalSourceDetail(item), runtimeNodeRepository.findByApprovalIdOrderByStepNoAscCreatedAtAsc(item.getId()).stream().map(this::toRuntimeNode).toList(), actionRepository.findByApprovalIdOrderByCreatedAtAsc(item.getId()).stream().map(action -> new ApprovalActionResponse(action.getId(), action.getDecision(), action.getOperatorName(), action.getComment(), action.getActionType(), action.getStepNo(), action.getCreatedAt())).toList()); }
+  private ApprovalResponse toApprovalSummary(ApprovalRequest item) {
+    return approvalResponse(item, null, List.of(), List.of());
+  }
+
+  private ApprovalResponse toApproval(ApprovalRequest item) {
+    List<ApprovalRuntimeNodeResponse> nodes = runtimeNodeRepository
+        .findByApprovalIdOrderByStepNoAscCreatedAtAsc(item.getId()).stream()
+        .map(this::toRuntimeNode).toList();
+    List<ApprovalActionResponse> actions = actionRepository
+        .findByApprovalIdOrderByCreatedAtAsc(item.getId()).stream()
+        .map(action -> new ApprovalActionResponse(action.getId(), action.getDecision(),
+            action.getOperatorName(), action.getComment(), action.getActionType(),
+            action.getStepNo(), action.getCreatedAt()))
+        .toList();
+    return approvalResponse(item, approvalSourceDetail(item), nodes, actions);
+  }
+
+  private ApprovalResponse approvalResponse(ApprovalRequest item, Object sourceDetail,
+      List<ApprovalRuntimeNodeResponse> nodes, List<ApprovalActionResponse> actions) {
+    return new ApprovalResponse(item.getId(), item.getCode(), item.getApprovalType(), item.getTitle(),
+        item.getSourceNo(), amount(item.getAmount()), item.getStatus(), item.getApplicantName(),
+        item.getContent(), item.getApproverName(), item.getApprovalComment(), item.getProcessedAt(),
+        item.getCreatedAt(), item.getDepartmentName(), item.getBusinessType(), item.getProjectCode(),
+        item.getSupplierRisk(), item.getCustomerLevel(), item.getApprovalMode(), item.getCurrentStep(),
+        item.getTotalSteps(), item.getCurrentApproverName(), item.getMatchedRuleText(),
+        item.getApprovalConfigVersion(), item.getApprovalPlanSnapshot(), sourceDetail, nodes, actions);
+  }
   private Object approvalSourceDetail(ApprovalRequest item) {
     if (item.getApprovalType() == ApprovalType.EXPENSE) {
       return expenseRepository.findByApprovalRequestId(item.getId())

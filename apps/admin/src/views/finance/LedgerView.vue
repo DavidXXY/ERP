@@ -3,6 +3,14 @@
     <a-card title="总账与财务报表">
       <template #extra>
         <a-space>
+          <a-button
+            v-if="auth.can('finance:voucher:create')"
+            type="primary"
+            @click="openDraftModal"
+          >
+            <template #icon><PlusOutlined /></template>
+            新建凭证
+          </a-button>
           <a-button @click="exportVouchers">导出凭证</a-button>
           <a-button @click="exportStatements">导出报表</a-button>
           <a-button :loading="loading" @click="loadData">
@@ -162,15 +170,50 @@
                 }}</a-tag>
               </template>
               <template v-else-if="column.key === 'status'">
-                <a-tag
-                  :color="record.status === 'POSTED' ? 'green' : 'default'"
-                  >{{ record.status === "POSTED" ? "已记账" : "已冲销" }}</a-tag
-                >
+                <a-tag :color="voucherStatusColor(record.status)">{{
+                  voucherStatusLabel(record.status)
+                }}</a-tag>
               </template>
               <template v-else-if="column.key === 'action'">
-                <a-button type="link" size="small" @click="openVoucher(record)"
-                  >查看分录</a-button
-                >
+                <a-space size="small">
+                  <a-button
+                    type="link"
+                    size="small"
+                    @click="openVoucher(record)"
+                    >查看</a-button
+                  >
+                  <a-button
+                    v-if="
+                      record.status === 'DRAFT' &&
+                      auth.can('finance:voucher:review')
+                    "
+                    type="link"
+                    size="small"
+                    @click="handleReview(record)"
+                    >复核</a-button
+                  >
+                  <a-button
+                    v-if="
+                      record.status === 'REVIEWED' &&
+                      auth.can('finance:voucher:post')
+                    "
+                    type="link"
+                    size="small"
+                    @click="handlePost(record)"
+                    >记账</a-button
+                  >
+                  <a-button
+                    v-if="
+                      record.status === 'POSTED' &&
+                      auth.can('finance:voucher:reverse')
+                    "
+                    type="link"
+                    size="small"
+                    danger
+                    @click="openReverseModal(record)"
+                    >冲销</a-button
+                  >
+                </a-space>
               </template>
             </template>
           </a-table>
@@ -292,6 +335,104 @@
         </a-table>
       </template>
     </a-drawer>
+
+    <a-modal
+      v-model:open="draftModalOpen"
+      title="新建凭证草稿"
+      width="860px"
+      :confirm-loading="submitting"
+      @ok="saveDraft"
+    >
+      <a-form layout="vertical">
+        <a-row :gutter="16">
+          <a-col :xs="24" :md="8"
+            ><a-form-item label="业务类型" required
+              ><a-input
+                v-model:value="draftForm.bizType"
+                disabled /></a-form-item
+          ></a-col>
+          <a-col :xs="24" :md="8"
+            ><a-form-item label="业务单号" required
+              ><a-input
+                v-model:value="draftForm.bizNo"
+                :maxlength="80" /></a-form-item
+          ></a-col>
+          <a-col :xs="24" :md="8"
+            ><a-form-item label="凭证日期" required
+              ><a-input
+                v-model:value="draftForm.voucherDate"
+                type="date" /></a-form-item
+          ></a-col>
+          <a-col :span="24"
+            ><a-form-item label="凭证摘要" required
+              ><a-input
+                v-model:value="draftForm.description"
+                :maxlength="500" /></a-form-item
+          ></a-col>
+        </a-row>
+        <div class="entry-editor-head">
+          <strong>会计分录</strong
+          ><a-button type="dashed" size="small" @click="addDraftLine"
+            ><template #icon><PlusOutlined /></template>增加分录</a-button
+          >
+        </div>
+        <div
+          v-for="(line, index) in draftForm.lines"
+          :key="index"
+          class="entry-editor-row"
+        >
+          <a-input v-model:value="line.accountCode" placeholder="科目编码" />
+          <a-input v-model:value="line.accountName" placeholder="科目名称" />
+          <a-input-number
+            v-model:value="line.debit"
+            :min="0"
+            :precision="2"
+            placeholder="借方"
+          />
+          <a-input-number
+            v-model:value="line.credit"
+            :min="0"
+            :precision="2"
+            placeholder="贷方"
+          />
+          <a-input v-model:value="line.summary" placeholder="分录摘要" />
+          <a-button
+            danger
+            type="text"
+            :disabled="draftForm.lines.length <= 2"
+            @click="draftForm.lines.splice(index, 1)"
+            >删除</a-button
+          >
+        </div>
+        <a-alert
+          :type="draftBalance === 0 && draftDebit > 0 ? 'success' : 'warning'"
+          show-icon
+          :message="`借方 ${formatMoney(draftDebit)} · 贷方 ${formatMoney(draftCredit)} · 差额 ${formatMoney(Math.abs(draftBalance))}`"
+        />
+      </a-form>
+    </a-modal>
+
+    <a-modal
+      v-model:open="reverseModalOpen"
+      title="冲销会计凭证"
+      :confirm-loading="submitting"
+      @ok="submitReverse"
+    >
+      <a-form layout="vertical">
+        <a-form-item label="原凭证"
+          ><a-input :value="reverseTarget?.code" disabled
+        /></a-form-item>
+        <a-form-item label="冲销日期" required
+          ><a-input v-model:value="reverseForm.reversalDate" type="date"
+        /></a-form-item>
+        <a-form-item label="冲销原因" required
+          ><a-textarea
+            v-model:value="reverseForm.reason"
+            :rows="4"
+            :maxlength="500"
+        /></a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
@@ -299,10 +440,15 @@
 import { computed, onMounted, reactive, ref } from "vue";
 import { Empty, message } from "ant-design-vue";
 import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
+import PlusOutlined from "@ant-design/icons-vue/PlusOutlined";
 import {
   getFinancialStatements,
   getLedgerOverview,
   listVouchers,
+  createVoucherDraft,
+  postVoucher,
+  reverseVoucher,
+  reviewVoucher,
   type AccountingVoucher,
   type FinancialStatements,
   type LedgerOverview,
@@ -310,6 +456,9 @@ import {
   type VoucherEntry,
 } from "@/api/ledger";
 import { downloadCsv } from "@/utils/csv";
+import { useAuthStore } from "@/stores/auth";
+
+const auth = useAuthStore();
 
 const loading = ref(false);
 const activeTab = ref("vouchers");
@@ -320,6 +469,25 @@ const keyword = ref("");
 const bizTypeFilter = ref<string>();
 const statusFilter = ref<string>();
 const simpleImage = Empty.PRESENTED_IMAGE_SIMPLE;
+const submitting = ref(false);
+const draftModalOpen = ref(false);
+const reverseModalOpen = ref(false);
+const reverseTarget = ref<AccountingVoucher>();
+const emptyDraftLine = () => ({
+  accountCode: "",
+  accountName: "",
+  debit: undefined as number | undefined,
+  credit: undefined as number | undefined,
+  summary: "",
+});
+const draftForm = reactive({
+  bizType: "MANUAL",
+  bizNo: "",
+  voucherDate: today(),
+  description: "",
+  lines: [emptyDraftLine(), emptyDraftLine()],
+});
+const reverseForm = reactive({ reversalDate: today(), reason: "" });
 const overview = reactive<LedgerOverview>({
   voucherCount: 0,
   totalDebit: 0,
@@ -363,6 +531,15 @@ const reversedCount = computed(
       (item) => item.status !== "POSTED" || !isVoucherBalanced(item),
     ).length,
 );
+const draftDebit = computed(() =>
+  draftForm.lines.reduce((sum, item) => sum + Number(item.debit || 0), 0),
+);
+const draftCredit = computed(() =>
+  draftForm.lines.reduce((sum, item) => sum + Number(item.credit || 0), 0),
+);
+const draftBalance = computed(() =>
+  roundMoney(draftDebit.value - draftCredit.value),
+);
 const voucherTypeStats = computed(() =>
   Array.from(
     vouchers.value
@@ -387,6 +564,8 @@ const bizTypeOptions = computed(() =>
   })),
 );
 const statusOptions = [
+  { label: "草稿", value: "DRAFT" },
+  { label: "已复核", value: "REVIEWED" },
   { label: "已记账", value: "POSTED" },
   { label: "已冲销", value: "REVERSED" },
 ];
@@ -411,7 +590,7 @@ const voucherColumns = [
   { title: "借贷金额", key: "amount", width: 160 },
   { title: "平衡", key: "balance", width: 90 },
   { title: "状态", key: "status", width: 100 },
-  { title: "操作", key: "action", width: 120, fixed: "right" as const },
+  { title: "操作", key: "action", width: 240, fixed: "right" as const },
 ];
 const statementColumns = [
   { title: "科目编码", dataIndex: "accountCode", width: 100 },
@@ -452,6 +631,100 @@ function openVoucher(item: AccountingVoucher) {
   drawerOpen.value = true;
 }
 
+function openDraftModal() {
+  Object.assign(draftForm, {
+    bizType: "MANUAL",
+    bizNo: `MANUAL-${Date.now()}`,
+    voucherDate: today(),
+    description: "",
+    lines: [emptyDraftLine(), emptyDraftLine()],
+  });
+  draftModalOpen.value = true;
+}
+function addDraftLine() {
+  draftForm.lines.push(emptyDraftLine());
+}
+async function saveDraft() {
+  if (
+    !draftForm.bizType.trim() ||
+    !draftForm.bizNo.trim() ||
+    !draftForm.description.trim()
+  ) {
+    message.warning("请完整填写凭证来源、单号和摘要");
+    return;
+  }
+  if (draftBalance.value !== 0 || draftDebit.value <= 0) {
+    message.warning("会计分录必须借贷平衡且金额大于零");
+    return;
+  }
+  if (
+    draftForm.lines.some(
+      (line) =>
+        !line.accountCode.trim() ||
+        !line.accountName.trim() ||
+        Number(line.debit || 0) > 0 === Number(line.credit || 0) > 0,
+    )
+  ) {
+    message.warning("每条分录必须填写科目，并且只能录入借方或贷方金额");
+    return;
+  }
+  submitting.value = true;
+  try {
+    await createVoucherDraft(draftForm);
+    message.success("凭证草稿已创建");
+    draftModalOpen.value = false;
+    await loadData();
+  } catch (error) {
+    message.error((error as Error).message);
+  } finally {
+    submitting.value = false;
+  }
+}
+async function handleReview(item: AccountingVoucher) {
+  try {
+    await reviewVoucher(item.id);
+    message.success("凭证已复核");
+    await loadData();
+  } catch (error) {
+    message.error((error as Error).message);
+  }
+}
+async function handlePost(item: AccountingVoucher) {
+  try {
+    await postVoucher(item.id);
+    message.success("凭证已记账");
+    await loadData();
+  } catch (error) {
+    message.error((error as Error).message);
+  }
+}
+function openReverseModal(item: AccountingVoucher) {
+  reverseTarget.value = item;
+  Object.assign(reverseForm, { reversalDate: today(), reason: "" });
+  reverseModalOpen.value = true;
+}
+async function submitReverse() {
+  if (!reverseTarget.value || reverseForm.reason.trim().length < 5) {
+    message.warning("请填写至少 5 个字的冲销原因");
+    return;
+  }
+  submitting.value = true;
+  try {
+    await reverseVoucher(
+      reverseTarget.value.id,
+      reverseForm.reversalDate,
+      reverseForm.reason,
+    );
+    message.success("冲销凭证已生成");
+    reverseModalOpen.value = false;
+    await loadData();
+  } catch (error) {
+    message.error((error as Error).message);
+  } finally {
+    submitting.value = false;
+  }
+}
+
 function exportVouchers() {
   const headers = [
     "凭证号",
@@ -472,7 +745,7 @@ function exportVouchers() {
     item.description,
     item.totalDebit,
     item.totalCredit,
-    item.status === "POSTED" ? "已记账" : "已冲销",
+    voucherStatusLabel(item.status),
     isVoucherBalanced(item) ? "平衡" : "不平",
   ]);
   downloadCsv(`ledger-vouchers-${today()}.csv`, headers, rows);
@@ -523,6 +796,27 @@ function bizTypeLabel(type: string) {
     type ||
     "-"
   );
+}
+
+function voucherStatusLabel(status: AccountingVoucher["status"]) {
+  return (
+    {
+      DRAFT: "草稿",
+      REVIEWED: "已复核",
+      POSTED: "已记账",
+      REVERSED: "已冲销",
+    } as const
+  )[status];
+}
+function voucherStatusColor(status: AccountingVoucher["status"]) {
+  return (
+    {
+      DRAFT: "default",
+      REVIEWED: "blue",
+      POSTED: "green",
+      REVERSED: "orange",
+    } as const
+  )[status];
 }
 
 function today() {
@@ -624,6 +918,24 @@ h3 {
 
 .text-danger {
   color: #cf1322;
+}
+
+.entry-editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.entry-editor-row {
+  display: grid;
+  grid-template-columns: 110px 150px 120px 120px minmax(140px, 1fr) 56px;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+@media (max-width: 768px) {
+  .entry-editor-row {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 @media (max-width: 1100px) {

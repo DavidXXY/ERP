@@ -46,4 +46,10 @@ public interface PurchaseOrderRepository extends JpaRepository<PurchaseOrder, UU
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select order from PurchaseOrder order where order.id = :id")
   java.util.Optional<PurchaseOrder> findByIdForUpdate(@Param("id") UUID id);
+
+  @Query("select o.supplierId, coalesce(sum(o.orderAmount), 0) from PurchaseOrder o "
+      + "where o.supplierId in :supplierIds and o.status <> :cancelled "
+      + "group by o.supplierId")
+  List<Object[]> aggregateAmountBySupplierIdIn(@Param("supplierIds") Collection<UUID> supplierIds,
+      @Param("cancelled") PurchaseOrderStatus cancelled);
 }

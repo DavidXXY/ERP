@@ -39,6 +39,12 @@ const rootRoutes: RouteRecordRaw[] = [
     },
   },
   {
+    path: "governance",
+    name: "governance-center",
+    component: () => import("@/views/GovernanceCenterView.vue"),
+    meta: { title: "经营治理中心", permission: "governance:view" },
+  },
+  {
     path: "workbench/todos",
     name: "business-todos",
     component: () => import("@/views/BusinessTodoCenterView.vue"),

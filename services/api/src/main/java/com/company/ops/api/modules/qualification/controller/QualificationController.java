@@ -1,6 +1,7 @@
 package com.company.ops.api.modules.qualification.controller;
 
 import com.company.ops.api.common.api.ApiResponse;
+import com.company.ops.api.common.api.PageResponse;
 import com.company.ops.api.modules.qualification.dto.QualificationDtos.CompanyQualificationRequest;
 import com.company.ops.api.modules.qualification.dto.QualificationDtos.Attachment;
 import com.company.ops.api.modules.qualification.dto.QualificationDtos.CompanyQualificationResponse;
@@ -37,6 +38,8 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 
 @RestController
 @RequestMapping("/api/qualifications")
@@ -56,10 +59,10 @@ public class QualificationController {
   public ApiResponse<ReferenceDataResponse> references() { return ApiResponse.ok(service.references()); }
 
   @GetMapping("/companies") @PreAuthorize("hasAuthority('qualification:company:view')")
-  public ApiResponse<List<CompanyQualificationResponse>> companies(
+  public ApiResponse<PageResponse<CompanyQualificationResponse>> companies(
       @RequestParam(required = false) String keyword, @RequestParam(required = false) String subjectCompany,
-      @RequestParam(required = false) String status) {
-    return ApiResponse.ok(service.listCompanies(keyword, subjectCompany, status));
+      @RequestParam(required = false) String status, @PageableDefault(size = 100) Pageable pageable) {
+    return ApiResponse.ok(PageResponse.from(service.listCompanies(keyword, subjectCompany, status, pageable)));
   }
   @PostMapping("/companies") @ResponseStatus(HttpStatus.CREATED) @PreAuthorize("hasAuthority('qualification:company:manage')")
   public ApiResponse<CompanyQualificationResponse> createCompany(@Valid @RequestBody CompanyQualificationRequest request) {
@@ -73,11 +76,11 @@ public class QualificationController {
   public ApiResponse<Void> deleteCompany(@PathVariable UUID id) { service.deleteCompany(id); return ApiResponse.ok(); }
 
   @GetMapping("/employees") @PreAuthorize("hasAuthority('qualification:employee:view')")
-  public ApiResponse<List<EmployeeResponse>> employees(
+  public ApiResponse<PageResponse<EmployeeResponse>> employees(
       @RequestParam(required = false) String keyword,
       @RequestParam(required = false) String employmentStatus,
-      @RequestParam(required = false) UUID organizationId) {
-    return ApiResponse.ok(service.listEmployees(keyword, employmentStatus, organizationId));
+      @RequestParam(required = false) UUID organizationId, @PageableDefault(size = 100) Pageable pageable) {
+    return ApiResponse.ok(PageResponse.from(service.listEmployees(keyword, employmentStatus, organizationId, pageable)));
   }
   @GetMapping("/employees/{id}") @PreAuthorize("hasAuthority('qualification:employee:view')")
   public ApiResponse<EmployeeDetailResponse> employee(@PathVariable UUID id) { return ApiResponse.ok(service.employeeDetail(id)); }
@@ -109,11 +112,11 @@ public class QualificationController {
   }
 
   @GetMapping("/certificates") @PreAuthorize("hasAuthority('qualification:certificate:view')")
-  public ApiResponse<List<PersonnelCertificateResponse>> certificates(
+  public ApiResponse<PageResponse<PersonnelCertificateResponse>> certificates(
       @RequestParam(required = false) String keyword, @RequestParam(required = false) String specialty,
       @RequestParam(required = false) String status,
-      @RequestParam(required = false) Boolean companyRegistered) {
-    return ApiResponse.ok(service.listCertificates(keyword, specialty, status, companyRegistered));
+      @RequestParam(required = false) Boolean companyRegistered, @PageableDefault(size = 100) Pageable pageable) {
+    return ApiResponse.ok(PageResponse.from(service.listCertificates(keyword, specialty, status, companyRegistered, pageable)));
   }
   @PostMapping("/certificates") @ResponseStatus(HttpStatus.CREATED) @PreAuthorize("hasAuthority('qualification:certificate:manage')")
   public ApiResponse<PersonnelCertificateResponse> createCertificate(@Valid @RequestBody PersonnelCertificateRequest request) { return ApiResponse.ok(service.createCertificate(request)); }
@@ -123,10 +126,10 @@ public class QualificationController {
   public ApiResponse<Void> deleteCertificate(@PathVariable UUID id) { service.deleteCertificate(id); return ApiResponse.ok(); }
 
   @GetMapping("/performances") @PreAuthorize("hasAuthority('qualification:performance:view')")
-  public ApiResponse<List<PerformanceResponse>> performances(
+  public ApiResponse<PageResponse<PerformanceResponse>> performances(
       @RequestParam(required = false) String keyword, @RequestParam(required = false) String subjectCompany,
-      @RequestParam(required = false) String projectType) {
-    return ApiResponse.ok(service.listPerformances(keyword, subjectCompany, projectType));
+      @RequestParam(required = false) String projectType, @PageableDefault(size = 100) Pageable pageable) {
+    return ApiResponse.ok(PageResponse.from(service.listPerformances(keyword, subjectCompany, projectType, pageable)));
   }
   @PostMapping("/performances") @ResponseStatus(HttpStatus.CREATED) @PreAuthorize("hasAuthority('qualification:performance:manage')")
   public ApiResponse<PerformanceResponse> createPerformance(@Valid @RequestBody PerformanceRequest request) { return ApiResponse.ok(service.createPerformance(request)); }

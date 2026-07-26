@@ -1,11 +1,14 @@
 package com.company.ops.api.common.delete;
 
 import com.company.ops.api.modules.system.security.UserPrincipal;
+import com.company.ops.api.common.tenant.TenantContext;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
+import java.util.Set;
+import java.util.HashSet;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -31,16 +34,35 @@ public class DeleteGovernanceService {
         FROM sys_soft_delete_records
         WHERE entity_type = ?1
           AND entity_id = ?2
+          AND tenant_id = ?3
           AND status IN ('PENDING', 'APPROVED')
         """)
         .setParameter(1, entityType)
         .setParameter(2, entityId)
+        .setParameter(3, TenantContext.currentTenant())
         .getSingleResult();
     return count.longValue() > 0;
   }
 
   public <T> List<T> visible(String entityType, List<T> rows, java.util.function.Function<T, UUID> idGetter) {
-    return rows.stream().filter(row -> !isHidden(entityType, idGetter.apply(row))).toList();
+    if (rows.isEmpty()) return rows;
+    Set<UUID> hiddenIds = hiddenIds(entityType);
+    return rows.stream().filter(row -> !hiddenIds.contains(idGetter.apply(row))).toList();
+  }
+
+  public Set<UUID> hiddenIds(String entityType) {
+    @SuppressWarnings("unchecked")
+    List<UUID> hiddenRows = entityManager.createNativeQuery("""
+        SELECT entity_id
+        FROM sys_soft_delete_records
+        WHERE entity_type = ?1
+          AND tenant_id = ?2
+          AND status IN ('PENDING', 'APPROVED')
+        """, UUID.class)
+        .setParameter(1, entityType)
+        .setParameter(2, TenantContext.currentTenant())
+        .getResultList();
+    return new HashSet<>(hiddenRows);
   }
 
   @Transactional
@@ -52,11 +74,12 @@ public class DeleteGovernanceService {
             restored_by = ?2,
             restored_at = ?3,
             updated_at = ?3
-        WHERE id = ?1
+        WHERE id = ?1 AND tenant_id = ?4
         """)
         .setParameter(1, recordId)
         .setParameter(2, currentDisplayName())
         .setParameter(3, OffsetDateTime.now())
+        .setParameter(4, TenantContext.currentTenant())
         .executeUpdate();
   }
 
@@ -69,11 +92,12 @@ public class DeleteGovernanceService {
             approved_by = ?2,
             approved_at = ?3,
             updated_at = ?3
-        WHERE id = ?1 AND status = 'PENDING'
+        WHERE id = ?1 AND tenant_id = ?4 AND status = 'PENDING'
         """)
         .setParameter(1, recordId)
         .setParameter(2, currentDisplayName())
         .setParameter(3, OffsetDateTime.now())
+        .setParameter(4, TenantContext.currentTenant())
         .executeUpdate();
   }
 
@@ -84,9 +108,9 @@ public class DeleteGovernanceService {
     List<Object[]> rows = entityManager.createNativeQuery("""
         SELECT id, entity_type, entity_id, title, status, requested_by, requested_at, approved_by, approved_at
         FROM sys_soft_delete_records
-        WHERE status IN ('PENDING', 'APPROVED')
+        WHERE tenant_id = ?1 AND status IN ('PENDING', 'APPROVED')
         ORDER BY requested_at DESC
-        """).getResultList();
+        """).setParameter(1, TenantContext.currentTenant()).getResultList();
     return rows.stream().map(row -> new DeletedRecordResponse(
         (UUID) row[0],
         (String) row[1],
@@ -106,10 +130,12 @@ public class DeleteGovernanceService {
         FROM sys_soft_delete_records
         WHERE entity_type = ?1
           AND entity_id = ?2
+          AND tenant_id = ?3
           AND status IN ('PENDING', 'APPROVED')
         """)
         .setParameter(1, entityType)
         .setParameter(2, entityId)
+        .setParameter(3, TenantContext.currentTenant())
         .getSingleResult();
     if (existing.longValue() > 0) {
       return;
@@ -123,7 +149,7 @@ public class DeleteGovernanceService {
         INSERT INTO oa_approval_requests (
           id, tenant_id, code, approval_type, title, source_no, status,
           applicant_name, content, business_type, created_at, updated_at
-        ) VALUES (?1, 'default', ?2, 'OTHER', ?3, ?4, 'PENDING', ?5, ?6, 'DELETE', ?7, ?7)
+        ) VALUES (?1, ?8, ?2, 'OTHER', ?3, ?4, 'PENDING', ?5, ?6, 'DELETE', ?7, ?7)
         """)
         .setParameter(1, approvalId)
         .setParameter(2, "DEL-" + now.toInstant().toEpochMilli())
@@ -132,12 +158,13 @@ public class DeleteGovernanceService {
         .setParameter(5, requester)
         .setParameter(6, "非管理员删除申请，业务列表已隐藏。管理员可审批或恢复。")
         .setParameter(7, now)
+        .setParameter(8, TenantContext.currentTenant())
         .executeUpdate();
     entityManager.createNativeQuery("""
         INSERT INTO sys_soft_delete_records (
           id, tenant_id, entity_type, entity_id, title, status,
           requested_by, requested_role_codes, requested_at, approval_id, created_at, updated_at
-        ) VALUES (?1, 'default', ?2, ?3, ?4, 'PENDING', ?5, ?6, ?7, ?8, ?7, ?7)
+        ) VALUES (?1, ?9, ?2, ?3, ?4, 'PENDING', ?5, ?6, ?7, ?8, ?7, ?7)
         """)
         .setParameter(1, recordId)
         .setParameter(2, entityType)
@@ -147,6 +174,7 @@ public class DeleteGovernanceService {
         .setParameter(6, principal == null ? "" : String.join(",", principal.roleCodes()))
         .setParameter(7, now)
         .setParameter(8, approvalId)
+        .setParameter(9, TenantContext.currentTenant())
         .executeUpdate();
   }
 

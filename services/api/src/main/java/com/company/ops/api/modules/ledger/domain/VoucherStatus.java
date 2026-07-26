@@ -1,2 +1,2 @@
 package com.company.ops.api.modules.ledger.domain;
-public enum VoucherStatus { POSTED, REVERSED }
+public enum VoucherStatus { DRAFT, REVIEWED, POSTED, REVERSED }

@@ -73,6 +73,8 @@ ops:
     login-lock-minutes: ${LOGIN_LOCK_MINUTES:15}
     trusted-proxy-cidrs: ${TRUSTED_PROXY_CIDRS:127.0.0.0/8,::1/128}
     data-encryption-key: ${DATA_ENCRYPTION_KEY:ops-erp-local-data-encryption-key-change-me}
+    data-encryption-key-id: ${DATA_ENCRYPTION_KEY_ID:primary}
+    data-encryption-previous-keys: ${DATA_ENCRYPTION_PREVIOUS_KEYS:}
   storage:
     type: ${STORAGE_TYPE:local}
     endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
@@ -85,6 +87,8 @@ ops:
     import: ${QUALIFICATION_IMPORT_ENABLED:false}
   audit:
     retention-days: ${AUDIT_RETENTION_DAYS:365}
+    cleanup-batch-size: ${AUDIT_CLEANUP_BATCH_SIZE:1000}
+    cleanup-max-batches: ${AUDIT_CLEANUP_MAX_BATCHES:20}
   wechat:
     enabled: ${WECHAT_ENABLED:false}
     app-id: ${WECHAT_APP_ID:}

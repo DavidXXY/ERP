@@ -1,6 +1,7 @@
 package com.company.ops.api.modules.finance.controller;
 
 import com.company.ops.api.common.api.ApiResponse;
+import com.company.ops.api.common.api.PageResponse;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ReceivableResponse;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.RecordReceiptRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.RegisterInvoiceRequest;
@@ -28,6 +29,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 
 @RestController
 @RequestMapping("/api/finance")
@@ -55,8 +58,9 @@ public class FinanceController {
 
   @GetMapping("/receivables")
   @PreAuthorize("hasAuthority('finance:receivable:view')")
-  public ApiResponse<List<ReceivableResponse>> listReceivables() {
-    return ApiResponse.ok(crmOperationsService.listReceivables());
+  public ApiResponse<PageResponse<ReceivableResponse>> listReceivables(
+      @PageableDefault(size = 100) Pageable pageable) {
+    return ApiResponse.ok(PageResponse.from(crmOperationsService.listReceivables(pageable)));
   }
 
   @GetMapping("/receivables/{id}")
@@ -94,14 +98,16 @@ public class FinanceController {
 
   @GetMapping("/payables")
   @PreAuthorize("hasAuthority('finance:payable:view')")
-  public ApiResponse<List<FinancePayableResponse>> listPayables() {
-    return ApiResponse.ok(financeService.listPayables());
+  public ApiResponse<PageResponse<FinancePayableResponse>> listPayables(
+      @PageableDefault(size = 100) Pageable pageable) {
+    return ApiResponse.ok(PageResponse.from(financeService.listPayables(pageable)));
   }
 
   @GetMapping("/payment-applications")
   @PreAuthorize("hasAnyAuthority('finance:payable:view', 'finance:payment:approve', 'finance:payment:execute')")
-  public ApiResponse<List<PaymentApplicationResponse>> listApplications() {
-    return ApiResponse.ok(financeService.listApplications());
+  public ApiResponse<PageResponse<PaymentApplicationResponse>> listApplications(
+      @PageableDefault(size = 100) Pageable pageable) {
+    return ApiResponse.ok(PageResponse.from(financeService.listApplications(pageable)));
   }
 
   @GetMapping("/payment-applications/can-approve")
@@ -139,7 +145,8 @@ public class FinanceController {
 
   @GetMapping("/payments")
   @PreAuthorize("hasAnyAuthority('finance:payable:view', 'finance:payment:approve', 'finance:payment:execute')")
-  public ApiResponse<List<PaymentRecordResponse>> listPayments() {
-    return ApiResponse.ok(financeService.listPayments());
+  public ApiResponse<PageResponse<PaymentRecordResponse>> listPayments(
+      @PageableDefault(size = 100) Pageable pageable) {
+    return ApiResponse.ok(PageResponse.from(financeService.listPayments(pageable)));
   }
 }

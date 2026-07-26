@@ -29,6 +29,7 @@ jobs:
       - run: npm audit --audit-level=high --prefix apps/admin
       - run: npm audit --audit-level=high --prefix apps/mobile
       - run: npm run lint
+      - run: npm run format:check
       - run: npm run test
       - run: npm --prefix apps/admin run typecheck
       - run: npm run build
@@ -38,6 +39,15 @@ jobs:
       - run: npm run mobile:test
       - run: npm run mobile:build:h5
       - run: npm run mobile:build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - name: Upload browser test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report
+          retention-days: 14
 
   backend:
     runs-on: ubuntu-latest
@@ -49,6 +59,12 @@ jobs:
           java-version: 17
           cache: maven
       - run: mvn --batch-mode verify
+        working-directory: services/api
+      - name: Enforce PostgreSQL migration test execution
+        run: |
+          report=target/surefire-reports/TEST-com.company.ops.api.PostgresBaselineMigrationTest.xml
+          test -f "$report"
+          grep -q 'tests="1" errors="0" skipped="0" failures="0"' "$report"
         working-directory: services/api
 
   dependency-review:

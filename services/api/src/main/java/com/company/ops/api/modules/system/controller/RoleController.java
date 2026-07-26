@@ -1,13 +1,13 @@
 package com.company.ops.api.modules.system.controller;
 
 import com.company.ops.api.common.api.ApiResponse;
+import com.company.ops.api.common.api.PageResponse;
 import com.company.ops.api.modules.system.dto.CreateRoleRequest;
 import com.company.ops.api.modules.system.dto.RoleResponse;
 import com.company.ops.api.modules.system.dto.UpdateRoleRequest;
 import com.company.ops.api.modules.system.service.RoleService;
 import jakarta.validation.Valid;
 import java.util.UUID;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -32,8 +32,8 @@ public class RoleController {
 
   @GetMapping
   @PreAuthorize("hasAuthority('system:role:view')")
-  public ApiResponse<Page<RoleResponse>> list(@PageableDefault(size = 20) Pageable pageable) {
-    return ApiResponse.ok(roleService.listRoles(pageable));
+  public ApiResponse<PageResponse<RoleResponse>> list(@PageableDefault(size = 20) Pageable pageable) {
+    return ApiResponse.ok(PageResponse.from(roleService.listRoles(pageable)));
   }
 
   @GetMapping("/{id}")

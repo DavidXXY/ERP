@@ -1,4 +1,4 @@
-import { http, request } from "./http";
+import { http, request, requestAllPages } from "./http";
 
 export type QualificationStatus =
   | "VALID"
@@ -215,11 +215,14 @@ export function getQualificationReferences() {
   });
 }
 export function listCompanyQualifications(params?: Record<string, unknown>) {
-  return request<CompanyQualification[]>({
-    method: "GET",
-    url: "/qualifications/companies",
-    params,
-  });
+  return requestAllPages<CompanyQualification>(
+    {
+      method: "GET",
+      url: "/qualifications/companies",
+      params,
+    },
+    200,
+  );
 }
 export function createCompanyQualification(data: CompanyQualificationPayload) {
   return request<CompanyQualification>({
@@ -245,11 +248,14 @@ export function deleteCompanyQualification(id: string) {
   });
 }
 export function listQualificationEmployees(params?: Record<string, unknown>) {
-  return request<QualificationEmployee[]>({
-    method: "GET",
-    url: "/qualifications/employees",
-    params,
-  });
+  return requestAllPages<QualificationEmployee>(
+    {
+      method: "GET",
+      url: "/qualifications/employees",
+      params,
+    },
+    200,
+  );
 }
 export function getQualificationEmployee(id: string) {
   return request<EmployeeDetail>({
@@ -310,11 +316,14 @@ export function deleteEmployeeContract(id: string) {
   });
 }
 export function listPersonnelCertificates(params?: Record<string, unknown>) {
-  return request<PersonnelCertificate[]>({
-    method: "GET",
-    url: "/qualifications/certificates",
-    params,
-  });
+  return requestAllPages<PersonnelCertificate>(
+    {
+      method: "GET",
+      url: "/qualifications/certificates",
+      params,
+    },
+    200,
+  );
 }
 export function createPersonnelCertificate(data: CertificatePayload) {
   return request<PersonnelCertificate>({
@@ -342,11 +351,14 @@ export function deletePersonnelCertificate(id: string) {
 export function listQualificationPerformances(
   params?: Record<string, unknown>,
 ) {
-  return request<QualificationPerformance[]>({
-    method: "GET",
-    url: "/qualifications/performances",
-    params,
-  });
+  return requestAllPages<QualificationPerformance>(
+    {
+      method: "GET",
+      url: "/qualifications/performances",
+      params,
+    },
+    200,
+  );
 }
 export function createQualificationPerformance(data: PerformancePayload) {
   return request<QualificationPerformance>({

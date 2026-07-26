@@ -1,6 +1,7 @@
 package com.company.ops.api.modules.crm.controller;
 
 import com.company.ops.api.common.api.ApiResponse;
+import com.company.ops.api.common.api.PageResponse;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.AdvanceOpportunityRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ApplyInvoiceRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ContractResponse;
@@ -244,8 +245,9 @@ public class CrmOperationsController {
 
   @GetMapping("/receivables")
   @PreAuthorize("hasAuthority('crm:receivable:view')")
-  public ApiResponse<List<ReceivableResponse>> listReceivables() {
-    return ApiResponse.ok(crmOperationsService.listReceivables());
+  public ApiResponse<PageResponse<ReceivableResponse>> listReceivables(
+      @org.springframework.data.web.PageableDefault(size = 100) org.springframework.data.domain.Pageable pageable) {
+    return ApiResponse.ok(PageResponse.from(crmOperationsService.listReceivables(pageable)));
   }
 
   @PostMapping("/receivables/{id}/invoice")

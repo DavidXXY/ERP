@@ -50,11 +50,12 @@ http://localhost:8080/api-docs
 - `office` / `collaboration`：审批、报销、档案、通知、审计和协作
 - `hr` / `qualification`：员工、人事、证书、资质和投标查询
 - `risk` / `bi`：风险闭环、快照和经营分析
+- `governance`：经营控制、会计期间、关账守卫和银行对账
 - `system`：认证、组织、用户、角色、权限和数据范围
 
 ## 数据库迁移
 
-生产使用 PostgreSQL 16 和 Flyway。新数据库从 `B77__fresh_install_baseline.sql` 建立基线，再执行 V78 之后的增量迁移；当前增量版本为 V86。不要手工修改数据库结构或已执行迁移。
+生产使用 PostgreSQL 16 和 Flyway。新数据库从 `B77__fresh_install_baseline.sql` 建立基线，再执行 V78 之后的增量迁移；当前增量版本为 V87。不要手工修改数据库结构或已执行迁移。
 
 ## 验证
 
@@ -64,4 +65,4 @@ mvn test
 
 PostgreSQL 基线迁移测试使用 Testcontainers，需要本机或 CI 的 Docker 可用。其余集成测试使用 H2 专用迁移链。
 
-关键生产配置和 V86 说明见 `../../docs/system-hardening-2026-07-26.md`。
+分页接口通过稳定 `PageResponse` 输出，不直接序列化 Spring Data `Page`。生产监控仅暴露 `health,prometheus`；数据密钥轮换、联合备份恢复、审计分批清理和本轮查询优化见 `../../docs/system-optimization-2026-07-26.md`。

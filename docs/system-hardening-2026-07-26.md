@@ -104,9 +104,10 @@ cd services/api && mvn test
 
 本轮验证结果：
 
-- 后端 77 项测试：76 通过，0 失败，1 项因本机 Docker 不可用跳过；跳过项是 PostgreSQL Testcontainers 基线迁移测试。
+- 后端 81 项测试：80 通过，0 失败，1 项因本机 Docker 不可用跳过；跳过项是 PostgreSQL Testcontainers 基线迁移测试。
 - 管理端 11 项测试通过，lint、Prettier、类型检查和生产构建通过。
 - 移动端 2 项测试通过，类型检查、H5 和微信小程序构建通过。
+- Playwright 桌面和移动端关键流程 4 项通过。
 - 根目录、管理端、移动端 npm audit 均为 0 漏洞。
 - 919 个唯一软件包经 OSV 扫描，未发现漏洞。
 - 管理端最大 JavaScript chunk 约 373 KB，低于 500 KB 预算。

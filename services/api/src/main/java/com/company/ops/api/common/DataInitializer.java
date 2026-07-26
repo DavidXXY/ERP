@@ -31,7 +31,15 @@ public class DataInitializer implements CommandLineRunner {
       new RequiredPermission("crm:quote:cost", "报价成本询价", "crm"),
       new RequiredPermission("maintenance:view", "服务管理查看", "maintenance"),
       new RequiredPermission("maintenance:order:manage", "工单管理", "maintenance"),
-      new RequiredPermission("maintenance:order:delete", "工单删除", "maintenance")
+      new RequiredPermission("maintenance:order:delete", "工单删除", "maintenance"),
+      new RequiredPermission("governance:view", "经营治理查看", "governance"),
+      new RequiredPermission("governance:manage", "经营治理维护", "governance"),
+      new RequiredPermission("governance:period:close", "会计期间关账", "governance"),
+      new RequiredPermission("governance:bank:reconcile", "银行流水对账", "governance"),
+      new RequiredPermission("finance:voucher:create", "凭证草稿新增", "finance"),
+      new RequiredPermission("finance:voucher:review", "凭证复核", "finance"),
+      new RequiredPermission("finance:voucher:post", "凭证记账", "finance"),
+      new RequiredPermission("finance:voucher:reverse", "凭证冲销", "finance")
   );
 
   private final SystemPermissionRepository permissionRepository;

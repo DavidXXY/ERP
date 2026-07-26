@@ -1,4 +1,4 @@
-import { request } from "./http";
+import { request, requestAllPages } from "./http";
 export type VoucherEntry = {
   id: string;
   accountCode: string;
@@ -14,10 +14,18 @@ export type AccountingVoucher = {
   bizNo: string;
   voucherDate: string;
   description: string;
-  status: "POSTED" | "REVERSED";
+  status: "DRAFT" | "REVIEWED" | "POSTED" | "REVERSED";
   totalDebit: number;
   totalCredit: number;
   entries: VoucherEntry[];
+  reviewedAt?: string;
+  reviewedBy?: string;
+  postedAt?: string;
+  postedBy?: string;
+  reversedAt?: string;
+  reversedBy?: string;
+  reversalReason?: string;
+  reversalVoucherId?: string;
 };
 export type LedgerOverview = {
   voucherCount: number;
@@ -54,10 +62,13 @@ export function getLedgerOverview() {
   });
 }
 export function listVouchers() {
-  return request<AccountingVoucher[]>({
-    method: "GET",
-    url: "/finance/ledger/vouchers",
-  });
+  return requestAllPages<AccountingVoucher>(
+    {
+      method: "GET",
+      url: "/finance/ledger/vouchers",
+    },
+    200,
+  );
 }
 export function getFinancialStatements() {
   return request<FinancialStatements>({
@@ -65,3 +76,42 @@ export function getFinancialStatements() {
     url: "/finance/ledger/statements",
   });
 }
+export type CreateVoucherPayload = {
+  bizType: string;
+  bizNo: string;
+  voucherDate: string;
+  description: string;
+  lines: {
+    accountCode: string;
+    accountName: string;
+    debit?: number;
+    credit?: number;
+    summary?: string;
+  }[];
+};
+export const createVoucherDraft = (data: CreateVoucherPayload) =>
+  request<AccountingVoucher>({
+    method: "POST",
+    url: "/finance/ledger/vouchers",
+    data,
+  });
+export const reviewVoucher = (id: string) =>
+  request<AccountingVoucher>({
+    method: "POST",
+    url: `/finance/ledger/vouchers/${id}/review`,
+  });
+export const postVoucher = (id: string) =>
+  request<AccountingVoucher>({
+    method: "POST",
+    url: `/finance/ledger/vouchers/${id}/post`,
+  });
+export const reverseVoucher = (
+  id: string,
+  reversalDate: string,
+  reason: string,
+) =>
+  request<AccountingVoucher>({
+    method: "POST",
+    url: `/finance/ledger/vouchers/${id}/reverse`,
+    data: { reversalDate, reason },
+  });

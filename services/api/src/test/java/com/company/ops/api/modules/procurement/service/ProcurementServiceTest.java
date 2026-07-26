@@ -124,8 +124,6 @@ class ProcurementServiceTest {
     when(supplierRepository.findById(supplier.getId())).thenReturn(Optional.of(supplier));
     when(supplierRepository.save(any(Supplier.class)))
         .thenAnswer(invocation -> invocation.getArgument(0));
-    when(supplierRepository.findAll()).thenReturn(java.util.List.of(supplier));
-
     var response = procurementService.reviewSupplierAdmission(
         supplier.getId(),
         new ReviewSupplierAdmissionRequest("APPROVED", "资料核验通过"));

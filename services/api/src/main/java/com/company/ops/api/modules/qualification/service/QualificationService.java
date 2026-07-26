@@ -45,6 +45,7 @@ import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -57,6 +58,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 @Service
 public class QualificationService {
@@ -140,9 +143,12 @@ public class QualificationService {
   }
 
   @Transactional(readOnly = true)
-  public List<CompanyQualificationResponse> listCompanies(String keyword, String subjectCompany, String status) {
-    return deleteGovernanceService.visible("QUAL_COMPANY", companyRepository.findAllByOrderBySubjectCompanyAscNameAsc(), CompanyQualification::getId).stream()
-        .filter(item -> matchesCompany(item, keyword, subjectCompany, status)).map(this::toCompany).toList();
+  public Page<CompanyQualificationResponse> listCompanies(String keyword, String subjectCompany, String status,
+      Pageable pageable) {
+    LocalDate today = LocalDate.now();
+    return companyRepository.search(normalizedFilter(keyword), normalizedFilter(subjectCompany),
+        normalizedStatus(status), today, today.plusDays(90), hiddenIdFilter("QUAL_COMPANY"), pageable)
+        .map(this::toCompany);
   }
 
   @Transactional
@@ -168,11 +174,14 @@ public class QualificationService {
   }
 
   @Transactional(readOnly = true)
-  public List<EmployeeResponse> listEmployees(String keyword, String employmentStatus, UUID organizationId) {
-    Map<UUID, List<PersonnelCertificate>> certificates = certificatesByEmployee();
-    return deleteGovernanceService.visible("QUAL_EMPLOYEE", employeeRepository.findAllByOrderByNameAsc(), QualificationEmployee::getId).stream()
-        .filter(item -> matchesEmployee(item, keyword, employmentStatus, organizationId))
-        .map(item -> toEmployee(item, certificates.getOrDefault(item.getId(), List.of()))).toList();
+  public Page<EmployeeResponse> listEmployees(String keyword, String employmentStatus, UUID organizationId,
+      Pageable pageable) {
+    Page<QualificationEmployee> source = employeeRepository.search(
+        normalizedFilter(keyword), normalizedFilter(employmentStatus), organizationId,
+        hiddenIdFilter("QUAL_EMPLOYEE"), pageable);
+    Map<UUID, List<PersonnelCertificate>> certificates = certificatesByEmployee(
+        source.getContent().stream().map(QualificationEmployee::getId).toList());
+    return source.map(item -> toEmployee(item, certificates.getOrDefault(item.getId(), List.of())));
   }
 
   @Transactional(readOnly = true)
@@ -243,11 +252,12 @@ public class QualificationService {
   }
 
   @Transactional(readOnly = true)
-  public List<PersonnelCertificateResponse> listCertificates(String keyword, String specialty, String status,
-                                                              Boolean companyRegistered) {
-    return deleteGovernanceService.visible("QUAL_CERTIFICATE", certificateRepository.findAllByOrderByEmployeeNameAscNameAsc(), PersonnelCertificate::getId).stream()
-        .filter(item -> matchesCertificate(item, keyword, specialty, status, companyRegistered))
-        .map(this::toCertificate).toList();
+  public Page<PersonnelCertificateResponse> listCertificates(String keyword, String specialty, String status,
+                                                              Boolean companyRegistered, Pageable pageable) {
+    LocalDate today = LocalDate.now();
+    return certificateRepository.search(normalizedFilter(keyword), normalizedFilter(specialty),
+        normalizedStatus(status), companyRegistered, today, today.plusDays(90),
+        hiddenIdFilter("QUAL_CERTIFICATE"), pageable).map(this::toCertificate);
   }
 
   @Transactional
@@ -273,13 +283,12 @@ public class QualificationService {
   }
 
   @Transactional(readOnly = true)
-  public List<PerformanceResponse> listPerformances(String keyword, String subjectCompany, String projectType) {
-    return deleteGovernanceService.visible("QUAL_PERFORMANCE", performanceRepository.findAllByOrderBySubjectCompanyAscNameAsc(), QualificationPerformance::getId).stream()
-        .filter(item -> contains(item.getName(), keyword) || contains(item.getClientName(), keyword)
-            || contains(item.getContractNo(), keyword) || blank(keyword))
-        .filter(item -> blank(subjectCompany) || subjectCompany.equals(item.getSubjectCompany()))
-        .filter(item -> blank(projectType) || projectType.equals(item.getProjectType()))
-        .map(this::toPerformance).toList();
+  public Page<PerformanceResponse> listPerformances(String keyword, String subjectCompany, String projectType,
+      Pageable pageable) {
+    Page<QualificationPerformance> source = performanceRepository.search(
+        normalizedFilter(keyword), normalizedFilter(subjectCompany), normalizedFilter(projectType),
+        hiddenIdFilter("QUAL_PERFORMANCE"), pageable);
+    return source.map(this::toPerformance);
   }
 
   @Transactional
@@ -542,6 +551,25 @@ public class QualificationService {
   private Map<UUID, List<PersonnelCertificate>> certificatesByEmployee() {
     return certificateRepository.findAllByOrderByEmployeeNameAscNameAsc().stream()
         .collect(Collectors.groupingBy(item -> item.getEmployee().getId(), LinkedHashMap::new, Collectors.toList()));
+  }
+
+  private Map<UUID, List<PersonnelCertificate>> certificatesByEmployee(List<UUID> employeeIds) {
+    if (employeeIds.isEmpty()) return Map.of();
+    return certificateRepository.findByEmployee_IdIn(employeeIds).stream()
+        .collect(Collectors.groupingBy(item -> item.getEmployee().getId(), LinkedHashMap::new, Collectors.toList()));
+  }
+
+  private String normalizedFilter(String value) {
+    return value == null ? "" : value.trim();
+  }
+
+  private String normalizedStatus(String value) {
+    return normalizedFilter(value).toUpperCase(java.util.Locale.ROOT);
+  }
+
+  private Collection<UUID> hiddenIdFilter(String entityType) {
+    Set<UUID> hiddenIds = deleteGovernanceService.hiddenIds(entityType);
+    return hiddenIds.isEmpty() ? List.of(new UUID(0L, 0L)) : hiddenIds;
   }
 
   private <T> List<CategoryCount> counts(List<T> items, Function<T, String> classifier) {

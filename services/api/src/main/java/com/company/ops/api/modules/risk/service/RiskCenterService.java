@@ -328,7 +328,8 @@ public class RiskCenterService {
       }
     }
     if (can("finance:payable:view")) {
-      for (FinancePayableResponse item : financeService.listPayables()) {
+      for (FinancePayableResponse item : financeService
+          .listPayables(org.springframework.data.domain.Pageable.unpaged()).getContent()) {
         if (!item.overdue()) continue;
         String key = "finance-payable-" + item.id();
         sink.accept(item(key, "finance", "财务资金", "应付逾期",

@@ -33,6 +33,11 @@
           <span>统一风险中心</span>
         </a-menu-item>
 
+        <a-menu-item v-if="auth.can('governance:view')" key="/governance">
+          <template #icon><AuditOutlined /></template>
+          <span>经营治理中心</span>
+        </a-menu-item>
+
         <a-menu-item v-if="canAccessBusinessTodos" key="/workbench/todos">
           <template #icon><FileDoneOutlined /></template>
           <span>业务待办中心</span>
@@ -349,6 +354,7 @@ import { useRoute, useRouter } from "vue-router";
 import DashboardOutlined from "@ant-design/icons-vue/DashboardOutlined";
 import CalendarOutlined from "@ant-design/icons-vue/CalendarOutlined";
 import ApartmentOutlined from "@ant-design/icons-vue/ApartmentOutlined";
+import AuditOutlined from "@ant-design/icons-vue/AuditOutlined";
 import FileDoneOutlined from "@ant-design/icons-vue/FileDoneOutlined";
 import InboxOutlined from "@ant-design/icons-vue/InboxOutlined";
 import MenuFoldOutlined from "@ant-design/icons-vue/MenuFoldOutlined";

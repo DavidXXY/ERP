@@ -36,6 +36,8 @@
     "test-bot:fix": "node scripts/test-bot.js --fix",
     "preview": "npm run admin:preview",
     "test": "npm --prefix apps/admin run test",
+    "test:e2e": "playwright test",
+    "test:e2e:install": "playwright install chromium",
     "lint": "npm --prefix apps/admin run lint",
     "format:check": "npm --prefix apps/admin run format:check",
     "version:check": "node scripts/version.mjs check",
@@ -54,6 +56,7 @@
     "vite": "8.1.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.55.1",
     "@types/node": "^26.0.1",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",

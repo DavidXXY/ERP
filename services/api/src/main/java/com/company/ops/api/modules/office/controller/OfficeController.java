@@ -1,6 +1,7 @@
 package com.company.ops.api.modules.office.controller;
 
 import com.company.ops.api.common.api.ApiResponse;
+import com.company.ops.api.common.api.PageResponse;
 import com.company.ops.api.modules.office.domain.DocumentFile;
 import com.company.ops.api.modules.office.dto.OfficeDtos.AuditResponse;
 import com.company.ops.api.modules.office.dto.OfficeDtos.ApprovalResponse;
@@ -51,7 +52,6 @@ import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.data.domain.Page;
 import java.util.ArrayList;
 
 @RestController @RequestMapping("/api/office")
@@ -67,9 +67,9 @@ public class OfficeController {
   @GetMapping("/references") @PreAuthorize("hasAnyAuthority('office:view', 'office:expense:create', 'office:outsource:create', 'office:travel:create', 'office:seal:create')")
   public ApiResponse<OfficeReferenceResponse> references() { return ApiResponse.ok(service.references()); }
   @GetMapping("/approvals") @PreAuthorize("hasAuthority('office:approval:view')")
-  public ApiResponse<org.springframework.data.domain.Page<ApprovalResponse>> approvals(
+  public ApiResponse<PageResponse<ApprovalResponse>> approvals(
       @org.springframework.data.web.PageableDefault(size = 100) org.springframework.data.domain.Pageable pageable) {
-    return ApiResponse.ok(service.listApprovals(pageable));
+    return ApiResponse.ok(PageResponse.from(service.listApprovals(pageable)));
   }
   @GetMapping("/approvals/{id}") @PreAuthorize("hasAnyAuthority('office:approval:view', 'office:approval:create')")
   public ApiResponse<ApprovalResponse> approval(@PathVariable UUID id) { return ApiResponse.ok(service.getApproval(id)); }
@@ -117,13 +117,13 @@ public class OfficeController {
   @GetMapping("/documents") @PreAuthorize("hasAuthority('office:document:view')")
   public ApiResponse<List<DocumentResponse>> documents() { return ApiResponse.ok(service.listDocuments()); }
   @GetMapping("/documents/search") @PreAuthorize("hasAuthority('office:document:view')")
-  public ApiResponse<Page<DocumentResponse>> searchDocuments(
+  public ApiResponse<PageResponse<DocumentResponse>> searchDocuments(
       @RequestParam(required = false) String bizType,
       @RequestParam(required = false) UUID bizId,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size) {
     if (size < 1 || size > 100) { size = 20; }
-    return ApiResponse.ok(service.listDocuments(bizType, bizId, page, size));
+    return ApiResponse.ok(PageResponse.from(service.listDocuments(bizType, bizId, page, size)));
   }
   @GetMapping("/documents/by-biz")
   @PreAuthorize("hasAuthority('office:document:view') or (hasAuthority('procurement:view') and @officeDocumentSecurity.isProcurementBizType(#bizType))")
@@ -174,9 +174,9 @@ public class OfficeController {
     service.deleteDocumentsByBiz(bizType, bizId); return ApiResponse.ok();
   }
   @GetMapping("/notifications") @PreAuthorize("hasAuthority('office:notification:view')")
-  public ApiResponse<org.springframework.data.domain.Page<NotificationResponse>> notifications(
+  public ApiResponse<PageResponse<NotificationResponse>> notifications(
       @org.springframework.data.web.PageableDefault(size = 50) org.springframework.data.domain.Pageable pageable) {
-    return ApiResponse.ok(service.notifications(pageable));
+    return ApiResponse.ok(PageResponse.from(service.notifications(pageable)));
   }
   @PostMapping("/notifications/refresh") @PreAuthorize("hasAuthority('office:notification:view')")
   public ApiResponse<Integer> refreshNotifications() {
@@ -184,13 +184,13 @@ public class OfficeController {
   }
 
   @GetMapping("/audits") @PreAuthorize("hasAuthority('office:audit:view')")
-  public ApiResponse<org.springframework.data.domain.Page<AuditResponse>> listAudits(
+  public ApiResponse<PageResponse<AuditResponse>> listAudits(
       @RequestParam(required = false) String keyword,
       @RequestParam(required = false) java.time.LocalDate startDate,
       @RequestParam(required = false) java.time.LocalDate endDate,
       @org.springframework.data.web.PageableDefault(size = 20, sort = "createdAt", direction = org.springframework.data.domain.Sort.Direction.DESC) 
       org.springframework.data.domain.Pageable pageable) {
-    return ApiResponse.ok(service.listAudits(keyword, startDate, endDate, pageable));
+    return ApiResponse.ok(PageResponse.from(service.listAudits(keyword, startDate, endDate, pageable)));
   }
 
   @GetMapping("/notifications/count") @PreAuthorize("hasAuthority('office:notification:view')")

@@ -1,5 +1,6 @@
 package com.company.ops.api.modules.inventory.service;
 
+import com.company.ops.api.common.delete.DeleteGovernanceService;
 import com.company.ops.api.common.exception.BusinessException;
 import com.company.ops.api.common.service.CodeGenerator;
 import com.company.ops.api.modules.inventory.domain.InventoryIssueLine;
@@ -10,7 +11,6 @@ import com.company.ops.api.modules.inventory.domain.InventoryReturnLine;
 import com.company.ops.api.modules.inventory.domain.InventoryReturnOrder;
 import com.company.ops.api.modules.inventory.domain.StockMovement;
 import com.company.ops.api.modules.inventory.domain.StockMovementType;
-import com.company.ops.api.modules.inventory.dto.CreateInventoryPartRequest;
 import com.company.ops.api.modules.inventory.dto.CreateMaterialIssueRequest;
 import com.company.ops.api.modules.inventory.dto.CreateMaterialReturnRequest;
 import com.company.ops.api.modules.inventory.dto.CreateStockMovementRequest;
@@ -64,6 +64,7 @@ public class InventoryService {
   private final InventoryReturnLineRepository returnLineRepository;
   private final ProjectRepository projectRepository;
   private final ProjectCostLedgerService costLedger;
+  private final DeleteGovernanceService deleteGovernanceService;
 
   public InventoryService(InventoryPartRepository partRepository,
       StockMovementRepository movementRepository,
@@ -73,7 +74,8 @@ public class InventoryService {
       InventoryReturnLineRepository returnLineRepository,
       ProjectRepository projectRepository,
       ProjectCostLedgerService costLedger,
-      CodeGenerator codeGenerator) {
+      CodeGenerator codeGenerator,
+      DeleteGovernanceService deleteGovernanceService) {
     this.codeGenerator = codeGenerator;
     this.partRepository = partRepository;
     this.movementRepository = movementRepository;
@@ -83,18 +85,23 @@ public class InventoryService {
     this.returnLineRepository = returnLineRepository;
     this.projectRepository = projectRepository;
     this.costLedger = costLedger;
+    this.deleteGovernanceService = deleteGovernanceService;
   }
 
   @Transactional(readOnly = true)
   public List<InventoryPartResponse> listParts() {
-    return partRepository.findAllByOrderByCreatedAtDesc().stream()
+    return visibleParts().stream()
         .map(this::toPartResponse)
         .toList();
   }
 
   @Transactional(readOnly = true)
   public Page<InventoryPartResponse> listParts(Pageable pageable) {
-    return partRepository.findAllByOrderByCreatedAtDesc(pageable).map(this::toPartResponse);
+    Set<UUID> hiddenIds = deleteGovernanceService.hiddenIds("MATERIAL");
+    Page<InventoryPart> parts = hiddenIds.isEmpty()
+        ? partRepository.findAllByOrderByCreatedAtDesc(pageable)
+        : partRepository.findAllVisible(hiddenIds, pageable);
+    return parts.map(this::toPartResponse);
   }
 
   @Transactional(readOnly = true)
@@ -103,7 +110,7 @@ public class InventoryService {
     Map<UUID, BigDecimal> outboundByPart = movementRepository.sumQuantityByPartSince(
         since, List.of(StockMovementType.OUTBOUND, StockMovementType.SCRAP)).stream()
         .collect(Collectors.toMap(row -> (UUID) row[0], row -> amount((BigDecimal) row[1])));
-    return partRepository.findAllByOrderByCreatedAtDesc().stream()
+    return visibleParts().stream()
         .map(part -> toReplenishmentSuggestion(part, outboundByPart.getOrDefault(part.getId(), BigDecimal.ZERO)))
         .filter(item -> item.suggestedQty().compareTo(BigDecimal.ZERO) > 0)
         .sorted((a, b) -> priorityRank(a.priority()) - priorityRank(b.priority()))
@@ -123,25 +130,6 @@ public class InventoryService {
             project.getStage()
         ))
         .toList();
-  }
-
-  @Transactional
-  public InventoryPartResponse createPart(CreateInventoryPartRequest request) {
-    String partCode = request.code() != null && !request.code().isBlank()
-        ? request.code().trim()
-        : codeGenerator.generate("PART");
-    if (partRepository.existsByCode(partCode)) {
-      throw new BusinessException("物料编码已存在");
-    }
-    InventoryPart part = new InventoryPart();
-    part.setCode(partCode);
-    part.setName(request.name());
-    part.setModel(request.model());
-    part.setStockQty(amount(request.stockQty()));
-    part.setSafetyQty(amount(request.safetyQty()));
-    part.setLocation(request.location());
-    part.setUnitCost(amount(request.unitCost()));
-    return toPartResponse(partRepository.save(part));
   }
 
   @Transactional(readOnly = true)
@@ -516,9 +504,16 @@ public class InventoryService {
 
   private InventoryPartResponse toPartResponse(InventoryPart part) {
     return new InventoryPartResponse(
-        part.getId(), part.getCode(), part.getName(), part.getModel(), part.getStockQty(),
-        part.getSafetyQty(), part.getLocation(), part.getUnitCost(), part.isLowStock()
+        part.getId(), part.getCode(), part.getName(), part.getModel(), part.getCategory(),
+        part.getStockQty(), part.getSafetyQty(), part.getUnitCost(), part.isLowStock()
     );
+  }
+
+  private List<InventoryPart> visibleParts() {
+    Set<UUID> hiddenIds = deleteGovernanceService.hiddenIds("MATERIAL");
+    return hiddenIds.isEmpty()
+        ? partRepository.findAllByOrderByCreatedAtDesc()
+        : partRepository.findAllVisible(hiddenIds);
   }
 
   private ReplenishmentSuggestionResponse toReplenishmentSuggestion(InventoryPart part, BigDecimal recentOutboundQty) {

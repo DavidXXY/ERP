@@ -53,7 +53,10 @@ echo "▸ 推送前端到 $REMOTE_HOST:$FRONTEND_DIR ……"
 ssh "$REMOTE_HOST" "mkdir -p $FRONTEND_DIR"
 # Keep old hashed assets during rollout. A browser can still be running the
 # previous index bundle for a short time and may request its old dynamic chunks.
-rsync -ahz "$FRONTEND_DIST/" "$REMOTE_HOST:$FRONTEND_DIR/"
+# The local dist directory may be owner-only. Do not copy its ownership or
+# permissions onto the Nginx document root.
+rsync -ahz --no-perms --no-owner --no-group "$FRONTEND_DIST/" "$REMOTE_HOST:$FRONTEND_DIR/"
+ssh "$REMOTE_HOST" "chmod 755 $FRONTEND_DIR"
 echo "  ✅ 前端部署完成"
 
 # ── 后端推送 ──

@@ -909,6 +909,7 @@ import {
   listProcurementCostAllocations,
   listProcurementCostTargets,
   listProcurementInquiries,
+  listProcurementMaterials,
   listProcurementPayables,
   listPurchaseOrders,
   listPurchaseRequests,
@@ -927,6 +928,7 @@ import {
   type ProcurementCostTargetOptions,
   type ProcurementCostType,
   type ProcurementInquiry,
+  type ProcurementMaterial,
   type ProcurementPayable,
   type PurchaseOrder,
   type PurchaseOrderStatus,
@@ -935,7 +937,6 @@ import {
   type Supplier,
   type SupplierRiskStatus,
 } from "@/api/procurement";
-import { listInventoryParts, type InventoryPart } from "@/api/inventory";
 import { useAuthStore } from "@/stores/auth";
 import { downloadCsv } from "@/views/crm/crm-export";
 
@@ -1028,7 +1029,7 @@ const costTargets = ref<ProcurementCostTargetOptions>({
   departments: [],
 });
 const costFilter = ref<"ALL" | ProcurementCostType>("ALL");
-const parts = ref<InventoryPart[]>([]);
+const parts = ref<ProcurementMaterial[]>([]);
 const loading = ref(false);
 const requestLoading = ref(false);
 const orderLoading = ref(false);
@@ -1329,7 +1330,7 @@ async function loadData() {
       listSuppliers(),
       listPurchaseRequests(),
       listPurchaseOrders(),
-      listInventoryParts(),
+      listProcurementMaterials(),
       listGoodsReceipts(),
       auth.can("procurement:payable:view")
         ? listProcurementPayables()

@@ -13,9 +13,9 @@ export type InventoryPart = {
   code?: string;
   name: string;
   model?: string;
+  category: string;
   stockQty: number;
   safetyQty: number;
-  location?: string;
   unitCost: number;
   lowStock: boolean;
 };
@@ -28,16 +28,6 @@ export type StockMovement = {
   sourceNo?: string;
   remark?: string;
   createdAt: string;
-};
-
-export type CreateInventoryPartPayload = {
-  code?: string;
-  name: string;
-  model?: string;
-  stockQty?: number;
-  safetyQty?: number;
-  location?: string;
-  unitCost?: number;
 };
 
 export type CreateStockMovementPayload = {
@@ -143,14 +133,6 @@ export function listReplenishmentSuggestions() {
   return request<ReplenishmentSuggestion[]>({
     method: "GET",
     url: "/inventory/replenishment-suggestions",
-  });
-}
-
-export function createInventoryPart(payload: CreateInventoryPartPayload) {
-  return request<InventoryPart>({
-    method: "POST",
-    url: "/inventory/parts",
-    data: payload,
   });
 }
 

@@ -89,6 +89,7 @@
           <template #icon><ShoppingCartOutlined /></template>
           <template #title>供应链采购</template>
           <a-menu-item key="/procurement/workbench">采购工作台</a-menu-item>
+          <a-menu-item key="/procurement/materials">物料库</a-menu-item>
           <a-menu-item key="/procurement/requests">采购申请</a-menu-item>
           <a-menu-item key="/procurement/purchase-pool">待采购清单</a-menu-item>
           <a-menu-item key="/procurement/inquiries">询价管理</a-menu-item>

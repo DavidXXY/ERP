@@ -8,9 +8,9 @@ public record InventoryPartResponse(
     String code,
     String name,
     String model,
+    String category,
     BigDecimal stockQty,
     BigDecimal safetyQty,
-    String location,
     BigDecimal unitCost,
     boolean lowStock
 ) {}

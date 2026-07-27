@@ -48,13 +48,13 @@
 
         <a-row :gutter="12" style="margin-top: 12px">
           <a-col :xs="24" :lg="12">
-            <a-card title="库存按仓库分布" size="small">
-              <div v-if="byWarehouse.length === 0" class="chart-empty">
+            <a-card title="库存按物料分类分布" size="small">
+              <div v-if="byCategory.length === 0" class="chart-empty">
                 暂无数据
               </div>
               <div v-else class="dist-rows">
                 <div
-                  v-for="item in byWarehouse"
+                  v-for="item in byCategory"
                   :key="item.name"
                   class="dist-row"
                 >
@@ -63,7 +63,7 @@
                     <div
                       class="dist-fill"
                       :style="{
-                        width: distPercent(item.value, byWarehouse) + '%',
+                        width: distPercent(item.value, byCategory) + '%',
                         background: '#52c41a',
                       }"
                     ></div>
@@ -195,10 +195,10 @@ const replenishmentColumns = [
   { title: "原因", dataIndex: "reason", width: 260 },
 ];
 
-const byWarehouse = computed(() => {
+const byCategory = computed(() => {
   const map = new Map<string, number>();
   parts.value.forEach((p) => {
-    const wh = p.location || "未分类";
+    const wh = p.category || "未分类";
     map.set(
       wh,
       (map.get(wh) || 0) + Number(p.stockQty || 0) * Number(p.unitCost || 0),

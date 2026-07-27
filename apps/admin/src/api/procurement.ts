@@ -1,4 +1,4 @@
-import { request } from "./http";
+import { request, requestAllPages } from "./http";
 import { type PageResponse } from "./system";
 
 export type SupplierRiskStatus = "NORMAL" | "WATCHLIST" | "BLOCKED";
@@ -18,6 +18,43 @@ export type PurchaseOrderStatus =
   | "CLOSED"
   | "CANCELLED";
 export type ProcurementCostType = "PROJECT" | "DEPARTMENT";
+
+export type ProcurementMaterial = {
+  id: string;
+  code?: string;
+  name: string;
+  model?: string;
+  category: string;
+  stockQty: number;
+  safetyQty: number;
+  unitCost: number;
+  lowStock: boolean;
+};
+
+export type CreateProcurementMaterialPayload = {
+  code?: string;
+  name: string;
+  model?: string;
+  category: string;
+  safetyQty?: number;
+  unitCost?: number;
+};
+
+export type UpdateProcurementMaterialPayload = Omit<
+  CreateProcurementMaterialPayload,
+  "code"
+>;
+
+export type MaterialCategory = {
+  id: string;
+  name: string;
+  builtIn: boolean;
+};
+
+export type MaterialDeletionResult = {
+  status: "DELETED" | "PENDING_APPROVAL";
+  message: string;
+};
 
 export type ProcurementCostTargetOption = {
   id: string;
@@ -440,6 +477,56 @@ export type SupplierInvoice = {
   attachmentDocumentId?: string;
   remark?: string;
 };
+
+export function listProcurementMaterials() {
+  return requestAllPages<ProcurementMaterial>({
+    method: "GET",
+    url: "/procurement/materials",
+  });
+}
+
+export function createProcurementMaterial(
+  payload: CreateProcurementMaterialPayload,
+) {
+  return request<ProcurementMaterial>({
+    method: "POST",
+    url: "/procurement/materials",
+    data: payload,
+  });
+}
+
+export function listMaterialCategories() {
+  return request<MaterialCategory[]>({
+    method: "GET",
+    url: "/procurement/materials/categories",
+  });
+}
+
+export function createMaterialCategory(name: string) {
+  return request<MaterialCategory>({
+    method: "POST",
+    url: "/procurement/materials/categories",
+    data: { name },
+  });
+}
+
+export function updateProcurementMaterial(
+  id: string,
+  payload: UpdateProcurementMaterialPayload,
+) {
+  return request<ProcurementMaterial>({
+    method: "PUT",
+    url: `/procurement/materials/${id}`,
+    data: payload,
+  });
+}
+
+export function deleteProcurementMaterial(id: string) {
+  return request<MaterialDeletionResult>({
+    method: "DELETE",
+    url: `/procurement/materials/${id}`,
+  });
+}
 
 export function listSuppliers(page?: number, size?: number) {
   return request<PageResponse<Supplier>>({

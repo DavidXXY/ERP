@@ -41,14 +41,6 @@
         <a-tab-pane key="parts" tab="库存台账">
           <div class="table-toolbar">
             <a-button @click="handleExportParts">导出</a-button>
-            <a-button
-              v-if="auth.can('inventory:part:create')"
-              type="primary"
-              @click="openPart"
-            >
-              <template #icon><PlusOutlined /></template>
-              新增物料
-            </a-button>
           </div>
           <a-table
             :columns="partColumns"
@@ -246,60 +238,6 @@
         </template>
       </a-table>
     </a-drawer>
-
-    <a-modal
-      v-model:open="partOpen"
-      title="新增物料"
-      width="720px"
-      :confirm-loading="saving"
-      @ok="handleCreatePart"
-    >
-      <a-form
-        ref="partFormRef"
-        :model="partForm"
-        :rules="partRules"
-        layout="vertical"
-      >
-        <a-row :gutter="16">
-          <a-col :xs="24" :md="16"
-            ><a-form-item label="物料名称" name="name"
-              ><a-input v-model:value="partForm.name" /></a-form-item
-          ></a-col>
-          <a-col :xs="24" :md="12"
-            ><a-form-item label="规格型号"
-              ><a-input v-model:value="partForm.model" /></a-form-item
-          ></a-col>
-          <a-col :xs="24" :md="12"
-            ><a-form-item label="库位"
-              ><a-input v-model:value="partForm.location" /></a-form-item
-          ></a-col>
-          <a-col :xs="24" :md="8"
-            ><a-form-item label="初始库存"
-              ><a-input-number
-                v-model:value="partForm.stockQty"
-                :min="0"
-                :precision="2"
-                class="full-input" /></a-form-item
-          ></a-col>
-          <a-col :xs="24" :md="8"
-            ><a-form-item label="安全库存"
-              ><a-input-number
-                v-model:value="partForm.safetyQty"
-                :min="0"
-                :precision="2"
-                class="full-input" /></a-form-item
-          ></a-col>
-          <a-col :xs="24" :md="8"
-            ><a-form-item label="单位成本"
-              ><a-input-number
-                v-model:value="partForm.unitCost"
-                :min="0"
-                :precision="2"
-                class="full-input" /></a-form-item
-          ></a-col>
-        </a-row>
-      </a-form>
-    </a-modal>
 
     <a-modal
       v-model:open="movementOpen"
@@ -502,7 +440,6 @@ import ExportOutlined from "@ant-design/icons-vue/ExportOutlined";
 import PlusOutlined from "@ant-design/icons-vue/PlusOutlined";
 import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
 import {
-  createInventoryPart,
   createMaterialIssue,
   createMaterialReturn,
   createStockMovement,
@@ -511,7 +448,6 @@ import {
   listMaterialIssues,
   listMaterialReturns,
   listStockMovements,
-  type CreateInventoryPartPayload,
   type CreateStockMovementPayload,
   type InventoryIssueStatus,
   type InventoryPart,
@@ -562,17 +498,14 @@ const loading = ref(false);
 const movementLoading = ref(false);
 const saving = ref(false);
 const errorMessage = ref("");
-const partOpen = ref(false);
 const movementOpen = ref(false);
 const movementDrawerOpen = ref(false);
 const issueOpen = ref(false);
 const returnOpen = ref(false);
-const partFormRef = ref();
 const movementFormRef = ref();
 const issueFormRef = ref();
 const returnFormRef = ref();
 let lineKey = 1;
-const partForm = reactive<CreateInventoryPartPayload>(initialPartForm());
 const movementForm = reactive<CreateStockMovementPayload>(
   initialMovementForm(),
 );
@@ -583,7 +516,7 @@ const partColumns = [
   { title: "物料", key: "name", width: 260 },
   { title: "库存", key: "stock", width: 130 },
   { title: "状态", key: "status", width: 100 },
-  { title: "库位", dataIndex: "location", width: 110 },
+  { title: "分类", dataIndex: "category", width: 110 },
   { title: "单位成本", key: "cost", width: 130 },
   { title: "库存金额", key: "value", width: 140 },
   { title: "操作", key: "action", width: 170, fixed: "right" },
@@ -624,10 +557,6 @@ const manualMovementOptions = [
   { label: "报废出库", value: "SCRAP" },
   { label: "盘盈调整", value: "ADJUSTMENT" },
 ];
-const partRules = {
-  code: [],
-  name: [{ required: true, message: "请输入物料名称" }],
-};
 const movementRules = {
   movementType: [{ required: true }],
   quantity: [{ required: true, message: "请输入数量" }],
@@ -690,21 +619,19 @@ function handleExportParts() {
     "物料编码",
     "物料名称",
     "规格型号",
-    "单位",
+    "物料分类",
     "库存数量",
     "安全库存",
-    "仓库",
-    "类别",
+    "单位成本",
   ];
-  const rows = parts.value.map((r: any) => [
-    r.partCode || "",
-    r.partName || "",
-    r.spec || "",
-    r.unit || "",
-    String(r.quantity || 0),
-    String(r.safetyStock || 0),
-    r.warehouse || "",
+  const rows = parts.value.map((r) => [
+    r.code || "",
+    r.name || "",
+    r.model || "",
     r.category || "",
+    String(r.stockQty || 0),
+    String(r.safetyQty || 0),
+    String(r.unitCost || 0),
   ]);
   downloadCsv("库存台账.csv", headers, rows);
 }
@@ -729,10 +656,6 @@ async function loadData() {
   } finally {
     loading.value = false;
   }
-}
-function openPart() {
-  Object.assign(partForm, initialPartForm());
-  partOpen.value = true;
 }
 function openMovement(part: InventoryPart) {
   movementPart.value = part;
@@ -779,20 +702,6 @@ function removeIssueLine(index: number) {
   if (issueForm.lines.length > 1) issueForm.lines.splice(index, 1);
 }
 
-async function handleCreatePart() {
-  await partFormRef.value?.validate();
-  saving.value = true;
-  try {
-    await createInventoryPart({ ...partForm });
-    partOpen.value = false;
-    message.success("物料已新增");
-    await loadData();
-  } catch (error) {
-    message.error(error instanceof Error ? error.message : "物料新增失败");
-  } finally {
-    saving.value = false;
-  }
-}
 async function handleCreateMovement() {
   if (!movementPart.value) return;
   await movementFormRef.value?.validate();
@@ -875,17 +784,6 @@ async function handleCreateReturn() {
   }
 }
 
-function initialPartForm(): CreateInventoryPartPayload {
-  return {
-    code: "",
-    name: "",
-    model: "",
-    stockQty: 0,
-    safetyQty: 0,
-    location: "",
-    unitCost: 0,
-  };
-}
 function initialMovementForm(): CreateStockMovementPayload {
   return { movementType: "INBOUND", quantity: 1, sourceNo: "", remark: "" };
 }

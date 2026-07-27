@@ -104,6 +104,7 @@ function entityLabel(type: string) {
         CONTRACT: "合同",
         FOLLOW_UP: "跟进",
         PROJECT: "项目",
+        MATERIAL: "物料",
       } as Record<string, string>
     )[type] || type
   );

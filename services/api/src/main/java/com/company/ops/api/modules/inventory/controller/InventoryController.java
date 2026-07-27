@@ -2,7 +2,6 @@ package com.company.ops.api.modules.inventory.controller;
 
 import com.company.ops.api.common.api.ApiResponse;
 import com.company.ops.api.common.api.PageResponse;
-import com.company.ops.api.modules.inventory.dto.CreateInventoryPartRequest;
 import com.company.ops.api.modules.inventory.dto.CreateMaterialIssueRequest;
 import com.company.ops.api.modules.inventory.dto.CreateMaterialReturnRequest;
 import com.company.ops.api.modules.inventory.dto.CreateStockMovementRequest;
@@ -54,13 +53,6 @@ public class InventoryController {
   @PreAuthorize("hasAnyAuthority('inventory:view', 'inventory:issue:create')")
   public ApiResponse<List<InventoryProjectOptionResponse>> listEligibleProjects() {
     return ApiResponse.ok(inventoryService.listEligibleProjects());
-  }
-
-  @PostMapping("/parts")
-  @ResponseStatus(HttpStatus.CREATED)
-  @PreAuthorize("hasAuthority('inventory:part:create')")
-  public ApiResponse<InventoryPartResponse> createPart(@Valid @RequestBody CreateInventoryPartRequest request) {
-    return ApiResponse.ok(inventoryService.createPart(request));
   }
 
   @GetMapping("/parts/{partId}/movements")

@@ -4,7 +4,7 @@
     :code="part?.code || (part as any)?.partCode"
     :subtitle="
       part
-        ? `${part.model || (part as any).spec || '无规格'} · 库位 ${part.location || '未设置'}`
+        ? `${part.model || (part as any).spec || '无规格'} · ${part.category || '未分类'}`
         : ''
     "
     :loading="loading"
@@ -58,8 +58,8 @@
             ><a-descriptions-item label="安全库存"
               >{{ safetyQty }}
               {{ (part as any).unit || "" }}</a-descriptions-item
-            ><a-descriptions-item label="库位">{{
-              part.location || "-"
+            ><a-descriptions-item label="物料分类">{{
+              part.category || "-"
             }}</a-descriptions-item>
             <a-descriptions-item label="单位成本">{{
               money(part.unitCost)

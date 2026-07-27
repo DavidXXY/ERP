@@ -4,6 +4,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.company.ops.api.common.delete.DeleteGovernanceService;
 import com.company.ops.api.common.service.CodeGenerator;
 import com.company.ops.api.modules.inventory.domain.InventoryIssueOrder;
 import com.company.ops.api.modules.inventory.domain.InventoryPart;
@@ -47,12 +48,13 @@ class InventoryServiceTest {
   @Mock private ProjectRepository projects;
   @Mock private ProjectCostLedgerService costs;
   @Mock private CodeGenerator codes;
+  @Mock private DeleteGovernanceService deleteGovernance;
   private InventoryService service;
 
   @BeforeEach
   void setUp() {
     service = new InventoryService(parts, movements, issues, issueLines, returns, returnLines,
-        projects, costs, codes);
+        projects, costs, codes, deleteGovernance);
   }
 
   @Test
@@ -92,4 +94,5 @@ class InventoryServiceTest {
     verify(costs).record(projectId, ProjectCostCategory.MATERIAL, ProjectCostSource.INVENTORY,
         "LD-20260726-0001", "项目领料：现场安装", new BigDecimal("12.50"), issueDate);
   }
+
 }

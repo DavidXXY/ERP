@@ -25,8 +25,8 @@ public class InventoryPart extends BaseEntity {
   @Column(name = "safety_qty", nullable = false, precision = 14, scale = 2)
   private BigDecimal safetyQty = BigDecimal.ZERO;
 
-  @Column(length = 80)
-  private String location;
+  @Column(nullable = false, length = 64)
+  private String category;
 
   @Column(name = "unit_cost", nullable = false, precision = 14, scale = 2)
   private BigDecimal unitCost = BigDecimal.ZERO;
@@ -75,12 +75,12 @@ public class InventoryPart extends BaseEntity {
     this.safetyQty = safetyQty;
   }
 
-  public String getLocation() {
-    return location;
+  public String getCategory() {
+    return category;
   }
 
-  public void setLocation(String location) {
-    this.location = location;
+  public void setCategory(String category) {
+    this.category = category;
   }
 
   public BigDecimal getUnitCost() {

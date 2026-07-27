@@ -6,4 +6,4 @@ The historical V1-V77 files were intentionally consolidated. `spring.flyway.igno
 
 Fresh deployments must set `BOOTSTRAP_ADMIN_PASSWORD` on the first application start. The application creates the configured bootstrap administrator only when that username does not already exist and never overwrites its password.
 
-The current incremental schema version is V87. Use the next unused version above the latest shipped migration for future changes. This keeps upgrades compatible with databases that previously reached V77 as well as new databases installed from the B77 baseline. Never edit a versioned migration after it has run in any shared environment.
+The current incremental schema version is V90. Use the next unused version above the latest shipped migration for future changes. This keeps upgrades compatible with databases that previously reached V77 as well as new databases installed from the B77 baseline. Never edit a versioned migration after it has run in any shared environment.

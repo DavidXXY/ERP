@@ -15,12 +15,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
           cache-dependency-path: |
             package-lock.json
             apps/admin/package-lock.json
             apps/mobile/package-lock.json
+      - name: Use the repository npm version
+        run: npm install --global npm@11.6.2
       - run: npm run version:check
       - run: npm ci
       - run: npm ci --prefix apps/admin

@@ -25,8 +25,13 @@ class PostgresBaselineMigrationTest {
         .locations("classpath:db/migration")
         .load();
 
+    var pendingMigrations = flyway.info().pending();
+    assertThat(pendingMigrations).isNotEmpty();
+    var expectedTargetSchemaVersion =
+        pendingMigrations[pendingMigrations.length - 1].getVersion().getVersion();
+
     var result = flyway.migrate();
-    assertThat(result.targetSchemaVersion).isEqualTo("87");
+    assertThat(result.targetSchemaVersion).isEqualTo(expectedTargetSchemaVersion);
 
     var dataSource = new DriverManagerDataSource(
         POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());

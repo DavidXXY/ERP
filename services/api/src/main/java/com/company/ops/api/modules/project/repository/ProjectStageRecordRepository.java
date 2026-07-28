@@ -8,4 +8,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface ProjectStageRecordRepository extends JpaRepository<ProjectStageRecord, UUID> {
 
   List<ProjectStageRecord> findByProjectIdOrderByChangedAtDesc(UUID projectId);
+  List<ProjectStageRecord> findByProjectIdIn(java.util.Collection<UUID> projectIds);
 }

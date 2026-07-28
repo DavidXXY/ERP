@@ -795,7 +795,9 @@ async function loadCrmChain() {
 
 async function loadProjectChain() {
   if (!activeProject.value && activeContract.value) {
-    const projects = await listProjects(0, 500).catch(() => ({ content: [] }));
+    const projects = await listProjects({ page: 0, size: 200 }).catch(() => ({
+      content: [],
+    }));
     relatedProject.value =
       projects.content.find(
         (item) =>

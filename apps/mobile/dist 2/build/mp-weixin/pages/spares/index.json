@@ -1,0 +1,7 @@
+{
+  "navigationBarTitleText": "备件库存",
+  "enablePullDownRefresh": true,
+  "usingComponents": {
+    "state-view": "../../components/StateView"
+  }
+}

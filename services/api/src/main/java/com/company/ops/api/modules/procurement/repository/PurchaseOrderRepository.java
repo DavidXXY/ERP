@@ -25,12 +25,14 @@ public interface PurchaseOrderRepository extends JpaRepository<PurchaseOrder, UU
       SELECT o FROM PurchaseOrder o
       WHERE (:status IS NULL OR o.status = :status)
         AND (:costType IS NULL OR o.costType = :costType)
+        AND (:projectId IS NULL OR o.projectId = :projectId)
         AND (:search IS NULL OR o.code LIKE %:search% OR o.partName LIKE %:search%)
       ORDER BY o.createdAt DESC
   """)
   Page<PurchaseOrder> findByFilters(
       @Param("status") PurchaseOrderStatus status,
       @Param("costType") ProcurementCostType costType,
+      @Param("projectId") UUID projectId,
       @Param("search") String search,
       Pageable pageable
   );

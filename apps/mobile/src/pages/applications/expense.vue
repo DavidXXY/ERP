@@ -2,7 +2,7 @@
 import { computed, reactive, ref } from "vue";
 import { createExpense } from "@/api/office";
 import { useAuthStore } from "@/stores/auth";
-import { createOperationId } from "@/utils/offline";
+import { createExpenseCode } from "@/utils/offline";
 
 const auth = useAuthStore();
 const types = [
@@ -35,7 +35,7 @@ async function submit() {
   saving.value = true;
   try {
     await createExpense({
-      code: createOperationId("MBEXP").slice(0, 40),
+      code: createExpenseCode(),
       claimantId: auth.user?.id,
       claimantName: auth.user?.displayName || auth.user?.username,
       expenseType: form.expenseType,

@@ -3,6 +3,7 @@ package com.company.ops.api.modules.project.dto;
 import com.company.ops.api.modules.project.domain.ProjectApprovalStatus;
 import com.company.ops.api.modules.project.domain.ProjectStage;
 import com.company.ops.api.modules.project.domain.ProjectType;
+import com.company.ops.api.modules.project.domain.ProjectExecutionStatus;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -21,7 +22,12 @@ public record ProjectResponse(
     String code,
     String name,
     ProjectType projectType,
+    @Nullable UUID managerUserId,
     String managerName,
+    @Nullable UUID managerAssignedByUserId,
+    @Nullable String managerAssignedByName,
+    @Nullable OffsetDateTime managerAssignedAt,
+    @Nullable String managerAssignmentComment,
     String siteAddress,
     BigDecimal contractAmount,
     LocalDate plannedStartDate,
@@ -31,6 +37,10 @@ public record ProjectResponse(
     String approvalComment,
     String approverName,
     OffsetDateTime approvedAt,
+    @Nullable UUID approverUserId,
+    ProjectExecutionStatus executionStatus,
+    @Nullable String statusComment,
+    @Nullable OffsetDateTime statusChangedAt,
     BigDecimal budgetAmount,
     BigDecimal actualCost,
     BigDecimal grossMargin,

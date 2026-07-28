@@ -8,4 +8,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface ProjectBudgetItemRepository extends JpaRepository<ProjectBudgetItem, UUID> {
 
   List<ProjectBudgetItem> findByProjectIdOrderByCategoryAsc(UUID projectId);
+  List<ProjectBudgetItem> findByProjectIdIn(java.util.Collection<UUID> projectIds);
 }

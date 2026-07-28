@@ -10,6 +10,7 @@ import com.company.ops.api.common.delete.DeleteGovernanceService;
 import com.company.ops.api.common.service.CodeGenerator;
 import com.company.ops.api.modules.crm.domain.Customer;
 import com.company.ops.api.modules.crm.domain.ServiceContract;
+import com.company.ops.api.modules.crm.domain.ContractStatus;
 import com.company.ops.api.modules.crm.repository.CustomerRepository;
 import com.company.ops.api.modules.crm.repository.ServiceContractRepository;
 import com.company.ops.api.modules.project.domain.Project;
@@ -59,6 +60,9 @@ class ProjectServiceCodeTest {
     ServiceContract contract = new ServiceContract();
     contract.setId(contractId);
     contract.setCode("HT-20260725-0042");
+    contract.setCustomerId(customerId);
+    contract.setAmount(new BigDecimal("100000"));
+    contract.setStatus(ContractStatus.ACTIVE);
     stubCreate(customerId, contract);
 
     projectService.createProject(request(customerId, contractId));
@@ -105,6 +109,7 @@ class ProjectServiceCodeTest {
         null,
         "测试项目",
         ProjectType.RENOVATION,
+        null,
         "项目经理",
         "上海市",
         new BigDecimal("100000"),

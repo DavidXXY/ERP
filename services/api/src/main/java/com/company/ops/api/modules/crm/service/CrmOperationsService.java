@@ -570,8 +570,10 @@ public class CrmOperationsService {
 
   @Transactional(readOnly = true)
   public org.springframework.data.domain.Page<ReceivableResponse> listReceivables(
-      org.springframework.data.domain.Pageable pageable) {
-    var receivables = receivableRepository.findAllByOrderByDueDateAsc(pageable);
+      UUID contractId, org.springframework.data.domain.Pageable pageable) {
+    var receivables = contractId == null
+        ? receivableRepository.findAllByOrderByDueDateAsc(pageable)
+        : receivableRepository.findByContractIdOrderByDueDateAsc(contractId, pageable);
     Map<UUID, Customer> customers = customerMap(receivables.getContent().stream()
         .map(Receivable::getCustomerId).toList());
     Map<UUID, ServiceContract> contracts = contractMap(receivables.getContent().stream()
@@ -1069,6 +1071,7 @@ public class CrmOperationsService {
         null,
         contract.getProjectName(),
         ProjectType.RENOVATION,
+        null,
         managerName,
         siteAddress,
         defaultAmount(quote.getAmount()),

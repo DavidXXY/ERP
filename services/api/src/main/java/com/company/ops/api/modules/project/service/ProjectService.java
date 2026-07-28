@@ -5,6 +5,7 @@ import com.company.ops.api.common.exception.BusinessException;
 import com.company.ops.api.common.service.CodeGenerator;
 import com.company.ops.api.modules.crm.domain.Customer;
 import com.company.ops.api.modules.crm.domain.ServiceContract;
+import com.company.ops.api.modules.crm.domain.ContractStatus;
 import com.company.ops.api.modules.crm.repository.CustomerRepository;
 import com.company.ops.api.modules.crm.repository.ServiceContractRepository;
 import com.company.ops.api.modules.project.domain.Project;
@@ -12,10 +13,12 @@ import com.company.ops.api.modules.project.domain.ProjectApprovalStatus;
 import com.company.ops.api.modules.project.domain.ProjectBudgetItem;
 import com.company.ops.api.modules.project.domain.ProjectCostCategory;
 import com.company.ops.api.modules.project.domain.ProjectCostEntry;
+import com.company.ops.api.modules.project.domain.ProjectExecutionStatus;
 import com.company.ops.api.modules.project.domain.ProjectStage;
 import com.company.ops.api.modules.project.domain.ProjectStageRecord;
 import com.company.ops.api.modules.project.dto.AdvanceProjectStageRequest;
 import com.company.ops.api.modules.project.dto.AssignProjectManagerRequest;
+import com.company.ops.api.modules.project.dto.ChangeProjectExecutionStatusRequest;
 import com.company.ops.api.modules.project.dto.CreateProjectCostRequest;
 import com.company.ops.api.modules.project.dto.CreateProjectRequest;
 import com.company.ops.api.modules.project.dto.ProcessProjectApprovalRequest;
@@ -32,19 +35,24 @@ import com.company.ops.api.modules.project.repository.ProjectCostEntryRepository
 import com.company.ops.api.modules.project.repository.ProjectRepository;
 import com.company.ops.api.modules.project.repository.ProjectStageRecordRepository;
 import com.company.ops.api.modules.system.security.DataScopeService;
+import com.company.ops.api.modules.system.security.UserPrincipal;
+import com.company.ops.api.modules.system.domain.SystemUser;
 import com.company.ops.api.modules.system.repository.SystemUserRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import java.time.OffsetDateTime;
 import java.util.EnumMap;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -103,31 +111,69 @@ public class ProjectService {
   }
 
   @Transactional(readOnly = true)
-  public Page<ProjectResponse> listProjects(Pageable pageable) {
-    Page<Project> projectPage = projectRepository.findAllByOrderByCreatedAtDesc(pageable);
-    List<Project> visibleProjects = deleteGovernanceService.visible("PROJECT", projectPage.getContent(), Project::getId).stream()
-        .filter(this::canViewProject)
-        .toList();
-    Map<UUID, String> customerNames = loadCustomerNames(visibleProjects);
-    return new org.springframework.data.domain.PageImpl<>(
-        visibleProjects.stream().map(project -> toResponse(project, customerNames.get(project.getCustomerId()), null)).toList(),
-        pageable,
-        visibleProjects.size()
-    );
+  public Page<ProjectResponse> listProjects(
+      String keyword,
+      ProjectApprovalStatus approvalStatus,
+      ProjectStage stage,
+      ProjectExecutionStatus executionStatus,
+      Pageable pageable
+  ) {
+    Specification<Project> specification = projectSpecification(
+        keyword, approvalStatus, stage, executionStatus, deleteGovernanceService.hiddenIds("PROJECT"));
+    Page<Project> projectPage = projectRepository.findAll(specification, pageable);
+    Map<UUID, String> customerNames = loadCustomerNames(projectPage.getContent());
+    Map<UUID, ServiceContract> contracts = loadContracts(projectPage.getContent());
+    return projectPage.map(project -> toResponse(
+        project, customerNames.get(project.getCustomerId()), contracts.get(project.getContractId())));
+  }
+
+  @Transactional(readOnly = true)
+  public Page<ProjectDetailResponse> listPortfolio(
+      String keyword,
+      ProjectApprovalStatus approvalStatus,
+      ProjectStage stage,
+      ProjectExecutionStatus executionStatus,
+      Pageable pageable
+  ) {
+    Page<Project> projectPage = projectRepository.findAll(projectSpecification(
+        keyword, approvalStatus, stage, executionStatus, deleteGovernanceService.hiddenIds("PROJECT")), pageable);
+    List<Project> rows = projectPage.getContent();
+    if (rows.isEmpty()) return new PageImpl<>(List.of(), pageable, projectPage.getTotalElements());
+    List<UUID> projectIds = rows.stream().map(Project::getId).toList();
+    Map<UUID, List<ProjectBudgetItem>> budgets = budgetRepository.findByProjectIdIn(projectIds).stream()
+        .collect(Collectors.groupingBy(ProjectBudgetItem::getProjectId));
+    Map<UUID, List<ProjectCostEntry>> costs = costRepository.findByProjectIdIn(projectIds).stream()
+        .collect(Collectors.groupingBy(ProjectCostEntry::getProjectId));
+    Map<UUID, List<ProjectStageRecord>> stages = stageRecordRepository.findByProjectIdIn(projectIds).stream()
+        .collect(Collectors.groupingBy(ProjectStageRecord::getProjectId));
+    Map<UUID, String> customerNames = loadCustomerNames(rows);
+    Map<UUID, ServiceContract> contracts = loadContracts(rows);
+    List<ProjectDetailResponse> content = rows.stream().map(project -> toDetail(
+        project,
+        customerNames.get(project.getCustomerId()),
+        contracts.get(project.getContractId()),
+        budgets.getOrDefault(project.getId(), List.of()),
+        costs.getOrDefault(project.getId(), List.of()),
+        stages.getOrDefault(project.getId(), List.of()))).toList();
+    return new PageImpl<>(content, pageable, projectPage.getTotalElements());
   }
 
   @Transactional(readOnly = true)
   public ProjectDetailResponse getProject(UUID id) {
-    Project project = requireProject(id);
-    if (deleteGovernanceService.isHidden("PROJECT", id)) throw new BusinessException("项目不存在");
-    if (!canViewProject(project)) throw new BusinessException("无权查看该项目");
+    Project project = requireVisibleProject(id);
     return toDetail(project);
   }
 
   @Transactional(readOnly = true)
   public List<ProjectProfitabilityResponse> profitability() {
+    Set<UUID> hiddenIds = deleteGovernanceService.hiddenIds("PROJECT");
+    boolean allScope = dataScopeService.hasAllDataScope();
+    Set<UUID> visibleUserIds = dataScopeService.visibleUserIds();
+    Set<String> visibleNames = dataScopeService.visibleOwnerNames();
+    boolean canApprove = dataScopeService.hasAuthority("project:approve");
     List<Project> projects = projectRepository.findAllByOrderByCreatedAtDesc().stream()
-        .filter(this::canViewProject)
+        .filter(project -> !hiddenIds.contains(project.getId()))
+        .filter(project -> canViewProject(project, allScope, visibleUserIds, visibleNames, canApprove))
         .toList();
     Map<UUID, String> customerNames = loadCustomerNames(projects);
     return projects.stream()
@@ -151,7 +197,9 @@ public class ProjectService {
     if (request.contractId() != null) {
       contract = contractRepository.findById(request.contractId())
           .orElseThrow(() -> new BusinessException("关联合同不存在"));
+      validateContractForProject(contract, request);
     }
+    SystemUser manager = request.managerUserId() == null ? null : requireProjectManager(request.managerUserId());
     String projectCode = resolveProjectCode(request.code(), contract);
     if (projectRepository.existsByCode(projectCode)) {
       throw new BusinessException("项目编码已存在");
@@ -165,12 +213,14 @@ public class ProjectService {
     }
     project.setName(request.name());
     project.setProjectType(request.projectType());
-    project.setManagerName(request.managerName());
+    project.setManagerUserId(manager == null ? null : manager.getId());
+    project.setManagerName(manager == null ? "待项目管理部门分配" : manager.getDisplayName());
     project.setSiteAddress(request.siteAddress());
     project.setContractAmount(request.contractAmount());
     project.setPlannedStartDate(request.plannedStartDate());
     project.setPlannedEndDate(request.plannedEndDate());
     project.setStage(ProjectStage.ENTRY);
+    project.setExecutionStatus(ProjectExecutionStatus.ACTIVE);
     project.setApprovalStatus(ProjectApprovalStatus.PENDING);
     project.setBudgetAmount(budgetAmount);
     project.setActualCost(BigDecimal.ZERO);
@@ -192,50 +242,59 @@ public class ProjectService {
 
   @Transactional
   public ProjectDetailResponse assignManager(UUID id, AssignProjectManagerRequest request) {
-    Project project = requireProject(id);
-    if (project.getApprovalStatus() == ProjectApprovalStatus.REJECTED) {
-      throw new BusinessException("已驳回项目不能分配项目经理");
+    Project project = requireVisibleProject(id);
+    if (project.getApprovalStatus() != ProjectApprovalStatus.APPROVED) {
+      throw new BusinessException("立项审批通过后才能分配项目经理");
     }
-    project.setManagerName(request.managerName());
-    project.setApprovalStatus(ProjectApprovalStatus.APPROVED);
-    project.setApprovalComment(request.comment());
-    project.setApproverName(request.operatorName());
-    project.setApprovedAt(OffsetDateTime.now());
-    if (project.getStage() == ProjectStage.INITIATED || project.getStage() == ProjectStage.BIDDING) {
-      project.setStage(ProjectStage.ENTRY);
-    }
+    SystemUser manager = requireProjectManager(request.managerUserId());
+    project.setManagerUserId(manager.getId());
+    project.setManagerName(manager.getDisplayName());
+    UserPrincipal principal = dataScopeService.currentPrincipal();
+    project.setManagerAssignedByUserId(principal == null ? null : principal.id());
+    project.setManagerAssignedByName(principal == null ? "system" : principal.displayName());
+    project.setManagerAssignedAt(OffsetDateTime.now());
+    project.setManagerAssignmentComment(request.comment());
     return toDetail(projectRepository.save(project));
   }
 
   @Transactional
   public ProjectDetailResponse processApproval(UUID id, ProcessProjectApprovalRequest request) {
-    Project project = requireProject(id);
+    Project project = requireVisibleProject(id);
     if (project.getApprovalStatus() != ProjectApprovalStatus.PENDING) {
-      throw new BusinessException("该项目经理分配已处理");
+      throw new BusinessException("该立项审批已处理");
     }
     if (request.decision() == ProjectApprovalStatus.PENDING) {
       throw new BusinessException("请选择通过或驳回");
     }
     project.setApprovalStatus(request.decision());
     project.setApprovalComment(request.comment());
-    project.setApproverName(request.approverName());
+    UserPrincipal principal = dataScopeService.currentPrincipal();
+    project.setApproverUserId(principal == null ? null : principal.id());
+    project.setApproverName(principal == null ? "system" : principal.displayName());
     project.setApprovedAt(request.decision() == ProjectApprovalStatus.APPROVED ? OffsetDateTime.now() : null);
     return toDetail(projectRepository.save(project));
   }
 
   @Transactional
   public ProjectDetailResponse advanceStage(UUID id, AdvanceProjectStageRequest request) {
-    Project project = requireProject(id);
+    Project project = requireManageableProject(id);
     requireApproved(project);
-    if (project.getStage() == ProjectStage.CLOSED) {
-      throw new BusinessException("项目已关闭，不能继续推进");
+    if (project.getExecutionStatus() != ProjectExecutionStatus.ACTIVE) {
+      throw new BusinessException("只有执行中的项目可以推进阶段");
     }
-    ProjectStage expected = ProjectStage.values()[project.getStage().ordinal() + 1];
+    ProjectStage expected = nextStage(project.getStage());
+    if (expected == null) throw new BusinessException("项目已关闭，不能继续推进");
     if (request.targetStage() != expected) {
       throw new BusinessException("项目阶段必须按顺序推进，下一阶段应为" + expected.name());
     }
     if (request.targetStage() == ProjectStage.WARRANTY && project.getWarrantyEndDate() == null) {
       throw new BusinessException("进入质保阶段前必须填写质保截止日期");
+    }
+    if (request.targetStage() == ProjectStage.CLOSED) {
+      validateCloseout(project);
+      project.setExecutionStatus(ProjectExecutionStatus.CLOSED);
+      project.setStatusComment(request.comment());
+      project.setStatusChangedAt(OffsetDateTime.now());
     }
 
     ProjectStage fromStage = project.getStage();
@@ -250,7 +309,7 @@ public class ProjectService {
     record.setToStage(request.targetStage());
     record.setProgress(progress);
     record.setComment(request.comment());
-    record.setOperatorName(request.operatorName());
+    record.setOperatorName(currentOperatorName());
     record.setChangedAt(OffsetDateTime.now());
     stageRecordRepository.save(record);
     return toDetail(project);
@@ -258,110 +317,40 @@ public class ProjectService {
 
   @Transactional
   public ProjectDetailResponse createCost(UUID id, CreateProjectCostRequest request) {
-    Project project = requireProject(id);
+    Project project = requireManageableProject(id);
     requireApproved(project);
-    if (project.getStage() == ProjectStage.CLOSED) {
-      throw new BusinessException("项目已关闭，不能继续归集成本");
+    if (project.getExecutionStatus() != ProjectExecutionStatus.ACTIVE) {
+      throw new BusinessException("只有执行中的项目可以归集成本");
     }
 
-    BigDecimal currentCost = costLedger.total(project.getId());
-    BigDecimal newCost = currentCost.add(request.amount());
-    if (newCost.compareTo(amount(project.getBudgetAmount())) > 0) {
-      BigDecimal budget = amount(project.getBudgetAmount());
-      long overPct = budget.signum() == 0 ? 100 : newCost.subtract(budget)
-          .multiply(BigDecimal.valueOf(100)).divide(budget, 0, java.math.RoundingMode.HALF_UP).longValue();
-      throw new BusinessException("Cost exceeds budget by " + overPct + "%");
-    }
     costLedger.record(project.getId(), request.category(), request.sourceType(), request.sourceNo(),
         request.description(), request.amount(), request.incurredDate());
     return toDetail(project);
   }
 
   @Transactional
+  public ProjectDetailResponse changeExecutionStatus(UUID id, ChangeProjectExecutionStatusRequest request) {
+    Project project = requireManageableProject(id);
+    requireApproved(project);
+    ProjectExecutionStatus current = project.getExecutionStatus();
+    ProjectExecutionStatus target = request.status();
+    boolean allowed = (current == ProjectExecutionStatus.ACTIVE
+        && (target == ProjectExecutionStatus.PAUSED || target == ProjectExecutionStatus.CANCELLED))
+        || (current == ProjectExecutionStatus.PAUSED
+        && (target == ProjectExecutionStatus.ACTIVE || target == ProjectExecutionStatus.CANCELLED));
+    if (!allowed) {
+      throw new BusinessException("不允许从" + current.name() + "变更为" + target.name());
+    }
+    project.setExecutionStatus(target);
+    project.setStatusComment(request.comment());
+    project.setStatusChangedAt(OffsetDateTime.now());
+    return toDetail(projectRepository.save(project));
+  }
+
+  @Transactional
   public void deleteProject(UUID id) {
-    Project project = requireProject(id);
-    if (!dataScopeService.canViewOwner(project.getManagerName())) {
-      throw new BusinessException("无权删除该项目");
-    }
-    if (!deleteGovernanceService.allowPhysicalDelete("PROJECT", id, project.getCode() + " · " + project.getName())) {
-      return;
-    }
-    entityManager.createNativeQuery("""
-        DELETE FROM fin_payment_records
-        WHERE payable_id IN (
-          SELECT id FROM fin_procurement_payables
-          WHERE order_id IN (SELECT id FROM procurement_purchase_orders WHERE project_id = ?1)
-             OR receipt_id IN (SELECT id FROM procurement_goods_receipts WHERE order_id IN (SELECT id FROM procurement_purchase_orders WHERE project_id = ?1))
-        )
-        """).setParameter(1, id).executeUpdate();
-    entityManager.createNativeQuery("""
-        DELETE FROM fin_payment_applications
-        WHERE payable_id IN (
-          SELECT id FROM fin_procurement_payables
-          WHERE order_id IN (SELECT id FROM procurement_purchase_orders WHERE project_id = ?1)
-             OR receipt_id IN (SELECT id FROM procurement_goods_receipts WHERE order_id IN (SELECT id FROM procurement_purchase_orders WHERE project_id = ?1))
-        )
-        """).setParameter(1, id).executeUpdate();
-    entityManager.createNativeQuery("""
-        DELETE FROM fin_procurement_payables
-        WHERE order_id IN (SELECT id FROM procurement_purchase_orders WHERE project_id = ?1)
-           OR receipt_id IN (SELECT id FROM procurement_goods_receipts WHERE order_id IN (SELECT id FROM procurement_purchase_orders WHERE project_id = ?1))
-        """).setParameter(1, id).executeUpdate();
-    entityManager.createNativeQuery("""
-        DELETE FROM procurement_cost_allocations
-        WHERE project_id = ?1
-           OR order_id IN (SELECT id FROM procurement_purchase_orders WHERE project_id = ?1)
-           OR receipt_id IN (SELECT id FROM procurement_goods_receipts WHERE order_id IN (SELECT id FROM procurement_purchase_orders WHERE project_id = ?1))
-        """).setParameter(1, id).executeUpdate();
-    entityManager.createNativeQuery("""
-        DELETE FROM procurement_goods_receipts
-        WHERE order_id IN (SELECT id FROM procurement_purchase_orders WHERE project_id = ?1)
-        """).setParameter(1, id).executeUpdate();
-    entityManager.createNativeQuery("""
-        DELETE FROM procurement_purchase_orders
-        WHERE project_id = ?1
-           OR request_id IN (SELECT id FROM procurement_purchase_requests WHERE project_id = ?1)
-        """).setParameter(1, id).executeUpdate();
-    entityManager.createNativeQuery("""
-        DELETE FROM procurement_request_approval_records
-        WHERE request_id IN (SELECT id FROM procurement_purchase_requests WHERE project_id = ?1)
-        """).setParameter(1, id).executeUpdate();
-    entityManager.createNativeQuery("DELETE FROM procurement_purchase_requests WHERE project_id = ?1")
-        .setParameter(1, id).executeUpdate();
-    entityManager.createNativeQuery("""
-        DELETE FROM inventory_return_lines
-        WHERE return_id IN (
-          SELECT id FROM inventory_return_orders
-          WHERE project_id = ?1 OR issue_id IN (SELECT id FROM inventory_issue_orders WHERE project_id = ?1)
-        )
-        """).setParameter(1, id).executeUpdate();
-    entityManager.createNativeQuery("""
-        DELETE FROM inventory_return_orders
-        WHERE project_id = ?1 OR issue_id IN (SELECT id FROM inventory_issue_orders WHERE project_id = ?1)
-        """).setParameter(1, id).executeUpdate();
-    entityManager.createNativeQuery("""
-        DELETE FROM inventory_issue_lines
-        WHERE issue_id IN (SELECT id FROM inventory_issue_orders WHERE project_id = ?1)
-        """).setParameter(1, id).executeUpdate();
-    entityManager.createNativeQuery("DELETE FROM inventory_issue_orders WHERE project_id = ?1")
-        .setParameter(1, id).executeUpdate();
-    entityManager.createNativeQuery("""
-        DELETE FROM oa_expense_claims
-        WHERE project_id = ?1 OR work_order_id IN (SELECT id FROM work_orders WHERE project_id = ?1)
-        """).setParameter(1, id).executeUpdate();
-    entityManager.createNativeQuery("""
-        DELETE FROM oa_outsource_orders
-        WHERE project_id = ?1 OR work_order_id IN (SELECT id FROM work_orders WHERE project_id = ?1)
-        """).setParameter(1, id).executeUpdate();
-    entityManager.createNativeQuery("DELETE FROM work_orders WHERE project_id = ?1")
-        .setParameter(1, id).executeUpdate();
-    entityManager.createNativeQuery("DELETE FROM project_budget_items WHERE project_id = ?1")
-        .setParameter(1, id).executeUpdate();
-    entityManager.createNativeQuery("DELETE FROM project_cost_entries WHERE project_id = ?1")
-        .setParameter(1, id).executeUpdate();
-    entityManager.createNativeQuery("DELETE FROM project_stage_records WHERE project_id = ?1")
-        .setParameter(1, id).executeUpdate();
-    projectRepository.deleteById(id);
+    Project project = requireManageableProject(id);
+    deleteGovernanceService.requestSoftDelete("PROJECT", id, project.getCode() + " · " + project.getName());
   }
 
   private ProjectDetailResponse toDetail(Project project) {
@@ -375,6 +364,18 @@ public class ProjectService {
   private ProjectDetailResponse toDetail(Project project, String customerName, ServiceContract contract) {
     List<ProjectBudgetItem> budgetItems = budgetRepository.findByProjectIdOrderByCategoryAsc(project.getId());
     List<ProjectCostEntry> costEntries = costRepository.findByProjectIdOrderByIncurredDateDescCreatedAtDesc(project.getId());
+    List<ProjectStageRecord> stageRecords = stageRecordRepository.findByProjectIdOrderByChangedAtDesc(project.getId());
+    return toDetail(project, customerName, contract, budgetItems, costEntries, stageRecords);
+  }
+
+  private ProjectDetailResponse toDetail(
+      Project project,
+      String customerName,
+      ServiceContract contract,
+      List<ProjectBudgetItem> budgetItems,
+      List<ProjectCostEntry> costEntries,
+      List<ProjectStageRecord> stageRecords
+  ) {
     Map<ProjectCostCategory, BigDecimal> actualByCategory = new EnumMap<>(ProjectCostCategory.class);
     costEntries.forEach(item -> actualByCategory.merge(item.getCategory(), item.getAmount(), BigDecimal::add));
     List<ProjectBudgetItemResponse> budgets = budgetItems.stream()
@@ -401,7 +402,7 @@ public class ProjectService {
             item.getIncurredDate()
         ))
         .toList();
-    List<ProjectStageRecordResponse> stages = stageRecordRepository.findByProjectIdOrderByChangedAtDesc(project.getId()).stream()
+    List<ProjectStageRecordResponse> stages = stageRecords.stream()
         .map(item -> new ProjectStageRecordResponse(
             item.getId(),
             item.getFromStage(),
@@ -429,7 +430,12 @@ public class ProjectService {
         project.getCode(),
         project.getName(),
         project.getProjectType(),
+        project.getManagerUserId(),
         project.getManagerName(),
+        project.getManagerAssignedByUserId(),
+        project.getManagerAssignedByName(),
+        project.getManagerAssignedAt(),
+        project.getManagerAssignmentComment(),
         project.getSiteAddress(),
         amount(project.getContractAmount()),
         project.getPlannedStartDate(),
@@ -439,6 +445,10 @@ public class ProjectService {
         project.getApprovalComment(),
         project.getApproverName(),
         project.getApprovedAt(),
+        project.getApproverUserId(),
+        project.getExecutionStatus(),
+        project.getStatusComment(),
+        project.getStatusChangedAt(),
         budgetAmount,
         actualCost,
         amount(project.getContractAmount()).subtract(actualCost),
@@ -449,8 +459,16 @@ public class ProjectService {
   }
 
   private boolean canViewProject(Project project) {
-    if (dataScopeService.canViewOwner(project.getManagerName())) return true;
-    return dataScopeService.hasAuthority("project:approve")
+    return canViewProject(project, dataScopeService.hasAllDataScope(), dataScopeService.visibleUserIds(),
+        dataScopeService.visibleOwnerNames(), dataScopeService.hasAuthority("project:approve"));
+  }
+
+  private boolean canViewProject(Project project, boolean allScope, Set<UUID> visibleUserIds,
+                                 Set<String> visibleNames, boolean canApprove) {
+    if (allScope) return true;
+    if (project.getManagerUserId() != null && visibleUserIds.contains(project.getManagerUserId())) return true;
+    if (project.getManagerUserId() == null && visibleNames.contains(project.getManagerName())) return true;
+    return canApprove
         && (project.getApprovalStatus() == ProjectApprovalStatus.PENDING
             || project.getManagerName() == null
             || project.getManagerName().startsWith("待"));
@@ -490,6 +508,24 @@ public class ProjectService {
         .orElseThrow(() -> new BusinessException("项目不存在"));
   }
 
+  private Project requireVisibleProject(UUID id) {
+    Project project = requireProject(id);
+    if (deleteGovernanceService.isHidden("PROJECT", id)) throw new BusinessException("项目不存在");
+    if (!canViewProject(project)) throw new BusinessException("无权查看该项目");
+    return project;
+  }
+
+  private Project requireManageableProject(UUID id) {
+    Project project = requireVisibleProject(id);
+    if (dataScopeService.hasAllDataScope()) return project;
+    boolean assignedVisible = project.getManagerUserId() != null
+        && dataScopeService.visibleUserIds().contains(project.getManagerUserId());
+    boolean legacyVisible = project.getManagerUserId() == null
+        && dataScopeService.canViewOwner(project.getManagerName());
+    if (!assignedVisible && !legacyVisible) throw new BusinessException("无权管理该项目");
+    return project;
+  }
+
   private void requireApproved(Project project) {
     if (project.getApprovalStatus() != ProjectApprovalStatus.APPROVED) {
       throw new BusinessException("项目经理分配后才能执行");
@@ -504,6 +540,20 @@ public class ProjectService {
       case INITIAL_ACCEPTANCE -> 65;
       case FINAL_ACCEPTANCE -> 85;
       case WARRANTY, CLOSED -> 100;
+    };
+  }
+
+  private ProjectStage nextStage(ProjectStage current) {
+    return switch (current) {
+      case INITIATED -> ProjectStage.BIDDING;
+      case BIDDING -> ProjectStage.ENTRY;
+      case ENTRY -> ProjectStage.CONSTRUCTION;
+      case CONSTRUCTION -> ProjectStage.COMMISSIONING;
+      case COMMISSIONING -> ProjectStage.INITIAL_ACCEPTANCE;
+      case INITIAL_ACCEPTANCE -> ProjectStage.FINAL_ACCEPTANCE;
+      case FINAL_ACCEPTANCE -> ProjectStage.WARRANTY;
+      case WARRANTY -> ProjectStage.CLOSED;
+      case CLOSED -> null;
     };
   }
 
@@ -527,6 +577,125 @@ public class ProjectService {
     }
     return customerRepository.findAllById(customerIds).stream()
         .collect(Collectors.toMap(Customer::getId, Customer::getName, (left, right) -> left));
+  }
+
+  private Map<UUID, ServiceContract> loadContracts(List<Project> projects) {
+    List<UUID> contractIds = projects.stream()
+        .map(Project::getContractId)
+        .filter(java.util.Objects::nonNull)
+        .distinct()
+        .toList();
+    if (contractIds.isEmpty()) return Map.of();
+    return contractRepository.findAllById(contractIds).stream()
+        .collect(Collectors.toMap(ServiceContract::getId, contract -> contract));
+  }
+
+  private Specification<Project> projectSpecification(
+      String keyword,
+      ProjectApprovalStatus approvalStatus,
+      ProjectStage stage,
+      ProjectExecutionStatus executionStatus,
+      Set<UUID> hiddenIds
+  ) {
+    Set<UUID> visibleUserIds = dataScopeService.visibleUserIds();
+    Set<String> visibleNames = dataScopeService.visibleOwnerNames();
+    boolean allScope = dataScopeService.hasAllDataScope();
+    boolean canApprove = dataScopeService.hasAuthority("project:approve");
+    String normalizedKeyword = keyword == null ? "" : keyword.trim().toLowerCase(Locale.ROOT);
+    return (root, query, cb) -> {
+      List<jakarta.persistence.criteria.Predicate> predicates = new ArrayList<>();
+      if (!normalizedKeyword.isEmpty()) {
+        String like = "%" + normalizedKeyword + "%";
+        predicates.add(cb.or(
+            cb.like(cb.lower(root.get("code")), like),
+            cb.like(cb.lower(root.get("name")), like),
+            cb.like(cb.lower(root.get("managerName")), like)));
+      }
+      if (approvalStatus != null) predicates.add(cb.equal(root.get("approvalStatus"), approvalStatus));
+      if (stage != null) predicates.add(cb.equal(root.get("stage"), stage));
+      if (executionStatus != null) predicates.add(cb.equal(root.get("executionStatus"), executionStatus));
+      if (!hiddenIds.isEmpty()) predicates.add(cb.not(root.get("id").in(hiddenIds)));
+      if (!allScope) {
+        List<jakarta.persistence.criteria.Predicate> scopes = new ArrayList<>();
+        if (!visibleUserIds.isEmpty()) scopes.add(root.get("managerUserId").in(visibleUserIds));
+        if (!visibleNames.isEmpty()) {
+          scopes.add(cb.and(cb.isNull(root.get("managerUserId")), root.get("managerName").in(visibleNames)));
+        }
+        if (canApprove) {
+          scopes.add(cb.equal(root.get("approvalStatus"), ProjectApprovalStatus.PENDING));
+          scopes.add(cb.isNull(root.get("managerUserId")));
+        }
+        predicates.add(scopes.isEmpty() ? cb.disjunction() : cb.or(scopes.toArray(jakarta.persistence.criteria.Predicate[]::new)));
+      }
+      return cb.and(predicates.toArray(jakarta.persistence.criteria.Predicate[]::new));
+    };
+  }
+
+  private void validateContractForProject(ServiceContract contract, CreateProjectRequest request) {
+    if (!contract.getCustomerId().equals(request.customerId())) {
+      throw new BusinessException("关联合同与项目客户不一致");
+    }
+    if (contract.getStatus() != ContractStatus.ACTIVE) {
+      throw new BusinessException("只有生效中的合同可以创建项目");
+    }
+    if (projectRepository.existsByContractId(contract.getId())) {
+      throw new BusinessException("该合同已关联项目，不能重复创建");
+    }
+    if (amount(contract.getAmount()).compareTo(amount(request.contractAmount())) != 0) {
+      throw new BusinessException("项目合同金额必须与关联合同金额一致");
+    }
+  }
+
+  private SystemUser requireProjectManager(UUID userId) {
+    SystemUser user = userRepository.findDetailById(userId)
+        .orElseThrow(() -> new BusinessException("项目经理用户不存在"));
+    if (!user.isEnabled()) throw new BusinessException("项目经理用户已停用");
+    boolean allowedRole = user.getRoles().stream()
+        .anyMatch(role -> "PROJECT_MANAGER".equals(role.getCode()) || "ADMIN".equals(role.getCode()));
+    if (!allowedRole) throw new BusinessException("所选用户不具备项目经理角色");
+    return user;
+  }
+
+  private String currentOperatorName() {
+    UserPrincipal principal = dataScopeService.currentPrincipal();
+    return principal == null ? "system" : principal.displayName();
+  }
+
+  private void validateCloseout(Project project) {
+    long openWorkOrders = nativeCount(
+        "SELECT COUNT(*) FROM work_orders WHERE project_id = ?1 AND status NOT IN ('ACCEPTED', 'CANCELLED')",
+        project.getId());
+    if (openWorkOrders > 0) throw new BusinessException("仍有未验收或未取消的工单，不能结项");
+    long openPurchaseOrders = nativeCount(
+        "SELECT COUNT(*) FROM procurement_purchase_orders WHERE project_id = ?1 AND status NOT IN ('CLOSED', 'CANCELLED')",
+        project.getId());
+    if (openPurchaseOrders > 0) throw new BusinessException("仍有未关闭采购订单，不能结项");
+    long outstandingPayables = nativeCount(
+        """
+        SELECT COUNT(*) FROM fin_procurement_payables payable
+        WHERE payable.amount > payable.paid_amount
+          AND (
+            payable.order_id IN (SELECT id FROM procurement_purchase_orders WHERE project_id = ?1)
+            OR payable.receipt_id IN (
+              SELECT receipt.id FROM procurement_goods_receipts receipt
+              JOIN procurement_purchase_orders purchase_order ON purchase_order.id = receipt.order_id
+              WHERE purchase_order.project_id = ?1
+            )
+          )
+        """,
+        project.getId());
+    if (outstandingPayables > 0) throw new BusinessException("项目仍有未结清采购应付，不能结项");
+    if (project.getContractId() != null) {
+      long outstandingReceivables = nativeCount(
+          "SELECT COUNT(*) FROM fin_receivables WHERE contract_id = ?1 AND status <> 'SETTLED'",
+          project.getContractId());
+      if (outstandingReceivables > 0) throw new BusinessException("关联合同仍有未结清应收，不能结项");
+    }
+  }
+
+  private long nativeCount(String sql, UUID id) {
+    Number count = (Number) entityManager.createNativeQuery(sql).setParameter(1, id).getSingleResult();
+    return count.longValue();
   }
 
 

@@ -1,0 +1,1 @@
+import{X as e,ct as t}from"./vue-DinNVDpa.js";function n(n){let r=t();return e(()=>{r.value=n()},{flush:`sync`}),r}export{n as t};

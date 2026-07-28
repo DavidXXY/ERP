@@ -1,0 +1,1 @@
+function e(e,t,n){return e==null?n??``:t[e]??n??e}function t(e,t,n){return e==null?n??`default`:t[e]??n??`default`}export{e as n,t};

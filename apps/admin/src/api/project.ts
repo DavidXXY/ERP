@@ -15,6 +15,11 @@ export type ProjectStage =
 
 export type ProjectType = "NEW_CONSTRUCTION" | "RENOVATION" | "O_M_RENOVATION";
 export type ProjectApprovalStatus = "PENDING" | "APPROVED" | "REJECTED";
+export type ProjectExecutionStatus =
+  | "ACTIVE"
+  | "PAUSED"
+  | "CANCELLED"
+  | "CLOSED";
 export type ProjectCostCategory =
   | "LABOR"
   | "MATERIAL"
@@ -44,7 +49,12 @@ export type Project = {
   code?: string;
   name: string;
   projectType: ProjectType;
+  managerUserId?: string;
   managerName: string;
+  managerAssignedByUserId?: string;
+  managerAssignedByName?: string;
+  managerAssignedAt?: string;
+  managerAssignmentComment?: string;
   siteAddress: string;
   contractId?: string;
   contractCode?: string;
@@ -58,6 +68,10 @@ export type Project = {
   approvalComment?: string;
   approverName?: string;
   approvedAt?: string;
+  approverUserId?: string;
+  executionStatus: ProjectExecutionStatus;
+  statusComment?: string;
+  statusChangedAt?: string;
   budgetAmount: number;
   actualCost: number;
   grossMargin: number;
@@ -77,7 +91,7 @@ export type CreateProjectPayload = {
   code?: string;
   name: string;
   projectType: ProjectType;
-  managerName: string;
+  managerUserId?: string;
   siteAddress: string;
   contractAmount: number;
   plannedStartDate: string;
@@ -143,11 +157,28 @@ export type ProjectManagerOption = {
   displayName: string;
 };
 
-export function listProjects(page?: number, size?: number) {
+export type ProjectListParams = {
+  keyword?: string;
+  approvalStatus?: ProjectApprovalStatus;
+  stage?: ProjectStage;
+  executionStatus?: ProjectExecutionStatus;
+  page?: number;
+  size?: number;
+};
+
+export function listProjects(params?: ProjectListParams) {
   return request<PageResponse<Project>>({
     method: "GET",
     url: "/projects",
-    params: { page, size },
+    params,
+  });
+}
+
+export function listProjectPortfolio(params?: ProjectListParams) {
+  return request<PageResponse<ProjectDetail>>({
+    method: "GET",
+    url: "/projects/portfolio",
+    params,
   });
 }
 
@@ -240,7 +271,6 @@ export function processProjectApproval(
   payload: {
     decision: ProjectApprovalStatus;
     comment: string;
-    approverName: string;
   },
 ) {
   return request<ProjectDetail>({
@@ -252,7 +282,7 @@ export function processProjectApproval(
 
 export function assignProjectManager(
   id: string,
-  payload: { managerName: string; operatorName: string; comment?: string },
+  payload: { managerUserId: string; comment?: string },
 ) {
   return request<ProjectDetail>({
     method: "POST",
@@ -263,11 +293,22 @@ export function assignProjectManager(
 
 export function advanceProjectStage(
   id: string,
-  payload: { targetStage: ProjectStage; comment: string; operatorName: string },
+  payload: { targetStage: ProjectStage; comment: string },
 ) {
   return request<ProjectDetail>({
     method: "POST",
     url: `/projects/${id}/stage`,
+    data: payload,
+  });
+}
+
+export function changeProjectExecutionStatus(
+  id: string,
+  payload: { status: ProjectExecutionStatus; comment: string },
+) {
+  return request<ProjectDetail>({
+    method: "POST",
+    url: `/projects/${id}/execution-status`,
     data: payload,
   });
 }

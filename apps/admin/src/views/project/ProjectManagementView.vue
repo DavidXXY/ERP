@@ -91,16 +91,19 @@
             allow-clear
             placeholder="搜索项目、客户、负责人"
             style="width: 260px"
+            @search="applyProjectFilters"
           />
           <a-select
             v-model:value="approvalFilter"
             :options="approvalFilterOptions"
             style="width: 140px"
+            @change="applyProjectFilters"
           />
           <a-select
             v-model:value="stageFilter"
             :options="stageFilterOptions"
             style="width: 140px"
+            @change="applyProjectFilters"
           />
           <a-tag color="orange">待分配 {{ pendingApprovalCount }}</a-tag>
         </a-space>
@@ -109,7 +112,8 @@
           :columns="columns"
           :data-source="filteredProjects"
           :loading="loading"
-          :pagination="{ pageSize: 8 }"
+          :pagination="projectPagination"
+          @change="handleProjectTableChange"
           :row-key="(record: Project) => record.id"
           :scroll="{ x: 1490 }"
           size="middle"
@@ -136,6 +140,9 @@
             <template v-else-if="column.key === 'stage'">
               <a-tag :color="stageColor(record.stage)">{{
                 stageLabel(record.stage)
+              }}</a-tag>
+              <a-tag :color="executionColor(record.executionStatus)">{{
+                executionLabel(record.executionStatus)
               }}</a-tag>
             </template>
             <template v-else-if="column.key === 'approval'">
@@ -175,7 +182,7 @@
                 >
                 <a-popconfirm
                   v-if="auth.can('project:delete')"
-                  title="确认删除该项目？相关预算、成本、采购、领料、费用和工单记录也会同步清理。"
+                  title="确认将该项目移入回收站？业务记录与审计数据会保留，可由管理员恢复。"
                   @confirm="removeProject(record)"
                 >
                   <a-button danger type="link" size="small">删除</a-button>
@@ -187,10 +194,20 @@
                   "
                   type="link"
                   size="small"
-                  @click="openApproval(record)"
+                  @click="openProjectApproval(record)"
                 >
-                  分配
+                  审批
                 </a-button>
+                <a-button
+                  v-if="
+                    auth.can('project:approve') &&
+                    record.approvalStatus === 'APPROVED'
+                  "
+                  type="link"
+                  size="small"
+                  @click="openApproval(record)"
+                  >分配/变更</a-button
+                >
               </a-space>
             </template>
           </template>
@@ -228,7 +245,8 @@
           :columns="budgetExecutionColumns"
           :data-source="budgetExecutionRows"
           :loading="loading"
-          :pagination="{ pageSize: 10 }"
+          :pagination="projectPagination"
+          @change="handleProjectTableChange"
           :row-key="(record: ProjectBudgetRow) => record.project.id"
           :scroll="{ x: 1120 }"
           size="middle"
@@ -483,6 +501,17 @@
           </template>
           <template #emptyText>暂无成本明细，可进入项目详情登记成本</template>
         </a-table>
+        <a-pagination
+          class="project-page-pagination"
+          :current="pageMeta.number + 1"
+          :page-size="pageMeta.size"
+          :total="pageMeta.totalElements"
+          show-size-changer
+          @change="
+            (page: number, size: number) =>
+              handleProjectTableChange({ current: page, pageSize: size })
+          "
+        />
       </template>
 
       <template v-else>
@@ -503,7 +532,10 @@
               class="stage-card"
               :class="{ active: stageFilter === 'ALL' }"
               type="button"
-              @click="stageFilter = 'ALL'"
+              @click="
+                stageFilter = 'ALL';
+                applyProjectFilters();
+              "
             >
               <span>全部项目</span>
               <strong>{{ projects.length }}</strong>
@@ -515,7 +547,10 @@
               class="stage-card"
               :class="{ active: stageFilter === item.stage }"
               type="button"
-              @click="stageFilter = item.stage"
+              @click="
+                stageFilter = item.stage;
+                applyProjectFilters();
+              "
             >
               <span>{{ item.label }}</span>
               <strong>{{ item.count }}</strong>
@@ -535,11 +570,13 @@
               allow-clear
               placeholder="搜索项目、客户、负责人"
               style="width: 240px"
+              @search="applyProjectFilters"
             />
             <a-select
               v-model:value="stageFilter"
               :options="stageFilterOptions"
               style="width: 140px"
+              @change="applyProjectFilters"
             />
           </a-space>
         </div>
@@ -547,7 +584,8 @@
           :columns="stageProjectColumns"
           :data-source="stageProjectRows"
           :loading="loading || detailHydrating"
-          :pagination="{ pageSize: 10 }"
+          :pagination="projectPagination"
+          @change="handleProjectTableChange"
           :row-key="(record: ProjectStageOverviewRow) => record.project.id"
           :scroll="{ x: 920 }"
           size="middle"
@@ -913,15 +951,19 @@
         <a-space v-if="detail">
           <a-button
             v-if="
+              auth.can('project:approve') &&
+              detail.project.approvalStatus === 'PENDING'
+            "
+            @click="openProjectApproval(detail.project)"
+            >立项审批</a-button
+          >
+          <a-button
+            v-if="
               auth.can('project:approve') && canAssignManager(detail.project)
             "
             @click="openApproval(detail.project)"
           >
-            {{
-              detail.project.approvalStatus === "PENDING"
-                ? "分配项目经理"
-                : "变更负责人"
-            }}
+            {{ detail.project.managerUserId ? "变更负责人" : "分配项目经理" }}
           </a-button>
           <a-button
             v-if="auth.can('project:cost:create') && canExecute(detail.project)"
@@ -938,6 +980,31 @@
           >
             推进阶段
           </a-button>
+          <a-button
+            v-if="
+              auth.can('project:stage:update') &&
+              ['ACTIVE', 'PAUSED'].includes(detail.project.executionStatus)
+            "
+            @click="
+              openLifecycle(
+                detail.project.executionStatus === 'ACTIVE'
+                  ? 'PAUSED'
+                  : 'ACTIVE',
+              )
+            "
+            >{{
+              detail.project.executionStatus === "ACTIVE" ? "暂停" : "恢复"
+            }}</a-button
+          >
+          <a-button
+            v-if="
+              auth.can('project:stage:update') &&
+              ['ACTIVE', 'PAUSED'].includes(detail.project.executionStatus)
+            "
+            danger
+            @click="openLifecycle('CANCELLED')"
+            >取消项目</a-button
+          >
         </a-space>
       </template>
 
@@ -1192,6 +1259,58 @@
       </a-form>
     </a-modal>
 
+    <a-modal
+      v-model:open="projectApprovalOpen"
+      title="立项审批"
+      :confirm-loading="saving"
+      @ok="handleProjectApproval"
+    >
+      <a-alert
+        v-if="activeProject"
+        class="section-alert"
+        type="info"
+        show-icon
+        :message="`${activeProject.code} · ${activeProject.name}`"
+        description="审批只决定是否立项；审批通过后再单独分配项目经理。"
+      />
+      <a-form :model="projectApprovalForm" layout="vertical">
+        <a-form-item label="审批结论" required>
+          <a-radio-group
+            v-model:value="projectApprovalForm.decision"
+            button-style="solid"
+          >
+            <a-radio-button value="APPROVED">通过</a-radio-button>
+            <a-radio-button value="REJECTED">驳回</a-radio-button>
+          </a-radio-group>
+        </a-form-item>
+        <a-form-item label="审批意见" required>
+          <a-textarea v-model:value="projectApprovalForm.comment" :rows="3" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <a-modal
+      v-model:open="lifecycleOpen"
+      :title="executionLabel(lifecycleForm.status)"
+      :confirm-loading="saving"
+      @ok="handleLifecycleChange"
+    >
+      <a-alert
+        type="warning"
+        show-icon
+        :message="
+          lifecycleForm.status === 'CANCELLED'
+            ? '取消后不可恢复，且不能再新增成本或推进阶段。'
+            : '状态变更会保留原因与时间。'
+        "
+      />
+      <a-form layout="vertical" class="section-gap">
+        <a-form-item label="变更原因" required>
+          <a-textarea v-model:value="lifecycleForm.comment" :rows="3" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
     <ProjectModals
       v-model:create-open="createOpen"
       v-model:approval-open="approvalOpen"
@@ -1224,6 +1343,7 @@ import { useRoute, useRouter } from "vue-router";
 import { listCustomers, type CustomerSummary } from "@/api/crm";
 import {
   listProjects,
+  listProjectPortfolio,
   getProject,
   listProjectProfitability,
   deleteProject,
@@ -1232,6 +1352,8 @@ import {
   approvePreSalesCost,
   listProjectManagerOptions,
   getProjectManagerAssignmentCapability,
+  processProjectApproval,
+  changeProjectExecutionStatus,
 } from "@/api/project";
 import { listUsersApi, type UserResponse } from "@/api/system";
 import {
@@ -1246,6 +1368,7 @@ import {
   type ProjectStageRecord,
   type ProjectType,
   type ProjectProfitability,
+  type ProjectExecutionStatus,
 } from "@/api/project";
 import { createPurchaseRequest } from "@/api/procurement";
 import type { ApprovalDecision, QuoteCostRequest, QuotePlan } from "@/api/crm";
@@ -1266,7 +1389,7 @@ const router = useRouter();
 const projects = ref<Project[]>([]);
 const profitabilityRows = ref<ProjectProfitability[]>([]);
 const detailCache = ref<Record<string, ProjectDetail>>({});
-const pageMeta = ref({ totalElements: 0, totalPages: 0, number: 0, size: 999 });
+const pageMeta = ref({ totalElements: 0, totalPages: 0, number: 0, size: 20 });
 const customers = ref<CustomerSummary[]>([]);
 const visibleUsers = ref<UserResponse[]>([]);
 const projectManagers = ref<
@@ -1282,6 +1405,8 @@ const saving = ref(false);
 const createOpen = ref(false);
 const detailOpen = ref(false);
 const approvalOpen = ref(false);
+const projectApprovalOpen = ref(false);
+const lifecycleOpen = ref(false);
 const stageOpen = ref(false);
 const costOpen = ref(false);
 const projectPurchaseOpen = ref(false);
@@ -1293,6 +1418,14 @@ const errorMessage = ref("");
 const keyword = ref("");
 const approvalFilter = ref("ALL");
 const stageFilter = ref("ALL");
+const projectApprovalForm = reactive({
+  decision: "APPROVED" as ProjectApprovalStatus,
+  comment: "",
+});
+const lifecycleForm = reactive({
+  status: "PAUSED" as ProjectExecutionStatus,
+  comment: "",
+});
 type PageMode = "list" | "budget" | "costs" | "stages" | "presales";
 type ProjectBudgetRow = {
   project: Project;
@@ -1444,22 +1577,14 @@ const preSalesColumns = [
   { title: "操作", key: "action", width: 190, fixed: "right" as const },
 ];
 
-const filteredProjects = computed(() =>
-  projects.value.filter((item) => {
-    const search = keyword.value.trim().toLowerCase();
-    const textMatched =
-      !search ||
-      [item.code, item.name, item.customerName, item.managerName].some(
-        (value) => value?.toLowerCase().includes(search),
-      );
-    return (
-      textMatched &&
-      (approvalFilter.value === "ALL" ||
-        item.approvalStatus === approvalFilter.value) &&
-      (stageFilter.value === "ALL" || item.stage === stageFilter.value)
-    );
-  }),
-);
+const filteredProjects = computed(() => projects.value);
+const projectPagination = computed(() => ({
+  current: pageMeta.value.number + 1,
+  pageSize: pageMeta.value.size,
+  total: pageMeta.value.totalElements,
+  showSizeChanger: true,
+  showTotal: (total: number) => `共 ${total} 个项目`,
+}));
 const customerOptions = computed(() =>
   customers.value.map((item) => ({
     label: `${item.name} (${item.code})`,
@@ -1481,24 +1606,31 @@ const visibleUserOptions = computed(() => {
 const projectManagerOptions = computed(() =>
   projectManagers.value.map((item) => ({
     label: `${item.displayName} · ${item.username}`,
-    value: item.displayName,
+    value: item.id,
   })),
 );
 const totalContract = computed(() =>
-  projects.value.reduce(
+  profitabilityRows.value.reduce(
     (sum, item) => sum + Number(item.contractAmount || 0),
     0,
   ),
 );
 const totalBudget = computed(() =>
-  projects.value.reduce((sum, item) => sum + Number(item.budgetAmount || 0), 0),
+  profitabilityRows.value.reduce(
+    (sum, item) => sum + Number(item.budgetAmount || 0),
+    0,
+  ),
 );
 const totalActualCost = computed(() =>
-  projects.value.reduce((sum, item) => sum + Number(item.actualCost || 0), 0),
+  profitabilityRows.value.reduce(
+    (sum, item) => sum + Number(item.actualCost || 0),
+    0,
+  ),
 );
 const pendingApprovalCount = computed(
   () =>
-    projects.value.filter((item) => item.approvalStatus === "PENDING").length,
+    profitabilityRows.value.filter((item) => item.approvalStatus === "PENDING")
+      .length,
 );
 const highRiskProjectCount = computed(
   () =>
@@ -1506,8 +1638,9 @@ const highRiskProjectCount = computed(
 );
 const budgetOverrunCount = computed(
   () =>
-    projects.value.filter((item) => Number(item.budgetVariance || 0) < 0)
-      .length,
+    profitabilityRows.value.filter(
+      (item) => Number(item.actualCost || 0) > Number(item.budgetAmount || 0),
+    ).length,
 );
 const nextStage = computed<ProjectStage | null>(() => {
   if (!detail.value || detail.value.project.stage === "CLOSED") return null;
@@ -1551,23 +1684,7 @@ const materialBudgetItem = computed(
     ) || null,
 );
 const detailRows = computed(() => Object.values(detailCache.value));
-const stageFilteredProjects = computed(() =>
-  projects.value.filter((project) => {
-    const search = keyword.value.trim().toLowerCase();
-    const textMatched =
-      !search ||
-      [
-        project.code,
-        project.name,
-        project.customerName,
-        project.managerName,
-      ].some((value) => value?.toLowerCase().includes(search));
-    return (
-      textMatched &&
-      (stageFilter.value === "ALL" || project.stage === stageFilter.value)
-    );
-  }),
-);
+const stageFilteredProjects = computed(() => projects.value);
 const latestStageRecordMap = computed(() => {
   const rows = new Map<string, ProjectStageRecord>();
   detailRows.value.forEach((detailRow) => {
@@ -1691,7 +1808,9 @@ const costCards = computed(() => [
 ]);
 const stageCards = computed(() =>
   stageOptions.map((stage) => {
-    const rows = projects.value.filter((item) => item.stage === stage.value);
+    const rows = profitabilityRows.value.filter(
+      (item) => item.stage === stage.value,
+    );
     return {
       stage: stage.value,
       label: stage.label,
@@ -1703,7 +1822,7 @@ const stageCards = computed(() =>
   }),
 );
 const closedReviewRows = computed(() =>
-  projects.value.filter((item) => item.stage === "CLOSED"),
+  profitabilityRows.value.filter((item) => item.stage === "CLOSED"),
 );
 const profitReviewCards = computed(() => {
   const contractAmount = closedReviewRows.value.reduce(
@@ -1727,6 +1846,7 @@ const profitReviewCards = computed(() => {
       danger: false,
       action: () => {
         stageFilter.value = "CLOSED";
+        applyProjectFilters();
       },
     },
     {
@@ -1768,7 +1888,7 @@ async function loadData() {
   try {
     const [projectPage, customerRows, profitability, preSales] =
       await Promise.all([
-        listProjects(0, 999),
+        listProjects(projectQueryParams()),
         // Project roles can work on projects and pre-sales costs without CRM
         // customer-directory permission.  The project rows already carry the
         // customer display data, so a forbidden optional lookup must not blank
@@ -1798,6 +1918,36 @@ async function loadData() {
   } finally {
     loading.value = false;
   }
+}
+
+function projectQueryParams() {
+  return {
+    page: pageMeta.value.number,
+    size: pageMeta.value.size,
+    keyword: keyword.value.trim() || undefined,
+    approvalStatus:
+      approvalFilter.value === "ALL"
+        ? undefined
+        : (approvalFilter.value as ProjectApprovalStatus),
+    stage:
+      stageFilter.value === "ALL"
+        ? undefined
+        : (stageFilter.value as ProjectStage),
+  };
+}
+
+function applyProjectFilters() {
+  pageMeta.value.number = 0;
+  void loadData();
+}
+
+function handleProjectTableChange(pagination: {
+  current?: number;
+  pageSize?: number;
+}) {
+  pageMeta.value.number = Math.max(0, Number(pagination.current || 1) - 1);
+  pageMeta.value.size = Number(pagination.pageSize || 20);
+  void loadData();
 }
 
 async function loadProjectManagerAssignmentData() {
@@ -1850,6 +2000,70 @@ function openApproval(project: Project) {
   activeProject.value = project;
   if (!projectManagers.value.length) void loadProjectManagerAssignmentData();
   approvalOpen.value = true;
+}
+function openProjectApproval(project: Project) {
+  activeProject.value = project;
+  projectApprovalForm.decision = "APPROVED";
+  projectApprovalForm.comment = "";
+  projectApprovalOpen.value = true;
+}
+
+async function handleProjectApproval() {
+  if (!activeProject.value) return;
+  if (!projectApprovalForm.comment.trim()) {
+    message.warning("请填写审批意见");
+    return;
+  }
+  saving.value = true;
+  try {
+    await processProjectApproval(activeProject.value.id, {
+      decision: projectApprovalForm.decision,
+      comment: projectApprovalForm.comment,
+    });
+    projectApprovalOpen.value = false;
+    message.success(
+      projectApprovalForm.decision === "APPROVED"
+        ? "立项审批已通过"
+        : "立项已驳回",
+    );
+    await loadData();
+  } catch (error) {
+    message.error(getErrorMessage(error, "立项审批失败"));
+  } finally {
+    saving.value = false;
+  }
+}
+
+function openLifecycle(status: ProjectExecutionStatus) {
+  lifecycleForm.status = status;
+  lifecycleForm.comment = "";
+  lifecycleOpen.value = true;
+}
+
+async function handleLifecycleChange() {
+  if (!detail.value) return;
+  if (!lifecycleForm.comment.trim()) {
+    message.warning("请填写状态变更原因");
+    return;
+  }
+  saving.value = true;
+  try {
+    const updated = await changeProjectExecutionStatus(
+      detail.value.project.id,
+      {
+        status: lifecycleForm.status,
+        comment: lifecycleForm.comment,
+      },
+    );
+    detail.value = updated;
+    lifecycleOpen.value = false;
+    message.success(`项目已${executionLabel(lifecycleForm.status)}`);
+    await loadData();
+  } catch (error) {
+    message.error(getErrorMessage(error, "项目状态变更失败"));
+  } finally {
+    saving.value = false;
+  }
 }
 function openStage() {
   if (!detail.value || !nextStage.value) return;
@@ -2010,7 +2224,7 @@ async function removeProject(project: Project) {
       detail.value = null;
       detailOpen.value = false;
     }
-    message.success("项目已删除");
+    message.success("项目已移入回收站，业务与审计数据均已保留");
     await loadData();
   } catch (error) {
     message.error(error instanceof Error ? error.message : "项目删除失败");
@@ -2021,19 +2235,10 @@ async function hydrateProjectDetails(force = false) {
   if (detailHydrating.value) return;
   detailHydrating.value = true;
   try {
-    const targets = projects.value
-      .filter((project) => force || !detailCache.value[project.id])
-      .slice(0, 80);
-    const details = await Promise.all(
-      targets.map((project) => getProject(project.id).catch(() => null)),
-    );
+    const details = (await listProjectPortfolio(projectQueryParams())).content;
     detailCache.value = {
-      ...detailCache.value,
-      ...Object.fromEntries(
-        details
-          .filter((item): item is ProjectDetail => Boolean(item))
-          .map((item) => [item.project.id, item]),
-      ),
+      ...(force ? {} : detailCache.value),
+      ...Object.fromEntries(details.map((item) => [item.project.id, item])),
     };
   } finally {
     detailHydrating.value = false;
@@ -2041,7 +2246,11 @@ async function hydrateProjectDetails(force = false) {
 }
 
 function canExecute(project: Project) {
-  return project.approvalStatus === "APPROVED" && project.stage !== "CLOSED";
+  return (
+    project.approvalStatus === "APPROVED" &&
+    project.executionStatus === "ACTIVE" &&
+    project.stage !== "CLOSED"
+  );
 }
 function canAdvance(project: Project) {
   return canExecute(project) && project.stage !== "CLOSED";
@@ -2050,13 +2259,36 @@ function canAssignManager(project: Project) {
   return (
     auth.can("project:approve") &&
     canManageProjectAssignment.value &&
-    (project.approvalStatus === "PENDING" ||
-      project.approvalStatus === "APPROVED")
+    project.approvalStatus === "APPROVED"
   );
 }
 function stageLabel(stage: ProjectStage) {
   if (stage === "INITIATED" || stage === "BIDDING") return "入场";
   return stageOptions.find((item) => item.value === stage)?.label || stage;
+}
+function executionLabel(status?: ProjectExecutionStatus) {
+  return (
+    (
+      {
+        ACTIVE: "执行中",
+        PAUSED: "已暂停",
+        CANCELLED: "已取消",
+        CLOSED: "已结项",
+      } as Record<string, string>
+    )[status || ""] || "-"
+  );
+}
+function executionColor(status?: ProjectExecutionStatus) {
+  return (
+    (
+      {
+        ACTIVE: "green",
+        PAUSED: "orange",
+        CANCELLED: "red",
+        CLOSED: "default",
+      } as Record<string, string>
+    )[status || ""] || "default"
+  );
 }
 function stageColor(stage: ProjectStage) {
   return (

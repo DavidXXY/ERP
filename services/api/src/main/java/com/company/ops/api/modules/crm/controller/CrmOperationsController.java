@@ -246,8 +246,9 @@ public class CrmOperationsController {
   @GetMapping("/receivables")
   @PreAuthorize("hasAuthority('crm:receivable:view')")
   public ApiResponse<PageResponse<ReceivableResponse>> listReceivables(
+      @org.springframework.web.bind.annotation.RequestParam(required = false) UUID contractId,
       @org.springframework.data.web.PageableDefault(size = 100) org.springframework.data.domain.Pageable pageable) {
-    return ApiResponse.ok(PageResponse.from(crmOperationsService.listReceivables(pageable)));
+    return ApiResponse.ok(PageResponse.from(crmOperationsService.listReceivables(contractId, pageable)));
   }
 
   @PostMapping("/receivables/{id}/invoice")

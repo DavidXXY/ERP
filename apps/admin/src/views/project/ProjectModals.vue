@@ -33,10 +33,11 @@
               :options="projectTypeOptions" /></a-form-item
         ></a-col>
         <a-col :xs="24" :md="6">
-          <a-form-item label="项目负责人" name="managerName">
+          <a-form-item label="项目负责人（可稍后分配）" name="managerUserId">
             <a-select
-              v-model:value="createForm.managerName"
+              v-model:value="createForm.managerUserId"
               :options="userOptions"
+              allow-clear
               show-search
               option-filter-prop="label"
               placeholder="选择项目负责人"
@@ -120,9 +121,9 @@
     >
       <a-row :gutter="16">
         <a-col :xs="24" :md="12">
-          <a-form-item label="项目经理" name="managerName">
+          <a-form-item label="项目经理" name="managerUserId">
             <a-select
-              v-model:value="approvalForm.managerName"
+              v-model:value="approvalForm.managerUserId"
               :options="userOptions"
               show-search
               option-filter-prop="label"
@@ -130,12 +131,6 @@
             />
           </a-form-item>
         </a-col>
-        <a-col :xs="24" :md="12"
-          ><a-form-item label="分配人" name="operatorName"
-            ><a-input
-              v-model:value="approvalForm.operatorName"
-              disabled /></a-form-item
-        ></a-col>
         <a-col :span="24"
           ><a-form-item label="分配说明"
             ><a-textarea
@@ -172,10 +167,6 @@
             ><a-input
               :value="nextStage ? stageLabel(nextStage) : ''"
               disabled /></a-form-item
-        ></a-col>
-        <a-col :xs="24" :md="8"
-          ><a-form-item label="操作人" name="operatorName"
-            ><a-input v-model:value="stageForm.operatorName" /></a-form-item
         ></a-col>
         <a-col :span="24"
           ><a-form-item label="节点说明" name="comment"
@@ -284,14 +275,12 @@ import {
   assignProjectManager,
   type ProjectStage,
 } from "@/api/project";
-import { useAuthStore } from "@/stores/auth";
 import {
   getErrorMessage,
   openBudgetChangeRequest,
   showBudgetOverrunPrompt,
 } from "@/utils/budget-overrun";
 
-const auth = useAuthStore();
 const router = useRouter();
 const emit = defineEmits([
   "update:createOpen",
@@ -328,7 +317,7 @@ const createForm = reactive({
   code: "",
   name: "",
   projectType: "RENOVATION",
-  managerName: auth.user?.displayName || "",
+  managerUserId: undefined as string | undefined,
   siteAddress: "",
   contractAmount: 0,
   plannedStartDate: dateAfter(0),
@@ -339,13 +328,11 @@ const createForm = reactive({
   },
 });
 const approvalForm = reactive({
-  managerName: "",
-  operatorName: auth.user?.displayName || "",
+  managerUserId: "",
   comment: "",
 });
 const stageForm = reactive({
   comment: "",
-  operatorName: auth.user?.displayName || "",
 });
 const costForm = reactive({
   category: "LABOR",
@@ -360,19 +347,16 @@ const createRules = {
   name: [{ required: true, message: "请输入项目名称" }],
   customerId: [{ required: true, message: "请选择客户" }],
   projectType: [{ required: true, message: "请选择项目类型" }],
-  managerName: [{ required: true, message: "请选择项目负责人" }],
   siteAddress: [{ required: true, message: "请输入现场地址" }],
   contractAmount: [{ required: true, message: "请输入合同金额" }],
   plannedStartDate: [{ required: true, message: "请选择计划开始日期" }],
   plannedEndDate: [{ required: true, message: "请选择计划结束日期" }],
 };
 const approvalRules = {
-  managerName: [{ required: true, message: "请选择项目经理" }],
-  operatorName: [{ required: true, message: "请输入分配人" }],
+  managerUserId: [{ required: true, message: "请选择项目经理" }],
 };
 const stageRules = {
   comment: [{ required: true, message: "请输入节点说明" }],
-  operatorName: [{ required: true, message: "请输入操作人" }],
 };
 const costRules = {
   category: [{ required: true }],
@@ -411,11 +395,9 @@ watch(
   () => props.approvalOpen,
   (open) => {
     if (!open) return;
-    const currentManager = String(props.activeProject?.managerName || "");
-    approvalForm.managerName = currentManager.startsWith("待")
-      ? ""
-      : currentManager;
-    approvalForm.operatorName = auth.user?.displayName || "";
+    approvalForm.managerUserId = String(
+      props.activeProject?.managerUserId || "",
+    );
     approvalForm.comment = "";
   },
 );
@@ -459,7 +441,7 @@ async function handleCreate() {
       code: createForm.code,
       name: createForm.name,
       projectType: createForm.projectType as any,
-      managerName: createForm.managerName,
+      managerUserId: createForm.managerUserId,
       siteAddress: createForm.siteAddress,
       contractAmount: createForm.contractAmount,
       plannedStartDate: createForm.plannedStartDate,
@@ -483,14 +465,15 @@ async function handleApproval() {
   await approvalFormRef.value?.validate();
   try {
     await assignProjectManager(props.activeProject.id, {
-      ...approvalForm,
-    } as any);
+      managerUserId: approvalForm.managerUserId,
+      comment: approvalForm.comment || undefined,
+    });
     emit("updated");
     emit("update:approvalOpen", false);
     message.success(
       props.activeProject.approvalStatus === "APPROVED"
         ? "项目负责人已变更"
-        : "项目经理已分配，项目进入入场执行",
+        : "项目经理已分配",
     );
   } catch (error) {
     message.error(error instanceof Error ? error.message : "项目经理分配失败");
@@ -503,8 +486,8 @@ async function handleAdvanceStage() {
   try {
     await advanceProjectStage(props.detail.project.id, {
       targetStage: props.nextStage,
-      ...stageForm,
-    } as any);
+      comment: stageForm.comment,
+    });
     emit("updated");
     emit("update:stageOpen", false);
     message.success("项目已进入" + stageLabel(props.nextStage) + "阶段");
@@ -534,9 +517,7 @@ async function handleCreateCost() {
     message.success("项目成本已归集");
   } catch (error) {
     const msg = error instanceof Error ? error.message : "项目成本登记失败";
-    const displayMessage = msg.includes("Cost exceeds budget")
-      ? "成本超过项目预算，已被预算控制拦截"
-      : msg;
+    const displayMessage = msg;
     if (
       !showBudgetOverrunPrompt(displayMessage, router, props.detail.project.id)
     ) {

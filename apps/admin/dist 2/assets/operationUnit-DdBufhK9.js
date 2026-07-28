@@ -1,0 +1,1 @@
+var e=e=>({color:e.colorLink,textDecoration:`none`,outline:`none`,cursor:`pointer`,transition:`color ${e.motionDurationSlow}`,"&:focus, &:hover":{color:e.colorLinkHover},"&:active":{color:e.colorLinkActive}});export{e as t};

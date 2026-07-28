@@ -665,6 +665,7 @@ export function updatePurchaseRequest(
 export function listPurchaseOrders(params?: {
   status?: PurchaseOrderStatus;
   costType?: ProcurementCostType;
+  projectId?: string;
   search?: string;
   page?: number;
   size?: number;

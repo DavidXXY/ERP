@@ -1,4 +1,5 @@
 import { http, request, requestAllPages } from "./http";
+import type { PageResponse } from "./system";
 
 export type CustomerLevel = "STRATEGIC" | "KEY" | "NORMAL";
 export type RiskStatus = "NORMAL" | "OVERDUE" | "RENEWAL_RISK";
@@ -733,6 +734,18 @@ export function listReceivables() {
     { method: "GET", url: "/crm/receivables" },
     200,
   );
+}
+
+export function listReceivablesByContract(
+  contractId: string,
+  page = 0,
+  size = 100,
+) {
+  return request<PageResponse<Receivable>>({
+    method: "GET",
+    url: "/crm/receivables",
+    params: { contractId, page, size },
+  });
 }
 
 export function getQuote(id: string) {

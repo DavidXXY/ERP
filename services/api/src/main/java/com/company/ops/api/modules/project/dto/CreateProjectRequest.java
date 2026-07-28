@@ -16,7 +16,8 @@ public record CreateProjectRequest(
     String code, // auto-generated if null
     @NotBlank @Size(max = 180) String name,
     @NotNull ProjectType projectType,
-    @NotBlank @Size(max = 80) String managerName,
+    UUID managerUserId,
+    @Size(max = 80) String managerName,
     @NotBlank @Size(max = 300) String siteAddress,
     @NotNull @PositiveOrZero BigDecimal contractAmount,
     @NotNull LocalDate plannedStartDate,

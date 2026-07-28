@@ -4,6 +4,7 @@ import com.company.ops.api.common.api.ApiResponse;
 import com.company.ops.api.common.api.PageResponse;
 import com.company.ops.api.modules.project.dto.AdvanceProjectStageRequest;
 import com.company.ops.api.modules.project.dto.AssignProjectManagerRequest;
+import com.company.ops.api.modules.project.dto.ChangeProjectExecutionStatusRequest;
 import com.company.ops.api.modules.project.dto.CreateProjectCostRequest;
 import com.company.ops.api.modules.project.dto.CreateProjectRequest;
 import com.company.ops.api.modules.project.dto.ProcessProjectApprovalRequest;
@@ -11,6 +12,9 @@ import com.company.ops.api.modules.project.dto.ProjectDetailResponse;
 import com.company.ops.api.modules.project.dto.ProjectProfitabilityResponse;
 import com.company.ops.api.modules.project.dto.ProjectManagerOption;
 import com.company.ops.api.modules.project.dto.ProjectResponse;
+import com.company.ops.api.modules.project.domain.ProjectApprovalStatus;
+import com.company.ops.api.modules.project.domain.ProjectExecutionStatus;
+import com.company.ops.api.modules.project.domain.ProjectStage;
 import com.company.ops.api.modules.project.service.ProjectService;
 import com.company.ops.api.modules.system.service.ApprovalFlowSecurity;
 import com.company.ops.api.modules.crm.domain.QuoteStatus;
@@ -32,6 +36,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -52,8 +57,28 @@ public class ProjectController {
 
   @GetMapping
   @PreAuthorize("hasAuthority('project:view')")
-  public ApiResponse<PageResponse<ProjectResponse>> listProjects(@PageableDefault(size = 20) Pageable pageable) {
-    return ApiResponse.ok(PageResponse.from(projectService.listProjects(pageable)));
+  public ApiResponse<PageResponse<ProjectResponse>> listProjects(
+      @RequestParam(required = false) String keyword,
+      @RequestParam(required = false) ProjectApprovalStatus approvalStatus,
+      @RequestParam(required = false) ProjectStage stage,
+      @RequestParam(required = false) ProjectExecutionStatus executionStatus,
+      @PageableDefault(size = 20, sort = "createdAt", direction = org.springframework.data.domain.Sort.Direction.DESC) Pageable pageable
+  ) {
+    return ApiResponse.ok(PageResponse.from(
+        projectService.listProjects(keyword, approvalStatus, stage, executionStatus, pageable)));
+  }
+
+  @GetMapping("/portfolio")
+  @PreAuthorize("hasAuthority('project:view')")
+  public ApiResponse<PageResponse<ProjectDetailResponse>> portfolio(
+      @RequestParam(required = false) String keyword,
+      @RequestParam(required = false) ProjectApprovalStatus approvalStatus,
+      @RequestParam(required = false) ProjectStage stage,
+      @RequestParam(required = false) ProjectExecutionStatus executionStatus,
+      @PageableDefault(size = 20, sort = "createdAt", direction = org.springframework.data.domain.Sort.Direction.DESC) Pageable pageable
+  ) {
+    return ApiResponse.ok(PageResponse.from(
+        projectService.listPortfolio(keyword, approvalStatus, stage, executionStatus, pageable)));
   }
 
   @GetMapping("/profitability")
@@ -150,6 +175,15 @@ public class ProjectController {
       @Valid @RequestBody CreateProjectCostRequest request
   ) {
     return ApiResponse.ok(projectService.createCost(id, request));
+  }
+
+  @PostMapping("/{id}/execution-status")
+  @PreAuthorize("hasAuthority('project:stage:update')")
+  public ApiResponse<ProjectDetailResponse> changeExecutionStatus(
+      @PathVariable UUID id,
+      @Valid @RequestBody ChangeProjectExecutionStatusRequest request
+  ) {
+    return ApiResponse.ok(projectService.changeExecutionStatus(id, request));
   }
 
   @DeleteMapping("/{id}")

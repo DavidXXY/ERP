@@ -1,0 +1,8 @@
+{
+  "navigationBarTitleText": "现场工单",
+  "enablePullDownRefresh": true,
+  "usingComponents": {
+    "state-view": "../../components/StateView",
+    "work-order-card": "../../components/WorkOrderCard"
+  }
+}

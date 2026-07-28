@@ -12,7 +12,7 @@
       <a-alert
         type="info"
         show-icon
-        message="按审批流集中维护规则；每条规则可指定人员或角色作为审批对象。"
+        message="常用配置直接填写，低频规则收在高级设置。"
         style="margin-bottom: 16px"
       />
       <a-collapse
@@ -274,22 +274,6 @@
             ><a-radio value="SEQUENTIAL">依次审批</a-radio></a-radio-group
           ></a-form-item
         >
-        <a-form-item
-          v-if="form.approvalMode === 'SEQUENTIAL'"
-          label="起始审批顺序"
-          name="sequenceNo"
-        >
-          <a-input-number
-            v-model:value="form.sequenceNo"
-            :min="1"
-            :precision="0"
-          />
-          <span class="form-hint">{{
-            editingId
-              ? "当前审批配置所在步骤。"
-              : "多人依次审批时，会按选择顺序从该数字开始递增。"
-          }}</span>
-        </a-form-item>
         <a-form-item label="适用条件" name="conditionType"
           ><a-select
             v-model:value="form.conditionType"
@@ -367,50 +351,80 @@
                 placeholder="例如：A、VIP、NORMAL" /></a-form-item
           ></a-col>
         </a-row>
-        <a-form-item label="规则优先级"
-          ><a-input-number
-            v-model:value="form.priority"
-            :min="1"
-            :precision="0"
-            style="width: 100%"
-        /></a-form-item>
-        <a-form-item label="节点通过策略">
-          <a-select
-            v-model:value="form.stepPolicy"
-            :options="stepPolicyOptions"
-          />
-        </a-form-item>
-        <a-row :gutter="12">
-          <a-col :span="12"
-            ><a-form-item label="SLA小时数"
-              ><a-input-number
-                v-model:value="form.slaHours"
+        <a-collapse
+          v-model:active-key="advancedKeys"
+          ghost
+          class="advanced-settings-collapse"
+        >
+          <a-collapse-panel key="advanced">
+            <template #header>
+              <span>高级设置</span>
+              <span v-if="advancedSettingCount" class="advanced-count"
+                >已配置 {{ advancedSettingCount }} 项</span
+              >
+            </template>
+            <a-form-item
+              v-if="form.approvalMode === 'SEQUENTIAL'"
+              label="起始审批顺序"
+              name="sequenceNo"
+            >
+              <a-input-number
+                v-model:value="form.sequenceNo"
                 :min="1"
                 :precision="0"
-                style="width: 100%" /></a-form-item
-          ></a-col>
-          <a-col :span="12"
-            ><a-form-item label="超时升级角色"
-              ><a-select
-                v-model:value="form.escalationRoleId"
-                allow-clear
-                show-search
-                option-filter-prop="label"
-                :options="roleOptions" /></a-form-item
-          ></a-col>
-        </a-row>
-        <a-form-item label="规则备注"
-          ><a-textarea
-            v-model:value="form.remark"
-            :rows="2"
-            placeholder="例如：金额超过 5 万需财务经理审批"
-        /></a-form-item>
-        <a-form-item v-if="editingId" label="启用状态"
-          ><a-switch
-            v-model:checked="form.enabled"
-            checked-children="启用"
-            un-checked-children="停用"
-        /></a-form-item>
+              />
+              <span class="form-hint">{{
+                editingId
+                  ? "当前审批配置所在步骤。"
+                  : "多人依次审批时，会按选择顺序从该数字开始递增。"
+              }}</span>
+            </a-form-item>
+            <a-form-item label="规则优先级"
+              ><a-input-number
+                v-model:value="form.priority"
+                :min="1"
+                :precision="0"
+                style="width: 100%"
+            /></a-form-item>
+            <a-form-item label="节点通过策略">
+              <a-select
+                v-model:value="form.stepPolicy"
+                :options="stepPolicyOptions"
+              />
+            </a-form-item>
+            <a-row :gutter="12">
+              <a-col :span="12"
+                ><a-form-item label="SLA小时数"
+                  ><a-input-number
+                    v-model:value="form.slaHours"
+                    :min="1"
+                    :precision="0"
+                    style="width: 100%" /></a-form-item
+              ></a-col>
+              <a-col :span="12"
+                ><a-form-item label="超时升级角色"
+                  ><a-select
+                    v-model:value="form.escalationRoleId"
+                    allow-clear
+                    show-search
+                    option-filter-prop="label"
+                    :options="roleOptions" /></a-form-item
+              ></a-col>
+            </a-row>
+            <a-form-item label="规则备注"
+              ><a-textarea
+                v-model:value="form.remark"
+                :rows="2"
+                placeholder="例如：金额超过 5 万需财务经理审批"
+            /></a-form-item>
+            <a-form-item v-if="editingId" label="启用状态"
+              ><a-switch
+                v-model:checked="form.enabled"
+                checked-children="启用"
+                un-checked-children="停用"
+            /></a-form-item>
+          </a-collapse-panel>
+        </a-collapse>
       </a-form>
     </a-modal>
 
@@ -537,6 +551,7 @@ const batchOpen = ref(false);
 const versionOpen = ref(false);
 const editingId = ref<string | null>(null);
 const activeFlowKeys = ref<string[]>([]);
+const advancedKeys = ref<string[]>([]);
 const formRef = ref<FormInstance>();
 const previewResults = ref<Record<string, ApprovalFlowPreview | undefined>>({});
 const batchResults = ref<ApprovalFlowPreview[]>([]);
@@ -637,6 +652,18 @@ const dynamicAssigneeOptions = [
   { label: "采购经理", value: "PROCUREMENT_MANAGER" },
   { label: "人事经理", value: "HR_MANAGER" },
 ];
+const advancedSettingCount = computed(
+  () =>
+    [
+      form.sequenceNo !== 1,
+      form.priority !== 100,
+      form.stepPolicy !== "ANY_APPROVE",
+      form.slaHours != null,
+      form.escalationRoleId != null,
+      Boolean(form.remark.trim()),
+      editingId.value != null && !form.enabled,
+    ].filter(Boolean).length,
+);
 const columns = [
   { title: "审批对象", key: "assignee", width: 180 },
   { title: "模式", key: "mode", width: 140 },
@@ -706,8 +733,15 @@ async function loadData() {
     roles.value = roleData.content;
     if (diagnostics.some((item) => item.severity === "HIGH"))
       message.warning("审批流存在高风险配置，请查看流程面板提示");
-    if (!activeFlowKeys.value.length)
-      activeFlowKeys.value = flowOptions.map((item) => item.value);
+    if (!activeFlowKeys.value.length) {
+      const configuredFlowCodes = new Set(
+        configData.map((item) => item.flowCode),
+      );
+      activeFlowKeys.value = flowOptions
+        .filter((item) => configuredFlowCodes.has(item.value))
+        .map((item) => item.value)
+        .slice(0, 1);
+    }
   } catch (error) {
     message.error(error instanceof Error ? error.message : "审批配置加载失败");
   } finally {
@@ -716,6 +750,7 @@ async function loadData() {
 }
 function openAdd(flowCode = "QUOTE") {
   editingId.value = null;
+  advancedKeys.value = [];
   Object.assign(form, {
     flowCode,
     assigneeType: "ROLE",
@@ -770,6 +805,7 @@ function openEdit(record: ApprovalConfigResponse) {
     remark: record.remark || "",
     enabled: record.enabled,
   });
+  advancedKeys.value = advancedSettingCount.value ? ["advanced"] : [];
   addOpen.value = true;
 }
 function handleTargetChange(values: string[]) {
@@ -1085,6 +1121,15 @@ onMounted(loadData);
   display: block;
   margin-top: 6px;
   color: #8c8c8c;
+  font-size: 12px;
+}
+.advanced-settings-collapse {
+  margin-top: 4px;
+  border-top: 1px solid #f0f0f0;
+}
+.advanced-count {
+  margin-left: 8px;
+  color: #64748b;
   font-size: 12px;
 }
 .approval-flow-collapse {

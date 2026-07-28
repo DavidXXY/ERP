@@ -667,13 +667,24 @@
             v-model:value="budgetForm.projectId"
             :options="projectOptions"
         /></a-form-item>
-        <a-form-item label="调整后预算（含税，元）" required
-          ><a-input-number
-            v-model:value="budgetForm.requestedAmount"
-            :min="1"
-            style="width: 100%"
-            addon-after="元"
-        /></a-form-item>
+        <a-divider>调整后分类预算 · 合计 {{ money(budgetTotal) }}</a-divider>
+        <a-row :gutter="12">
+          <a-col
+            v-for="item in budgetForm.items"
+            :key="item.category"
+            :span="12"
+          >
+            <a-form-item :label="budgetCategoryLabel(item.category)" required>
+              <a-input-number
+                v-model:value="item.plannedAmount"
+                :min="0"
+                :precision="2"
+                style="width: 100%"
+                addon-after="元"
+              />
+            </a-form-item>
+          </a-col>
+        </a-row>
         <a-form-item label="变更原因" required
           ><a-textarea v-model:value="budgetForm.reason" /></a-form-item
       ></a-form>
@@ -752,6 +763,7 @@ import {
   type CollaborationOverview,
   type CollaborationReferences,
 } from "@/api/collaboration";
+import { getProject, type ProjectCostCategory } from "@/api/project";
 
 const route = useRoute(),
   router = useRouter(),
@@ -821,8 +833,18 @@ const timesheetForm = reactive<any>({
   budgetForm = reactive<any>({
     projectId: undefined,
     requestedAmount: 0,
+    items: [] as Array<{
+      category: ProjectCostCategory;
+      plannedAmount: number;
+    }>,
     reason: "",
   });
+const budgetTotal = computed(() =>
+  budgetForm.items.reduce(
+    (sum: number, item: any) => sum + Number(item.plannedAmount || 0),
+    0,
+  ),
+);
 const periodForm = reactive<any>({ yearMonth: "", reason: "月度人工成本结账" }),
   responsibilityForm = reactive<any>({
     sourceId: undefined,
@@ -1316,14 +1338,18 @@ function reviewSheet(record: any, decision: string) {
   });
 }
 async function submitBudget() {
-  if (
-    !budgetForm.projectId ||
-    !budgetForm.requestedAmount ||
-    !budgetForm.reason
-  )
+  if (!budgetForm.projectId || budgetTotal.value <= 0 || !budgetForm.reason)
     return message.warning("请完整填写预算变更");
   try {
-    await requestBudgetChange(budgetForm);
+    await requestBudgetChange({
+      projectId: budgetForm.projectId,
+      requestedAmount: budgetTotal.value,
+      items: budgetForm.items.map((item: any) => ({
+        category: item.category,
+        plannedAmount: Number(item.plannedAmount || 0),
+      })),
+      reason: budgetForm.reason,
+    });
     budgetOpen.value = false;
     message.success("预算变更已提交");
     await loadData();
@@ -1374,12 +1400,31 @@ watch(
 );
 watch(
   () => budgetForm.projectId,
-  (projectId, previousProjectId) => {
+  async (projectId, previousProjectId) => {
     if (!projectId || projectId === previousProjectId) return;
-    const current = data.budgets.find((item) => item.projectId === projectId);
-    budgetForm.requestedAmount = Number(current?.budgetAmount || 0);
+    try {
+      const detail = await getProject(projectId);
+      budgetForm.items = detail.budgetItems.map((item) => ({
+        category: item.category,
+        plannedAmount: Number(item.plannedAmount || 0),
+      }));
+      budgetForm.requestedAmount = budgetTotal.value;
+    } catch (error: any) {
+      message.error(error?.message || "项目预算明细加载失败");
+    }
   },
 );
+function budgetCategoryLabel(category: ProjectCostCategory) {
+  return (
+    {
+      LABOR: "人工",
+      MATERIAL: "材料物料",
+      SUBCONTRACT: "外包",
+      TRAVEL: "差旅",
+      OTHER: "其他",
+    } as Record<ProjectCostCategory, string>
+  )[category];
+}
 onMounted(async () => {
   await loadData();
   await applyBudgetRequestIntent();

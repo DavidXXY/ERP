@@ -28,6 +28,12 @@ public class DeleteGovernanceService {
     return false;
   }
 
+  /** Always archives the business record without destroying its dependent audit data. */
+  @Transactional
+  public void requestSoftDelete(String entityType, UUID entityId, String title) {
+    createSoftDeleteRequest(entityType, entityId, title, currentPrincipal());
+  }
+
   public boolean isHidden(String entityType, UUID entityId) {
     Number count = (Number) entityManager.createNativeQuery("""
         SELECT COUNT(*)

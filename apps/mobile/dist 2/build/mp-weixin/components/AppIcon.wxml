@@ -1,0 +1,1 @@
+<text class="app-icon data-v-ea86e31f" style="{{b}}"><block wx:if="{{$slots.d}}"><slot></slot></block><block wx:else>{{a}}</block></text>

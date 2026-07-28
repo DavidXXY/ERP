@@ -1,11 +1,13 @@
 package com.company.ops.api.modules.collaboration.dto;
 
 import jakarta.validation.constraints.*;
+import jakarta.validation.Valid;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.List;
 import java.util.UUID;
+import com.company.ops.api.modules.project.domain.ProjectCostCategory;
 
 public final class CollaborationDtos {
   private CollaborationDtos(){}
@@ -22,6 +24,8 @@ public final class CollaborationDtos {
   public record TimesheetSubmitRequest(@NotNull UUID assignmentId,@NotNull LocalDate workDate,@NotNull @DecimalMin("0.25") @DecimalMax("24") BigDecimal hours,@NotBlank @Size(max=500) String description){}
   public record ReviewRequest(@NotBlank String decision,@Size(max=500) String comment){}
   public record PeriodLockRequest(@NotBlank @Pattern(regexp="\\d{4}-(0[1-9]|1[0-2])") String yearMonth,@NotBlank @Size(max=500) String reason){}
-  public record BudgetChangeRequest(@NotNull UUID projectId,@NotNull @Positive BigDecimal requestedAmount,@NotBlank @Size(max=1000) String reason){}
+  public record BudgetCategoryAmount(@NotNull ProjectCostCategory category,@NotNull @PositiveOrZero BigDecimal plannedAmount){}
+  public record BudgetChangeRequest(@NotNull UUID projectId,@NotNull @Positive BigDecimal requestedAmount,
+      List<@Valid BudgetCategoryAmount> items,@NotBlank @Size(max=1000) String reason){}
   public record DashboardFilter(Integer year,UUID departmentId){}
 }

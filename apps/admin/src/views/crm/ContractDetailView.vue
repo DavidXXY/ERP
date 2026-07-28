@@ -917,7 +917,7 @@ async function loadClosureData() {
   if (!record.value) return;
   const current = record.value;
   const [projectsResult, receivablesResult] = await Promise.allSettled([
-    listProjects(0, 500),
+    listProjects({ page: 0, size: 200 }),
     listReceivables(),
   ]);
   if (projectsResult.status === "fulfilled") {

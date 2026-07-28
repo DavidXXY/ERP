@@ -806,7 +806,7 @@ async function loadData() {
         listEmergencyContacts(employeeId.value),
         listEmployeeLifecycles(employeeId.value),
         listEmployeeLeaves(employeeId.value),
-        listProjects(0, 999),
+        listProjects({ page: 0, size: 200 }),
       ]);
     educations.value = eds;
     workExperiences.value = works;

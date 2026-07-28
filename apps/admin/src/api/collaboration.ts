@@ -1,4 +1,5 @@
 import { http, request } from "./http";
+import type { ProjectCostCategory } from "./project";
 
 export type CollaborationOverview = {
   cards: Record<string, number>;
@@ -129,7 +130,12 @@ export const unlockTimesheetPeriod = (yearMonth: string, comment?: string) =>
     url: `/collaboration/timesheet-period-locks/${yearMonth}`,
     params: { comment },
   });
-export const requestBudgetChange = (data: any) =>
+export const requestBudgetChange = (data: {
+  projectId: string;
+  requestedAmount: number;
+  items: Array<{ category: ProjectCostCategory; plannedAmount: number }>;
+  reason: string;
+}) =>
   request<any>({ method: "POST", url: "/collaboration/budget-changes", data });
 export const reviewBudgetChange = (
   id: string,

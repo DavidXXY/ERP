@@ -12,7 +12,7 @@ import java.math.BigDecimal;
 public interface ProjectCostEntryRepository extends JpaRepository<ProjectCostEntry, UUID> {
 
   List<ProjectCostEntry> findByProjectIdOrderByIncurredDateDescCreatedAtDesc(UUID projectId);
-  Optional<ProjectCostEntry> findBySourceNo(String sourceNo);
+  Optional<ProjectCostEntry> findBySourceTypeAndSourceNo(com.company.ops.api.modules.project.domain.ProjectCostSource sourceType, String sourceNo);
   List<ProjectCostEntry> findByProjectIdIn(java.util.Collection<UUID> projectIds);
 
   @Query("select coalesce(sum(c.amount), 0) from ProjectCostEntry c where c.projectId = :projectId")

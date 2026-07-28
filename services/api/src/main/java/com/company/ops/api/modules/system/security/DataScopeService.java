@@ -48,6 +48,27 @@ public class DataScopeService {
     return principal != null && principal.permissions().contains(authority);
   }
 
+  public boolean hasAllDataScope() {
+    UserPrincipal principal = principal();
+    return principal != null && principal.dataScopes().contains("ALL");
+  }
+
+  @Transactional(readOnly = true)
+  public Set<UUID> visibleUserIds() {
+    UserPrincipal principal = principal();
+    return principal == null ? Set.of() : Set.copyOf(visibleUserIds(principal));
+  }
+
+  @Transactional(readOnly = true)
+  public Set<String> visibleOwnerNames() {
+    UserPrincipal principal = principal();
+    return principal == null ? Set.of() : Set.copyOf(visibleDisplayNames(principal));
+  }
+
+  public UserPrincipal currentPrincipal() {
+    return principal();
+  }
+
   @Transactional(readOnly = true)
   public boolean canViewOrganization(UUID organizationId) {
     UserPrincipal principal = principal();

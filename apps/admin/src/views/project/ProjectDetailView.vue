@@ -73,6 +73,15 @@
             <a-descriptions-item label="项目经理">{{
               detail.project.managerName || "待分配"
             }}</a-descriptions-item>
+            <a-descriptions-item label="经理分配记录">
+              {{ detail.project.managerAssignedByName || "-" }}
+              <span v-if="detail.project.managerAssignedAt">
+                · {{ dateTime(detail.project.managerAssignedAt) }}</span
+              >
+              <span v-if="detail.project.managerAssignmentComment">
+                · {{ detail.project.managerAssignmentComment }}</span
+              >
+            </a-descriptions-item>
             <a-descriptions-item label="现场地址" :span="2">{{
               detail.project.siteAddress || "-"
             }}</a-descriptions-item>
@@ -89,6 +98,14 @@
             <a-descriptions-item label="审批状态">{{
               approvalLabel(detail.project.approvalStatus)
             }}</a-descriptions-item>
+            <a-descriptions-item label="执行状态">
+              <a-tag :color="executionColor(detail.project.executionStatus)">{{
+                executionLabel(detail.project.executionStatus)
+              }}</a-tag>
+              <span v-if="detail.project.statusComment">{{
+                detail.project.statusComment
+              }}</span>
+            </a-descriptions-item>
           </a-descriptions>
           <a-alert
             v-if="riskLabel !== '经营正常'"
@@ -252,7 +269,7 @@ import {
   type ProjectStage,
 } from "@/api/project";
 import { listPurchaseOrders, type PurchaseOrder } from "@/api/procurement";
-import { listReceivables, type Receivable } from "@/api/crm";
+import { listReceivablesByContract, type Receivable } from "@/api/crm";
 import { useAuthStore } from "@/stores/auth";
 
 const route = useRoute();
@@ -365,23 +382,23 @@ onMounted(loadData);
 async function loadData() {
   loading.value = true;
   try {
-    const [project, orderPage, allReceivables] = await Promise.all([
-      getProject(projectId.value),
+    const project = await getProject(projectId.value);
+    const [orderPage, receivablePage] = await Promise.all([
       auth.can("procurement:view")
-        ? listPurchaseOrders({ page: 0, size: 999 })
+        ? listPurchaseOrders({
+            page: 0,
+            size: 100,
+            costType: "PROJECT",
+            projectId: projectId.value,
+          })
         : Promise.resolve({ content: [] } as { content: PurchaseOrder[] }),
-      auth.can("crm:receivable:view")
-        ? listReceivables()
-        : Promise.resolve([] as Receivable[]),
+      auth.can("crm:receivable:view") && project.project.contractId
+        ? listReceivablesByContract(project.project.contractId)
+        : Promise.resolve({ content: [] } as { content: Receivable[] }),
     ]);
     detail.value = project;
-    orders.value = orderPage.content.filter(
-      (item) =>
-        item.costType === "PROJECT" && item.costTargetId === projectId.value,
-    );
-    receivables.value = allReceivables.filter(
-      (item) => item.contractId === project.project.contractId,
-    );
+    orders.value = orderPage.content;
+    receivables.value = receivablePage.content;
   } catch (error) {
     message.error(error instanceof Error ? error.message : "项目详情加载失败");
   } finally {
@@ -423,6 +440,30 @@ function approvalLabel(value?: string) {
         string
       >
     )[value || ""] || "-"
+  );
+}
+function executionLabel(value?: string) {
+  return (
+    (
+      {
+        ACTIVE: "执行中",
+        PAUSED: "已暂停",
+        CANCELLED: "已取消",
+        CLOSED: "已结项",
+      } as Record<string, string>
+    )[value || ""] || "-"
+  );
+}
+function executionColor(value?: string) {
+  return (
+    (
+      {
+        ACTIVE: "green",
+        PAUSED: "orange",
+        CANCELLED: "red",
+        CLOSED: "default",
+      } as Record<string, string>
+    )[value || ""] || "default"
   );
 }
 function typeLabel(value?: string) {

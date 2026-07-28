@@ -37,6 +37,8 @@ public class CollaborationGovernanceService {
   private final ProjectTimesheetRepository timesheets;
   private final TimesheetPeriodLockRepository periodLocks;
   private final ProjectBudgetVersionRepository budgetVersions;
+  private final ProjectBudgetVersionItemRepository budgetVersionItems;
+  private final ProjectBudgetItemRepository projectBudgetItems;
   private final ProjectStaffAssignmentRepository assignments;
   private final ProjectRepository projects;
   private final ProjectCostLedgerService costLedger;
@@ -49,12 +51,14 @@ public class CollaborationGovernanceService {
   public CollaborationGovernanceService(
       CollaborationTaskControlRepository controls, CollaborationActionLogRepository actions,
       ProjectTimesheetRepository timesheets, TimesheetPeriodLockRepository periodLocks,
-      ProjectBudgetVersionRepository budgetVersions, ProjectStaffAssignmentRepository assignments,
+      ProjectBudgetVersionRepository budgetVersions, ProjectBudgetVersionItemRepository budgetVersionItems,
+      ProjectBudgetItemRepository projectBudgetItems, ProjectStaffAssignmentRepository assignments,
       ProjectRepository projects, ProjectCostLedgerService costLedger, SystemUserRepository users,
       SystemNotificationRepository notifications, QualificationEmployeeRepository employees,
       LeaveRequestRepository leaveRequests, DataScopeService dataScopeService) {
     this.controls=controls;this.actions=actions;this.timesheets=timesheets;this.periodLocks=periodLocks;
-    this.budgetVersions=budgetVersions;this.assignments=assignments;this.projects=projects;this.costLedger=costLedger;
+    this.budgetVersions=budgetVersions;this.budgetVersionItems=budgetVersionItems;this.projectBudgetItems=projectBudgetItems;
+    this.assignments=assignments;this.projects=projects;this.costLedger=costLedger;
     this.users=users;this.notifications=notifications;this.employees=employees;this.leaveRequests=leaveRequests;
     this.dataScopeService=dataScopeService;
   }
@@ -153,12 +157,25 @@ public class CollaborationGovernanceService {
 
   @Transactional
   public Map<String,Object> requestBudgetChange(BudgetChangeRequest request) {
-    UserPrincipal p=requirePrincipal();Project project=projects.findById(request.projectId()).orElseThrow(()->new BusinessException("项目不存在"));
+    UserPrincipal p=requirePrincipal();Project project=projects.findByIdForUpdate(request.projectId()).orElseThrow(()->new BusinessException("项目不存在"));
+    assertProjectVisible(project);
+    if(project.getExecutionStatus()==ProjectExecutionStatus.CANCELLED||project.getExecutionStatus()==ProjectExecutionStatus.CLOSED)
+      throw new BusinessException("已取消或已结项项目不能调整预算");
+    if(amount(request.requestedAmount()).compareTo(amount(project.getActualCost()))<0)
+      throw new BusinessException("调整后预算不能低于项目已发生成本");
     if(budgetVersions.existsByProjectIdAndStatus(project.getId(),"PENDING"))throw new BusinessException("该项目已有待审批预算变更");
     int next=budgetVersions.findFirstByProjectIdOrderByVersionNoDesc(project.getId()).map(x->x.getVersionNo()+1).orElse(1);
     ProjectBudgetVersion item=new ProjectBudgetVersion();item.setProjectId(project.getId());item.setVersionNo(next);item.setPreviousAmount(amount(project.getBudgetAmount()));
     item.setRequestedAmount(request.requestedAmount());item.setReason(request.reason());item.setStatus("PENDING");item.setRequestedBy(p.id());item.setRequestedByName(p.displayName());
-    budgetVersions.save(item);log("BUDGET_CHANGE",item.getId(),"SUBMIT",p,null,request.reason());return budgetView(item,project.getName());
+    budgetVersions.save(item);
+    Map<ProjectCostCategory,BigDecimal> requestedItems=resolveBudgetItems(project,request);
+    BigDecimal itemTotal=requestedItems.values().stream().reduce(BigDecimal.ZERO,BigDecimal::add);
+    if(itemTotal.compareTo(amount(request.requestedAmount()))!=0)throw new BusinessException("分类预算合计必须等于调整后总预算");
+    requestedItems.forEach((category,planned)->{
+      ProjectBudgetVersionItem versionItem=new ProjectBudgetVersionItem();versionItem.setBudgetVersionId(item.getId());
+      versionItem.setCategory(category);versionItem.setPlannedAmount(amount(planned));budgetVersionItems.save(versionItem);
+    });
+    log("BUDGET_CHANGE",item.getId(),"SUBMIT",p,null,request.reason());return budgetView(item,project.getName());
   }
 
   @Transactional
@@ -168,8 +185,26 @@ public class CollaborationGovernanceService {
     if(p.id().equals(item.getRequestedBy())&&!p.roleCodes().contains("ADMIN"))throw new BusinessException("申请人不能审批自己的预算变更");
     String decision=request.decision().toUpperCase(Locale.ROOT);if(!Set.of("APPROVED","REJECTED").contains(decision))throw new BusinessException("审批决定不正确");
     item.setStatus(decision);item.setReviewedBy(p.id());item.setReviewedByName(p.displayName());item.setReviewComment(request.comment());item.setReviewedAt(OffsetDateTime.now());
-    Project project=projects.findById(item.getProjectId()).orElseThrow(()->new BusinessException("项目不存在"));
-    if("APPROVED".equals(decision)){project.setBudgetAmount(item.getRequestedAmount());projects.save(project);item.setEffectiveAt(OffsetDateTime.now());}
+    Project project=projects.findByIdForUpdate(item.getProjectId()).orElseThrow(()->new BusinessException("项目不存在"));
+    assertProjectVisible(project);
+    if("APPROVED".equals(decision)){
+      if(amount(item.getRequestedAmount()).compareTo(amount(project.getActualCost()))<0)
+        throw new BusinessException("项目成本已增加，调整后预算低于实际成本，不能通过");
+      List<ProjectBudgetVersionItem> approvedItems=budgetVersionItems.findByBudgetVersionIdOrderByCategoryAsc(item.getId());
+      if(approvedItems.isEmpty())throw new BusinessException("预算变更缺少分类明细");
+      Map<ProjectCostCategory,ProjectBudgetItem> existing=projectBudgetItems.findByProjectIdOrderByCategoryAsc(project.getId()).stream()
+          .collect(Collectors.toMap(ProjectBudgetItem::getCategory,Function.identity()));
+      Set<ProjectCostCategory> approvedCategories=approvedItems.stream().map(ProjectBudgetVersionItem::getCategory).collect(Collectors.toSet());
+      existing.values().stream().filter(budget->!approvedCategories.contains(budget.getCategory())).forEach(budget->{
+        budget.setPlannedAmount(BigDecimal.ZERO);projectBudgetItems.save(budget);
+      });
+      for(ProjectBudgetVersionItem approved:approvedItems){
+        ProjectBudgetItem target=existing.getOrDefault(approved.getCategory(),new ProjectBudgetItem());
+        target.setProjectId(project.getId());target.setCategory(approved.getCategory());target.setPlannedAmount(amount(approved.getPlannedAmount()));
+        if(target.getRemark()==null)target.setRemark("预算变更 V"+item.getVersionNo());projectBudgetItems.save(target);
+      }
+      project.setBudgetAmount(item.getRequestedAmount());projects.save(project);item.setEffectiveAt(OffsetDateTime.now());
+    }
     budgetVersions.save(item);log("BUDGET_CHANGE",item.getId(),decision,p,null,request.comment());
     notifyUser(item.getRequestedBy(),"预算变更审批结果",project.getName()+"预算变更已"+("APPROVED".equals(decision)?"通过":"驳回"),"BUDGET_CHANGE",item.getId(),"BUD-"+item.getId()+"-"+decision);
     return budgetView(item,project.getName());
@@ -286,6 +321,34 @@ public class CollaborationGovernanceService {
   private Map<String,Object> budgetView(ProjectBudgetVersion x,String projectName){
     Map<String,Object>m=new LinkedHashMap<>();m.put("id",x.getId());m.put("projectId",x.getProjectId());m.put("projectName",projectName);m.put("versionNo",x.getVersionNo());
     m.put("previousAmount",x.getPreviousAmount());m.put("requestedAmount",x.getRequestedAmount());m.put("differenceAmount",x.getRequestedAmount().subtract(x.getPreviousAmount()));
-    m.put("status",x.getStatus());m.put("reason",x.getReason());m.put("requestedByName",x.getRequestedByName());m.put("reviewedByName",x.getReviewedByName());m.put("reviewComment",x.getReviewComment());m.put("createdAt",x.getCreatedAt());return m;
+    m.put("status",x.getStatus());m.put("reason",x.getReason());m.put("requestedByName",x.getRequestedByName());m.put("reviewedByName",x.getReviewedByName());m.put("reviewComment",x.getReviewComment());m.put("createdAt",x.getCreatedAt());
+    m.put("items",budgetVersionItems.findByBudgetVersionIdOrderByCategoryAsc(x.getId()).stream().map(i->Map.of("category",i.getCategory(),"plannedAmount",i.getPlannedAmount())).toList());return m;
+  }
+
+  private Map<ProjectCostCategory,BigDecimal> resolveBudgetItems(Project project,BudgetChangeRequest request){
+    if(request.items()!=null&&!request.items().isEmpty()){
+      Map<ProjectCostCategory,BigDecimal> result=new EnumMap<>(ProjectCostCategory.class);
+      request.items().forEach(i->{if(result.put(i.category(),amount(i.plannedAmount()))!=null)throw new BusinessException("分类预算不能重复");});
+      return result;
+    }
+    List<ProjectBudgetItem> current=projectBudgetItems.findByProjectIdOrderByCategoryAsc(project.getId());
+    Map<ProjectCostCategory,BigDecimal> result=new EnumMap<>(ProjectCostCategory.class);
+    BigDecimal currentTotal=current.stream().map(i->amount(i.getPlannedAmount())).reduce(BigDecimal.ZERO,BigDecimal::add);
+    if(currentTotal.signum()==0){result.put(ProjectCostCategory.OTHER,amount(request.requestedAmount()));return result;}
+    BigDecimal allocated=BigDecimal.ZERO;int index=0;
+    for(ProjectBudgetItem existing:current){
+      index++;
+      BigDecimal scaled=index==current.size()
+          ? amount(request.requestedAmount()).subtract(allocated)
+          : amount(existing.getPlannedAmount()).multiply(amount(request.requestedAmount())).divide(currentTotal,2,RoundingMode.HALF_UP);
+      result.put(existing.getCategory(),scaled);allocated=allocated.add(scaled);
+    }
+    return result;
+  }
+
+  private void assertProjectVisible(Project project){
+    if(dataScopeService.canViewAssignee(project.getManagerUserId(),project.getManagerUserId()==null))return;
+    if(project.getManagerUserId()==null&&dataScopeService.canViewOwner(project.getManagerName()))return;
+    throw new AccessDeniedException("无权操作该项目");
   }
 }

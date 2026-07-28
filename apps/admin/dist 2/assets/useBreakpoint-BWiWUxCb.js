@@ -1,0 +1,1 @@
+import{I as e,L as t,ct as n}from"./vue-DinNVDpa.js";import{h as r}from"./PlusOutlined-BS07vh1a.js";function i(){let i=n({}),a=null,o=r();return e(()=>{a=o.value.subscribe(e=>{i.value=e})}),t(()=>{o.value.unsubscribe(a)}),i}export{i as t};

@@ -7,6 +7,7 @@ import com.company.ops.api.modules.project.domain.Project;
 import com.company.ops.api.modules.project.domain.ProjectCostCategory;
 import com.company.ops.api.modules.project.domain.ProjectCostEntry;
 import com.company.ops.api.modules.project.domain.ProjectCostSource;
+import com.company.ops.api.modules.project.domain.ProjectExecutionStatus;
 import com.company.ops.api.modules.project.repository.ProjectCostEntryRepository;
 import com.company.ops.api.modules.project.repository.ProjectRepository;
 import java.math.BigDecimal;
@@ -45,7 +46,13 @@ public class ProjectCostLedgerService {
       LocalDate incurredDate
   ) {
     Project project = lockProject(projectId);
-    ProjectCostEntry entry = new ProjectCostEntry();
+    ProjectCostEntry entry = sourceNo == null || sourceNo.isBlank()
+        ? new ProjectCostEntry()
+        : entries.findBySourceTypeAndSourceNo(sourceType, sourceNo).orElseGet(ProjectCostEntry::new);
+    if (entry.getId() != null && !Objects.equals(entry.getProjectId(), projectId)) {
+      throw new BusinessException("成本来源编号已被其他项目使用");
+    }
+    validateProjectedBudget(project, entry, costAmount);
     apply(entry, projectId, category, sourceType, sourceNo, description, costAmount, incurredDate);
     entries.saveAndFlush(entry);
     refreshLocked(project);
@@ -63,10 +70,11 @@ public class ProjectCostLedgerService {
       LocalDate incurredDate
   ) {
     Project project = lockProject(projectId);
-    ProjectCostEntry entry = entries.findBySourceNo(sourceNo).orElseGet(ProjectCostEntry::new);
+    ProjectCostEntry entry = entries.findBySourceTypeAndSourceNo(sourceType, sourceNo).orElseGet(ProjectCostEntry::new);
     if (entry.getId() != null && !Objects.equals(entry.getProjectId(), projectId)) {
       throw new BusinessException("成本来源编号已被其他项目使用");
     }
+    validateProjectedBudget(project, entry, costAmount);
     apply(entry, projectId, category, sourceType, sourceNo, description, costAmount, incurredDate);
     entries.saveAndFlush(entry);
     refreshLocked(project);
@@ -88,6 +96,23 @@ public class ProjectCostLedgerService {
   private void refreshLocked(Project project) {
     project.setActualCost(amount(entries.sumAmountByProjectId(project.getId())));
     projects.save(project);
+  }
+
+  private void validateProjectedBudget(Project project, ProjectCostEntry existing, BigDecimal newAmount) {
+    BigDecimal normalizedNewAmount = amount(newAmount);
+    if (normalizedNewAmount.signum() > 0
+        && (project.getExecutionStatus() == ProjectExecutionStatus.CANCELLED
+            || project.getExecutionStatus() == ProjectExecutionStatus.CLOSED)) {
+      throw new BusinessException("已取消或已结项项目不能新增成本");
+    }
+    BigDecimal current = amount(entries.sumAmountByProjectId(project.getId()));
+    BigDecimal previous = existing.getId() == null ? BigDecimal.ZERO : amount(existing.getAmount());
+    BigDecimal projected = current.subtract(previous).add(normalizedNewAmount);
+    BigDecimal budget = amount(project.getBudgetAmount());
+    if (projected.compareTo(budget) > 0) {
+      BigDecimal excess = projected.subtract(budget);
+      throw new BusinessException("成本将超过项目预算 " + excess.setScale(2) + " 元，请先提交预算变更");
+    }
   }
 
   private void apply(

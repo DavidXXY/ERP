@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "离线任务",
+  "usingComponents": {
+    "state-view": "../../components/StateView"
+  }
+}

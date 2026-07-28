@@ -20,6 +20,7 @@ public interface ReceivableRepository extends JpaRepository<Receivable, UUID> {
 
   List<Receivable> findAllByOrderByDueDateAsc();
   Page<Receivable> findAllByOrderByDueDateAsc(Pageable pageable);
+  Page<Receivable> findByContractIdOrderByDueDateAsc(UUID contractId, Pageable pageable);
   List<Receivable> findByDueDateBetweenOrderByDueDateAsc(LocalDate startDate,LocalDate endDate);
 
   boolean existsByCode(String code);

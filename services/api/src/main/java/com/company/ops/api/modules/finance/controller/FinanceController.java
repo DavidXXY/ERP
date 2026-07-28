@@ -60,7 +60,7 @@ public class FinanceController {
   @PreAuthorize("hasAuthority('finance:receivable:view')")
   public ApiResponse<PageResponse<ReceivableResponse>> listReceivables(
       @PageableDefault(size = 100) Pageable pageable) {
-    return ApiResponse.ok(PageResponse.from(crmOperationsService.listReceivables(pageable)));
+    return ApiResponse.ok(PageResponse.from(crmOperationsService.listReceivables(null, pageable)));
   }
 
   @GetMapping("/receivables/{id}")

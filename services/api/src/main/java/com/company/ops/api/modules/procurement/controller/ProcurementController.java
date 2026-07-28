@@ -111,6 +111,7 @@ public class ProcurementController {
       @RequestParam(required = false) String status,
       @RequestParam(required = false) String approvalStatus,
       @RequestParam(required = false) String costType,
+      @RequestParam(required = false) UUID projectId,
       @RequestParam(required = false) String search,
       @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
   ) {
@@ -176,12 +177,13 @@ public class ProcurementController {
   public ApiResponse<PageResponse<PurchaseOrderResponse>> listPurchaseOrders(
       @RequestParam(required = false) String status,
       @RequestParam(required = false) String costType,
+      @RequestParam(required = false) UUID projectId,
       @RequestParam(required = false) String search,
       @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
   ) {
     PurchaseOrderStatus s = status != null ? PurchaseOrderStatus.valueOf(status) : null;
     ProcurementCostType c = costType != null ? ProcurementCostType.valueOf(costType) : null;
-    return ApiResponse.ok(PageResponse.from(procurementService.listPurchaseOrders(s, c, search, pageable)));
+    return ApiResponse.ok(PageResponse.from(procurementService.listPurchaseOrders(s, c, projectId, search, pageable)));
   }
 
   @PostMapping("/orders")

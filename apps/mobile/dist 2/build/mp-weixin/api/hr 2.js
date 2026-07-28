@@ -1,0 +1,1 @@
+"use strict";const e=require("../utils/http.js");exports.createSelfLeave=s=>e.request({url:"/hr/self/leaves",method:"POST",data:s}),exports.listLeaveBalances=()=>e.request({url:"/hr/self/leave-balances"}),exports.listSelfLeaves=()=>e.request({url:"/hr/self/leaves"});

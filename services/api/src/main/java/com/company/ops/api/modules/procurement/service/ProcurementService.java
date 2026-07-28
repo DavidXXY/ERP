@@ -609,8 +609,8 @@ public class ProcurementService {
   @Transactional(readOnly = true)
   public Page<PurchaseOrderResponse> listPurchaseOrders(
       PurchaseOrderStatus status, ProcurementCostType costType,
-      String search, Pageable pageable) {
-    Page<PurchaseOrder> page = orderRepository.findByFilters(status, costType, search, pageable);
+      UUID projectId, String search, Pageable pageable) {
+    Page<PurchaseOrder> page = orderRepository.findByFilters(status, costType, projectId, search, pageable);
     // Batch-load suppliers
     Map<UUID, Supplier> supplierMap = supplierRepository.findAllById(
         page.getContent().stream().map(PurchaseOrder::getSupplierId).distinct().toList()

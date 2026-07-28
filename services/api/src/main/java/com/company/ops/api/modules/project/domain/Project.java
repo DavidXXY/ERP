@@ -34,6 +34,21 @@ public class Project extends BaseEntity {
   @Column(name = "manager_name", nullable = false, length = 80)
   private String managerName;
 
+  @Column(name = "manager_user_id")
+  private UUID managerUserId;
+
+  @Column(name = "manager_assigned_by_user_id")
+  private UUID managerAssignedByUserId;
+
+  @Column(name = "manager_assigned_by_name", length = 80)
+  private String managerAssignedByName;
+
+  @Column(name = "manager_assigned_at")
+  private OffsetDateTime managerAssignedAt;
+
+  @Column(name = "manager_assignment_comment", length = 500)
+  private String managerAssignmentComment;
+
   @Column(name = "site_address", nullable = false, length = 300)
   private String siteAddress;
 
@@ -59,9 +74,22 @@ public class Project extends BaseEntity {
   @Column(name = "approved_at")
   private OffsetDateTime approvedAt;
 
+  @Column(name = "approver_user_id")
+  private UUID approverUserId;
+
   @Enumerated(EnumType.STRING)
   @Column(nullable = false, length = 40)
   private ProjectStage stage = ProjectStage.INITIATED;
+
+  @Enumerated(EnumType.STRING)
+  @Column(name = "execution_status", nullable = false, length = 32)
+  private ProjectExecutionStatus executionStatus = ProjectExecutionStatus.ACTIVE;
+
+  @Column(name = "status_comment", length = 500)
+  private String statusComment;
+
+  @Column(name = "status_changed_at")
+  private OffsetDateTime statusChangedAt;
 
   @Column(name = "budget_amount", nullable = false, precision = 14, scale = 2)
   private BigDecimal budgetAmount = BigDecimal.ZERO;
@@ -122,6 +150,23 @@ public class Project extends BaseEntity {
   public void setManagerName(String managerName) {
     this.managerName = managerName;
   }
+
+  public UUID getManagerUserId() {
+    return managerUserId;
+  }
+
+  public void setManagerUserId(UUID managerUserId) {
+    this.managerUserId = managerUserId;
+  }
+
+  public UUID getManagerAssignedByUserId() { return managerAssignedByUserId; }
+  public void setManagerAssignedByUserId(UUID value) { managerAssignedByUserId = value; }
+  public String getManagerAssignedByName() { return managerAssignedByName; }
+  public void setManagerAssignedByName(String value) { managerAssignedByName = value; }
+  public OffsetDateTime getManagerAssignedAt() { return managerAssignedAt; }
+  public void setManagerAssignedAt(OffsetDateTime value) { managerAssignedAt = value; }
+  public String getManagerAssignmentComment() { return managerAssignmentComment; }
+  public void setManagerAssignmentComment(String value) { managerAssignmentComment = value; }
 
   public String getSiteAddress() {
     return siteAddress;
@@ -187,12 +232,44 @@ public class Project extends BaseEntity {
     this.approvedAt = approvedAt;
   }
 
+  public UUID getApproverUserId() {
+    return approverUserId;
+  }
+
+  public void setApproverUserId(UUID approverUserId) {
+    this.approverUserId = approverUserId;
+  }
+
   public ProjectStage getStage() {
     return stage;
   }
 
   public void setStage(ProjectStage stage) {
     this.stage = stage;
+  }
+
+  public ProjectExecutionStatus getExecutionStatus() {
+    return executionStatus;
+  }
+
+  public void setExecutionStatus(ProjectExecutionStatus executionStatus) {
+    this.executionStatus = executionStatus;
+  }
+
+  public String getStatusComment() {
+    return statusComment;
+  }
+
+  public void setStatusComment(String statusComment) {
+    this.statusComment = statusComment;
+  }
+
+  public OffsetDateTime getStatusChangedAt() {
+    return statusChangedAt;
+  }
+
+  public void setStatusChangedAt(OffsetDateTime statusChangedAt) {
+    this.statusChangedAt = statusChangedAt;
   }
 
   public BigDecimal getBudgetAmount() {

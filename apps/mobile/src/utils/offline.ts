@@ -61,6 +61,14 @@ export function createOperationId(prefix = "mobile") {
   return `${prefix}-${operationId()}`;
 }
 
+export function createExpenseCode(now = new Date(), random = Math.random) {
+  const datePart = now.toISOString().slice(0, 10).replace(/-/g, "");
+  const suffix = Array.from({ length: 5 }, () =>
+    Math.floor(random() * 36).toString(36).toUpperCase(),
+  ).join("");
+  return `BX-${datePart}-${suffix}`;
+}
+
 export function persistOfflineFile(filePath: string) {
   return new Promise<string>((resolve) => uni.saveFile({
     tempFilePath: filePath,

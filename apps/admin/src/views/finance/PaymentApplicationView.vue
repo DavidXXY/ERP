@@ -20,13 +20,13 @@
         /></a-col>
         <a-col :xs="12" :lg="6"
           ><a-statistic
-            title="待付款"
+            title="待付款（含税，元）"
             :value="countByStatus('APPROVED')"
             suffix="笔"
         /></a-col>
         <a-col :xs="12" :lg="6"
           ><a-statistic
-            title="审批占用金额"
+            title="审批占用金额（含税，元）"
             :value="reservedAmount"
             :formatter="moneyFormatter"
         /></a-col>
@@ -231,7 +231,7 @@
         v-if="selectedApplication"
         class="section-alert"
         type="info"
-        :message="`${selectedApplication.code} · ${selectedApplication.supplierName} · ${formatMoney(selectedApplication.requestedAmount)}`"
+        :message="`${selectedApplication.code} · ${selectedApplication.supplierName} · 申请金额（含税，元）${formatMoney(selectedApplication.requestedAmount)}`"
       />
       <a-card
         v-if="selectedApplication"
@@ -282,7 +282,7 @@
         v-if="selectedApplication"
         class="section-alert"
         type="warning"
-        :message="`${selectedApplication.code} · ${selectedApplication.supplierName} · 审批金额 ${formatMoney(selectedApplication.requestedAmount)}`"
+        :message="`${selectedApplication.code} · ${selectedApplication.supplierName} · 审批金额（含税，元）${formatMoney(selectedApplication.requestedAmount)}`"
       />
       <a-alert
         v-if="
@@ -312,7 +312,7 @@
               ><a-input v-model:value="paymentForm.paymentCode" /></a-form-item
           ></a-col>
           <a-col :xs="24" :md="12"
-            ><a-form-item label="实际付款金额" name="amount"
+            ><a-form-item label="实际付款金额（含税，元）" name="amount"
               ><a-input-number
                 v-model:value="paymentForm.amount"
                 :min="0.01"
@@ -429,7 +429,7 @@ const methodOptions = [
 const applicationColumns = [
   { title: "申请单", key: "application", width: 200 },
   { title: "应付单 / 供应商", key: "payable", width: 240 },
-  { title: "申请金额", key: "amount", width: 150 },
+  { title: "申请金额（含税，元）", key: "amount", width: 190 },
   { title: "风险", key: "risk", width: 130 },
   { title: "申请人 / 用途", key: "applicant", width: 230 },
   { title: "状态", key: "status", width: 110 },
@@ -440,7 +440,7 @@ const applicationColumns = [
 const paymentColumns = [
   { title: "付款单", key: "payment", width: 230 },
   { title: "应付单 / 供应商", key: "payable", width: 250 },
-  { title: "实付金额", key: "amount", width: 160 },
+  { title: "实付金额（含税，元）", key: "amount", width: 190 },
   { title: "付款日期", dataIndex: "paidDate", width: 130 },
   { title: "付款方式", key: "method", width: 130 },
   { title: "流水 / 凭证号", dataIndex: "bankReference", width: 190 },
@@ -520,7 +520,7 @@ const canApproveSelected = computed(
 const workbenchCards = computed(() => [
   {
     key: "approval",
-    label: "待审批金额",
+    label: "待审批金额（含税，元）",
     value: formatMoney(pendingApprovalAmount.value),
     hint: `${countByStatus("PENDING_APPROVAL")} 笔待处理`,
     action: () => {
@@ -530,7 +530,7 @@ const workbenchCards = computed(() => [
   },
   {
     key: "payment",
-    label: "待付款金额",
+    label: "待付款金额（含税，元）",
     value: formatMoney(approvedAmount.value),
     hint: `${countByStatus("APPROVED")} 笔待执行`,
     action: () => {
@@ -654,7 +654,7 @@ function exportApplications() {
     "申请单",
     "应付单",
     "供应商",
-    "申请金额",
+    "申请金额（含税，元）",
     "申请日期",
     "申请人",
     "用途",

@@ -53,11 +53,21 @@ uni-page-refresh {
 }
 
 uni-tabbar.uni-tabbar-bottom {
-  right: auto;
-  left: 50%;
+  right: 0;
+  left: 0;
   width: 100%;
   max-width: 480px;
-  transform: translateX(-50%);
+  margin-right: auto;
+  margin-left: auto;
+}
+
+uni-tabbar.uni-tabbar-bottom .uni-tabbar {
+  right: 0;
+  left: 0;
+  width: 100%;
+  max-width: 480px;
+  margin-right: auto;
+  margin-left: auto;
 }
 /* #endif */
 </style>

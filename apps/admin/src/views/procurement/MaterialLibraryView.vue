@@ -38,7 +38,7 @@
         </a-col>
         <a-col :xs="12" :lg="6">
           <a-statistic
-            title="库存金额"
+            title="库存金额（含税，元）"
             :value="inventoryValue"
             :formatter="moneyFormatter"
           />
@@ -193,7 +193,7 @@
             </a-form-item>
           </a-col>
           <a-col :xs="24" :md="12">
-            <a-form-item label="单位成本">
+            <a-form-item label="单位成本（含税，元）">
               <a-input-number
                 v-model:value="form.unitCost"
                 :min="0"
@@ -330,8 +330,8 @@ const columns = [
   { title: "库存 / 安全库存", key: "stock", width: 150 },
   { title: "状态", key: "status", width: 100 },
   { title: "分类", key: "category", width: 120 },
-  { title: "单位成本", key: "cost", width: 130 },
-  { title: "库存金额", key: "value", width: 140 },
+  { title: "单位成本（含税，元）", key: "cost", width: 190 },
+  { title: "库存金额（含税，元）", key: "value", width: 190 },
   { title: "操作", key: "action", width: 150, fixed: "right" },
 ];
 const stockFilterOptions = [

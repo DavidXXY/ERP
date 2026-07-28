@@ -29,32 +29,32 @@
         /></a-col>
         <a-col :xs="12" :xl="4"
           ><a-statistic
-            title="累计借方"
+            title="累计借方（元，税价不适用）"
             :value="overview.totalDebit"
             :formatter="moneyFormatter"
         /></a-col>
         <a-col :xs="12" :xl="4"
           ><a-statistic
-            title="营业收入"
+            title="营业收入（元，税价不适用）"
             :value="overview.revenue"
             :formatter="moneyFormatter"
         /></a-col>
         <a-col :xs="12" :xl="4"
           ><a-statistic
-            title="成本费用"
+            title="成本费用（元，税价不适用）"
             :value="overview.expense"
             :formatter="moneyFormatter"
         /></a-col>
         <a-col :xs="12" :xl="4"
           ><a-statistic
-            title="账面利润"
+            title="账面利润（元，税价不适用）"
             :value="overview.profit"
             :formatter="moneyFormatter"
             :value-style="profitStyle"
         /></a-col>
         <a-col :xs="12" :xl="4"
           ><a-statistic
-            title="银行净流量"
+            title="银行净流量（元，税价不适用）"
             :value="overview.cashBalance"
             :formatter="moneyFormatter"
         /></a-col>
@@ -62,14 +62,14 @@
 
       <section class="ledger-check-panel">
         <div class="check-card">
-          <span>试算平衡</span>
+          <span>试算平衡差额（元，税价不适用）</span>
           <strong :class="{ 'text-danger': trialBalanceDiff !== 0 }">{{
             formatMoney(Math.abs(trialBalanceDiff))
           }}</strong>
           <small>{{ trialBalanceDiff === 0 ? "借贷相等" : "借贷不平" }}</small>
         </div>
         <div class="check-card">
-          <span>资产负债差额</span>
+          <span>资产负债差额（元，税价不适用）</span>
           <strong :class="{ 'text-danger': balanceSheetDiff !== 0 }">{{
             formatMoney(Math.abs(balanceSheetDiff))
           }}</strong>
@@ -92,7 +92,7 @@
       <section class="ledger-source-panel">
         <div class="panel-heading">
           <h3>凭证来源分布</h3>
-          <a-tag color="blue">按张数/金额</a-tag>
+          <a-tag color="blue">按张数/金额（元，税价不适用）</a-tag>
         </div>
         <div class="source-grid">
           <button
@@ -225,24 +225,24 @@
             :column="{ xs: 1, md: 3 }"
             class="statement-summary"
           >
-            <a-descriptions-item label="资产合计">{{
+            <a-descriptions-item label="资产合计（元，税价不适用）">{{
               formatMoney(statements.totalAssets)
             }}</a-descriptions-item>
-            <a-descriptions-item label="负债合计">{{
+            <a-descriptions-item label="负债合计（元，税价不适用）">{{
               formatMoney(statements.totalLiabilities)
             }}</a-descriptions-item>
-            <a-descriptions-item label="本期利润">
+            <a-descriptions-item label="本期利润（元，税价不适用）">
               <strong :class="{ 'text-danger': statements.profit < 0 }">{{
                 formatMoney(statements.profit)
               }}</strong>
             </a-descriptions-item>
-            <a-descriptions-item label="营业收入">{{
+            <a-descriptions-item label="营业收入（元，税价不适用）">{{
               formatMoney(statements.totalRevenue)
             }}</a-descriptions-item>
-            <a-descriptions-item label="成本费用">{{
+            <a-descriptions-item label="成本费用（元，税价不适用）">{{
               formatMoney(statements.totalExpense)
             }}</a-descriptions-item>
-            <a-descriptions-item label="现金净流量">{{
+            <a-descriptions-item label="现金净流量（元，税价不适用）">{{
               formatMoney(statements.netCashFlow)
             }}</a-descriptions-item>
           </a-descriptions>
@@ -309,7 +309,7 @@
             >{{ bizTypeLabel(selectedVoucher.bizType) }} ·
             {{ selectedVoucher.bizNo }}</a-descriptions-item
           >
-          <a-descriptions-item label="借贷合计">{{
+          <a-descriptions-item label="借贷合计（元，税价不适用）">{{
             formatMoney(selectedVoucher.totalDebit)
           }}</a-descriptions-item>
           <a-descriptions-item label="摘要" :span="2">{{
@@ -407,7 +407,7 @@
         <a-alert
           :type="draftBalance === 0 && draftDebit > 0 ? 'success' : 'warning'"
           show-icon
-          :message="`借方 ${formatMoney(draftDebit)} · 贷方 ${formatMoney(draftCredit)} · 差额 ${formatMoney(Math.abs(draftBalance))}`"
+          :message="`借方（元，税价不适用）${formatMoney(draftDebit)} · 贷方（元，税价不适用）${formatMoney(draftCredit)} · 差额（元，税价不适用）${formatMoney(Math.abs(draftBalance))}`"
         />
       </a-form>
     </a-modal>
@@ -587,7 +587,7 @@ const voucherColumns = [
   { title: "日期", dataIndex: "voucherDate", width: 120 },
   { title: "业务类型", key: "bizType", width: 150 },
   { title: "业务单号", dataIndex: "bizNo", width: 190 },
-  { title: "借贷金额", key: "amount", width: 160 },
+  { title: "借贷金额（元，税价不适用）", key: "amount", width: 220 },
   { title: "平衡", key: "balance", width: 90 },
   { title: "状态", key: "status", width: 100 },
   { title: "操作", key: "action", width: 240, fixed: "right" as const },
@@ -595,15 +595,15 @@ const voucherColumns = [
 const statementColumns = [
   { title: "科目编码", dataIndex: "accountCode", width: 100 },
   { title: "科目名称", dataIndex: "accountName" },
-  { title: "借方", key: "debit", width: 130 },
-  { title: "贷方", key: "credit", width: 130 },
-  { title: "余额", key: "balance", width: 150 },
+  { title: "借方（元，税价不适用）", key: "debit", width: 190 },
+  { title: "贷方（元，税价不适用）", key: "credit", width: 190 },
+  { title: "余额（元，税价不适用）", key: "balance", width: 200 },
 ];
 const entryColumns = [
   { title: "科目", dataIndex: "accountName" },
   { title: "摘要", dataIndex: "summary" },
-  { title: "借方", key: "debit", width: 140 },
-  { title: "贷方", key: "credit", width: 140 },
+  { title: "借方（元，税价不适用）", key: "debit", width: 190 },
+  { title: "贷方（元，税价不适用）", key: "credit", width: 190 },
 ];
 
 onMounted(loadData);
@@ -732,8 +732,8 @@ function exportVouchers() {
     "业务类型",
     "业务单号",
     "摘要",
-    "借方合计",
-    "贷方合计",
+    "借方合计（元，税价不适用）",
+    "贷方合计（元，税价不适用）",
     "状态",
     "平衡",
   ];
@@ -752,7 +752,14 @@ function exportVouchers() {
 }
 
 function exportStatements() {
-  const headers = ["报表", "科目编码", "科目名称", "借方", "贷方", "余额"];
+  const headers = [
+    "报表",
+    "科目编码",
+    "科目名称",
+    "借方（元，税价不适用）",
+    "贷方（元，税价不适用）",
+    "余额（元，税价不适用）",
+  ];
   const rows = [
     ...statements.assets.map((item) => statementRow("资产", item)),
     ...statements.liabilities.map((item) => statementRow("负债", item)),

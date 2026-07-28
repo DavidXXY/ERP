@@ -12,7 +12,7 @@
       <a-row :gutter="[16, 16]" class="metric-row">
         <a-col :xs="12" :lg="6"
           ><a-statistic
-            title="应付余额"
+            title="应付余额（含税，元）"
             :value="outstandingAmount"
             :formatter="moneyFormatter"
         /></a-col>
@@ -24,13 +24,13 @@
         /></a-col>
         <a-col :xs="12" :lg="6"
           ><a-statistic
-            title="可申请付款"
+            title="可申请付款（含税，元）"
             :value="availableAmount"
             :formatter="moneyFormatter"
         /></a-col>
         <a-col :xs="12" :lg="6"
           ><a-statistic
-            title="逾期应付"
+            title="逾期应付（含税，元）"
             :value="overdueAmount"
             :formatter="moneyFormatter"
         /></a-col>
@@ -39,7 +39,7 @@
       <section class="finance-action-panel">
         <div class="action-heading">
           <div>
-            <h3>付款排期</h3>
+            <h3>付款排期（含税，元）</h3>
             <p>按到期日、占用金额和可申请金额判断付款安排优先级。</p>
           </div>
           <a-space>
@@ -170,7 +170,7 @@
         v-if="selectedItem"
         class="section-alert"
         type="info"
-        :message="`${selectedItem.code} · ${selectedItem.supplierName} · 可申请 ${formatMoney(selectedItem.availableAmount)}`"
+        :message="`${selectedItem.code} · ${selectedItem.supplierName} · 可申请金额（含税，元）${formatMoney(selectedItem.availableAmount)}`"
       />
       <a-alert
         v-if="selectedItem?.overdue"
@@ -184,7 +184,7 @@
         class="section-alert"
         type="info"
         show-icon
-        :message="`已有审批占用 ${formatMoney(selectedItem.reservedAmount)}，本次申请不得超过剩余可申请金额。`"
+        :message="`已有审批占用（含税，元）${formatMoney(selectedItem.reservedAmount)}，本次申请不得超过剩余可申请金额。`"
       />
       <a-form ref="formRef" :model="form" :rules="rules" layout="vertical">
         <div class="quick-amounts">
@@ -198,7 +198,7 @@
         </div>
         <a-row :gutter="16">
           <a-col :xs="24" :md="8"
-            ><a-form-item label="申请金额" name="requestedAmount"
+            ><a-form-item label="申请金额（含税，元）" name="requestedAmount"
               ><a-input-number
                 v-model:value="form.requestedAmount"
                 :min="0.01"
@@ -272,8 +272,8 @@ const scheduleOptions = [
 const columns = [
   { title: "应付单", key: "payable", width: 230 },
   { title: "供应商", key: "supplier", width: 220 },
-  { title: "应付 / 已付", key: "amount", width: 260 },
-  { title: "可申请 / 占用", key: "available", width: 210 },
+  { title: "应付 / 已付（含税，元）", key: "amount", width: 300 },
+  { title: "可申请 / 占用（含税，元）", key: "available", width: 260 },
   { title: "付款排期", key: "schedule", width: 150 },
   { title: "到期日", dataIndex: "dueDate", width: 120 },
   { title: "状态", key: "status", width: 160 },
@@ -388,11 +388,11 @@ function exportPayables() {
     "应付单",
     "供应商",
     "采购单",
-    "应付金额",
-    "已付",
-    "待付",
-    "审批占用",
-    "可申请",
+    "应付金额（含税，元）",
+    "已付金额（含税，元）",
+    "待付金额（含税，元）",
+    "审批占用（含税，元）",
+    "可申请金额（含税，元）",
     "到期日",
     "状态",
     "付款排期",

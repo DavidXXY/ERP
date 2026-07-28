@@ -685,7 +685,7 @@ const leaveColumns = [
 const projectColumns = [
   { title: "项目", key: "project", width: 260 },
   { title: "客户", dataIndex: "customerName", width: 180 },
-  { title: "合同金额", key: "amount", width: 140 },
+  { title: "合同金额（含税，元）", key: "amount", width: 190 },
   { title: "阶段", dataIndex: "stage", width: 120 },
   { title: "进度", key: "progress", width: 180 },
 ];

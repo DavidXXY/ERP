@@ -47,8 +47,8 @@
             <span>回款率</span>
             <strong>{{ formatPercent(collectionRate) }}</strong>
             <p>
-              {{ formatMoney(summary.receivedAmount) }} /
-              {{ formatMoney(summary.receivableAmount) }}
+              已回款（含税，元） {{ formatMoney(summary.receivedAmount) }} /
+              应收（含税，元） {{ formatMoney(summary.receivableAmount) }}
             </p>
           </div>
         </a-col>
@@ -100,7 +100,7 @@
           @click="stageFilter = stageFilter === step.label ? 'ALL' : step.label"
         >
           <div class="step-head">
-            <span>{{ step.label }}</span>
+            <span>{{ stepDisplayLabel(step) }}</span>
             <a-tag :color="step.count > 0 ? 'blue' : 'default'">{{
               step.count
             }}</a-tag>
@@ -115,28 +115,28 @@
       <a-row :gutter="[16, 16]" class="trace-metrics">
         <a-col :xs="12" :lg="6">
           <a-statistic
-            title="合同额"
+            title="合同额（含税，元）"
             :value="summary.contractAmount"
             :formatter="moneyFormatter"
           />
         </a-col>
         <a-col :xs="12" :lg="6">
           <a-statistic
-            title="采购/领料成本"
+            title="采购/领料成本（含税，元）"
             :value="summary.supplyCost"
             :formatter="moneyFormatter"
           />
         </a-col>
         <a-col :xs="12" :lg="6">
           <a-statistic
-            title="已回款"
+            title="已回款（含税，元）"
             :value="summary.receivedAmount"
             :formatter="moneyFormatter"
           />
         </a-col>
         <a-col :xs="12" :lg="6">
           <a-statistic
-            title="毛利"
+            title="毛利（含税，元）"
             :value="summary.grossProfit"
             :formatter="moneyFormatter"
           />
@@ -290,10 +290,13 @@ const stageFilter = ref("ALL");
 const columns = [
   { title: "链路", key: "stage", width: 110 },
   { title: "事件", key: "title", width: 260 },
-  { title: "金额", key: "amount", width: 130 },
+  { title: "金额（含税，元）", key: "amount", width: 180 },
   { title: "日期", dataIndex: "date", key: "date", width: 120 },
   { title: "穿透", key: "route", width: 80 },
 ];
+
+const stepDisplayLabel = (step: TraceStep) =>
+  step.amount == null ? step.label : `${step.label}（含税，元）`;
 
 const sourceKey = computed(
   () =>
@@ -694,7 +697,7 @@ const gapAlerts = computed(() => {
       key: "overdue-receivable",
       level: "high",
       title: "存在逾期应收",
-      description: `未回款 ${formatMoney(summary.value.outstandingAmount)}，建议生成催收跟进。`,
+      description: `未回款（含税，元）${formatMoney(summary.value.outstandingAmount)}，建议生成催收跟进。`,
       route: "/finance/receivables",
     });
   if (summary.value.grossProfit < 0)
@@ -716,13 +719,29 @@ const waterfallItems = computed(() => {
     1,
   );
   return [
-    { key: "contract", label: "合同额", value: summary.value.contractAmount },
-    { key: "cost", label: "成本", value: -summary.value.supplyCost },
-    { key: "profit", label: "毛利", value: summary.value.grossProfit },
-    { key: "received", label: "已回款", value: summary.value.receivedAmount },
+    {
+      key: "contract",
+      label: "合同额（含税，元）",
+      value: summary.value.contractAmount,
+    },
+    {
+      key: "cost",
+      label: "成本（含税，元）",
+      value: -summary.value.supplyCost,
+    },
+    {
+      key: "profit",
+      label: "毛利（含税，元）",
+      value: summary.value.grossProfit,
+    },
+    {
+      key: "received",
+      label: "已回款（含税，元）",
+      value: summary.value.receivedAmount,
+    },
     {
       key: "outstanding",
-      label: "未回款",
+      label: "未回款（含税，元）",
       value: -summary.value.outstandingAmount,
     },
   ].map((item) => ({

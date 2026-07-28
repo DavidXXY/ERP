@@ -17,50 +17,50 @@
       <a-row :gutter="[16, 20]" class="metric-row">
         <a-col :xs="12" :lg="6"
           ><a-statistic
-            title="应收总额"
+            title="应收总额（含税，元）"
             :value="overview.receivableAmount"
             :formatter="moneyFormatter"
         /></a-col>
         <a-col :xs="12" :lg="6"
           ><a-statistic
-            title="已回款"
+            title="已回款（含税，元）"
             :value="overview.receivedAmount"
             :formatter="moneyFormatter"
         /></a-col>
         <a-col :xs="12" :lg="6"
           ><a-statistic
-            title="待收金额"
+            title="待收金额（含税，元）"
             :value="overview.receivableOutstanding"
             :formatter="moneyFormatter"
         /></a-col>
         <a-col :xs="12" :lg="6"
           ><a-statistic
-            title="逾期应收"
+            title="逾期应收（含税，元）"
             :value="overview.receivableOverdue"
             :formatter="moneyFormatter"
             :value-style="dangerStyle(overview.receivableOverdue)"
         /></a-col>
         <a-col :xs="12" :lg="6"
           ><a-statistic
-            title="应付总额"
+            title="应付总额（含税，元）"
             :value="overview.payableAmount"
             :formatter="moneyFormatter"
         /></a-col>
         <a-col :xs="12" :lg="6"
           ><a-statistic
-            title="已付款"
+            title="已付款（含税，元）"
             :value="overview.paidAmount"
             :formatter="moneyFormatter"
         /></a-col>
         <a-col :xs="12" :lg="6"
           ><a-statistic
-            title="待付金额"
+            title="待付金额（含税，元）"
             :value="overview.payableOutstanding"
             :formatter="moneyFormatter"
         /></a-col>
         <a-col :xs="12" :lg="6"
           ><a-statistic
-            title="逾期应付"
+            title="逾期应付（含税，元）"
             :value="overview.payableOverdue"
             :formatter="moneyFormatter"
             :value-style="dangerStyle(overview.payableOverdue)"
@@ -68,7 +68,7 @@
       </a-row>
 
       <a-descriptions bordered :column="2" size="middle">
-        <a-descriptions-item label="资金净流入"
+        <a-descriptions-item label="资金净流入（含税，元）"
           ><strong :class="{ 'text-danger': overview.netCashInflow < 0 }">{{
             formatMoney(overview.netCashInflow)
           }}</strong></a-descriptions-item
@@ -104,19 +104,19 @@
         </div>
         <div class="annual-summary">
           <div>
-            <span>年度收入</span
+            <span>年度收入（含税，元）</span
             ><strong class="income-text">{{
               formatMoney(annualTotals.income)
             }}</strong>
           </div>
           <div>
-            <span>年度支出</span
+            <span>年度支出（含税，元）</span
             ><strong class="expense-text">{{
               formatMoney(annualTotals.expense)
             }}</strong>
           </div>
           <div>
-            <span>年度净额</span
+            <span>年度净额（含税，元）</span
             ><strong
               :class="annualTotals.net < 0 ? 'expense-text' : 'income-text'"
               >{{ formatMoney(annualTotals.net) }}</strong
@@ -125,8 +125,8 @@
         </div>
         <div v-if="auth.can('finance:ledger:view')" class="monthly-table">
           <div class="monthly-row monthly-table-head">
-            <span>月份</span><span>收支趋势</span><span>收入</span
-            ><span>支出</span><span>净额</span>
+            <span>月份</span><span>收支趋势</span><span>收入（含税，元）</span
+            ><span>支出（含税，元）</span><span>净额（含税，元）</span>
           </div>
           <div
             v-for="item in monthlyFinance"
@@ -158,7 +158,7 @@
       <section class="finance-control-grid">
         <div class="finance-panel">
           <div class="panel-heading">
-            <h3>未来现金流</h3>
+            <h3>未来现金流（含税，元）</h3>
             <a-tag :color="forecastTotal.net >= 0 ? 'green' : 'red'"
               >{{ forecastTotal.net >= 0 ? "净流入" : "净流出" }}
               {{ formatMoney(Math.abs(forecastTotal.net)) }}</a-tag
@@ -186,7 +186,7 @@
 
         <div class="finance-panel">
           <div class="panel-heading">
-            <h3>账龄结构</h3>
+            <h3>账龄结构（含税，元）</h3>
             <a-tag color="blue">按未结金额</a-tag>
           </div>
           <div class="aging-list">
@@ -403,7 +403,7 @@ const riskItems = computed(() => {
           key: "ar",
           level: "高",
           color: "red",
-          title: "逾期应收待催收",
+          title: "逾期应收待催收（含税，元）",
           value: formatMoney(overdueReceivable),
           route: "/finance/receivables",
         }
@@ -413,7 +413,7 @@ const riskItems = computed(() => {
           key: "ap",
           level: "中",
           color: "orange",
-          title: "逾期应付待安排",
+          title: "逾期应付待安排（含税，元）",
           value: formatMoney(overduePayable),
           route: "/finance/payables",
         }
@@ -423,7 +423,7 @@ const riskItems = computed(() => {
           key: "pending",
           level: "中",
           color: "blue",
-          title: "付款申请待审批",
+          title: "付款申请待审批（含税，元）",
           value: formatMoney(pendingAmount),
           route: "/finance/payment-applications",
         }
@@ -433,7 +433,7 @@ const riskItems = computed(() => {
           key: "large",
           level: "关注",
           color: "purple",
-          title: `大额付款 ${largeApplication.supplierName || largeApplication.payableCode}`,
+          title: `大额付款（含税，元）${largeApplication.supplierName || largeApplication.payableCode}`,
           value: formatMoney(largeApplication.requestedAmount),
           route: "/finance/payment-applications",
         }
@@ -452,23 +452,23 @@ const ledgerPaymentAmount = computed(() => voucherAmountByType("PAYMENT"));
 const reconciliationItems = computed(() => [
   {
     key: "receipt",
-    label: "回款入账差额",
+    label: "回款入账差额（元，税价不适用）",
     diff: roundMoney(
       Number(overview.receivedAmount || 0) - ledgerReceiptAmount.value,
     ),
-    hint: `业务 ${formatMoney(overview.receivedAmount)} / 总账 ${formatMoney(ledgerReceiptAmount.value)}`,
+    hint: `业务（含税，元）${formatMoney(overview.receivedAmount)} / 总账（元，税价不适用）${formatMoney(ledgerReceiptAmount.value)}`,
   },
   {
     key: "payment",
-    label: "付款入账差额",
+    label: "付款入账差额（元，税价不适用）",
     diff: roundMoney(
       Number(overview.paidAmount || 0) - ledgerPaymentAmount.value,
     ),
-    hint: `业务 ${formatMoney(overview.paidAmount)} / 总账 ${formatMoney(ledgerPaymentAmount.value)}`,
+    hint: `业务（含税，元）${formatMoney(overview.paidAmount)} / 总账（元，税价不适用）${formatMoney(ledgerPaymentAmount.value)}`,
   },
   {
     key: "cash",
-    label: "净流量差额",
+    label: "净流量差额（元，税价不适用）",
     diff: roundMoney(
       Number(overview.netCashInflow || 0) -
         (ledgerReceiptAmount.value - ledgerPaymentAmount.value),

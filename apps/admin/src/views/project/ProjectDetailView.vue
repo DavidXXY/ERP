@@ -267,22 +267,25 @@ const metrics = computed<DetailMetric[]>(() =>
   detail.value
     ? [
         {
-          label: "合同金额",
+          label: "合同金额（含税，元）",
           value: money(detail.value.project.contractAmount),
         },
-        { label: "预算成本", value: money(detail.value.project.budgetAmount) },
         {
-          label: "实际成本",
+          label: "预算成本（含税，元）",
+          value: money(detail.value.project.budgetAmount),
+        },
+        {
+          label: "实际成本（含税，元）",
           value: money(detail.value.project.actualCost),
           warning: detail.value.project.budgetVariance < 0,
         },
         {
-          label: "当前毛利",
+          label: "当前毛利（含税，元）",
           value: money(detail.value.project.grossMargin),
           danger: detail.value.project.grossMargin < 0,
         },
         {
-          label: "预算余额",
+          label: "预算余额（含税，元）",
           value: money(detail.value.project.budgetVariance),
           danger: detail.value.project.budgetVariance < 0,
         },
@@ -332,7 +335,7 @@ const budgetColumns = [
   { title: "成本类别", key: "category", width: 130 },
   { title: "计划", key: "planned", width: 150 },
   { title: "实际", key: "actual", width: 150 },
-  { title: "余额", key: "variance", width: 150 },
+  { title: "预算余额（含税，元）", key: "variance", width: 190 },
   { title: "执行率", key: "rate" },
 ];
 const costColumns = [
@@ -340,21 +343,21 @@ const costColumns = [
   { title: "来源", dataIndex: "sourceType", width: 130 },
   { title: "来源单号", dataIndex: "sourceNo", width: 180 },
   { title: "说明", dataIndex: "description" },
-  { title: "金额", key: "amount", width: 150 },
+  { title: "成本金额（含税，元）", key: "amount", width: 190 },
   { title: "发生日期", dataIndex: "incurredDate", width: 120 },
 ];
 const orderColumns = [
   { title: "采购订单", key: "order", width: 230 },
   { title: "供应商", dataIndex: "supplierName", width: 180 },
-  { title: "金额", key: "amount", width: 140 },
+  { title: "领料金额（含税，元）", key: "amount", width: 190 },
   { title: "到货", key: "receipt", width: 100 },
   { title: "预计交付", dataIndex: "expectedDeliveryDate", width: 120 },
   { title: "状态", dataIndex: "status", width: 120 },
 ];
 const receivableColumns = [
   { title: "应收单", key: "code", width: 200 },
-  { title: "应收金额", key: "amount", width: 150 },
-  { title: "待收", key: "outstanding", width: 150 },
+  { title: "应收金额（含税，元）", key: "amount", width: 190 },
+  { title: "待收金额（含税，元）", key: "outstanding", width: 190 },
   { title: "到期日", dataIndex: "dueDate", width: 120 },
   { title: "状态", dataIndex: "status", width: 120 },
 ];

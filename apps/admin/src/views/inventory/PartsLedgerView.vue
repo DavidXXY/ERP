@@ -76,8 +76,8 @@ const partColumns = [
   { title: "库存", key: "stock", width: 130 },
   { title: "状态", key: "status", width: 100 },
   { title: "分类", dataIndex: "category", width: 110 },
-  { title: "单位成本", key: "cost", width: 130 },
-  { title: "库存金额", key: "value", width: 140 },
+  { title: "单位成本（含税，元）", key: "cost", width: 190 },
+  { title: "库存金额（含税，元）", key: "value", width: 190 },
 ];
 onMounted(loadData);
 async function loadData() {

@@ -382,14 +382,20 @@ const metrics = computed<DetailMetric[]>(() =>
   supplier.value
     ? [
         {
-          label: "签约金额",
+          label: "签约金额（含税，元）",
           value: money(supplier.value.contractedAmount),
           hint: `${orders.value.length} 笔采购订单`,
         },
-        { label: "应付金额", value: money(supplier.value.payableAmount) },
-        { label: "已付金额", value: money(supplier.value.paidAmount) },
         {
-          label: "待付金额",
+          label: "应付金额（含税，元）",
+          value: money(supplier.value.payableAmount),
+        },
+        {
+          label: "已付金额（含税，元）",
+          value: money(supplier.value.paidAmount),
+        },
+        {
+          label: "待付金额（含税，元）",
           value: money(supplier.value.outstandingAmount),
           danger: supplier.value.outstandingAmount > 0,
         },
@@ -478,7 +484,7 @@ const overallScore = computed(() =>
 );
 const quoteColumns = [
   { title: "询价单", dataIndex: "inquiryCode" },
-  { title: "单价", key: "price", width: 140 },
+  { title: "单价（含税，元）", key: "price", width: 180 },
   { title: "税率", dataIndex: "taxRate", width: 90 },
   { title: "交付日", dataIndex: "deliveryDate", width: 120 },
   { title: "付款条款", dataIndex: "paymentTerms" },
@@ -487,7 +493,7 @@ const quoteColumns = [
 const orderColumns = [
   { title: "采购订单", key: "order", width: 230 },
   { title: "成本归属", dataIndex: "costTargetName", width: 180 },
-  { title: "金额", key: "amount", width: 140 },
+  { title: "采购金额（含税，元）", key: "amount", width: 190 },
   { title: "收货", key: "receipt", width: 100 },
   { title: "预计交付", dataIndex: "expectedDeliveryDate", width: 120 },
   { title: "审批", dataIndex: "approvalStatus", width: 100 },
@@ -497,7 +503,7 @@ const receiptColumns = [
   { title: "收货单", dataIndex: "code", width: 180 },
   { title: "订单", dataIndex: "orderCode", width: 180 },
   { title: "数量", dataIndex: "quantity", width: 90 },
-  { title: "金额", key: "amount", width: 140 },
+  { title: "收货金额（含税，元）", key: "amount", width: 190 },
   { title: "收货日期", dataIndex: "receivedDate", width: 120 },
   { title: "质检", key: "inspection", width: 150 },
   { title: "收货人", dataIndex: "receiverName", width: 120 },
@@ -505,19 +511,19 @@ const receiptColumns = [
 const returnColumns = [
   { title: "退货单", dataIndex: "code" },
   { title: "数量", dataIndex: "quantity", width: 90 },
-  { title: "金额", key: "amount", width: 140 },
+  { title: "发票金额（含税，元）", key: "amount", width: 190 },
   { title: "原因", dataIndex: "reason" },
   { title: "日期", dataIndex: "returnDate", width: 120 },
 ];
 const invoiceColumns = [
   { title: "发票号", dataIndex: "invoiceNo" },
-  { title: "金额", key: "amount", width: 130 },
+  { title: "付款金额（含税，元）", key: "amount", width: 190 },
   { title: "日期", dataIndex: "invoiceDate", width: 110 },
   { title: "四单匹配", key: "match", width: 100 },
 ];
 const payableColumns = [
   { title: "应付单", key: "code" },
-  { title: "应付", key: "amount", width: 120 },
+  { title: "应付金额（含税，元）", key: "amount", width: 190 },
   { title: "已付", key: "paid", width: 120 },
   { title: "待付", key: "outstanding", width: 120 },
   { title: "到期日", dataIndex: "dueDate", width: 110 },

@@ -1047,7 +1047,7 @@
         ></a-row>
         <a-row :gutter="14"
           ><a-col :span="8"
-            ><a-form-item label="合同金额"
+            ><a-form-item label="合同金额（含税，元）"
               ><a-input
                 v-model:value="
                   performanceForm.contractAmount
@@ -1768,7 +1768,7 @@ const performanceColumns = [
   { title: "项目名称", key: "name", width: 420 },
   { title: "所属公司", dataIndex: "subjectCompany", width: 130 },
   { title: "项目类型", dataIndex: "projectType", width: 160 },
-  { title: "合同金额", dataIndex: "contractAmount", width: 130 },
+  { title: "合同金额（含税，元）", dataIndex: "contractAmount", width: 190 },
   { title: "合同日期", dataIndex: "contractDate", width: 120 },
   { title: "附件", key: "attachment", width: 110 },
   { title: "操作", key: "actions", width: 100, fixed: "right" },

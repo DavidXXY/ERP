@@ -72,19 +72,19 @@
             <a-descriptions-item label="到期日">{{
               payable.dueDate
             }}</a-descriptions-item>
-            <a-descriptions-item label="应付金额">{{
+            <a-descriptions-item label="应付金额（含税，元）">{{
               money(payable.amount)
             }}</a-descriptions-item>
-            <a-descriptions-item label="已付金额">{{
+            <a-descriptions-item label="已付金额（含税，元）">{{
               money(payable.paidAmount)
             }}</a-descriptions-item>
-            <a-descriptions-item label="待付金额">{{
+            <a-descriptions-item label="待付金额（含税，元）">{{
               money(payable.outstandingAmount)
             }}</a-descriptions-item>
             <a-descriptions-item label="审批占用">{{
               money(payable.reservedAmount)
             }}</a-descriptions-item>
-            <a-descriptions-item label="可申请付款">{{
+            <a-descriptions-item label="可申请付款（含税，元）">{{
               money(payable.availableAmount)
             }}</a-descriptions-item>
             <a-descriptions-item label="付款状态">{{
@@ -242,16 +242,22 @@ const loading = ref(false),
 const metrics = computed<DetailMetric[]>(() =>
   payable.value
     ? [
-        { label: "应付金额", value: money(payable.value.amount) },
-        { label: "已付金额", value: money(payable.value.paidAmount) },
+        { label: "应付金额（含税，元）", value: money(payable.value.amount) },
         {
-          label: "审批占用",
+          label: "已付金额（含税，元）",
+          value: money(payable.value.paidAmount),
+        },
+        {
+          label: "审批占用（含税，元）",
           value: money(payable.value.reservedAmount),
           warning: payable.value.reservedAmount > 0,
         },
-        { label: "可申请金额", value: money(payable.value.availableAmount) },
         {
-          label: "待付金额",
+          label: "可申请金额（含税，元）",
+          value: money(payable.value.availableAmount),
+        },
+        {
+          label: "待付金额（含税，元）",
           value: money(payable.value.outstandingAmount),
           danger: payable.value.overdue,
         },
@@ -284,19 +290,19 @@ const reconcileDescription = computed(
 const receiptColumns = [
   { title: "收货单", dataIndex: "code" },
   { title: "数量", dataIndex: "quantity", width: 90 },
-  { title: "金额", key: "amount", width: 130 },
+  { title: "收货金额（含税，元）", key: "amount", width: 190 },
   { title: "日期", dataIndex: "receivedDate", width: 110 },
   { title: "质检", dataIndex: "inspectionStatus", width: 110 },
 ];
 const invoiceColumns = [
   { title: "发票号", dataIndex: "invoiceNo" },
-  { title: "金额", key: "amount", width: 130 },
+  { title: "发票金额（含税，元）", key: "amount", width: 190 },
   { title: "日期", dataIndex: "invoiceDate", width: 110 },
   { title: "匹配", key: "match", width: 110 },
 ];
 const applicationColumns = [
   { title: "付款申请", key: "code", width: 190 },
-  { title: "申请金额", key: "amount", width: 140 },
+  { title: "申请金额（含税，元）", key: "amount", width: 190 },
   { title: "申请人", dataIndex: "applicantName", width: 120 },
   { title: "申请日期", dataIndex: "requestedDate", width: 120 },
   { title: "用途", dataIndex: "purpose" },
@@ -304,7 +310,7 @@ const applicationColumns = [
 ];
 const paymentColumns = [
   { title: "付款单", dataIndex: "code", width: 180 },
-  { title: "付款金额", key: "amount", width: 150 },
+  { title: "付款金额（含税，元）", key: "amount", width: 190 },
   { title: "付款日期", dataIndex: "paidDate", width: 120 },
   { title: "方式", dataIndex: "paymentMethod", width: 130 },
   { title: "银行流水", dataIndex: "bankReference" },

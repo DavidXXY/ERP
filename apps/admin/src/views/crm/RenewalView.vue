@@ -117,7 +117,7 @@ const riskOptions = [
 const columns = [
   { title: "合同 / 客户", key: "contract", width: 230 },
   { title: "合同项目", key: "project", width: 280 },
-  { title: "合同金额", key: "amount", width: 140 },
+  { title: "合同金额（含税，元）", key: "amount", width: 190 },
   { title: "到期时间", key: "endDate", width: 170 },
   { title: "续约风险", key: "risk", width: 110 },
   { title: "合同待收", key: "outstanding", width: 140 },

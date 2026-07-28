@@ -119,7 +119,7 @@
             </a-form-item>
           </a-col>
           <a-col :xs="24" :md="12">
-            <a-form-item label="报销总额">
+            <a-form-item label="报销总额（含税，元）">
               <a-input-number
                 :value="expenseTotal"
                 disabled
@@ -247,14 +247,14 @@ const expenseColumns = [
   { title: "明细", key: "lines", width: 90 },
   { title: "绑定业务", key: "binding", width: 180 },
   { title: "发生日期", dataIndex: "expenseDate", width: 120 },
-  { title: "金额", key: "amount", width: 140 },
+  { title: "报销金额（含税，元）", key: "amount", width: 190 },
   { title: "状态", key: "status", width: 130 },
   { title: "审批", key: "action", width: 120, fixed: "right" as const },
 ];
 const lineColumns = [
   { title: "费用类型", key: "expenseType", width: 130 },
   { title: "发生日期", key: "expenseDate", width: 150 },
-  { title: "金额", key: "amount", width: 130 },
+  { title: "明细金额（含税，元）", key: "amount", width: 190 },
   { title: "说明", key: "description", width: 260 },
   { title: "发票", key: "invoice", width: 220 },
   { title: "操作", key: "action", width: 80, fixed: "right" as const },

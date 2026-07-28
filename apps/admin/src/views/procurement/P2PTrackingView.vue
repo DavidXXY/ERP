@@ -317,16 +317,16 @@ const matchingActions = computed(() => [
 
 const p2pColumns = [
   { title: "申请单", key: "code", width: 200 },
-  { title: "金额", key: "amount", width: 130 },
+  { title: "金额（含税，元）", key: "amount", width: 180 },
   { title: "P2P 状态", key: "p2p", width: 320 },
   { title: "申请状态", dataIndex: "status", width: 110 },
 ];
 const matchingColumns = [
   { title: "采购订单", key: "order", width: 240 },
   { title: "入库/订购数量", key: "qty", width: 130 },
-  { title: "订单金额", key: "orderAmount", width: 130 },
-  { title: "入库金额", key: "receiptAmount", width: 130 },
-  { title: "应付金额", key: "payableAmount", width: 130 },
+  { title: "订单金额（含税，元）", key: "orderAmount", width: 190 },
+  { title: "入库金额（含税，元）", key: "receiptAmount", width: 190 },
+  { title: "应付金额（含税，元）", key: "payableAmount", width: 190 },
   { title: "发票/审核匹配", key: "invoiceAmount", width: 170 },
   { title: "匹配状态", key: "status", width: 120 },
   { title: "风险说明", dataIndex: "riskMessage", width: 260 },

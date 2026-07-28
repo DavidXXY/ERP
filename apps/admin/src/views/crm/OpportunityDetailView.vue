@@ -40,7 +40,7 @@
           <a-descriptions-item label="负责人">{{
             record.ownerName
           }}</a-descriptions-item>
-          <a-descriptions-item label="预计金额">
+          <a-descriptions-item label="预计金额（含税，元）">
             <strong>{{ formatMoney(record.expectedAmount) }}</strong>
           </a-descriptions-item>
           <a-descriptions-item label="成功率"
@@ -460,7 +460,7 @@ const weightedAmount = computed(
 );
 const healthMetrics = computed(() => [
   {
-    label: "加权金额",
+    label: "加权金额（含税）",
     value: Math.round(weightedAmount.value / 10000),
     suffix: "万元",
     color: "#1677ff",

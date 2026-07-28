@@ -289,7 +289,7 @@
             <a-descriptions-item label="来源单号">{{
               detailApproval.sourceNo || "-"
             }}</a-descriptions-item>
-            <a-descriptions-item label="金额">{{
+            <a-descriptions-item label="金额（元，税价随来源单据）">{{
               formatMoney(detailApproval.amount)
             }}</a-descriptions-item>
             <a-descriptions-item label="申请人">{{
@@ -345,7 +345,7 @@
             <a-descriptions-item label="绑定工单">{{
               expenseDetail(detailApproval)?.workOrderCode || "-"
             }}</a-descriptions-item>
-            <a-descriptions-item label="报销金额">{{
+            <a-descriptions-item label="报销金额（含税，元）">{{
               formatMoney(
                 Number(
                   expenseDetail(detailApproval)?.amount ??
@@ -566,7 +566,7 @@
                   approvalCreateForm.sourceNo
                 " /></a-form-item></a-col
           ><a-col :span="12"
-            ><a-form-item label="金额"
+            ><a-form-item label="金额（元，税价随来源单据）"
               ><a-input-number
                 v-model:value="approvalCreateForm.amount"
                 :min="0"
@@ -618,7 +618,7 @@
         v-if="selectedApproval"
         class="section-alert"
         type="info"
-        :message="`${selectedApproval.code} · ${selectedApproval.title} · ${formatMoney(selectedApproval.amount)}`"
+        :message="`${selectedApproval.code} · ${selectedApproval.title} · 金额（元，税价随来源单据）${formatMoney(selectedApproval.amount)}`"
         :description="selectedApproval.content || '未填写申请内容'"
       />
       <a-descriptions
@@ -710,7 +710,7 @@
         v-if="selectedCrmApproval"
         class="section-alert"
         type="info"
-        :message="`${selectedCrmApproval.code} · ${selectedCrmApproval.customerName} · ${formatMoney(selectedCrmApproval.amount)}`"
+        :message="`${selectedCrmApproval.code} · ${selectedCrmApproval.customerName} · 报价金额（含税，元）${formatMoney(selectedCrmApproval.amount)}`"
         :description="selectedCrmApproval.desc || '未填写服务范围'"
       />
       <a-descriptions
@@ -723,13 +723,13 @@
         <a-descriptions-item label="客户">{{
           selectedCrmApproval.customerName || "-"
         }}</a-descriptions-item>
-        <a-descriptions-item label="报价金额">{{
+        <a-descriptions-item label="报价金额（含税，元）">{{
           formatMoney(selectedCrmApproval.amount)
         }}</a-descriptions-item>
         <a-descriptions-item label="付款方式/节点" :span="2">{{
           selectedCrmApproval.paymentNodes || "-"
         }}</a-descriptions-item>
-        <a-descriptions-item label="成本预算">{{
+        <a-descriptions-item label="成本预算（含税，元）">{{
           selectedCrmApproval.budgetAmount != null
             ? formatMoney(selectedCrmApproval.budgetAmount)
             : "-"
@@ -911,7 +911,7 @@ const expenseLineColumns = [
   { title: "序号", dataIndex: "lineNo", width: 70 },
   { title: "费用类型", key: "expenseType", width: 100 },
   { title: "发生日期", dataIndex: "expenseDate", width: 110 },
-  { title: "金额", key: "amount", width: 120 },
+  { title: "金额（元，税价随来源单据）", key: "amount", width: 230 },
   { title: "说明", dataIndex: "description" },
   { title: "发票", key: "invoice", width: 180 },
 ];
@@ -1081,7 +1081,7 @@ const healthCards = computed(() => [
     key: "pending",
     label: "待处理审批",
     value: `${pendingCount.value} 项`,
-    hint: `待审金额 ${formatMoney(largeAmount.value)}`,
+    hint: `待审金额（元，税价随来源单据）${formatMoney(largeAmount.value)}`,
     danger: pendingCount.value > 0,
     action: () => {
       slaFilter.value = undefined;
@@ -1140,7 +1140,7 @@ const mergedColumns = [
   { title: "审批信息", key: "detail", width: 360 },
   { title: "类型", key: "type", width: 100 },
   { title: "申请人", key: "applicant", width: 120 },
-  { title: "金额", key: "amount", width: 130 },
+  { title: "金额（元，税价随来源单据）", key: "amount", width: 230 },
   { title: "状态", key: "status", width: 120 },
   { title: "规则来源", key: "rule", width: 260 },
   { title: "时间", key: "date", width: 120 },
@@ -1509,7 +1509,7 @@ function approvalDetailLines(record: any) {
       `客户：${record.customerName || "-"}`,
       `服务范围：${record.desc || "-"}`,
       `付款方式：${record.paymentNodes || "-"}`,
-      `预算/毛利率：${record.budgetAmount != null ? formatMoney(record.budgetAmount) : "-"} / ${record.grossMarginRate != null ? `${(Number(record.grossMarginRate) * 100).toFixed(1)}%` : "-"}`,
+      `预算（含税，元）/毛利率：${record.budgetAmount != null ? formatMoney(record.budgetAmount) : "-"} / ${record.grossMarginRate != null ? `${(Number(record.grossMarginRate) * 100).toFixed(1)}%` : "-"}`,
     ];
   }
   if (record._source === "contract") {
@@ -1629,7 +1629,7 @@ function sourceDetailLabel(key: string) {
         projectCode: "项目",
         workOrderCode: "工单",
         serviceType: "服务类型",
-        amount: "金额",
+        amount: "金额（元，税价随来源单据）",
         plannedDate: "计划日期",
         status: "状态",
         description: "说明",
@@ -1640,7 +1640,7 @@ function sourceDetailLabel(key: string) {
         startDate: "开始日期",
         endDate: "结束日期",
         travelDays: "出差天数",
-        estimatedAmount: "预算金额",
+        estimatedAmount: "预算金额（含税，元）",
         companionNames: "同行人员",
         sealType: "印章类型",
         documentName: "文件名称",
@@ -1707,7 +1707,7 @@ function changeSummary(record: any) {
     return (
       [
         data.amount != null
-          ? `金额改为 ${formatMoney(Number(data.amount))}`
+          ? `应收金额（含税，元）改为 ${formatMoney(Number(data.amount))}`
           : "",
         data.dueDate ? `到期日改为 ${data.dueDate}` : "",
         data.sourceNo ? `来源单号改为 ${data.sourceNo}` : "",
@@ -1719,7 +1719,7 @@ function changeSummary(record: any) {
   const labels: Record<string, string> = {
     projectName: "项目名称",
     contractType: "合同类型",
-    amount: "合同金额",
+    amount: "合同金额（含税，元）",
     taxRate: "税率",
     startDate: "开始日期",
     endDate: "结束日期",

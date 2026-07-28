@@ -605,7 +605,7 @@ const columns = [
   { title: "状态", key: "status", width: 100 },
   { title: "处理", key: "workflow", width: 140 },
   { title: "SLA", key: "sla", width: 140 },
-  { title: "金额", key: "amount", width: 140 },
+  { title: "金额（元，税价随来源单据）", key: "amount", width: 230 },
   { title: "日期", key: "date", width: 120 },
   { title: "说明", dataIndex: "description", width: 300 },
   { title: "操作", key: "action", width: 90, fixed: "right" as const },
@@ -816,7 +816,7 @@ const taskCards = computed(() => {
     },
     {
       key: "amount",
-      label: "金额敞口",
+      label: "金额敞口（元，税价随来源单据）",
       value: formatMoney(riskAmount.value),
       hint: "当前筛选范围",
       action: () => {
@@ -1189,7 +1189,7 @@ function exportRisks() {
     "等级",
     "业务状态",
     "处理状态",
-    "金额",
+    "金额（元，税价随来源单据）",
     "日期",
     "说明",
   ];

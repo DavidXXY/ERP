@@ -749,10 +749,10 @@ const amountFields: {
   key: "budgetAmount" | "committedAmount" | "actualAmount" | "forecastAmount";
   label: string;
 }[] = [
-  { key: "budgetAmount", label: "预算/基准" },
-  { key: "committedAmount", label: "承诺金额" },
-  { key: "actualAmount", label: "实际金额" },
-  { key: "forecastAmount", label: "预测金额" },
+  { key: "budgetAmount", label: "预算/基准（含税，元）" },
+  { key: "committedAmount", label: "承诺金额（含税，元）" },
+  { key: "actualAmount", label: "实际金额（含税，元）" },
+  { key: "forecastAmount", label: "预测金额（含税，元）" },
 ];
 const transitionOptions = computed(() => {
   const status = transitionRecord.value?.status;
@@ -779,7 +779,12 @@ const exceptionColumns = [
   { title: "类型", key: "type", width: 210 },
   { title: "负责人", dataIndex: "owner", width: 110 },
   { title: "到期日", dataIndex: "dueDate", width: 120 },
-  { title: "金额敞口", key: "exposure", width: 130, align: "right" },
+  {
+    title: "金额敞口（元，税价随来源单据）",
+    key: "exposure",
+    width: 240,
+    align: "right",
+  },
   { title: "操作", key: "action", width: 80, fixed: "right" },
 ];
 const controlColumns = [
@@ -789,7 +794,7 @@ const controlColumns = [
   { title: "风险", key: "risk", width: 90 },
   { title: "负责人", dataIndex: "owner", width: 110 },
   { title: "计划完成", dataIndex: "plannedEnd", width: 120 },
-  { title: "预算 / 执行", key: "amounts", width: 220 },
+  { title: "预算 / 执行（含税，元）", key: "amounts", width: 250 },
   { title: "进度", key: "progress", width: 150 },
   { title: "操作", key: "action", width: 240, fixed: "right" },
 ];
@@ -804,7 +809,12 @@ const periodColumns = [
 const bankColumns = [
   { title: "交易日期", dataIndex: "transactionDate", width: 120 },
   { title: "方向", key: "direction", width: 90 },
-  { title: "金额", key: "amount", width: 130, align: "right" },
+  {
+    title: "流水金额（元，税价不适用）",
+    key: "amount",
+    width: 220,
+    align: "right",
+  },
   { title: "对方户名", dataIndex: "counterparty", width: 180 },
   { title: "银行流水号", dataIndex: "bankReference", width: 180 },
   { title: "状态", key: "status", width: 100 },

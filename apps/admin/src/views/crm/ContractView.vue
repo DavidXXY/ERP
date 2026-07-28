@@ -14,19 +14,19 @@
         /></a-col>
         <a-col :xs="12" :lg="4"
           ><a-statistic
-            title="合同总额"
+            title="合同总额（含税，元）"
             :value="totalAmount"
             :formatter="moneyFormatter"
         /></a-col>
         <a-col :xs="12" :lg="4"
           ><a-statistic
-            title="已开票金额"
+            title="已开票金额（含税，元）"
             :value="totalInvoicedAmount"
             :formatter="moneyFormatter"
         /></a-col>
         <a-col :xs="12" :lg="4"
           ><a-statistic
-            title="已回款金额"
+            title="已回款金额（含税，元）"
             :value="totalReceivedAmount"
             :formatter="moneyFormatter"
         /></a-col>
@@ -289,9 +289,9 @@ const columns = [
   { title: "项目", key: "project", width: 280 },
   { title: "合同日期", key: "period", width: 270 },
   { title: "销售人员", key: "sales", width: 120 },
-  { title: "金额", key: "amount", width: 180 },
-  { title: "已开票", key: "invoiced", width: 140 },
-  { title: "已回款", key: "received", width: 140 },
+  { title: "合同金额（含税，元）", key: "amount", width: 200 },
+  { title: "已开票（含税，元）", key: "invoiced", width: 180 },
+  { title: "已回款（含税，元）", key: "received", width: 180 },
   { title: "状态", key: "status", width: 110 },
   { title: "操作", key: "action", width: 210 },
 ];
@@ -363,10 +363,10 @@ function handleExportCsv() {
     "客户名称",
     "项目名称",
     "合同类型",
-    "合同金额",
-    "未税金额",
-    "已开票金额",
-    "已回款金额",
+    "合同金额（含税，元）",
+    "未税金额（元）",
+    "已开票金额（含税，元）",
+    "已回款金额（含税，元）",
     "开始日期",
     "结束日期",
     "销售人员",

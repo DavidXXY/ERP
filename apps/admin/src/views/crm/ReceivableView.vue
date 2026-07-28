@@ -18,25 +18,25 @@
       <a-row :gutter="[16, 16]" class="metric-row">
         <a-col :xs="12" :lg="6"
           ><a-statistic
-            title="应收总额"
+            title="应收总额（含税，元）"
             :value="totalAmount"
             :formatter="moneyFormatter"
         /></a-col>
         <a-col :xs="12" :lg="6"
           ><a-statistic
-            title="待开票"
+            title="待开票（含税，元）"
             :value="invoicePendingAmount"
             :formatter="moneyFormatter"
         /></a-col>
         <a-col :xs="12" :lg="6"
           ><a-statistic
-            title="待回款"
+            title="待回款（含税，元）"
             :value="paymentPendingAmount"
             :formatter="moneyFormatter"
         /></a-col>
         <a-col :xs="12" :lg="6"
           ><a-statistic
-            title="逾期金额"
+            title="逾期金额（含税，元）"
             :value="overdueAmount"
             :formatter="moneyFormatter"
         /></a-col>
@@ -202,7 +202,7 @@
         <a-descriptions-item label="合同编号">{{
           selectedItem.contractCode
         }}</a-descriptions-item>
-        <a-descriptions-item label="申请金额">{{
+        <a-descriptions-item label="申请金额（含税，元）">{{
           formatMoney(selectedItem.amount)
         }}</a-descriptions-item>
       </a-descriptions>
@@ -255,7 +255,7 @@
               ><a-input v-model:value="editForm.sourceNo" /></a-form-item
           ></a-col>
           <a-col :xs="24" :md="12"
-            ><a-form-item label="应收金额" name="amount"
+            ><a-form-item label="应收金额（含税，元）" name="amount"
               ><a-input-number
                 v-model:value="editForm.amount"
                 :min="0"
@@ -321,7 +321,7 @@ const statusOptions = [
 const receivableColumns = [
   { title: "应收单 / 客户", key: "receivable", width: 220 },
   { title: "合同名称 / 编号", key: "contract", width: 260 },
-  { title: "应收 / 回款", key: "amount", width: 230 },
+  { title: "应收 / 回款（含税，元）", key: "amount", width: 280 },
   { title: "开票信息", key: "invoice", width: 180 },
   { title: "到期日", key: "dueDate", width: 130 },
   { title: "状态", key: "status", width: 110 },
@@ -462,8 +462,8 @@ function handleExportCsv() {
     "应收编号",
     "客户名称",
     "来源单号",
-    "应收金额",
-    "未收金额",
+    "应收金额（含税，元）",
+    "未收金额（含税，元）",
     "到期日",
     "状态",
     "发票号",

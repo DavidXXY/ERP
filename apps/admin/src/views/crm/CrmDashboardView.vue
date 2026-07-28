@@ -114,7 +114,7 @@
         <div class="crm-insight-block">
           <div class="right-panel-head compact">
             <div>
-              <span>销售预测</span>
+              <span>销售预测（含税，元）</span>
               <strong>{{ formatMoney(salesForecast.weightedAmount) }}</strong>
             </div>
             <a-tag color="blue">{{ salesForecast.count }} 个机会</a-tag>
@@ -167,7 +167,7 @@
 
     <a-row :gutter="[16, 16]" style="margin-top: 16px">
       <a-col :xs="24" :md="14">
-        <a-card title="销售漏斗" :loading="loading">
+        <a-card title="销售漏斗（含税，元）" :loading="loading">
           <div class="funnel-chart">
             <div v-for="item in stageData" :key="item.stage" class="funnel-row">
               <span class="funnel-label">{{ item.stage }}</span>
@@ -264,7 +264,7 @@
 
     <a-row :gutter="[16, 16]" style="margin-top: 16px">
       <a-col :xs="24" :md="14">
-        <a-card title="月度趋势" :loading="loading">
+        <a-card title="月度成交趋势（含税，元）" :loading="loading">
           <div class="trend-chart">
             <div class="trech-y-axis">
               <span v-for="val in trendYLabels" :key="val">{{ val }}</span>
@@ -296,7 +296,7 @@
               }}</a-tag>
             </div>
             <div class="cash-focus">
-              <span>净现金流</span>
+              <span>净现金流（元，税价随来源单据）</span>
               <strong :class="{ 'text-danger': biSummary.netCashFlow < 0 }">{{
                 formatMoney(biSummary.netCashFlow)
               }}</strong>
@@ -611,24 +611,24 @@ const dashboardMetrics = computed(() =>
   isCompanyDashboard.value
     ? [
         {
-          label: "合同收入",
+          label: "合同收入（含税，元）",
           value: formatMoney(biSummary.contractRevenue),
           suffix: "",
-          sub: `累计回款 ${formatMoney(biSummary.receivedAmount)}`,
+          sub: `累计回款（含税，元）${formatMoney(biSummary.receivedAmount)}`,
           color: "#237804",
         },
         {
-          label: "净现金流",
+          label: "净现金流（元，税价随来源单据）",
           value: formatMoney(biSummary.netCashFlow),
           suffix: "",
-          sub: `待收 ${formatMoney(biSummary.receivableOutstanding)} / 待付 ${formatMoney(biSummary.payableOutstanding)}`,
+          sub: `待收（含税，元）${formatMoney(biSummary.receivableOutstanding)} / 待付（含税，元）${formatMoney(biSummary.payableOutstanding)}`,
           color: biSummary.netCashFlow < 0 ? "#ff4d4f" : "#237804",
         },
         {
           label: "在建项目",
           value: biSummary.activeProjects,
           suffix: "个",
-          sub: `项目成本 ${formatMoney(biSummary.projectCost)}`,
+          sub: `项目成本（含税，元）${formatMoney(biSummary.projectCost)}`,
           color: "#1890ff",
         },
         {
@@ -651,21 +651,21 @@ const dashboardMetrics = computed(() =>
           label: "进行中商机",
           value: stats.activeOpportunityCount,
           suffix: "个",
-          sub: `预计金额 ${formatMoney(stats.pipelineAmount)}`,
+          sub: `预计金额（含税，元）${formatMoney(stats.pipelineAmount)}`,
           color: "#1890ff",
         },
         {
           label: "本月签约",
           value: stats.monthContractCount,
           suffix: "份",
-          sub: formatMoney(stats.monthContractAmount),
+          sub: `签约金额（含税，元）${formatMoney(stats.monthContractAmount)}`,
           color: stats.monthContractCount > 0 ? "#52c41a" : "#8c8c8c",
         },
         {
           label: "CRM逾期应收",
           value: stats.overdueCount,
           suffix: "笔",
-          sub: `${formatMoney(stats.overdueAmount)} 未收回`,
+          sub: `未收回（含税，元）${formatMoney(stats.overdueAmount)}`,
           color: stats.overdueCount > 0 ? "#ff4d4f" : "#52c41a",
         },
       ],
@@ -673,7 +673,7 @@ const dashboardMetrics = computed(() =>
 const crmMetrics = computed(() => [
   { label: "客户总量", value: `${stats.customerCount} 家`, danger: false },
   {
-    label: "商机金额",
+    label: "商机金额（含税，元）",
     value: formatMoney(stats.pipelineAmount),
     danger: false,
   },
@@ -816,22 +816,22 @@ const customerRiskItems = computed(() =>
 );
 const rightMetrics = computed(() => [
   {
-    label: "合同收入",
+    label: "合同收入（含税，元）",
     value: formatMoney(biSummary.contractRevenue),
     danger: false,
   },
   {
-    label: "待收金额",
+    label: "待收金额（含税，元）",
     value: formatMoney(biSummary.receivableOutstanding),
     danger: biSummary.receivableOutstanding > 0,
   },
   {
-    label: "库存资产",
+    label: "库存资产（含税，元）",
     value: formatMoney(biSummary.inventoryValue),
     danger: false,
   },
   {
-    label: "待支付",
+    label: "待支付（含税，元）",
     value: formatMoney(biSummary.payableOutstanding),
     danger: biSummary.payableOutstanding > biSummary.receivedAmount,
   },
@@ -841,7 +841,7 @@ const riskItems = computed(() => [
     label: "逾期应收",
     value: detailAccess.receivables ? `${stats.overdueCount} 笔` : "--",
     desc: detailAccess.receivables
-      ? formatMoney(stats.overdueAmount)
+      ? `逾期金额（含税，元）${formatMoney(stats.overdueAmount)}`
       : "当前角色无明细权限",
     tone: detailAccess.receivables
       ? stats.overdueCount > 0
@@ -982,7 +982,7 @@ const closureAlerts = computed(() => {
       type: "应收",
       title: "逾期回款需要财务与销售协同",
       desc: "优先处理账龄高、金额大的应收款",
-      value: formatMoney(stats.overdueAmount),
+      value: `逾期金额（含税，元）${formatMoney(stats.overdueAmount)}`,
       color: "red",
       link: "/finance/receivables",
     });
@@ -1030,7 +1030,7 @@ const teamColumns = [
   { title: "负责人", dataIndex: "name", width: 80 },
   { title: "商机", dataIndex: "opps", width: 60 },
   { title: "赢单", key: "won", width: 70 },
-  { title: "成交金额", dataIndex: "amount", width: 110 },
+  { title: "成交金额（含税，元）", dataIndex: "amount", width: 170 },
 ];
 
 onMounted(loadData);
@@ -1260,7 +1260,7 @@ async function loadData() {
         id: r.id,
         type: "应收逾期",
         desc: `${r.code} ${r.customerName}`,
-        time: formatMoney(r.outstandingAmount),
+        time: `未回款（含税，元）${formatMoney(r.outstandingAmount)}`,
         color: "red",
         link: "/crm/receivables",
       }),

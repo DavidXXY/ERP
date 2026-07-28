@@ -48,7 +48,7 @@
             ><a-input v-model:value="createForm.siteAddress" /></a-form-item
         ></a-col>
         <a-col :xs="24" :md="8"
-          ><a-form-item label="合同金额" name="contractAmount"
+          ><a-form-item label="合同金额（含税，元）" name="contractAmount"
             ><a-input-number
               v-model:value="createForm.contractAmount"
               :min="0"
@@ -75,7 +75,8 @@
         ></a-col>
       </a-row>
       <a-divider
-        >分类预算 · 合计 {{ formatMoney(createBudgetTotal) }}</a-divider
+        >分类预算合计（含税，元） ·
+        {{ formatMoney(createBudgetTotal) }}</a-divider
       >
       <a-row :gutter="16">
         <a-col
@@ -84,7 +85,7 @@
           :xs="24"
           :md="8"
         >
-          <a-form-item :label="item.label">
+          <a-form-item :label="`${item.label}预算（含税，元）`">
             <a-input-number
               v-model:value="createForm.budgets[(item as any).value]"
               :min="0"
@@ -109,7 +110,7 @@
       v-if="activeProject"
       class="section-alert"
       type="info"
-      :message="`${activeProject.code} · ${activeProject.name} · ${formatMoney(activeProject.contractAmount)}`"
+      :message="`${activeProject.code} · ${activeProject.name} · 合同金额（含税，元）${formatMoney(activeProject.contractAmount)}`"
     />
     <a-form
       ref="approvalFormRef"
@@ -198,7 +199,7 @@
       v-if="detail"
       class="section-alert"
       type="info"
-      :message="`${detail.project.code} · 预算余额 ${formatMoney(detail.project.budgetVariance)}`"
+      :message="`${detail.project.code} · 预算余额（含税，元）${formatMoney(detail.project.budgetVariance)}`"
     />
     <a-alert
       v-if="detail"
@@ -211,13 +212,19 @@
             : 'success'
       "
       show-icon
-      :message="`登记后预算使用率 ${costBudgetUsageAfter.toFixed(1)}%，预计余额 ${formatMoney(projectedBudgetVariance)}`"
+      :message="`登记后预算使用率 ${costBudgetUsageAfter.toFixed(1)}%，预计余额（含税，元）${formatMoney(projectedBudgetVariance)}`"
       :description="
         costBudgetOverrun
-          ? '该成本会导致项目超预算，保存时将被后端预算控制拦截，请先走预算调整或审批。'
+          ? '该成本会导致项目超预算，请申请调整项目总预算，审批通过后再登记。'
           : '成本登记后会同步刷新项目实际成本和毛利。'
       "
-    />
+    >
+      <template v-if="costBudgetOverrun" #action>
+        <a-button size="small" danger @click="goToBudgetChange">
+          申请预算变更
+        </a-button>
+      </template>
+    </a-alert>
     <a-form
       ref="costFormRef"
       :model="costForm"
@@ -254,7 +261,7 @@
             ><a-input v-model:value="costForm.description" /></a-form-item
         ></a-col>
         <a-col :xs="24" :md="8"
-          ><a-form-item label="成本金额" name="amount"
+          ><a-form-item label="成本金额（含税，元）" name="amount"
             ><a-input-number
               v-model:value="costForm.amount"
               :min="0.01"
@@ -269,6 +276,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from "vue";
 import { message } from "ant-design-vue";
+import { useRouter } from "vue-router";
 import {
   createProject,
   createProjectCost,
@@ -277,8 +285,14 @@ import {
   type ProjectStage,
 } from "@/api/project";
 import { useAuthStore } from "@/stores/auth";
+import {
+  getErrorMessage,
+  openBudgetChangeRequest,
+  showBudgetOverrunPrompt,
+} from "@/utils/budget-overrun";
 
 const auth = useAuthStore();
+const router = useRouter();
 const emit = defineEmits([
   "update:createOpen",
   "update:approvalOpen",
@@ -503,7 +517,11 @@ async function handleCreateCost() {
   if (!props.detail) return;
   await costFormRef.value?.validate();
   if (costBudgetOverrun.value) {
-    message.warning("登记后将超出项目预算，请先调整预算或走超预算审批");
+    showBudgetOverrunPrompt(
+      "登记后将超出项目预算",
+      router,
+      props.detail.project.id,
+    );
     return;
   }
   try {
@@ -516,11 +534,19 @@ async function handleCreateCost() {
     message.success("项目成本已归集");
   } catch (error) {
     const msg = error instanceof Error ? error.message : "项目成本登记失败";
-    message.error(
-      msg.includes("Cost exceeds budget")
-        ? "成本超过项目预算，已被预算控制拦截"
-        : msg,
-    );
+    const displayMessage = msg.includes("Cost exceeds budget")
+      ? "成本超过项目预算，已被预算控制拦截"
+      : msg;
+    if (
+      !showBudgetOverrunPrompt(displayMessage, router, props.detail.project.id)
+    ) {
+      message.error(getErrorMessage(error, "项目成本登记失败"));
+    }
   }
+}
+
+function goToBudgetChange() {
+  if (!props.detail) return;
+  void openBudgetChangeRequest(router, props.detail.project.id);
 }
 </script>

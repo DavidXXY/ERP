@@ -29,19 +29,19 @@
       <a-row :gutter="[16, 16]" class="metric-row">
         <a-col :xs="12" :lg="6"
           ><a-statistic
-            title="合同总额"
+            title="合同总额（含税，元）"
             :value="totalContract"
             :formatter="moneyFormatter"
         /></a-col>
         <a-col :xs="12" :lg="6"
           ><a-statistic
-            title="项目预算"
+            title="项目预算（含税，元）"
             :value="totalBudget"
             :formatter="moneyFormatter"
         /></a-col>
         <a-col :xs="12" :lg="6"
           ><a-statistic
-            title="已归集成本"
+            title="已归集成本（含税，元）"
             :value="totalActualCost"
             :formatter="moneyFormatter"
         /></a-col>
@@ -670,7 +670,7 @@
         type="info"
         show-icon
         :message="`${selectedPreSales.code} · ${selectedPreSales.customerName}`"
-        :description="`含税成本 ${formatMoney(preSalesCostTotal(preSalesCostForm))}，未税成本 ${formatMoney(preSalesCostNetTotal(preSalesCostForm))}，建议报价 ${formatMoney(preSalesCostForm.suggestedPrice || 0)}`"
+        :description="`含税成本（元）${formatMoney(preSalesCostTotal(preSalesCostForm))}，未税成本（元）${formatMoney(preSalesCostNetTotal(preSalesCostForm))}，建议报价（含税，元）${formatMoney(preSalesCostForm.suggestedPrice || 0)}`"
       />
       <a-form :model="preSalesCostForm" layout="vertical">
         <a-row :gutter="16">
@@ -687,7 +687,7 @@
             </a-form-item>
           </a-col>
           <a-col :xs="24" :md="12"
-            ><a-form-item label="建议报价"
+            ><a-form-item label="建议报价（含税，元）"
               ><a-input-number
                 v-model:value="preSalesCostForm.suggestedPrice"
                 :min="0"
@@ -698,8 +698,8 @@
             <div class="presales-cost-table">
               <div class="presales-cost-head">
                 <span>成本项</span>
-                <span>含税价</span>
-                <span>不含税价</span>
+                <span>含税价（元）</span>
+                <span>未税价（元）</span>
                 <span>税率</span>
               </div>
               <div class="presales-cost-row">
@@ -872,7 +872,7 @@
         class="section-alert"
         show-icon
         type="info"
-        :message="`成本合计 ${formatMoney(selectedPreSales.costRequest.totalCost || 0)} · 建议报价 ${formatMoney(selectedPreSales.costRequest.suggestedPrice || 0)}`"
+        :message="`成本合计（含税，元）${formatMoney(selectedPreSales.costRequest.totalCost || 0)} · 建议报价（含税，元）${formatMoney(selectedPreSales.costRequest.suggestedPrice || 0)}`"
         :description="
           selectedPreSales.costRequest.costRemark || '成本负责人未填写备注'
         "
@@ -963,10 +963,10 @@
             <a-descriptions-item label="质保截止">{{
               detail.project.warrantyEndDate || "-"
             }}</a-descriptions-item>
-            <a-descriptions-item label="合同金额">{{
+            <a-descriptions-item label="合同金额（含税，元）">{{
               formatMoney(detail.project.contractAmount)
             }}</a-descriptions-item>
-            <a-descriptions-item label="当前毛利">{{
+            <a-descriptions-item label="当前毛利（含税，元）">{{
               formatMoney(detail.project.grossMargin)
             }}</a-descriptions-item>
             <a-descriptions-item
@@ -987,19 +987,19 @@
           <a-row :gutter="[16, 16]" class="drawer-metrics">
             <a-col :span="8"
               ><a-statistic
-                title="预算成本"
+                title="预算成本（含税，元）"
                 :value="detail.project.budgetAmount"
                 :formatter="moneyFormatter"
             /></a-col>
             <a-col :span="8"
               ><a-statistic
-                title="实际成本"
+                title="实际成本（含税，元）"
                 :value="detail.project.actualCost"
                 :formatter="moneyFormatter"
             /></a-col>
             <a-col :span="8"
               ><a-statistic
-                title="预算余额"
+                title="预算余额（含税，元）"
                 :value="detail.project.budgetVariance"
                 :formatter="moneyFormatter"
             /></a-col>
@@ -1011,7 +1011,7 @@
                 <a-alert
                   type="info"
                   show-icon
-                  :message="`物料预算 ${formatMoney(materialBudgetItem.plannedAmount)}，剩余 ${formatMoney(materialBudgetItem.variance)}`"
+                  :message="`物料预算（含税，元）${formatMoney(materialBudgetItem.plannedAmount)}，剩余（含税，元）${formatMoney(materialBudgetItem.variance)}`"
                   description="项目物料采购申请会自动归集到当前项目预算。"
                 />
                 <a-button
@@ -1126,7 +1126,7 @@
         :message="`${detail.project.code} · ${detail.project.name}`"
         :description="
           materialBudgetItem
-            ? `物料预算 ${formatMoney(materialBudgetItem.plannedAmount)}，当前剩余 ${formatMoney(materialBudgetItem.variance)}。`
+            ? `物料预算（含税，元）${formatMoney(materialBudgetItem.plannedAmount)}，当前剩余（含税，元）${formatMoney(materialBudgetItem.variance)}。`
             : '当前项目无物料预算。'
         "
       />
@@ -1160,7 +1160,7 @@
               ><a-input v-model:value="projectPurchaseForm.unit" /></a-form-item
           ></a-col>
           <a-col :xs="12" :md="6"
-            ><a-form-item label="预计单价"
+            ><a-form-item label="预计单价（含税，元）"
               ><a-input-number
                 v-model:value="projectPurchaseForm.unitPrice"
                 :min="0"
@@ -1255,6 +1255,10 @@ import ApprovalProgressFlow, {
 import { useAuthStore } from "@/stores/auth";
 import ProjectModals from "./ProjectModals.vue";
 import BusinessTraceTimeline from "@/components/business/BusinessTraceTimeline.vue";
+import {
+  getErrorMessage,
+  showBudgetOverrunPrompt,
+} from "@/utils/budget-overrun";
 
 const auth = useAuthStore();
 const route = useRoute();
@@ -1376,16 +1380,16 @@ const columns = [
   { title: "项目负责人", key: "manager", width: 130 },
   { title: "阶段", key: "stage", width: 150 },
   { title: "项目经理分配", key: "approval", width: 220 },
-  { title: "合同金额", key: "contract", width: 140 },
-  { title: "预算 / 实际", key: "cost", width: 180 },
-  { title: "毛利 / 余额", key: "gross", width: 180 },
+  { title: "合同金额（含税，元）", key: "contract", width: 190 },
+  { title: "预算 / 实际（含税，元）", key: "cost", width: 220 },
+  { title: "毛利 / 余额（含税，元）", key: "gross", width: 220 },
   { title: "操作", key: "action", width: 130, fixed: "right" },
 ];
 const budgetColumns = [
   { title: "成本分类", key: "category", width: 140 },
-  { title: "预算金额", key: "planned", width: 150 },
+  { title: "预算金额（含税，元）", key: "planned", width: 190 },
   { title: "实际发生", key: "actual", width: 150 },
-  { title: "预算余额", key: "variance", width: 150 },
+  { title: "预算余额（含税，元）", key: "variance", width: 190 },
   { title: "备注", dataIndex: "remark" },
 ];
 const costColumns = [
@@ -1393,7 +1397,7 @@ const costColumns = [
   { title: "来源", key: "source", width: 170 },
   { title: "成本说明", dataIndex: "description" },
   { title: "发生日期", dataIndex: "incurredDate", width: 120 },
-  { title: "金额", key: "amount", width: 130 },
+  { title: "成本金额（含税，元）", key: "amount", width: 190 },
 ];
 const stageRecordColumns = [
   { title: "阶段变化", key: "change", width: 220 },
@@ -1402,9 +1406,9 @@ const stageRecordColumns = [
 ];
 const budgetExecutionColumns = [
   { title: "项目 / 负责人", key: "project", width: 280 },
-  { title: "预算 / 合同", key: "budget", width: 190 },
-  { title: "实际成本 / 使用率", key: "actual", width: 210 },
-  { title: "预算余额", key: "variance", width: 150 },
+  { title: "预算 / 合同（含税，元）", key: "budget", width: 230 },
+  { title: "实际成本（含税，元）/ 使用率", key: "actual", width: 250 },
+  { title: "预算余额（含税，元）", key: "variance", width: 190 },
   { title: "风险", key: "risk", width: 300 },
   { title: "操作", key: "action", width: 110, fixed: "right" as const },
 ];
@@ -1414,7 +1418,7 @@ const flatCostColumns = [
   { title: "来源", key: "source", width: 180 },
   { title: "成本说明", dataIndex: "description" },
   { title: "发生日期", dataIndex: "incurredDate", width: 120 },
-  { title: "金额", key: "amount", width: 140 },
+  { title: "成本金额（含税，元）", key: "amount", width: 190 },
 ];
 const flatStageColumns = [
   { title: "推进时间", key: "time", width: 170 },
@@ -1434,7 +1438,7 @@ const stageProjectColumns = [
 const preSalesColumns = [
   { title: "报价 / 客户", key: "quote", width: 260 },
   { title: "售前需求", key: "scope", width: 330 },
-  { title: "报价金额", key: "amount", width: 150 },
+  { title: "报价金额（含税，元）", key: "amount", width: 190 },
   { title: "成本核算", key: "cost", width: 220 },
   { title: "状态", key: "status", width: 160 },
   { title: "操作", key: "action", width: 190, fixed: "right" as const },
@@ -1619,7 +1623,7 @@ const budgetCards = computed(() => [
     },
   },
   {
-    label: "预算余额",
+    label: "预算余额（含税，元）",
     value: formatMoney(totalBudget.value - totalActualCost.value),
     hint: "全部项目合计",
     danger: totalActualCost.value > totalBudget.value,
@@ -1654,7 +1658,7 @@ const costCards = computed(() => [
     action: () => hydrateProjectDetails(true),
   },
   {
-    label: "成本总额",
+    label: "成本总额（含税，元）",
     value: formatMoney(
       flatCostEntries.value.reduce(
         (sum, item) => sum + Number(item.amount || 0),
@@ -1665,7 +1669,7 @@ const costCards = computed(() => [
     action: () => {},
   },
   {
-    label: "材料成本",
+    label: "材料成本（含税，元）",
     value: formatMoney(
       flatCostEntries.value
         .filter((item) => item.category === "MATERIAL")
@@ -1675,7 +1679,7 @@ const costCards = computed(() => [
     action: () => {},
   },
   {
-    label: "外包成本",
+    label: "外包成本（含税，元）",
     value: formatMoney(
       flatCostEntries.value
         .filter((item) => item.category === "SUBCONTRACT")
@@ -1726,14 +1730,14 @@ const profitReviewCards = computed(() => {
       },
     },
     {
-      label: "合同额",
+      label: "合同额（含税，元）",
       value: formatMoney(contractAmount),
       hint: "关闭项目合计",
       danger: false,
       action: () => {},
     },
     {
-      label: "实际成本",
+      label: "实际成本（含税，元）",
       value: formatMoney(actualCost),
       hint: "采购/领料/人工/外包",
       danger: false,
@@ -1742,7 +1746,7 @@ const profitReviewCards = computed(() => {
     {
       label: "毛利率",
       value: formatPercent(marginRate),
-      hint: `毛利 ${formatMoney(gross)}`,
+      hint: `毛利（含税，元） ${formatMoney(gross)}`,
       danger: marginRate < 10,
       action: () => {},
     },
@@ -1884,7 +1888,9 @@ async function handleProjectPurchaseRequest() {
     projectPurchaseOpen.value = false;
     message.success("项目采购申请已提交审批");
   } catch (error) {
-    message.error(error instanceof Error ? error.message : "采购申请提交失败");
+    if (!showBudgetOverrunPrompt(error, router, detail.value.project.id)) {
+      message.error(getErrorMessage(error, "采购申请提交失败"));
+    }
   } finally {
     savingPurchase.value = false;
   }

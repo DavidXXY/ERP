@@ -20,13 +20,13 @@
         /></a-col>
         <a-col :xs="12" :lg="6"
           ><a-statistic
-            title="预计金额"
+            title="预计金额（含税，元）"
             :value="activeAmount"
             :formatter="moneyFormatter"
         /></a-col>
         <a-col :xs="12" :lg="6"
           ><a-statistic
-            title="加权金额"
+            title="加权金额（含税，元）"
             :value="weightedAmount"
             :formatter="moneyFormatter"
         /></a-col>
@@ -211,7 +211,7 @@
                 placeholder="选择负责人" /></a-form-item
           ></a-col>
           <a-col :xs="24" :md="8"
-            ><a-form-item label="预计金额"
+            ><a-form-item label="预计金额（含税，元）"
               ><a-input-number
                 v-model:value="createForm.expectedAmount"
                 :min="0"
@@ -367,7 +367,7 @@ const columns = [
   { title: "商机 / 客户", key: "opportunity", width: 220 },
   { title: "需求", key: "need", width: 280 },
   { title: "阶段 / 成功率", key: "stage", width: 160 },
-  { title: "预计金额", key: "amount", width: 140 },
+  { title: "预计金额（含税，元）", key: "amount", width: 180 },
   { title: "下一步动作", key: "nextAction", width: 260 },
   { title: "负责人", dataIndex: "ownerName", width: 110 },
   { title: "操作", key: "action", width: 80, fixed: "right" },

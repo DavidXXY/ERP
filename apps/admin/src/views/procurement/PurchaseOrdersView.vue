@@ -158,7 +158,7 @@ function openCreate() {
 const orderColumns = [
   { title: "订单编号", key: "order", width: 220 },
   { title: "明细", key: "items", width: 80 },
-  { title: "金额", key: "amount", width: 140 },
+  { title: "订单金额（含税，元）", key: "amount", width: 190 },
   { title: "状态", key: "status", width: 130 },
   { title: "下单日期", key: "date", width: 120 },
   { title: "操作", key: "action", width: 280, fixed: "right" },

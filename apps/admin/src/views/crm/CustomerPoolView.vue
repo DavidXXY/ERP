@@ -280,13 +280,13 @@
               ><strong>{{ selectedDetail.metrics.contractCount }} 份</strong>
             </div>
             <div>
-              <span>合同总额</span
+              <span>合同总额（含税，元）</span
               ><strong>{{
                 formatMoney(selectedDetail.metrics.contractAmount)
               }}</strong>
             </div>
             <div>
-              <span>待收款项</span
+              <span>待收款项（含税，元）</span
               ><strong
                 :class="{
                   'customer-risk-value':
@@ -298,7 +298,7 @@
               >
             </div>
             <div>
-              <span>已核销</span
+              <span>已核销（含税，元）</span
               ><strong>{{
                 formatMoney(selectedDetail.metrics.settledAmount)
               }}</strong>
@@ -1025,9 +1025,9 @@ const columns = [
   { title: "客户编码", dataIndex: "code", width: 150 },
   { title: "负责人", key: "owner", width: 110 },
   { title: "等级 / 行业", key: "level", width: 120 },
-  { title: "已签订单金额", key: "signedAmount", width: 150 },
-  { title: "累计支付金额", key: "paidAmount", width: 150 },
-  { title: "待付金额", key: "pendingAmount", width: 150 },
+  { title: "已签订单金额（含税，元）", key: "signedAmount", width: 180 },
+  { title: "累计支付金额（含税，元）", key: "paidAmount", width: 180 },
+  { title: "待付金额（含税，元）", key: "pendingAmount", width: 170 },
   { title: "风险", key: "risk", width: 90 },
   { title: "操作", key: "action", width: 80, fixed: "right" },
 ];
@@ -1035,7 +1035,7 @@ const opportunityColumns = [
   { title: "商机", key: "opportunity", width: 150 },
   { title: "需求", dataIndex: "needSummary", width: 280 },
   { title: "阶段", key: "stage", width: 130 },
-  { title: "预计金额", key: "amount", width: 130 },
+  { title: "预计金额（含税，元）", key: "amount", width: 170 },
   { title: "下一步动作", key: "nextAction", width: 220 },
   { title: "负责人", dataIndex: "ownerName", width: 110 },
 ];
@@ -1043,12 +1043,12 @@ const contractColumns = [
   { title: "合同", key: "contract", width: 260 },
   { title: "期限", key: "period", width: 220 },
   { title: "服务周期", dataIndex: "serviceCycle", width: 150 },
-  { title: "金额", key: "amount", width: 130 },
+  { title: "合同金额（含税，元）", key: "amount", width: 180 },
   { title: "状态", key: "status", width: 100 },
 ];
 const receivableColumns = [
   { title: "应收单", key: "receivable", width: 190 },
-  { title: "应收 / 已收", key: "amount", width: 250 },
+  { title: "应收 / 已收（含税，元）", key: "amount", width: 280 },
   { title: "到期日", dataIndex: "dueDate", width: 120 },
   { title: "开票信息", key: "invoice", width: 170 },
   { title: "状态", key: "status", width: 100 },

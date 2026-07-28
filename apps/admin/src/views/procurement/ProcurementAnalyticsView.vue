@@ -17,14 +17,14 @@
           <a-col :xs="12" :xl="6"
             ><a-card
               ><a-statistic
-                title="总支出"
+                title="总支出（含税，元）"
                 :value="totalSpend"
                 :formatter="moneyFormatter" /></a-card
           ></a-col>
           <a-col :xs="12" :xl="6"
             ><a-card
               ><a-statistic
-                title="项目采购"
+                title="项目采购（含税，元）"
                 :value="projectSpend"
                 :formatter="moneyFormatter"
                 :value-style="{ color: '#1890ff' }" /></a-card
@@ -32,7 +32,7 @@
           <a-col :xs="12" :xl="6"
             ><a-card
               ><a-statistic
-                title="部门采购"
+                title="部门采购（含税，元）"
                 :value="deptSpend"
                 :formatter="moneyFormatter"
                 :value-style="{ color: '#722ed1' }" /></a-card
@@ -246,12 +246,12 @@ const supplierSpend = computed(() => {
 });
 const monthlyColumns = [
   { title: "月份", dataIndex: "month" },
-  { title: "支出", key: "amount" },
+  { title: "支出（含税，元）", key: "amount" },
   { title: "年度占比", key: "share" },
 ];
 const supplierColumns = [
   { title: "供应商", dataIndex: "name" },
-  { title: "采购支出", key: "amount" },
+  { title: "采购支出（含税，元）", key: "amount" },
 ];
 
 function distPercent(value: number, data: { value: number }[]) {

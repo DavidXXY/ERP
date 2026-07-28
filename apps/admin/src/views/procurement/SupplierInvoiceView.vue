@@ -120,7 +120,7 @@
         <a-form-item label="发票号码">
           <a-input v-model:value="invoiceForm.invoiceNo" />
         </a-form-item>
-        <a-form-item label="发票金额">
+        <a-form-item label="发票金额（含税，元）">
           <a-input-number
             v-model:value="invoiceForm.amount"
             :min="0.01"
@@ -168,7 +168,7 @@ const invoiceForm = reactive({
 const invoiceColumns = [
   { title: "发票", key: "invoice", width: 190 },
   { title: "采购订单", key: "order", width: 210 },
-  { title: "金额", key: "amount", width: 150 },
+  { title: "发票金额（含税，元）", key: "amount", width: 190 },
   { title: "开票日期", dataIndex: "invoiceDate", width: 120 },
   { title: "四单匹配", key: "match", width: 220 },
   { title: "审核", key: "approval", width: 100 },

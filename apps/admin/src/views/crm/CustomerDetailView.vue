@@ -308,17 +308,17 @@ const metrics = computed<DetailMetric[]>(() =>
   detail.value
     ? [
         {
-          label: "已签订单金额",
+          label: "已签订单金额（含税，元）",
           value: money(detail.value.metrics.contractAmount),
           hint: `${detail.value.contracts.length} 份合同`,
         },
         {
-          label: "累计支付金额",
+          label: "累计支付金额（含税，元）",
           value: money(detail.value.metrics.settledAmount),
           hint: "已核销回款",
         },
         {
-          label: "待付金额",
+          label: "待付金额（含税，元）",
           value: money(detail.value.metrics.outstandingAmount),
           danger: detail.value.metrics.outstandingAmount > 0,
           hint: "客户待支付",
@@ -357,7 +357,7 @@ const siteColumns = [
 const opportunityColumns = [
   { title: "商机", key: "code", width: 280 },
   { title: "阶段", dataIndex: "stage", width: 120 },
-  { title: "预计金额", key: "amount", width: 140 },
+  { title: "预计金额（含税，元）", key: "amount", width: 180 },
   { title: "成功率", key: "probability", width: 90 },
   { title: "下一步", dataIndex: "nextAction", width: 200 },
   { title: "负责人", dataIndex: "ownerName", width: 120 },
@@ -365,7 +365,7 @@ const opportunityColumns = [
 const contractColumns = [
   { title: "合同", key: "contract", width: 260 },
   { title: "类型", dataIndex: "contractType", width: 130 },
-  { title: "金额", key: "amount", width: 140 },
+  { title: "合同金额（含税，元）", key: "amount", width: 180 },
   { title: "开始", dataIndex: "startDate", width: 120 },
   { title: "结束", dataIndex: "endDate", width: 120 },
   { title: "状态", key: "status", width: 120 },
@@ -373,7 +373,7 @@ const contractColumns = [
 const receivableColumns = [
   { title: "应收单", key: "code", width: 180 },
   { title: "来源", dataIndex: "sourceNo", width: 180 },
-  { title: "应收", key: "amount", width: 140 },
+  { title: "应收金额（含税，元）", key: "amount", width: 180 },
   { title: "已收", key: "settled", width: 140 },
   { title: "未收", key: "outstanding", width: 140 },
   { title: "到期日", dataIndex: "dueDate", width: 120 },

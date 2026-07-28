@@ -24,7 +24,7 @@
         >
         <a-col :xs="12" :lg="6"
           ><div class="self-metric-card">
-            <span>待审金额</span
+            <span>待审金额（元，税价随来源单据）</span
             ><strong>{{ formatCompactMoney(pendingAmount) }}</strong>
           </div></a-col
         >
@@ -109,7 +109,7 @@
         v-if="selectedApproval"
         class="section-alert"
         type="info"
-        :message="`${selectedApproval.code} · ${selectedApproval.title} · ${formatMoney(selectedApproval.amount)}`"
+        :message="`${selectedApproval.code} · ${selectedApproval.title} · 金额（元，税价随来源单据）${formatMoney(selectedApproval.amount)}`"
       />
       <a-form
         ref="processFormRef"
@@ -172,7 +172,7 @@ const columns = [
   { title: "编号 / 说明", key: "approval", width: 260 },
   { title: "类型", key: "type", width: 100 },
   { title: "申请人", dataIndex: "applicantName", width: 120 },
-  { title: "金额", key: "amount", width: 130 },
+  { title: "金额（元，税价随来源单据）", key: "amount", width: 230 },
   { title: "状态", key: "status", width: 190 },
   { title: "提交时间", key: "date", width: 130 },
   { title: "操作", key: "action", width: 130, fixed: "right" as const },

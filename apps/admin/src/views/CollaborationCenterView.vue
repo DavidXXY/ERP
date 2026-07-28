@@ -599,7 +599,7 @@
                 :min="1"
                 style="width: 100%" /></a-form-item></a-col
           ><a-col :span="12"
-            ><a-form-item label="小时成本"
+            ><a-form-item label="小时成本（元，税价不适用）"
               ><a-input-number
                 v-model:value="staffForm.hourlyCost"
                 :min="0"
@@ -667,7 +667,7 @@
             v-model:value="budgetForm.projectId"
             :options="projectOptions"
         /></a-form-item>
-        <a-form-item label="调整后预算" required
+        <a-form-item label="调整后预算（含税，元）" required
           ><a-input-number
             v-model:value="budgetForm.requestedAmount"
             :min="1"
@@ -733,7 +733,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import { message, Modal } from "ant-design-vue";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import {
   acceptProjectHandover,
   actOnCollaborationTodo,
@@ -753,7 +753,8 @@ import {
   type CollaborationReferences,
 } from "@/api/collaboration";
 
-const router = useRouter(),
+const route = useRoute(),
+  router = useRouter(),
   loading = ref(false),
   tab = ref("todos");
 const now = new Date(),
@@ -987,19 +988,19 @@ const handoverColumns = [
 ];
 const budgetColumns = [
   { title: "项目", dataIndex: "projectName" },
-  { title: "预算", key: "budgetAmount" },
-  { title: "已占用", key: "committedAmount" },
-  { title: "已发生", key: "actualAmount" },
-  { title: "人工成本", key: "laborCost" },
-  { title: "剩余", key: "remainingAmount" },
+  { title: "预算（含税，元）", key: "budgetAmount" },
+  { title: "已占用（含税，元）", key: "committedAmount" },
+  { title: "已发生（含税，元）", key: "actualAmount" },
+  { title: "人工成本（元，税价不适用）", key: "laborCost" },
+  { title: "剩余（含税，元）", key: "remainingAmount" },
   { title: "使用率", key: "usageRate", width: 160 },
 ];
 const budgetVersionColumns = [
   { title: "项目", dataIndex: "projectName" },
   { title: "版本", dataIndex: "versionNo", width: 70 },
-  { title: "原预算", key: "previousAmount" },
-  { title: "新预算", key: "requestedAmount" },
-  { title: "差额", key: "differenceAmount" },
+  { title: "原预算（含税，元）", key: "previousAmount" },
+  { title: "新预算（含税，元）", key: "requestedAmount" },
+  { title: "差额（含税，元）", key: "differenceAmount" },
   { title: "原因", dataIndex: "reason" },
   { title: "申请人", dataIndex: "requestedByName" },
   { title: "状态", key: "status" },
@@ -1008,10 +1009,10 @@ const budgetVersionColumns = [
 const financeColumns = [
   { title: "合同", dataIndex: "contractCode" },
   { title: "客户", dataIndex: "customerName" },
-  { title: "合同额", key: "contractAmount" },
-  { title: "已开票", key: "billedAmount" },
-  { title: "已回款", key: "receivedAmount" },
-  { title: "待收", key: "outstandingAmount" },
+  { title: "合同额（含税，元）", key: "contractAmount" },
+  { title: "已开票（含税，元）", key: "billedAmount" },
+  { title: "已回款（含税，元）", key: "receivedAmount" },
+  { title: "待收（含税，元）", key: "outstandingAmount" },
   { title: "下次到期", dataIndex: "nextDueDate" },
   { title: "状态", key: "overdue" },
 ];
@@ -1024,13 +1025,13 @@ const procurementColumns = [
       `${record.orderedQty}/${record.receivedQty}`,
     width: 130,
   },
-  { title: "订单额", key: "orderAmount" },
-  { title: "收货额", key: "receivedAmount" },
-  { title: "发票", key: "invoiceAmount" },
-  { title: "应付", key: "payableAmount" },
-  { title: "已付", key: "paidAmount" },
-  { title: "待付", key: "outstandingAmount" },
-  { title: "容差", key: "toleranceAmount" },
+  { title: "订单额（含税，元）", key: "orderAmount" },
+  { title: "收货额（含税，元）", key: "receivedAmount" },
+  { title: "发票额（含税，元）", key: "invoiceAmount" },
+  { title: "应付（含税，元）", key: "payableAmount" },
+  { title: "已付（含税，元）", key: "paidAmount" },
+  { title: "待付（含税，元）", key: "outstandingAmount" },
+  { title: "容差（含税，元）", key: "toleranceAmount" },
   { title: "差异原因", dataIndex: "differenceReason", width: 220 },
   { title: "匹配", key: "matchStatus", width: 100 },
 ];
@@ -1048,7 +1049,7 @@ const staffColumns = [
     customRender: ({ record }: any) =>
       `${record.plannedHours}/${record.actualHours}`,
   },
-  { title: "人工成本", key: "laborCost" },
+  { title: "人工成本（元，税价不适用）", key: "laborCost" },
   { title: "证书", key: "certificateStatus" },
   { title: "操作", key: "action" },
 ];
@@ -1058,7 +1059,7 @@ const timesheetColumns = [
   { title: "员工", dataIndex: "userName" },
   { title: "工时", dataIndex: "hours" },
   { title: "工作内容", dataIndex: "description" },
-  { title: "成本", key: "cost" },
+  { title: "工时成本（元，税价不适用）", key: "cost" },
   { title: "状态", key: "status" },
   { title: "审批人", dataIndex: "reviewedByName" },
   { title: "操作", key: "action" },
@@ -1158,6 +1159,28 @@ async function loadData() {
   } finally {
     loading.value = false;
   }
+}
+
+async function applyBudgetRequestIntent() {
+  if (route.query.tab === "budget") tab.value = "budget";
+  if (route.query.action !== "request-budget") return;
+
+  const projectId =
+    typeof route.query.projectId === "string"
+      ? route.query.projectId
+      : undefined;
+  if (
+    projectId &&
+    references.projects.some((project) => project.id === projectId)
+  ) {
+    budgetForm.projectId = projectId;
+  }
+  budgetOpen.value = true;
+
+  const query = { ...route.query };
+  delete query.action;
+  delete query.projectId;
+  await router.replace({ path: route.path, query });
 }
 async function downloadReport() {
   try {
@@ -1349,7 +1372,18 @@ watch(
   () => [filters.year, filters.month, filters.departmentId],
   () => loadData(),
 );
-onMounted(loadData);
+watch(
+  () => budgetForm.projectId,
+  (projectId, previousProjectId) => {
+    if (!projectId || projectId === previousProjectId) return;
+    const current = data.budgets.find((item) => item.projectId === projectId);
+    budgetForm.requestedAmount = Number(current?.budgetAmount || 0);
+  },
+);
+onMounted(async () => {
+  await loadData();
+  await applyBudgetRequestIntent();
+});
 </script>
 
 <style scoped>

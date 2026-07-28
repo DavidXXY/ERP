@@ -228,6 +228,10 @@ class LocalApplicationContextTest {
 
   @Test
   void enforcesAuthenticationAndCompletesLoginFlow() throws Exception {
+    var apiDocs = rest.getForEntity("http://localhost:" + port + "/api-docs", String.class);
+    assertThat(apiDocs.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(apiDocs.getBody()).contains("\"openapi\"", "\"paths\"");
+
     var anonymous = rest.getForEntity("http://localhost:" + port + "/api/auth/me", String.class);
     assertThat(anonymous.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     var anonymousWorkbench = rest.getForEntity(
@@ -236,13 +240,16 @@ class LocalApplicationContextTest {
     );
     assertThat(anonymousWorkbench.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
 
+    var loginHeaders = new HttpHeaders();
+    loginHeaders.setOrigin("http://localhost:5180");
     var login = rest.postForEntity(
         "http://localhost:" + port + "/api/auth/login",
-        Map.of("username", "admin", "password", "Admin@123"),
+        new HttpEntity<>(Map.of("username", "admin", "password", "Admin@123"), loginHeaders),
         String.class
     );
     assertThat(login.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(login.getBody()).contains("\"success\":true", "\"token\"");
+    assertThat(login.getHeaders().getAccessControlAllowOrigin()).isEqualTo("http://localhost:5180");
     assertThat(login.getHeaders().getFirst("X-Request-ID")).isNotBlank();
 
     String token = objectMapper.readTree(login.getBody()).path("data").path("token").asText();

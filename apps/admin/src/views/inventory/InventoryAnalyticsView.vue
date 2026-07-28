@@ -12,7 +12,7 @@
           <a-col :xs="12" :xl="6"
             ><a-card
               ><a-statistic
-                title="库存总价值"
+                title="库存总价值（含税，元）"
                 :value="totalValue"
                 :formatter="moneyFormatter" /></a-card
           ></a-col>

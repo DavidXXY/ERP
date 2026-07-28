@@ -206,7 +206,7 @@
         </a-row>
         <a-row :gutter="16">
           <a-col :span="8">
-            <a-form-item label="预计单价">
+            <a-form-item label="预计单价（含税，元）">
               <a-input-number
                 v-model:value="form.unitPrice"
                 :min="0"
@@ -254,7 +254,7 @@
         <a-alert
           type="info"
           show-icon
-          :message="`预计采购金额 ${formatMoney(estimatedAmount)}。创建后可立即上传图纸、照片和规格书。`"
+          :message="`预计采购金额（含税，元）${formatMoney(estimatedAmount)}。创建后可立即上传图纸、照片和规格书。`"
         />
       </a-form>
     </a-modal>
@@ -352,7 +352,7 @@
         v-if="selectedBatch"
         class="section-alert"
         type="info"
-        :message="`${selectedBatch.batchCode} · ${selectedBatch.itemCount}项 · ${formatMoney(selectedBatch.totalAmount)} · ${selectedBatch.costTargetName}`"
+        :message="`${selectedBatch.batchCode} · ${selectedBatch.itemCount}项 · 预计金额（含税，元）${formatMoney(selectedBatch.totalAmount)} · ${selectedBatch.costTargetName}`"
       />
       <a-card
         v-if="selectedBatch"
@@ -484,6 +484,10 @@ import { useAuthStore } from "@/stores/auth";
 import ApprovalProgressFlow, {
   type ApprovalProgressStep,
 } from "@/components/ApprovalProgressFlow.vue";
+import {
+  getErrorMessage,
+  showBudgetOverrunPrompt,
+} from "@/utils/budget-overrun";
 
 type RequestBatch = {
   batchId: string;
@@ -567,7 +571,7 @@ const costTypeOptions = [
 const batchColumns = [
   { title: "申请批次", key: "batch", width: 240 },
   { title: "明细汇总", key: "summary", width: 150 },
-  { title: "预计金额", key: "amount", width: 160 },
+  { title: "预计金额（含税，元）", key: "amount", width: 190 },
   { title: "成本归属", key: "target", width: 190 },
   { title: "到货日期", key: "date", width: 190 },
   { title: "审批状态", key: "approval", width: 140 },
@@ -577,8 +581,8 @@ const lineColumns = [
   { title: "行号/申请号", key: "line", width: 160 },
   { title: "物料/说明", key: "material", width: 280 },
   { title: "数量", key: "qty", width: 90 },
-  { title: "预计单价", key: "price", width: 120 },
-  { title: "预计金额", key: "amount", width: 150 },
+  { title: "预计单价（含税，元）", key: "price", width: 180 },
+  { title: "预计金额（含税，元）", key: "amount", width: 190 },
   { title: "到货日期", key: "date", width: 120 },
   { title: "审批", key: "approval", width: 100 },
   { title: "操作", key: "action", width: 120, fixed: "right" as const },
@@ -587,7 +591,7 @@ const approvalLineColumns = [
   { title: "行号", dataIndex: "lineNo", width: 70 },
   { title: "物料", dataIndex: "partName" },
   { title: "数量", dataIndex: "quantity", width: 90 },
-  { title: "金额", dataIndex: "totalAmount", width: 120 },
+  { title: "金额（含税，元）", dataIndex: "totalAmount", width: 180 },
 ];
 const documentColumns = [
   { title: "文件", key: "file" },
@@ -750,7 +754,15 @@ async function handleCreate() {
       title: `整批附件 · ${created.batchCode || created.code}`,
     });
   } catch (error: any) {
-    message.error(error.message || "创建失败");
+    if (
+      !showBudgetOverrunPrompt(
+        error,
+        router,
+        form.costType === "PROJECT" ? form.costTargetId : undefined,
+      )
+    ) {
+      message.error(getErrorMessage(error, "创建失败"));
+    }
   } finally {
     saving.value = false;
   }
@@ -783,7 +795,7 @@ async function handleImport() {
     });
     importOpen.value = false;
     message.success(
-      `${result.batchCode} 已创建：${result.totalLines}项，预计金额${formatMoney(result.totalAmount)}`,
+      `${result.batchCode} 已创建：${result.totalLines}项，预计金额（含税，元）${formatMoney(result.totalAmount)}`,
     );
     await loadData();
     await openDocuments({
@@ -792,7 +804,15 @@ async function handleImport() {
       title: `整批附件 · ${result.batchCode}`,
     });
   } catch (error: any) {
-    message.error(error.message || "批量导入失败");
+    if (
+      !showBudgetOverrunPrompt(
+        error,
+        router,
+        importForm.costType === "PROJECT" ? importForm.costTargetId : undefined,
+      )
+    ) {
+      message.error(getErrorMessage(error, "批量导入失败"));
+    }
   } finally {
     importing.value = false;
   }
@@ -931,7 +951,7 @@ function batchApprovalSteps(batch: RequestBatch): ApprovalProgressStep[] {
       key: "start",
       personName: batch.requesterName || "发起人",
       title: `发起批次（${batch.itemCount}项）`,
-      note: `${batch.batchName}，预计金额${formatMoney(batch.totalAmount)}`,
+      note: `${batch.batchName}，预计金额（含税，元）${formatMoney(batch.totalAmount)}`,
       state: "done",
     },
     {

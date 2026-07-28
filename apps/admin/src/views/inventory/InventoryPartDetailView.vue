@@ -61,7 +61,7 @@
             ><a-descriptions-item label="物料分类">{{
               part.category || "-"
             }}</a-descriptions-item>
-            <a-descriptions-item label="单位成本">{{
+            <a-descriptions-item label="单位成本（含税，元）">{{
               money(part.unitCost)
             }}</a-descriptions-item
             ><a-descriptions-item label="库存价值">{{
@@ -182,7 +182,7 @@ const metrics = computed<DetailMetric[]>(() =>
           danger: part.value.lowStock,
         },
         {
-          label: "可用价值",
+          label: "可用价值（含税，元）",
           value: money(stockQty.value * Number(part.value.unitCost || 0)),
         },
         { label: "累计入库", value: inboundQty.value },

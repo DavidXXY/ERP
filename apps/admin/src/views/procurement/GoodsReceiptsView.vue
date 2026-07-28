@@ -170,7 +170,7 @@
             </a-form-item>
           </a-col>
           <a-col :span="8">
-            <a-form-item label="红字/抵扣金额">
+            <a-form-item label="红字/抵扣金额（含税，元）">
               <a-input-number
                 v-model:value="resolveForm.creditAmount"
                 :min="0"
@@ -179,7 +179,7 @@
             </a-form-item>
           </a-col>
           <a-col :span="8">
-            <a-form-item label="索赔金额">
+            <a-form-item label="索赔金额（含税，元）">
               <a-input-number
                 v-model:value="resolveForm.claimAmount"
                 :min="0"
@@ -241,7 +241,7 @@ const receiptColumns = [
   { title: "到货单", key: "receipt", width: 210 },
   { title: "物料 / 送货单", key: "part", width: 250 },
   { title: "到货数量", key: "quantity", width: 170 },
-  { title: "金额", key: "amount", width: 130 },
+  { title: "入库金额（含税，元）", key: "amount", width: 190 },
   { title: "到货日期", dataIndex: "receivedDate", width: 120 },
   { title: "收货人", dataIndex: "receiverName", width: 120 },
   { title: "质检状态", key: "status", width: 110 },
@@ -250,7 +250,7 @@ const receiptColumns = [
 const returnColumns = [
   { title: "退货单", dataIndex: "code" },
   { title: "数量", dataIndex: "quantity" },
-  { title: "金额", key: "amount" },
+  { title: "退货金额（含税，元）", key: "amount", width: 190 },
   { title: "原因", dataIndex: "reason" },
   { title: "日期", dataIndex: "returnDate" },
   { title: "状态", key: "status" },

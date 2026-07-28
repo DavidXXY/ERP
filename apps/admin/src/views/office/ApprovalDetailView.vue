@@ -73,7 +73,7 @@
                 <a-descriptions-item label="申请人">{{
                   approval.applicantName
                 }}</a-descriptions-item
-                ><a-descriptions-item label="金额">{{
+                ><a-descriptions-item label="金额（元，税价随来源单据）">{{
                   money(approval.amount)
                 }}</a-descriptions-item>
                 <a-descriptions-item label="部门/业务"
@@ -292,7 +292,10 @@ const route = useRoute(),
 const metrics = computed<DetailMetric[]>(() =>
   approval.value
     ? [
-        { label: "申请金额", value: money(approval.value.amount) },
+        {
+          label: "申请金额（元，税价随来源单据）",
+          value: money(approval.value.amount),
+        },
         {
           label: "流程进度",
           value: `${approval.value.currentStep || 0}/${approval.value.totalSteps || approval.value.nodes?.length || 0}`,
@@ -349,20 +352,20 @@ const sourceLines = computed(() => {
     claimantName: "报销人",
     applicantName: "申请人",
     departmentName: "部门",
-    amount: "金额",
+    amount: "金额（元，税价随来源单据）",
     description: "说明",
     serviceType: "服务类型",
     plannedDate: "计划日期",
     expenseDate: "发生日期",
     status: "业务状态",
     purpose: "用途",
-    requestedAmount: "申请金额",
+    requestedAmount: "申请金额（含税，元）",
     destination: "目的地",
     transportType: "交通方式",
     startDate: "开始日期",
     endDate: "结束日期",
     travelDays: "出差天数",
-    estimatedAmount: "预算金额",
+    estimatedAmount: "预算金额（含税，元）",
     companionNames: "同行人员",
     sealType: "印章类型",
     documentName: "文件名称",

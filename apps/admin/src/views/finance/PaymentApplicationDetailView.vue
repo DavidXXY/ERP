@@ -70,7 +70,7 @@
                 "
                 >{{ application.payableCode }}</a
               ></a-descriptions-item
-            ><a-descriptions-item label="申请金额">{{
+            ><a-descriptions-item label="申请金额（含税，元）">{{
               money(application.requestedAmount)
             }}</a-descriptions-item>
             <a-descriptions-item label="申请日期">{{
@@ -124,7 +124,7 @@
             <a-descriptions-item label="付款单号">{{
               payment.code
             }}</a-descriptions-item
-            ><a-descriptions-item label="付款金额">{{
+            ><a-descriptions-item label="付款金额（含税，元）">{{
               money(payment.amount)
             }}</a-descriptions-item>
             <a-descriptions-item label="付款日期">{{
@@ -167,11 +167,14 @@ const route = useRoute(),
 const metrics = computed<DetailMetric[]>(() =>
   application.value
     ? [
-        { label: "申请金额", value: money(application.value.requestedAmount) },
+        {
+          label: "申请金额（含税，元）",
+          value: money(application.value.requestedAmount),
+        },
         { label: "申请日期", value: application.value.requestedDate },
         { label: "审批人", value: application.value.approverName || "待审批" },
         {
-          label: "实际付款",
+          label: "实际付款（含税，元）",
           value: money(payment.value?.amount),
           hint: payment.value?.paidDate || "尚未付款",
         },

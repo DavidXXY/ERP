@@ -37,7 +37,7 @@
         </a-col>
         <a-col :xs="12" :lg="6">
           <a-statistic
-            title="预计采购金额"
+            title="预计采购金额（含税，元）"
             :value="pool.totalEstimatedAmount"
             :precision="2"
             prefix="¥"
@@ -210,7 +210,7 @@
         class="section-alert"
         type="success"
         show-icon
-        :message="`已选择 ${selectedGroups.length} 种物料、${selectedItems.length}/${selectableItems.length} 条申请 · 预计 ${formatMoney(selectedAmount)}`"
+        :message="`已选择 ${selectedGroups.length} 种物料、${selectedItems.length}/${selectableItems.length} 条申请 · 预计金额（含税，元）${formatMoney(selectedAmount)}`"
       />
       <a-table
         v-if="selectedGroups.length"
@@ -336,15 +336,15 @@ const groupColumns = [
   { title: "物料分类", key: "material", width: 260 },
   { title: "申请来源", key: "requests", width: 150 },
   { title: "汇总数量", key: "quantity", width: 130 },
-  { title: "预计金额", key: "amount", width: 150 },
+  { title: "预计金额（含税，元）", key: "amount", width: 190 },
   { title: "最早需求日", key: "date", width: 170 },
   { title: "操作", key: "action", width: 130, fixed: "right" as const },
 ];
 const itemColumns = [
   { title: "采购申请", key: "request", width: 190 },
   { title: "待采购数量", key: "quantity", width: 190 },
-  { title: "预计单价", key: "price", width: 120 },
-  { title: "预计金额", key: "amount", width: 130 },
+  { title: "预计单价（含税，元）", key: "price", width: 180 },
+  { title: "预计金额（含税，元）", key: "amount", width: 190 },
   { title: "成本归属", key: "target", width: 220 },
   { title: "需求日期", dataIndex: "expectedDate", width: 120 },
   { title: "采购说明", key: "reason", width: 220 },
@@ -355,7 +355,7 @@ const selectionColumns = [
   { title: "成本归属", dataIndex: "costTargetName", width: 210 },
   { title: "到货日期", dataIndex: "expectedDate", width: 120 },
   { title: "数量", key: "quantity", width: 90 },
-  { title: "预计金额", key: "amount", width: 130 },
+  { title: "预计金额（含税，元）", key: "amount", width: 190 },
 ];
 const inquiryRules = computed(() => ({
   title: [{ required: true, message: "请输入询价主题" }],

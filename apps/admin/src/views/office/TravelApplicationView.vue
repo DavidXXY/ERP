@@ -122,7 +122,7 @@
             </a-form-item>
           </a-col>
           <a-col :xs="24" :md="12">
-            <a-form-item label="预算金额" name="estimatedAmount">
+            <a-form-item label="预算金额（含税，元）" name="estimatedAmount">
               <a-input-number
                 v-model:value="form.estimatedAmount"
                 :min="0"
@@ -219,7 +219,7 @@ const columns = [
   { title: "出差日期", key: "period", width: 230 },
   { title: "项目", dataIndex: "projectCode", width: 150 },
   { title: "同行人员", dataIndex: "companionNames", width: 150 },
-  { title: "预算", key: "amount", width: 140 },
+  { title: "预算金额（含税，元）", key: "amount", width: 190 },
   { title: "状态", key: "status", width: 120 },
   { title: "操作", key: "action", width: 110, fixed: "right" as const },
 ];

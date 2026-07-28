@@ -352,10 +352,10 @@ public class CollaborationService {
     out.append("\n统一待办\n事项,说明,状态,优先级,逾期天数\n");
     @SuppressWarnings("unchecked") List<Map<String,Object>> todoRows=(List<Map<String,Object>>)data.get("todos");
     todoRows.forEach(x->csvRow(out,x.get("title"),x.get("detail"),x.get("status"),x.get("priority"),x.get("overdueDays")));
-    out.append("\n项目预算\n项目,预算,已占用,已发生,剩余,使用率\n");
+    out.append("\n项目预算\n项目,预算（含税，元）,已占用（含税，元）,已发生（含税，元）,剩余（含税，元）,使用率\n");
     @SuppressWarnings("unchecked") List<Map<String,Object>> budgetRows=(List<Map<String,Object>>)data.get("budgets");
     budgetRows.forEach(x->csvRow(out,x.get("projectName"),x.get("budgetAmount"),x.get("committedAmount"),x.get("actualAmount"),x.get("remainingAmount"),x.get("usageRate")+"%"));
-    out.append("\n采购对账\n订单,供应商,订单额,收货额,发票额,应付额,已付额,匹配状态,差异原因\n");
+    out.append("\n采购对账\n订单,供应商,订单额（含税，元）,收货额（含税，元）,发票额（含税，元）,应付额（含税，元）,已付额（含税，元）,匹配状态,差异原因\n");
     @SuppressWarnings("unchecked") List<Map<String,Object>> procurementRows=(List<Map<String,Object>>)data.get("procurementReconciliation");
     procurementRows.forEach(x->csvRow(out,x.get("orderCode"),x.get("supplierName"),x.get("orderAmount"),x.get("receivedAmount"),x.get("invoiceAmount"),x.get("payableAmount"),x.get("paidAmount"),x.get("matchStatus"),x.get("differenceReason")));
     return out.toString();

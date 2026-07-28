@@ -22,7 +22,7 @@
         /></a-col>
         <a-col :xs="12" :lg="6"
           ><a-statistic
-            title="库存金额"
+            title="库存金额（含税，元）"
             :value="inventoryValue"
             :formatter="moneyFormatter"
         /></a-col>
@@ -316,7 +316,9 @@
               ><a-input v-model:value="issueForm.purpose" /></a-form-item
           ></a-col>
         </a-row>
-        <a-divider>领料明细 · {{ formatMoney(issueTotal) }}</a-divider>
+        <a-divider
+          >领料明细 · 金额（含税，元）{{ formatMoney(issueTotal) }}</a-divider
+        >
         <div
           v-for="(line, index) in issueForm.lines"
           :key="line.key"
@@ -427,7 +429,9 @@
             }}</template>
           </template>
         </a-table>
-        <a-divider>本次冲回项目成本 {{ formatMoney(returnTotal) }}</a-divider>
+        <a-divider
+          >本次冲回项目成本（含税，元）{{ formatMoney(returnTotal) }}</a-divider
+        >
       </a-form>
     </a-modal>
   </div>
@@ -517,8 +521,8 @@ const partColumns = [
   { title: "库存", key: "stock", width: 130 },
   { title: "状态", key: "status", width: 100 },
   { title: "分类", dataIndex: "category", width: 110 },
-  { title: "单位成本", key: "cost", width: 130 },
-  { title: "库存金额", key: "value", width: 140 },
+  { title: "单位成本（含税，元）", key: "cost", width: 190 },
+  { title: "库存金额（含税，元）", key: "value", width: 190 },
   { title: "操作", key: "action", width: 170, fixed: "right" },
 ];
 const issueColumns = [
@@ -526,7 +530,7 @@ const issueColumns = [
   { title: "项目", key: "project", width: 240 },
   { title: "用途", dataIndex: "purpose", width: 220 },
   { title: "领料明细", key: "lines", width: 260 },
-  { title: "材料成本", key: "amount", width: 140 },
+  { title: "材料成本（含税，元）", key: "amount", width: 190 },
   { title: "状态", key: "status", width: 120 },
   { title: "操作", key: "action", width: 120, fixed: "right" },
 ];
@@ -537,7 +541,7 @@ const returnColumns = [
   { title: "退料原因", key: "reason", width: 240 },
   { title: "退料日期", dataIndex: "returnDate", width: 120 },
   { title: "经办人", dataIndex: "handlerName", width: 120 },
-  { title: "冲回成本", key: "amount", width: 140 },
+  { title: "冲回成本（含税，元）", key: "amount", width: 190 },
 ];
 const movementColumns = [
   { title: "类型", key: "type", width: 100 },
@@ -550,7 +554,7 @@ const returnLineColumns = [
   { title: "物料", key: "part", width: 260 },
   { title: "可退数量", key: "returnable", width: 110 },
   { title: "本次退料", key: "quantity", width: 150 },
-  { title: "冲回成本", key: "amount", width: 140 },
+  { title: "冲回成本（含税，元）", key: "amount", width: 190 },
 ];
 const manualMovementOptions = [
   { label: "其他入库", value: "INBOUND" },
@@ -622,7 +626,7 @@ function handleExportParts() {
     "物料分类",
     "库存数量",
     "安全库存",
-    "单位成本",
+    "单位成本（含税，元）",
   ];
   const rows = parts.value.map((r) => [
     r.code || "",

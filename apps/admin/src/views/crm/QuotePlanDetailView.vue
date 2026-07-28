@@ -77,13 +77,13 @@
             <a-descriptions-item label="关联商机">{{
               record.opportunityCode || "未关联"
             }}</a-descriptions-item>
-            <a-descriptions-item label="报价金额">
+            <a-descriptions-item label="报价金额（含税，元）">
               <strong>{{ formatMoney(record.amount) }}</strong>
               <span class="table-subtitle"
                 >税率 {{ formatTaxRate(record.taxRate) }}</span
               >
             </a-descriptions-item>
-            <a-descriptions-item label="未税金额">
+            <a-descriptions-item label="未税金额（元）">
               <strong>{{
                 formatMoney(
                   record.netAmount ??
@@ -116,13 +116,13 @@
             <a-row :gutter="[16, 16]" class="metric-row">
               <a-col :xs="12" :md="6"
                 ><a-statistic
-                  title="报价金额"
+                  title="报价金额（含税，元）"
                   :value="record.amount"
                   :formatter="moneyFormatter"
               /></a-col>
               <a-col :xs="12" :md="6"
                 ><a-statistic
-                  title="未税金额"
+                  title="未税金额（元）"
                   :value="
                     record.netAmount ??
                     calcNetAmount(record.amount, record.taxRate)
@@ -137,13 +137,13 @@
               /></a-col>
               <a-col :xs="12" :md="6"
                 ><a-statistic
-                  title="预算成本"
+                  title="预算成本（含税，元）"
                   :value="quoteMargin.cost"
                   :formatter="moneyFormatter"
               /></a-col>
               <a-col :xs="12" :md="6"
                 ><a-statistic
-                  title="预计毛利"
+                  title="预计毛利（含税，元）"
                   :value="quoteMargin.gross"
                   :formatter="moneyFormatter"
                   :value-style="{
@@ -272,12 +272,12 @@
               <a-descriptions-item label="项目名称">{{
                 relatedContract.projectName
               }}</a-descriptions-item>
-              <a-descriptions-item label="合同金额"
+              <a-descriptions-item label="合同金额（含税，元）"
                 ><strong>{{
                   formatMoney(relatedContract.amount)
                 }}</strong></a-descriptions-item
               >
-              <a-descriptions-item label="未税金额"
+              <a-descriptions-item label="未税金额（元）"
                 ><strong>{{
                   formatMoney(
                     relatedContract.netAmount ??
@@ -324,20 +324,20 @@
             <a-row :gutter="16" class="metric-row">
               <a-col :xs="12" :md="6"
                 ><a-statistic
-                  title="应收总额"
+                  title="应收总额（含税，元）"
                   :value="receivableSummary.total"
                   :formatter="moneyFormatter"
               /></a-col>
               <a-col :xs="12" :md="6"
                 ><a-statistic
-                  title="已开票"
+                  title="已开票（含税，元）"
                   :value="receivableSummary.invoiced"
                   :formatter="moneyFormatter"
                   :value-style="{ color: '#1890ff' }"
               /></a-col>
               <a-col :xs="12" :md="6"
                 ><a-statistic
-                  title="已回款"
+                  title="已回款（含税，元）"
                   :value="receivableSummary.received"
                   :formatter="moneyFormatter"
                   :value-style="{ color: '#52c41a' }"
@@ -478,19 +478,19 @@ const canApproveQuote = computed(
 
 const receivableMiniColumns = [
   { title: "应收编号", dataIndex: "code", width: 180 },
-  { title: "应收金额", key: "amount", width: 130 },
-  { title: "未收金额", key: "outstanding", width: 130 },
+  { title: "应收金额（含税，元）", key: "amount", width: 180 },
+  { title: "未收金额（含税，元）", key: "outstanding", width: 180 },
   { title: "到期日", dataIndex: "dueDate", width: 120 },
   { title: "状态", key: "status", width: 110 },
 ];
 const budgetColumns = [
   { title: "成本类型", dataIndex: "label", key: "label", width: 140 },
-  { title: "预算金额", key: "amount", width: 140 },
+  { title: "预算金额（含税，元）", key: "amount", width: 180 },
   { title: "占报价比", key: "ratio", width: 120 },
 ];
 const revisionColumns = [
   { title: "版本", key: "version", width: 80 },
-  { title: "报价金额", key: "amount", width: 130 },
+  { title: "报价金额（含税，元）", key: "amount", width: 180 },
   { title: "毛利率", key: "margin", width: 100 },
   { title: "修订说明", dataIndex: "revisionNote" },
   { title: "编辑人", dataIndex: "editorName", width: 100 },
@@ -730,7 +730,7 @@ function quoteApprovalSteps(item: QuotePlan): ApprovalProgressStep[] {
       personName: item.customerName || "发起人",
       title: "发起报价",
       time: item.updatedAt,
-      note: `${item.code || "-"} · ${formatMoney(item.amount)}`,
+      note: `${item.code || "-"} · 合同金额（含税，元）${formatMoney(item.amount)}`,
       state: "done",
     },
     {

@@ -1415,6 +1415,8 @@ public class ProcurementService {
         .replace("（", "(")
         .replace("）", ")")
         .replaceAll("\\s+", "")
+        .replace("(含税，元)", "")
+        .replace("(含税,元)", "")
         .replace("(%)", "")
         .replace("%", "")
         .replace("/", "");

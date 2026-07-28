@@ -13,7 +13,7 @@
       <a-row :gutter="[16, 16]" class="metric-row"
         ><a-col :xs="12" :xl="6"
           ><a-statistic
-            title="期间收入"
+            title="期间收入（含税，元）"
             :value="company.revenue"
             :formatter="moneyFormatter" /></a-col
         ><a-col :xs="12" :xl="6"
@@ -42,18 +42,18 @@
             suffix="%" /></a-col
         ><a-col :xs="12" :xl="6"
           ><a-statistic
-            title="现金净流"
+            title="现金净流（元，税价不适用）"
             :value="company.netCashFlow"
             :formatter="moneyFormatter"
             :value-style="valueStyle(company.netCashFlow)" /></a-col
         ><a-col :xs="12" :xl="6"
           ><a-statistic
-            title="人时产值"
+            title="人时产值（含税，元/小时）"
             :value="company.workforceOutputPerHour"
             :formatter="moneyFormatter" /></a-col
         ><a-col :xs="12" :xl="6"
           ><a-statistic
-            title="期间毛利"
+            title="期间毛利（含税，元）"
             :value="company.grossProfit"
             :formatter="moneyFormatter"
             :value-style="valueStyle(company.grossProfit)" /></a-col
@@ -61,22 +61,22 @@
       <a-row :gutter="[16, 16]" class="metric-row"
         ><a-col :xs="12" :xl="6"
           ><a-statistic
-            title="合同收入规模"
+            title="合同收入规模（含税，元）"
             :value="data.summary.contractRevenue"
             :formatter="moneyFormatter" /></a-col
         ><a-col :xs="12" :xl="6"
           ><a-statistic
-            title="累计回款"
+            title="累计回款（含税，元）"
             :value="data.summary.receivedAmount"
             :formatter="moneyFormatter" /></a-col
         ><a-col :xs="12" :xl="6"
           ><a-statistic
-            title="待收金额"
+            title="待收金额（含税，元）"
             :value="data.summary.receivableOutstanding"
             :formatter="moneyFormatter" /></a-col
         ><a-col :xs="12" :xl="6"
           ><a-statistic
-            title="资金净流量"
+            title="资金净流量（元，税价不适用）"
             :value="data.summary.netCashFlow"
             :formatter="moneyFormatter"
             :value-style="valueStyle(data.summary.netCashFlow)" /></a-col
@@ -92,7 +92,7 @@
             suffix="张" /></a-col
         ><a-col :xs="12" :xl="6"
           ><a-statistic
-            title="库存资产"
+            title="库存资产（含税，元）"
             :value="data.summary.inventoryValue"
             :formatter="moneyFormatter" /></a-col
         ><a-col :xs="12" :xl="6"
@@ -106,7 +106,7 @@
         ><a-descriptions-item label="已闭环工单">{{
           data.summary.completedWorkOrders
         }}</a-descriptions-item
-        ><a-descriptions-item label="项目累计成本">{{
+        ><a-descriptions-item label="项目累计成本（含税，元）">{{
           formatMoney(data.summary.projectCost)
         }}</a-descriptions-item
         ><a-descriptions-item label="低库存物料"
@@ -265,17 +265,17 @@ const maxRevenue = computed(() =>
 );
 const trendColumns = [
   { title: "月份", dataIndex: "month", width: 100 },
-  { title: "营业收入", key: "revenue", width: 150 },
-  { title: "成本费用", key: "expense", width: 150 },
-  { title: "现金流", key: "cash", width: 250 },
-  { title: "利润", key: "profit", width: 150 },
+  { title: "营业收入（含税，元）", key: "revenue", width: 190 },
+  { title: "成本费用（含税，元）", key: "expense", width: 190 },
+  { title: "现金流（元，税价不适用）", key: "cash", width: 260 },
+  { title: "利润（含税，元）", key: "profit", width: 190 },
   { title: "收入趋势", key: "trend" },
 ];
 const customerColumns = [
   { title: "客户", dataIndex: "customerName", width: 220 },
-  { title: "合同 / 回款", key: "contract", width: 250 },
-  { title: "工单收入 / 成本", key: "workorder", width: 250 },
-  { title: "综合毛利", key: "profit", width: 220 },
+  { title: "合同 / 回款（含税，元）", key: "contract", width: 290 },
+  { title: "工单收入 / 成本（含税，元）", key: "workorder", width: 290 },
+  { title: "综合毛利（含税，元）", key: "profit", width: 250 },
   { title: "投诉", key: "complaints", width: 90 },
 ];
 const equipmentColumns = [
@@ -283,14 +283,14 @@ const equipmentColumns = [
   { title: "客户", dataIndex: "customerName" },
   { title: "工单数", dataIndex: "workOrderCount", width: 100 },
   { title: "故障数", key: "fault", width: 110 },
-  { title: "服务成本", key: "cost", width: 220 },
+  { title: "服务成本（含税，元）", key: "cost", width: 250 },
 ];
 const workforceColumns = [
   { title: "工程师", dataIndex: "engineerName" },
   { title: "闭环工单", dataIndex: "completedOrders", width: 120 },
   { title: "工时", key: "hours", width: 130 },
-  { title: "产值 / 成本", key: "revenue", width: 250 },
-  { title: "人时产值", key: "output", width: 180 },
+  { title: "产值 / 成本（含税，元）", key: "revenue", width: 290 },
+  { title: "人时产值（含税，元/小时）", key: "output", width: 230 },
 ];
 onMounted(loadData);
 async function loadData() {

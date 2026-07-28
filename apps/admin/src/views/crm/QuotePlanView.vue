@@ -19,7 +19,7 @@
         /></a-col>
         <a-col :xs="12" :lg="6"
           ><a-statistic
-            title="当前报价总额"
+            title="当前报价总额（含税，元）"
             :value="totalAmount"
             :formatter="moneyFormatter"
         /></a-col>
@@ -315,7 +315,7 @@
                 placeholder="例如：季度服务，年度检测" /></a-form-item
           ></a-col>
           <a-col :xs="24" :md="12"
-            ><a-form-item label="报价金额" name="amount"
+            ><a-form-item label="报价金额（含税，元）" name="amount"
               ><a-input-number
                 v-model:value="form.amount"
                 :min="0"
@@ -358,7 +358,7 @@
               </div>
               <a-row :gutter="12">
                 <a-col :xs="12" :md="8"
-                  ><a-form-item label="人工预算"
+                  ><a-form-item label="人工预算（含税，元）"
                     ><a-input-number
                       v-model:value="form.laborBudget"
                       :disabled="quoteBudgetLocked"
@@ -367,7 +367,7 @@
                       class="full-input" /></a-form-item
                 ></a-col>
                 <a-col :xs="12" :md="8"
-                  ><a-form-item label="材料预算"
+                  ><a-form-item label="材料预算（含税，元）"
                     ><a-input-number
                       v-model:value="form.materialBudget"
                       :disabled="quoteBudgetLocked"
@@ -376,7 +376,7 @@
                       class="full-input" /></a-form-item
                 ></a-col>
                 <a-col :xs="12" :md="8"
-                  ><a-form-item label="外包预算"
+                  ><a-form-item label="外包预算（含税，元）"
                     ><a-input-number
                       v-model:value="form.subcontractBudget"
                       :disabled="quoteBudgetLocked"
@@ -385,7 +385,7 @@
                       class="full-input" /></a-form-item
                 ></a-col>
                 <a-col :xs="12" :md="8"
-                  ><a-form-item label="差旅预算"
+                  ><a-form-item label="差旅预算（含税，元）"
                     ><a-input-number
                       v-model:value="form.travelBudget"
                       :disabled="quoteBudgetLocked"
@@ -394,7 +394,7 @@
                       class="full-input" /></a-form-item
                 ></a-col>
                 <a-col :xs="12" :md="8"
-                  ><a-form-item label="其他预算"
+                  ><a-form-item label="其他预算（含税，元）"
                     ><a-input-number
                       v-model:value="form.otherBudget"
                       :disabled="quoteBudgetLocked"
@@ -404,9 +404,12 @@
                 ></a-col>
                 <a-col :xs="12" :md="8">
                   <div class="quote-budget-summary">
-                    <span>预算合计</span>
+                    <span>预算合计（含税，元）</span>
                     <strong>{{ formatMoney(formMargin.cost) }}</strong>
-                    <p>预计毛利 {{ formatMoney(formMargin.gross) }}</p>
+                    <p>
+                      预计毛利（含税，元）
+                      {{ formatMoney(formMargin.gross) }}
+                    </p>
                   </div>
                 </a-col>
               </a-row>
@@ -479,10 +482,10 @@
         class="section-alert"
         :type="selectedQuoteMargin.rate < 15 ? 'warning' : 'info'"
         show-icon
-        :message="`${selectedQuote.code} V${selectedQuote.versionNo} · ${selectedQuote.customerName} · ${formatMoney(selectedQuote.amount)} · 毛利率 ${selectedQuoteMargin.rate.toFixed(1)}%`"
+        :message="`${selectedQuote.code} V${selectedQuote.versionNo} · ${selectedQuote.customerName} · 报价金额（含税，元）${formatMoney(selectedQuote.amount)} · 毛利率 ${selectedQuoteMargin.rate.toFixed(1)}%`"
         :description="
           selectedQuoteMargin.rate < 15
-            ? `毛利率低于 15%，预算 ${formatMoney(selectedQuoteMargin.cost)}，预计毛利 ${formatMoney(selectedQuoteMargin.gross)}。请重点复核预算构成、折扣授权和服务范围，必要时在审批意见中说明风险。`
+            ? `毛利率低于 15%，预算（含税，元）${formatMoney(selectedQuoteMargin.cost)}，预计毛利（含税，元）${formatMoney(selectedQuoteMargin.gross)}。请重点复核预算构成、折扣授权和服务范围，必要时在审批意见中说明风险。`
             : '审批通过仅代表允许向客户发送本版报价，不会生成合同或应收。'
         "
       />
@@ -492,11 +495,11 @@
         :class="{ warning: selectedQuoteMargin.rate < 15 }"
       >
         <div>
-          <span>预算成本</span>
+          <span>预算成本（含税，元）</span>
           <strong>{{ formatMoney(selectedQuoteMargin.cost) }}</strong>
         </div>
         <div>
-          <span>预计毛利</span>
+          <span>预计毛利（含税，元）</span>
           <strong>{{ formatMoney(selectedQuoteMargin.gross) }}</strong>
         </div>
         <div>
@@ -668,17 +671,17 @@
         <a-divider>应收账款分期</a-divider>
         <div class="receivable-summary" style="margin-bottom: 12px">
           <a-statistic
-            title="合同总额"
+            title="合同总额（含税，元）"
             :value="selectedQuote?.amount || 0"
             :formatter="moneyFormatter"
             style="display: inline-block; margin-right: 32px"
           /><a-statistic
-            title="已分配"
+            title="已分配（含税，元）"
             :value="receivableAllocated"
             :formatter="moneyFormatter"
             style="display: inline-block; margin-right: 32px"
           /><a-statistic
-            title="剩余"
+            title="剩余（含税，元）"
             :value="
               Math.max(0, (selectedQuote?.amount || 0) - receivableAllocated)
             "
@@ -783,7 +786,7 @@
         type="info"
         show-icon
         :message="`${selectedQuote.code} · ${selectedQuote.customerName}`"
-        :description="`成本合计 ${formatMoney(costSubmitTotal)}，建议报价 ${formatMoney(costSubmitForm.suggestedPrice || 0)}`"
+        :description="`成本合计（含税，元）${formatMoney(costSubmitTotal)}，建议报价（含税，元）${formatMoney(costSubmitForm.suggestedPrice || 0)}`"
       />
       <a-form
         ref="costSubmitFormRef"
@@ -804,7 +807,7 @@
             </a-form-item>
           </a-col>
           <a-col :xs="12" :md="8"
-            ><a-form-item label="人工成本"
+            ><a-form-item label="人工成本（含税，元）"
               ><a-input-number
                 v-model:value="costSubmitForm.laborCost"
                 :min="0"
@@ -812,7 +815,7 @@
                 class="full-input" /></a-form-item
           ></a-col>
           <a-col :xs="12" :md="8"
-            ><a-form-item label="材料成本"
+            ><a-form-item label="材料成本（含税，元）"
               ><a-input-number
                 v-model:value="costSubmitForm.materialCost"
                 :min="0"
@@ -820,7 +823,7 @@
                 class="full-input" /></a-form-item
           ></a-col>
           <a-col :xs="12" :md="8"
-            ><a-form-item label="外包成本"
+            ><a-form-item label="外包成本（含税，元）"
               ><a-input-number
                 v-model:value="costSubmitForm.subcontractCost"
                 :min="0"
@@ -828,7 +831,7 @@
                 class="full-input" /></a-form-item
           ></a-col>
           <a-col :xs="12" :md="8"
-            ><a-form-item label="差旅成本"
+            ><a-form-item label="差旅成本（含税，元）"
               ><a-input-number
                 v-model:value="costSubmitForm.travelCost"
                 :min="0"
@@ -836,7 +839,7 @@
                 class="full-input" /></a-form-item
           ></a-col>
           <a-col :xs="12" :md="8"
-            ><a-form-item label="设备成本"
+            ><a-form-item label="设备成本（含税，元）"
               ><a-input-number
                 v-model:value="costSubmitForm.equipmentCost"
                 :min="0"
@@ -852,7 +855,7 @@
                 class="full-input" /></a-form-item
           ></a-col>
           <a-col :xs="12" :md="8"
-            ><a-form-item label="其他成本"
+            ><a-form-item label="其他成本（含税，元）"
               ><a-input-number
                 v-model:value="costSubmitForm.otherCost"
                 :min="0"
@@ -860,7 +863,7 @@
                 class="full-input" /></a-form-item
           ></a-col>
           <a-col :xs="12" :md="8"
-            ><a-form-item label="建议报价"
+            ><a-form-item label="建议报价（含税，元）"
               ><a-input-number
                 v-model:value="costSubmitForm.suggestedPrice"
                 :min="0"
@@ -889,7 +892,7 @@
         class="section-alert"
         type="warning"
         show-icon
-        :message="`成本合计 ${formatMoney(selectedCostRequest.totalCost || 0)} · 建议报价 ${formatMoney(selectedCostRequest.suggestedPrice || 0)}`"
+        :message="`成本合计（含税，元）${formatMoney(selectedCostRequest.totalCost || 0)} · 建议报价（含税，元）${formatMoney(selectedCostRequest.suggestedPrice || 0)}`"
         :description="selectedCostRequest.costRemark || '成本负责人未填写备注'"
       />
       <a-card
@@ -1106,7 +1109,7 @@ const receivableAllocated = computed(() =>
   ),
 );
 const receivableColumns = [
-  { title: "应收金额", key: "amount", width: 160 },
+  { title: "应收金额（含税，元）", key: "amount", width: 190 },
   { title: "比例(%)", key: "ratio", width: 120 },
   { title: "到期日", key: "dueDate", width: 140 },
   { title: "操作", key: "action", width: 70 },
@@ -1138,7 +1141,7 @@ function syncReceivable(index: number, field: string, value: string | number) {
 const columns = [
   { title: "报价 / 客户", key: "quote", width: 250 },
   { title: "方案内容", key: "scope", width: 320 },
-  { title: "报价金额", key: "amount", width: 180 },
+  { title: "报价金额（含税，元）", key: "amount", width: 200 },
   { title: "毛利校验", key: "margin", width: 150 },
   { title: "销售负责人", key: "owner", width: 130 },
   { title: "流程状态", key: "status", width: 220 },
@@ -1665,7 +1668,7 @@ function quoteApprovalSteps(item: QuotePlan): ApprovalProgressStep[] {
       personName: (item as any).editorName || item.customerName || "发起人",
       title: "发起报价",
       time: item.updatedAt,
-      note: `${item.code || "-"} · ${formatMoney(item.amount)}`,
+      note: `${item.code || "-"} · 合同金额（含税，元）${formatMoney(item.amount)}`,
       state: "done",
     },
     {

@@ -412,16 +412,16 @@
             <a-descriptions-item label="结算条款">{{
               selectedSupplier.settlementTerms || "-"
             }}</a-descriptions-item>
-            <a-descriptions-item label="累计签约金额">{{
+            <a-descriptions-item label="累计签约金额（含税，元）">{{
               formatMoney(selectedSupplier.contractedAmount)
             }}</a-descriptions-item>
-            <a-descriptions-item label="累计应付金额">{{
+            <a-descriptions-item label="累计应付金额（含税，元）">{{
               formatMoney(selectedSupplier.payableAmount)
             }}</a-descriptions-item>
-            <a-descriptions-item label="累计已付金额">{{
+            <a-descriptions-item label="累计已付金额（含税，元）">{{
               formatMoney(selectedSupplier.paidAmount)
             }}</a-descriptions-item>
-            <a-descriptions-item label="当前待付金额">{{
+            <a-descriptions-item label="当前待付金额（含税，元）">{{
               formatMoney(selectedSupplier.outstandingAmount)
             }}</a-descriptions-item>
             <a-descriptions-item label="注册地址" :span="2">{{
@@ -813,10 +813,10 @@ const supplierColumns = [
   { title: "供应商", key: "supplier", width: 260 },
   { title: "工商信息", key: "license", width: 240 },
   { title: "联系人", key: "contact", width: 170 },
-  { title: "签约金额", key: "contractedAmount", width: 150 },
-  { title: "应付金额", key: "payableAmount", width: 150 },
-  { title: "已付金额", key: "paidAmount", width: 150 },
-  { title: "待付金额", key: "outstandingAmount", width: 150 },
+  { title: "签约金额（含税，元）", key: "contractedAmount", width: 190 },
+  { title: "应付金额（含税，元）", key: "payableAmount", width: 190 },
+  { title: "已付金额（含税，元）", key: "paidAmount", width: 190 },
+  { title: "待付金额（含税，元）", key: "outstandingAmount", width: 190 },
   { title: "资料完整度", key: "profile", width: 180 },
   { title: "有效期", key: "validity", width: 170 },
   { title: "评分", key: "score", width: 160 },
@@ -839,7 +839,7 @@ const documentColumns = [
 const supplierOrderColumns = [
   { title: "订单 / 物料", key: "order", width: 210 },
   { title: "成本归属", key: "target", width: 210 },
-  { title: "订单金额", key: "amount", width: 170 },
+  { title: "订单金额（含税，元）", key: "amount", width: 200 },
   { title: "收货数量", key: "receipt", width: 110 },
   { title: "预计交付", dataIndex: "expectedDeliveryDate", width: 120 },
   { title: "状态", key: "status", width: 100 },

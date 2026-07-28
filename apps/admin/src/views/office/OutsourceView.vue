@@ -112,7 +112,7 @@
                 option-filter-prop="label"
                 :options="projectOptions" /></a-form-item></a-col
           ><a-col :span="8"
-            ><a-form-item label="金额" name="amount"
+            ><a-form-item label="外包金额（含税，元）" name="amount"
               ><a-input-number
                 v-model:value="outsourceForm.amount"
                 :min="0"
@@ -139,7 +139,7 @@
         v-if="selectedOutsource"
         class="section-alert"
         type="warning"
-        :message="`${selectedOutsource.code} · ${selectedOutsource.supplierName} · ${formatMoney(selectedOutsource.amount)}`"
+        :message="`${selectedOutsource.code} · ${selectedOutsource.supplierName} · 外包金额（含税，元）${formatMoney(selectedOutsource.amount)}`"
       />
       <a-form
         ref="outsourceCompleteFormRef"
@@ -202,7 +202,7 @@ const outsourceColumns = [
   { title: "服务商", dataIndex: "supplierName", width: 220 },
   { title: "绑定业务", key: "binding", width: 170 },
   { title: "计划日期", dataIndex: "plannedDate", width: 120 },
-  { title: "金额", key: "amount", width: 140 },
+  { title: "外包金额（含税，元）", key: "amount", width: 190 },
   { title: "状态", key: "status", width: 130 },
   { title: "说明", dataIndex: "description", width: 260 },
   { title: "操作", key: "action", width: 120, fixed: "right" as const },

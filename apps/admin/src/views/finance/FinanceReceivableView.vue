@@ -18,25 +18,25 @@
       <a-row :gutter="[16, 16]" class="metric-row">
         <a-col :xs="12" :lg="6"
           ><a-statistic
-            title="应收余额"
+            title="应收余额（含税，元）"
             :value="outstandingAmount"
             :formatter="moneyFormatter"
         /></a-col>
         <a-col :xs="12" :lg="6"
           ><a-statistic
-            title="待开票"
+            title="待开票（含税，元）"
             :value="amountByStatus('INVOICE_PENDING')"
             :formatter="moneyFormatter"
         /></a-col>
         <a-col :xs="12" :lg="6"
           ><a-statistic
-            title="待回款"
+            title="待回款（含税，元）"
             :value="amountByStatus('PAYMENT_PENDING')"
             :formatter="moneyFormatter"
         /></a-col>
         <a-col :xs="12" :lg="6"
           ><a-statistic
-            title="逾期应收"
+            title="逾期应收（含税，元）"
             :value="amountByStatus('OVERDUE')"
             :formatter="moneyFormatter"
         /></a-col>
@@ -45,7 +45,7 @@
       <section class="finance-action-panel">
         <div class="action-heading">
           <div>
-            <h3>催收优先级</h3>
+            <h3>催收优先级（含税，元）</h3>
             <p>按逾期天数和未收金额识别今天最需要推进的回款事项。</p>
           </div>
           <a-space>
@@ -276,13 +276,13 @@
             :column="2"
             class="detail-section"
           >
-            <a-descriptions-item label="应收金额">{{
+            <a-descriptions-item label="应收金额（含税，元）">{{
               formatMoney(detail.receivable.amount)
             }}</a-descriptions-item>
-            <a-descriptions-item label="待收金额">{{
+            <a-descriptions-item label="待收金额（含税，元）">{{
               formatMoney(detail.receivable.outstandingAmount)
             }}</a-descriptions-item>
-            <a-descriptions-item label="已收金额">{{
+            <a-descriptions-item label="已收金额（含税，元）">{{
               formatMoney(detail.receivable.settledAmount)
             }}</a-descriptions-item>
             <a-descriptions-item label="到期日">{{
@@ -384,10 +384,10 @@
             <a-descriptions-item label="合同状态">{{
               contractStatusLabel(detail.contract.status)
             }}</a-descriptions-item>
-            <a-descriptions-item label="合同金额">{{
+            <a-descriptions-item label="合同金额（含税，元）">{{
               formatMoney(detail.contract.amount)
             }}</a-descriptions-item>
-            <a-descriptions-item label="不含税金额"
+            <a-descriptions-item label="未税金额（元）"
               >{{ formatMoney(detail.contract.netAmount) }} · 税率
               {{ detail.contract.taxRate }}%</a-descriptions-item
             >
@@ -414,7 +414,7 @@
         v-if="selectedItem"
         class="section-alert"
         type="info"
-        :message="`${selectedItem.code} · ${selectedItem.customerName} · ${formatMoney(selectedItem.amount)}`"
+        :message="`${selectedItem.code} · ${selectedItem.customerName} · 应收金额（含税，元）${formatMoney(selectedItem.amount)}`"
         :description="
           selectedItem.invoiceRequestRemark || '业务侧未填写申请说明'
         "
@@ -462,7 +462,7 @@
         v-if="selectedItem"
         class="section-alert"
         type="info"
-        :message="`${selectedItem.code} · ${selectedItem.customerName} · ${formatMoney(selectedItem.amount)}`"
+        :message="`${selectedItem.code} · ${selectedItem.customerName} · 应收金额（含税，元）${formatMoney(selectedItem.amount)}`"
       />
       <a-form
         ref="invoiceFormRef"
@@ -489,7 +489,7 @@
         v-if="selectedItem"
         class="section-alert"
         type="info"
-        :message="`${selectedItem.code} · 待收 ${formatMoney(selectedItem.outstandingAmount)}`"
+        :message="`${selectedItem.code} · 待收金额（含税，元）${formatMoney(selectedItem.outstandingAmount)}`"
       />
       <a-form
         ref="receiptFormRef"
@@ -504,7 +504,7 @@
         </div>
         <a-row :gutter="16">
           <a-col :span="12"
-            ><a-form-item label="本次回款" name="amount"
+            ><a-form-item label="本次回款（含税，元）" name="amount"
               ><a-input-number
                 v-model:value="receiptForm.amount"
                 :min="0.01"
@@ -593,7 +593,7 @@ const columns = [
   { title: "应收单 / 客户", key: "receivable", width: 240 },
   { title: "合同名称 / 编号", key: "contract", width: 260 },
   { title: "来源单号", dataIndex: "sourceNo", width: 170 },
-  { title: "应收 / 回款", key: "amount", width: 260 },
+  { title: "应收 / 回款（含税，元）", key: "amount", width: 300 },
   { title: "开票信息", key: "invoice", width: 180 },
   { title: "账龄 / 优先级", key: "aging", width: 150 },
   { title: "到期日", dataIndex: "dueDate", width: 120 },
@@ -707,9 +707,9 @@ function exportReceivables() {
     "客户",
     "合同",
     "来源单号",
-    "应收金额",
-    "已收",
-    "待收",
+    "应收金额（含税，元）",
+    "已收金额（含税，元）",
+    "待收金额（含税，元）",
     "发票号",
     "到期日",
     "状态",

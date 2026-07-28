@@ -347,7 +347,7 @@ const requestSourceColumns = [
 ];
 const quoteColumns = [
   { title: "供应商", dataIndex: "supplierName" },
-  { title: "报价总额", key: "price" },
+  { title: "报价总额（含税，元）", key: "price", width: 190 },
   { title: "综合评分", key: "score" },
   { title: "最晚交期", dataIndex: "deliveryDate" },
   { title: "付款条件", dataIndex: "paymentTerms" },
@@ -357,16 +357,16 @@ const quoteLineColumns = [
   { title: "采购申请", dataIndex: "requestCode" },
   { title: "物料", dataIndex: "partName" },
   { title: "数量", dataIndex: "quantity" },
-  { title: "含税单价", key: "linePrice" },
+  { title: "含税单价（元）", key: "linePrice", width: 170 },
   { title: "税率(%)", dataIndex: "taxRate" },
   { title: "交付日期", dataIndex: "deliveryDate" },
-  { title: "分项金额", key: "lineAmount" },
+  { title: "分项金额（含税，元）", key: "lineAmount", width: 190 },
 ];
 const quoteLineInputColumns = [
   { title: "采购申请", dataIndex: "requestCode", width: 150 },
   { title: "物料", dataIndex: "partName", width: 200 },
   { title: "数量", dataIndex: "quantity", width: 90 },
-  { title: "含税单价", key: "quotePrice", width: 150 },
+  { title: "含税单价（元）", key: "quotePrice", width: 170 },
   { title: "税率(%)", key: "quoteTax", width: 110 },
   { title: "交付日期", key: "quoteDelivery", width: 170 },
 ];

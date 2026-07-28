@@ -102,13 +102,13 @@
         <a-descriptions-item label="成本类型">{{
           selectedPayable.costType === "PROJECT" ? "项目" : "部门"
         }}</a-descriptions-item>
-        <a-descriptions-item label="应付金额">{{
+        <a-descriptions-item label="应付金额（含税，元）">{{
           formatMoney(selectedPayable.amount)
         }}</a-descriptions-item>
-        <a-descriptions-item label="已付金额">{{
+        <a-descriptions-item label="已付金额（含税，元）">{{
           formatMoney(selectedPayable.paidAmount)
         }}</a-descriptions-item>
-        <a-descriptions-item label="待付金额">{{
+        <a-descriptions-item label="待付金额（含税，元）">{{
           formatMoney(selectedPayable.outstandingAmount)
         }}</a-descriptions-item>
         <a-descriptions-item label="税率">{{
@@ -133,11 +133,11 @@
         type="info"
         show-icon
         :message="`${selectedPayable.supplierName} · ${selectedPayable.code}`"
-        :description="`待付 ${formatMoney(selectedPayable.outstandingAmount)}，审批中的申请 ${formatMoney(reservedAmount)}`"
+        :description="`待付（含税，元）${formatMoney(selectedPayable.outstandingAmount)}，审批中的申请（含税，元）${formatMoney(reservedAmount)}`"
         style="margin-bottom: 16px"
       />
       <a-form layout="vertical">
-        <a-form-item label="申请付款金额" required>
+        <a-form-item label="申请付款金额（含税，元）" required>
           <a-input-number
             v-model:value="paymentForm.requestedAmount"
             :min="0.01"
@@ -209,7 +209,7 @@ const availableAmount = computed(() =>
 );
 const payableColumns = [
   { title: "应付单", key: "payable", width: 240 },
-  { title: "金额", key: "amount", width: 140 },
+  { title: "应付金额（含税，元）", key: "amount", width: 190 },
   { title: "已付/待付", key: "paid", width: 200 },
   { title: "到期日", key: "dueDate", width: 120 },
   { title: "状态", key: "status", width: 110 },

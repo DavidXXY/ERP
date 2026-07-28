@@ -84,7 +84,7 @@ public class CrmExportService {
       Font headerFont = wb.createFont(); headerFont.setBold(true); headerStyle.setFont(headerFont);
       headerStyle.setAlignment(HorizontalAlignment.CENTER);
 
-      String[] headers = {"合同编号", "客户名称", "项目名称", "合同金额", "合同类型", "开始日期", "结束日期", "合同状态"};
+      String[] headers = {"合同编号", "客户名称", "项目名称", "合同金额（含税，元）", "合同类型", "开始日期", "结束日期", "合同状态"};
       Row headerRow = sheet.createRow(0);
       for (int i = 0; i < headers.length; i++) { var cell = headerRow.createCell(i); cell.setCellValue(headers[i]); cell.setCellStyle(headerStyle); }
 

@@ -303,7 +303,7 @@
           :gutter="12"
         >
           <a-col :span="12"
-            ><a-form-item label="最小金额"
+            ><a-form-item label="最小金额（含税，元）"
               ><a-input-number
                 v-model:value="form.minAmount"
                 :min="0"
@@ -311,7 +311,7 @@
                 style="width: 100%" /></a-form-item
           ></a-col>
           <a-col :span="12"
-            ><a-form-item label="最大金额"
+            ><a-form-item label="最大金额（含税，元）"
               ><a-input-number
                 v-model:value="form.maxAmount"
                 :min="0"

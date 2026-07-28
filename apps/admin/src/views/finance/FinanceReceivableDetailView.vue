@@ -75,7 +75,7 @@
                 <a-descriptions-item label="客户">{{
                   detail.receivable.customerName
                 }}</a-descriptions-item>
-                <a-descriptions-item label="应收金额">{{
+                <a-descriptions-item label="应收金额（含税，元）">{{
                   money(detail.receivable.amount)
                 }}</a-descriptions-item>
                 <a-descriptions-item label="到期日">{{
@@ -214,13 +214,16 @@ const detail = ref<FinanceReceivableDetail | null>(null);
 const metrics = computed<DetailMetric[]>(() =>
   detail.value
     ? [
-        { label: "应收金额", value: money(detail.value.receivable.amount) },
         {
-          label: "已收金额",
+          label: "应收金额（含税，元）",
+          value: money(detail.value.receivable.amount),
+        },
+        {
+          label: "已收金额（含税，元）",
           value: money(detail.value.receivable.settledAmount),
         },
         {
-          label: "待收金额",
+          label: "待收金额（含税，元）",
           value: money(detail.value.receivable.outstandingAmount),
           danger: detail.value.receivable.status === "OVERDUE",
         },

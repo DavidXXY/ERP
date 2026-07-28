@@ -29,25 +29,25 @@
         /></a-col>
         <a-col :xs="12" :lg="8" :xl="4"
           ><a-statistic
-            title="累计入库金额"
+            title="累计入库金额（含税，元）"
             :value="receiptAmount"
             :formatter="moneyFormatter"
         /></a-col>
         <a-col :xs="12" :lg="8" :xl="4"
           ><a-statistic
-            title="采购待付"
+            title="采购待付（含税，元）"
             :value="outstandingPayable"
             :formatter="moneyFormatter"
         /></a-col>
         <a-col :xs="12" :lg="8" :xl="4"
           ><a-statistic
-            title="项目采购成本"
+            title="项目采购成本（含税，元）"
             :value="projectCostAmount"
             :formatter="moneyFormatter"
         /></a-col>
         <a-col :xs="12" :lg="8" :xl="4"
           ><a-statistic
-            title="部门采购成本"
+            title="部门采购成本（含税，元）"
             :value="departmentCostAmount"
             :formatter="moneyFormatter"
         /></a-col>
@@ -675,7 +675,7 @@
                 class="full-input" /></a-form-item
           ></a-col>
           <a-col :xs="24" :md="8"
-            ><a-form-item label="预计单价"
+            ><a-form-item label="预计单价（含税，元）"
               ><a-input-number
                 v-model:value="requestForm.unitPrice"
                 :min="0"
@@ -795,7 +795,7 @@
                 class="full-input" /></a-form-item
           ></a-col>
           <a-col :xs="24" :md="8"
-            ><a-form-item label="含税单价" name="unitPrice"
+            ><a-form-item label="含税单价（元）" name="unitPrice"
               ><a-input-number
                 v-model:value="orderForm.unitPrice"
                 :min="0.01"
@@ -812,7 +812,7 @@
                 class="full-input" /></a-form-item
           ></a-col>
           <a-col :xs="24" :md="8"
-            ><a-form-item label="订单金额"
+            ><a-form-item label="订单金额（含税，元）"
               ><a-input
                 :value="formatMoney(orderAmount)"
                 disabled /></a-form-item
@@ -939,6 +939,10 @@ import {
 } from "@/api/procurement";
 import { useAuthStore } from "@/stores/auth";
 import { downloadCsv } from "@/views/crm/crm-export";
+import {
+  getErrorMessage,
+  showBudgetOverrunPrompt,
+} from "@/utils/budget-overrun";
 
 type ApprovalForm = {
   decision: ApprovalStatus;
@@ -961,8 +965,8 @@ function handleExportRequests() {
     "物料",
     "规格型号",
     "数量",
-    "单价",
-    "金额",
+    "单价（含税，元）",
+    "金额（含税，元）",
     "需求日期",
     "状态",
     "申请人",
@@ -1120,10 +1124,10 @@ const requestColumns = [
 const orderColumns = [
   { title: "订单", key: "code", width: 230, sorter: true },
   { title: "供应商", dataIndex: "supplierName", width: 200 },
-  { title: "物料 / 单价", key: "part", width: 220 },
+  { title: "物料 / 单价（含税，元）", key: "part", width: 250 },
   { title: "成本归属", key: "costTarget", width: 200 },
   { title: "已收 / 订购", key: "quantity", width: 160 },
-  { title: "订单金额", key: "amount", width: 140, sorter: true },
+  { title: "订单金额（含税，元）", key: "amount", width: 190, sorter: true },
   {
     title: "预计到货",
     dataIndex: "expectedDeliveryDate",
@@ -1136,8 +1140,8 @@ const orderColumns = [
 const receiptColumns = [
   { title: "入库单", key: "receipt", width: 250 },
   { title: "物料", dataIndex: "partName", width: 190 },
-  { title: "数量 / 单价", key: "quantity", width: 190 },
-  { title: "入库金额", key: "amount", width: 140 },
+  { title: "数量 / 单价（含税，元）", key: "quantity", width: 240 },
+  { title: "入库金额（含税，元）", key: "amount", width: 190 },
   { title: "成本归属", key: "costTarget", width: 200 },
   { title: "到货日期", dataIndex: "receivedDate", width: 120 },
   { title: "送货单号", dataIndex: "deliveryNo", width: 150 },
@@ -1146,13 +1150,13 @@ const receiptColumns = [
 const payableColumns = [
   { title: "应付单", key: "payable", width: 250 },
   { title: "供应商", dataIndex: "supplierName", width: 220 },
-  { title: "金额", key: "amount", width: 180 },
+  { title: "应付金额（含税，元）", key: "amount", width: 200 },
   { title: "成本归属", key: "costTarget", width: 200 },
   {
-    title: "已付金额",
+    title: "已付金额（含税，元）",
     dataIndex: "paidAmount",
     customRender: ({ text }: { text: number }) => formatMoney(text),
-    width: 140,
+    width: 190,
   },
   { title: "到期日", dataIndex: "dueDate", width: 120 },
   { title: "状态", key: "status", width: 160 },
@@ -1168,7 +1172,7 @@ const costAllocationColumns = [
   { title: "来源单据", key: "source", width: 220 },
   { title: "成本归属", key: "costTarget", width: 260 },
   { title: "采购物料", dataIndex: "partName", width: 220 },
-  { title: "归集金额", key: "amount", width: 150 },
+  { title: "归集金额（含税，元）", key: "amount", width: 190 },
   { title: "归集日期", dataIndex: "incurredDate", width: 130 },
 ];
 
@@ -1503,7 +1507,15 @@ async function handleSaveRequest() {
     editingRequestId.value = null;
     await loadRequests();
   } catch (error) {
-    message.error(error instanceof Error ? error.message : "操作失败");
+    if (
+      !showBudgetOverrunPrompt(
+        error,
+        router,
+        requestForm.costType === "PROJECT" ? requestForm.projectId : undefined,
+      )
+    ) {
+      message.error(getErrorMessage(error));
+    }
   } finally {
     savingRequest.value = false;
   }

@@ -38,7 +38,7 @@
         </a-col>
         <a-col :xs="12" :lg="6">
           <div class="metric-card amount">
-            <span>金额敞口</span>
+            <span>金额敞口（元，税价随来源单据）</span>
             <strong>{{ formatCurrency(totalExposure) }}</strong>
           </div>
         </a-col>
@@ -174,7 +174,7 @@
             <a-descriptions-item label="责任人">{{
               selectedTodo.owner || "-"
             }}</a-descriptions-item>
-            <a-descriptions-item label="金额">{{
+            <a-descriptions-item label="金额（元，税价随来源单据）">{{
               selectedTodo.amount ? formatCurrency(selectedTodo.amount) : "-"
             }}</a-descriptions-item>
             <a-descriptions-item label="到期/时间">{{
@@ -253,7 +253,7 @@ const columns = [
   { title: "优先级", key: "priority", width: 100 },
   { title: "状态", key: "status", width: 100 },
   { title: "责任人", dataIndex: "owner", key: "owner", width: 120 },
-  { title: "金额", key: "amount", width: 130 },
+  { title: "金额（元，税价随来源单据）", key: "amount", width: 230 },
   { title: "到期/时间", key: "dueDate", width: 130 },
   { title: "推荐动作", key: "action", width: 210 },
 ];

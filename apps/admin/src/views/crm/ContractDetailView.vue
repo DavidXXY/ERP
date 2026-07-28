@@ -60,16 +60,16 @@
             <a-descriptions-item label="合同类型">{{
               record.contractType
             }}</a-descriptions-item>
-            <a-descriptions-item label="合同金额">
+            <a-descriptions-item label="合同金额（含税，元）">
               <strong>{{ formatMoney(record.amount) }}</strong>
             </a-descriptions-item>
-            <a-descriptions-item label="已开票金额">
+            <a-descriptions-item label="已开票金额（含税，元）">
               <strong>{{ formatMoney(invoicedTotal) }}</strong>
             </a-descriptions-item>
-            <a-descriptions-item label="已回款金额">
+            <a-descriptions-item label="已回款金额（含税，元）">
               <strong>{{ formatMoney(receivedTotal) }}</strong>
             </a-descriptions-item>
-            <a-descriptions-item label="未税金额">
+            <a-descriptions-item label="未税金额（元）">
               <strong>{{
                 formatMoney(
                   record.netAmount ??
@@ -308,7 +308,7 @@
                   }}</span>
                 </template>
               </a-table-column>
-              <a-table-column title="应收金额" width="140">
+              <a-table-column title="应收金额（含税，元）" width="180">
                 <template #default="{ record: item }">{{
                   formatMoney(item.amount)
                 }}</template>
@@ -358,10 +358,10 @@
               <a-descriptions-item label="版本"
                 >V{{ relatedQuote.versionNo }}</a-descriptions-item
               >
-              <a-descriptions-item label="报价金额">
+              <a-descriptions-item label="报价金额（含税，元）">
                 <strong>{{ formatMoney(relatedQuote.amount) }}</strong>
               </a-descriptions-item>
-              <a-descriptions-item label="未税金额">
+              <a-descriptions-item label="未税金额（元）">
                 <strong>{{
                   formatMoney(
                     relatedQuote.netAmount ??
@@ -415,7 +415,7 @@
               <a-descriptions-item label="客户需求" :span="3">{{
                 relatedOpportunity.needSummary
               }}</a-descriptions-item>
-              <a-descriptions-item label="预计金额">{{
+              <a-descriptions-item label="预计金额（含税，元）">{{
                 formatMoney(relatedOpportunity.expectedAmount)
               }}</a-descriptions-item>
               <a-descriptions-item label="成功率"
@@ -496,7 +496,7 @@
                 title="项目承接与预算"
                 :description="
                   relatedProject
-                    ? `${relatedProject.code} · 预算 ${formatMoney(relatedProject.budgetAmount)}`
+                    ? `${relatedProject.code} · 预算（含税，元）${formatMoney(relatedProject.budgetAmount)}`
                     : '等待合同生效后承接'
                 "
               />
@@ -510,7 +510,7 @@
               />
               <a-step
                 title="开票与回款"
-                :description="`回款率 ${collectionRate}%，待回款 ${formatMoney(outstandingTotal)}`"
+                :description="`回款率 ${collectionRate}%，待回款（含税，元）${formatMoney(outstandingTotal)}`"
               />
               <a-step
                 title="质保与续约"
@@ -694,7 +694,7 @@
           >{{ selectedReceivable.code }} · 到期日
           {{ selectedReceivable.dueDate }}</a-descriptions-item
         >
-        <a-descriptions-item label="申请金额">{{
+        <a-descriptions-item label="申请金额（含税，元）">{{
           formatMoney(selectedReceivable.amount)
         }}</a-descriptions-item>
       </a-descriptions>
@@ -732,7 +732,7 @@
               ><a-input v-model:value="editForm.contractType" /></a-form-item
           ></a-col>
           <a-col :xs="24" :md="12"
-            ><a-form-item label="合同金额" name="amount"
+            ><a-form-item label="合同金额（含税，元）" name="amount"
               ><a-input-number
                 v-model:value="editForm.amount"
                 :min="0"
@@ -1116,7 +1116,7 @@ const closureStats = computed(() => [
   },
   {
     key: "outstanding",
-    label: "未回款",
+    label: "未回款（含税，元）",
     value: formatMoney(outstandingTotal.value),
     hint: overdueReceivables.value.length
       ? `${overdueReceivables.value.length} 笔逾期`
@@ -1221,7 +1221,7 @@ const closureActions = computed(() => {
       key: "overdue",
       level: "high",
       title: "存在逾期应收",
-      description: `当前 ${overdueReceivables.value.length} 笔逾期，未回款 ${formatMoney(outstandingTotal.value)}，建议生成催收跟进。`,
+      description: `当前 ${overdueReceivables.value.length} 笔逾期，未回款（含税，元）${formatMoney(outstandingTotal.value)}，建议生成催收跟进。`,
       route: "/finance/receivables",
     });
   }
@@ -1305,7 +1305,7 @@ function contractApprovalSteps(item: ServiceContract): ApprovalProgressStep[] {
       avatarText: "发起",
       personName: item.salesOwnerName || item.customerName || "发起人",
       title: "发起合同",
-      note: `${item.contractType || "-"} · ${formatMoney(item.amount)}`,
+      note: `${item.contractType || "-"} · 合同金额（含税，元）${formatMoney(item.amount)}`,
       state: "done",
     },
     {

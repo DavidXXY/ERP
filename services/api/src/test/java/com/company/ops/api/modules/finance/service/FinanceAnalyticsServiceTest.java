@@ -59,12 +59,13 @@ class FinanceAnalyticsServiceTest {
   @Mock private BankStatementLineRepository bankLines;
   @Mock private BusinessControlRecordRepository controls;
   @Mock private LedgerService ledgerService;
+  @Mock private TaxFilingGuard taxFilingGuard;
   private FinanceAnalyticsService service;
 
   @BeforeEach
   void setUp() {
     service = new FinanceAnalyticsService(receivables, receipts, contracts, customers, payables,
-        payments, applications, supplierInvoices, suppliers, vouchers, bankLines, controls, ledgerService);
+        payments, applications, supplierInvoices, suppliers, vouchers, bankLines, controls, ledgerService, taxFilingGuard);
     when(receivables.findAll()).thenReturn(List.of());
     when(payables.findAll()).thenReturn(List.of());
     when(receipts.findAll()).thenReturn(List.of());

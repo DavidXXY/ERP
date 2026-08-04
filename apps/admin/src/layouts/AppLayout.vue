@@ -239,6 +239,14 @@
             key="/finance/tax-ledger"
             >税务台账</a-menu-item
           >
+          <a-menu-item
+            v-if="
+              auth.can('finance:operations:view') ||
+              auth.can('finance:operations:manage')
+            "
+            key="/finance/operations"
+            >财务运营</a-menu-item
+          >
         </a-sub-menu>
 
         <a-sub-menu
@@ -464,6 +472,8 @@ const canAccessFinance = computed(() =>
     "finance:payment:approve",
     "finance:payment:execute",
     "finance:ledger:view",
+    "finance:operations:view",
+    "finance:operations:manage",
   ].some((permission) => auth.can(permission)),
 );
 const canAccessRiskCenter = computed(() =>

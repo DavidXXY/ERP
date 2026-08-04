@@ -600,6 +600,15 @@ const rootRoutes: RouteRecordRaw[] = [
     component: () => import("@/views/finance/TaxLedgerView.vue"),
     meta: { title: "税务台账", permission: "finance:tax:view" },
   },
+  {
+    path: "finance/operations",
+    name: "finance-operations",
+    component: () => import("@/views/finance/FinanceOperationsView.vue"),
+    meta: {
+      title: "财务运营工作台",
+      permissions: ["finance:operations:view", "finance:operations:manage"],
+    },
+  },
   // System
   { path: "system", redirect: "/system/health" },
   {

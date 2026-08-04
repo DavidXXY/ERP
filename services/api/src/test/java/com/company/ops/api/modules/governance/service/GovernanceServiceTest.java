@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import com.company.ops.api.common.exception.BusinessException;
 import com.company.ops.api.modules.crm.repository.ReceivableReceiptRepository;
 import com.company.ops.api.modules.finance.repository.PaymentRecordRepository;
+import com.company.ops.api.modules.finance.service.FinanceOperationsService;
 import com.company.ops.api.modules.governance.domain.BusinessControlRecord;
 import com.company.ops.api.modules.governance.domain.ControlStatus;
 import com.company.ops.api.modules.governance.domain.ControlType;
@@ -39,6 +40,7 @@ class GovernanceServiceTest {
   @Mock private PaymentRecordRepository payments;
   @Mock private ReceivableReceiptRepository receipts;
   @Mock private GovernanceActionLogRepository actionLogs;
+  @Mock private FinanceOperationsService financeOperations;
 
   @Test
   void detectsOverdueBudgetAndReviewExceptions() {
@@ -105,6 +107,7 @@ class GovernanceServiceTest {
   }
 
   private GovernanceService service() {
-    return new GovernanceService(controls, periods, bankLines, vouchers, payments, receipts, actionLogs, new ObjectMapper());
+    return new GovernanceService(controls, periods, bankLines, vouchers, payments, receipts, actionLogs,
+        new ObjectMapper(), financeOperations);
   }
 }

@@ -42,12 +42,19 @@ class PostgresBaselineMigrationTest {
             + "'procurement_goods_receipts','biz_collaboration_task_controls','shedlock',"
             + "'work_order_attachments','work_order_mobile_operations','sys_wechat_bindings',"
             + "'biz_accounting_periods','biz_bank_statement_lines','biz_control_records',"
-            + "'biz_governance_action_logs')",
-        Integer.class)).isEqualTo(13);
+            + "'biz_governance_action_logs','fin_period_end_jobs','fin_partner_reconciliations',"
+            + "'fin_cash_forecast_scenarios','fin_tax_filings','fin_consolidation_runs',"
+            + "'fin_report_snapshots','fin_voucher_generation_requests')",
+        Integer.class)).isEqualTo(20);
     assertThat(jdbc.queryForObject(
         "select count(*) from pg_indexes where schemaname='public' "
             + "and indexname='uk_proc_receipt_client_request'",
         Integer.class)).isEqualTo(1);
+    assertThat(jdbc.queryForObject(
+        "select count(*) from information_schema.table_constraints where constraint_schema='public' "
+            + "and constraint_name in ('uk_period_job_key','uk_tax_filing_period',"
+            + "'uk_report_snapshot_hash','uk_voucher_request_key')",
+        Integer.class)).isEqualTo(4);
     assertThat(jdbc.queryForObject("select count(*) from sys_users", Integer.class)).isZero();
   }
 }

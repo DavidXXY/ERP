@@ -1,6 +1,7 @@
 package com.company.ops.api.modules.crm.controller;
 
 import com.company.ops.api.common.api.ApiResponse;
+import com.company.ops.api.common.exception.BusinessException;
 import com.company.ops.api.modules.crm.service.CrmAttachmentService;
 import com.company.ops.api.modules.crm.service.CrmAttachmentService.AttachmentDto;
 import com.company.ops.api.modules.system.security.UserPrincipal;
@@ -51,7 +52,7 @@ public class CrmAttachmentController {
   }
 
   @PostMapping("/upload")
-  @PreAuthorize("hasAnyAuthority('crm:contract:update', 'crm:quote:update', 'crm:quote:convert', 'crm:opportunity:update', 'crm:customer:update')")
+  @PreAuthorize("hasAnyAuthority('crm:contract:update', 'crm:quote:update', 'crm:quote:convert', 'crm:opportunity:update', 'crm:customer:update', 'crm:receivable:update')")
   public ApiResponse<AttachmentDto> upload(
       @RequestParam String entityType, @RequestParam UUID entityId,
       @RequestParam(required = false) String attachmentType,
@@ -64,17 +65,15 @@ public class CrmAttachmentController {
   @GetMapping("/{id}/download")
   @PreAuthorize("hasAnyAuthority('crm:contract:view', 'crm:quote:view', 'crm:opportunity:view', 'crm:customer:view', 'finance:receivable:view')")
   public void download(@PathVariable UUID id, HttpServletResponse response) {
-    try {
-      String fileName = service.getFileName(id);
-      Resource resource = service.load(id);
-      response.setContentType(service.getMimeType(id));
-      response.setHeader(HttpHeaders.CONTENT_DISPOSITION,
-          "inline; filename*=UTF-8''" + URLEncoder.encode(fileName, StandardCharsets.UTF_8));
-      try (var is = resource.getInputStream()) {
-        is.transferTo(response.getOutputStream());
-      }
-    } catch (Exception e) {
-      response.setStatus(500);
+    String fileName = service.getFileName(id);
+    Resource resource = service.load(id);
+    response.setContentType(service.getMimeType(id));
+    response.setHeader(HttpHeaders.CONTENT_DISPOSITION,
+        "inline; filename*=UTF-8''" + URLEncoder.encode(fileName, StandardCharsets.UTF_8));
+    try (var is = resource.getInputStream()) {
+      is.transferTo(response.getOutputStream());
+    } catch (java.io.IOException exception) {
+      throw new BusinessException("附件读取失败");
     }
   }
 
@@ -86,7 +85,7 @@ public class CrmAttachmentController {
   }
 
   @DeleteMapping("/{id}")
-  @PreAuthorize("hasAuthority('crm:contract:delete')")
+  @PreAuthorize("hasAnyAuthority('crm:contract:update', 'crm:quote:update', 'crm:opportunity:update', 'crm:customer:update', 'crm:receivable:update')")
   public ApiResponse<Void> delete(@PathVariable UUID id) {
     service.delete(id);
     return ApiResponse.ok(null);

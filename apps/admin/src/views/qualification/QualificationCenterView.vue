@@ -1701,7 +1701,10 @@ const contractStatusOptions = [
 const requiredRule = [{ required: true, message: "请填写必填项" }];
 const passwordRules = [
   { required: true, message: "请输入初始密码" },
-  { min: 6, message: "密码至少6位" },
+  {
+    pattern: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9\s])\S{12,100}$/,
+    message: "密码须为12-100位，且包含大小写字母、数字和特殊字符",
+  },
 ];
 const dashboardMetrics = computed(() => [
   { title: "公司资质", value: dashboard.companyQualificationCount },
@@ -2192,8 +2195,12 @@ function openPasswordReset() {
 }
 async function resetEmployeePassword() {
   if (!employeeDetail.value?.employee.account) return;
-  if (newPassword.value.length < 6) {
-    message.error("密码至少6位");
+  if (
+    !/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9\s])\S{12,100}$/.test(
+      newPassword.value,
+    )
+  ) {
+    message.error("密码须为12-100位，且包含大小写字母、数字和特殊字符");
     return;
   }
   saving.value = true;
@@ -2320,12 +2327,7 @@ function uploadPerformanceFile(file: File) {
 async function uploadAttachment(file: File, target: Attachment[]) {
   saving.value = true;
   try {
-    target.push(
-      await uploadQualificationAttachment(
-        file,
-        auth.user?.displayName || "当前用户",
-      ),
-    );
+    target.push(await uploadQualificationAttachment(file));
     message.success("附件已上传");
   } catch (error) {
     message.error(error instanceof Error ? error.message : "附件上传失败");

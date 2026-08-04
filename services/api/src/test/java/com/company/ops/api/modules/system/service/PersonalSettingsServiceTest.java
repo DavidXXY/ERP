@@ -80,10 +80,10 @@ class PersonalSettingsServiceTest {
     when(userRepository.save(user)).thenReturn(user);
 
     personalSettingsService.updateProfile(
-        userId, new UpdateMyProfileRequest("新的显示名", "13800000001", "employee@example.com")
+        userId, new UpdateMyProfileRequest("员工", "13800000001", "employee@example.com")
     );
 
-    assertThat(user.getDisplayName()).isEqualTo("新的显示名");
+    assertThat(user.getDisplayName()).isEqualTo("员工");
     assertThat(employee.getPhone()).isEqualTo("13800000001");
   }
 

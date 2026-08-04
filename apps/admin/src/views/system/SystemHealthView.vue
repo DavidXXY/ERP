@@ -60,23 +60,8 @@
         <a-descriptions-item label="存储类型">{{
           health?.application?.storageType ?? "-"
         }}</a-descriptions-item>
-        <a-descriptions-item label="Redis">{{
-          health?.dependencies?.redisEndpoint || "未配置"
-        }}</a-descriptions-item>
-        <a-descriptions-item label="数据库" :span="3">{{
-          health?.dependencies?.databaseUrl || "-"
-        }}</a-descriptions-item>
         <a-descriptions-item label="数据库驱动" :span="3">{{
           health?.dependencies?.databaseDriver || "-"
-        }}</a-descriptions-item>
-        <a-descriptions-item label="本地存储路径" :span="3">{{
-          health?.dependencies?.localStoragePath || "-"
-        }}</a-descriptions-item>
-        <a-descriptions-item label="工作目录" :span="3">{{
-          health?.dependencies?.workingDir || "-"
-        }}</a-descriptions-item>
-        <a-descriptions-item label="临时目录" :span="3">{{
-          health?.dependencies?.tempDir || "-"
         }}</a-descriptions-item>
       </a-descriptions>
     </a-card>
@@ -274,9 +259,9 @@
     <!-- 磁盘 -->
     <a-card title="磁盘使用情况">
       <a-spin :spinning="loading">
-        <div v-for="disk in disks" :key="disk.path" class="disk-card">
+        <div v-for="disk in disks" :key="disk.name" class="disk-card">
           <div class="metric-label">
-            <span><FolderOutlined /> {{ disk.path }}</span>
+            <span><FolderOutlined /> {{ disk.name }}</span>
             <strong
               >{{ formatBytes(disk.used) }} /
               {{ formatBytes(disk.totalSpace) }}</strong
@@ -301,11 +286,6 @@
     </a-card>
 
     <!-- JVM 详细信息 -->
-    <a-card title="JVM 启动参数">
-      <a-spin :spinning="loading">
-        <pre class="jvm-args">{{ formattedArgs }}</pre>
-      </a-spin>
-    </a-card>
   </div>
 </template>
 
@@ -396,12 +376,6 @@ const disks = computed(() => {
     ...d,
     used: (d.totalSpace ?? 0) - (d.freeSpace ?? 0),
   }));
-});
-
-const formattedArgs = computed(() => {
-  const args = health.value?.jvm.inputArguments;
-  if (!args || args.length === 0) return "无启动参数";
-  return args.join("\n");
 });
 
 async function loadData() {
@@ -570,19 +544,6 @@ function diskColor(percent: number): string {
 
 .disk-card .metric-label {
   margin-bottom: 8px;
-}
-
-.jvm-args {
-  margin: 0;
-  padding: 16px;
-  border: 1px solid #eaecf0;
-  border-radius: 6px;
-  background: #fafbfc;
-  color: #475467;
-  font-size: 12px;
-  line-height: 1.7;
-  white-space: pre-wrap;
-  word-break: break-all;
 }
 
 .text-danger {

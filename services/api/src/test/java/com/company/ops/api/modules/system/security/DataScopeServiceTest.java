@@ -13,11 +13,14 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 @ExtendWith(MockitoExtension.class)
 class DataScopeServiceTest {
@@ -28,6 +31,25 @@ class DataScopeServiceTest {
   private SystemOrganizationRepository organizationRepository;
   @InjectMocks
   private DataScopeService dataScopeService;
+
+  @AfterEach
+  void clearSecurityContext() {
+    SecurityContextHolder.clearContext();
+  }
+
+  @Test
+  void selfScopeUsesStableUserIdInsteadOfDisplayName() {
+    SystemOrganization department = organization("销售部", null);
+    SystemUser current = user("同名销售", department, "SELF");
+    SystemUser other = user("同名销售", department, "SELF");
+    UserPrincipal principal = new UserPrincipal(current);
+    SecurityContextHolder.getContext().setAuthentication(
+        new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities()));
+    when(userRepository.findById(current.getId())).thenReturn(Optional.of(current));
+
+    assertThat(dataScopeService.canViewOwner(current.getId())).isTrue();
+    assertThat(dataScopeService.canViewOwner(other.getId())).isFalse();
+  }
 
   @Test
   void departmentAndSubScopeIncludesDescendantOrganizationUsers() {

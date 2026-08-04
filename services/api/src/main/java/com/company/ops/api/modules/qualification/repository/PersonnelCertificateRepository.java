@@ -13,6 +13,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface PersonnelCertificateRepository extends JpaRepository<PersonnelCertificate, UUID> {
+  Optional<PersonnelCertificate> findFirstByAttachmentsJsonContaining(String value);
   List<PersonnelCertificate> findAllByOrderByEmployeeNameAscNameAsc();
   List<PersonnelCertificate> findByEmployeeIdOrderByNameAsc(UUID employeeId);
   Optional<PersonnelCertificate> findByExternalId(String externalId);

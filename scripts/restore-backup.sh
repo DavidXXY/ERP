@@ -6,6 +6,17 @@ backup_file="${1:?Usage: RESTORE_TARGET=... RESTORE_CONFIRM=... scripts/restore-
 restore_target="${RESTORE_TARGET:?RESTORE_TARGET is required}"
 "$root_dir/scripts/verify-backup.sh" "$backup_file"
 
+decrypt_dir=""
+if [[ "$backup_file" == *.age ]]; then
+  command -v age >/dev/null 2>&1 || { echo "age is required to restore encrypted backups." >&2; exit 1; }
+  : "${BACKUP_ENCRYPTION_IDENTITY:?BACKUP_ENCRYPTION_IDENTITY is required}"
+  decrypt_dir="$(mktemp -d "${TMPDIR:-/tmp}/ops-erp-restore-decrypt.XXXXXX")"
+  decrypted="$decrypt_dir/$(basename "${backup_file%.age}")"
+  age --decrypt --identity "$BACKUP_ENCRYPTION_IDENTITY" --output "$decrypted" "$backup_file"
+  backup_file="$decrypted"
+  trap 'rm -rf -- "$decrypt_dir"' EXIT
+fi
+
 [[ "${RESTORE_CONFIRM:-}" == "$restore_target" ]] || {
   echo "Refusing restore: set RESTORE_CONFIRM exactly to RESTORE_TARGET ($restore_target)." >&2; exit 1;
 }
@@ -20,7 +31,7 @@ if [[ "$backup_file" == *.tar.gz ]]; then
     *) echo "RESTORE_OBJECTS must be true or false." >&2; exit 1 ;;
   esac
   restore_dir="$(mktemp -d "${TMPDIR:-/tmp}/ops-erp-restore.XXXXXX")"
-  cleanup() { rm -rf -- "$restore_dir"; }
+  cleanup() { rm -rf -- "$restore_dir"; [[ -z "$decrypt_dir" ]] || rm -rf -- "$decrypt_dir"; }
   trap cleanup EXIT
   tar -xzf "$backup_file" -C "$restore_dir"
   database_dump="$restore_dir/postgres.dump"

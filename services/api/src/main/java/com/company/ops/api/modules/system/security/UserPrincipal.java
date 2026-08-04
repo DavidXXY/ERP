@@ -21,6 +21,7 @@ public class UserPrincipal implements UserDetails {
   private final String password;
   private final boolean enabled;
   private final long authVersion;
+  private final boolean mfaEnabled;
   private final List<String> roleCodes;
   private final List<UUID> roleIds;
   private final List<String> permissions;
@@ -36,6 +37,7 @@ public class UserPrincipal implements UserDetails {
     this.password = user.getPasswordHash();
     this.enabled = user.isEnabled();
     this.authVersion = user.getAuthVersion();
+    this.mfaEnabled = user.isMfaEnabled();
     this.roleCodes = user.getRoles().stream().map(SystemRole::getCode).sorted().toList();
     this.roleIds = user.getRoles().stream().map(SystemRole::getId).sorted().toList();
     this.permissions = user.getRoles().stream()
@@ -81,6 +83,8 @@ public class UserPrincipal implements UserDetails {
   }
 
   public long authVersion() { return authVersion; }
+
+  public boolean mfaEnabled() { return mfaEnabled; }
 
   public List<String> dataScopes() {
     return dataScopes;

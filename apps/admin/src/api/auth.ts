@@ -10,11 +10,16 @@ export type CurrentUser = {
 };
 
 export type LoginResponse = {
-  token: string;
-  user: CurrentUser;
+  token?: string;
+  user?: CurrentUser;
+  mfaRequired?: boolean;
 };
 
-export function loginApi(payload: { username: string; password: string }) {
+export function loginApi(payload: {
+  username: string;
+  password: string;
+  mfaCode?: string;
+}) {
   return request<LoginResponse>({
     method: "POST",
     url: "/auth/login",

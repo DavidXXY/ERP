@@ -33,6 +33,8 @@ jobs:
       - run: npm run lint
       - run: npm run format:check
       - run: npm run test
+      - name: Generate frontend SBOM
+        run: npm sbom --sbom-format cyclonedx > sbom-frontend.cdx.json
       - run: npm --prefix apps/admin run typecheck
       - run: npm run build
       - name: Enforce bundle budget
@@ -49,6 +51,15 @@ jobs:
         with:
           name: playwright-report
           path: playwright-report
+          retention-days: 14
+      - name: Upload frontend coverage and SBOM
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-security-artifacts
+          path: |
+            apps/admin/coverage
+            sbom-frontend.cdx.json
           retention-days: 14
 
   backend:
@@ -68,6 +79,15 @@ jobs:
           test -f "$report"
           grep -q 'tests="1" errors="0" skipped="0" failures="0"' "$report"
         working-directory: services/api
+      - name: Upload backend coverage and SBOM
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-security-artifacts
+          path: |
+            services/api/target/site/jacoco
+            services/api/target/bom.json
+          retention-days: 14
 
   dependency-review:
     if: github.event_name == 'pull_request'

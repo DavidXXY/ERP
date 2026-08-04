@@ -60,6 +60,16 @@ export type PersonalOverview = {
   contracts: MyContract[];
 };
 
+export type MfaStatus = {
+  enabled: boolean;
+  recoveryCodesRemaining: number;
+};
+
+export type MfaSetup = {
+  secret: string;
+  otpauthUri: string;
+};
+
 export type MyCertificatePayload = {
   name: string;
   type?: string;
@@ -93,6 +103,45 @@ export function changeMyPasswordApi(data: {
   newPassword: string;
 }) {
   return request<void>({ method: "PUT", url: "/personal/password", data });
+}
+
+export function getMfaStatusApi() {
+  return request<MfaStatus>({ method: "GET", url: "/personal/mfa" });
+}
+
+export function beginMfaSetupApi(currentPassword: string) {
+  return request<MfaSetup>({
+    method: "POST",
+    url: "/personal/mfa/setup",
+    data: { currentPassword },
+  });
+}
+
+export function enableMfaApi(code: string) {
+  return request<{ recoveryCodes: string[] }>({
+    method: "POST",
+    url: "/personal/mfa/enable",
+    data: { code },
+  });
+}
+
+export function regenerateMfaRecoveryCodesApi(data: {
+  currentPassword: string;
+  code: string;
+}) {
+  return request<{ recoveryCodes: string[] }>({
+    method: "POST",
+    url: "/personal/mfa/recovery-codes",
+    data,
+  });
+}
+
+export function disableMfaApi(data: { currentPassword: string; code: string }) {
+  return request<void>({
+    method: "POST",
+    url: "/personal/mfa/disable",
+    data,
+  });
 }
 
 export function createMyCertificateApi(data: MyCertificatePayload) {

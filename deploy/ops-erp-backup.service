@@ -1,0 +1,19 @@
+[Unit]
+Description=Engineering Ops ERP encrypted backup
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ops-erp
+Group=ops-erp
+WorkingDirectory=/opt/engineering-ops-erp
+EnvironmentFile=/etc/ops-erp/ops-erp.env
+Environment=BACKUP_DIR=/var/backups/ops-erp
+ExecStart=/opt/engineering-ops-erp/scripts/backup-data.sh
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/backups/ops-erp

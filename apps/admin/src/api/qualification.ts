@@ -401,13 +401,9 @@ export function listQualificationWarnings() {
     url: "/qualifications/warnings",
   });
 }
-export function uploadQualificationAttachment(
-  file: File,
-  operatorName: string,
-) {
+export function uploadQualificationAttachment(file: File) {
   const form = new FormData();
   form.append("file", file);
-  form.append("operatorName", operatorName);
   return request<Attachment>({
     method: "POST",
     url: "/qualifications/attachments",

@@ -10,12 +10,22 @@ User=ops-erp
 Group=ops-erp
 WorkingDirectory=/opt/engineering-ops-erp
 EnvironmentFile=/etc/ops-erp/ops-erp.env
-ExecStart=/usr/bin/java -XX:MaxRAMPercentage=50 -jar /opt/engineering-ops-erp/ops-erp-api.jar
+ExecStart=/usr/bin/java -XX:MaxRAMPercentage=50 -jar /opt/engineering-ops-erp/current-api.jar
 Restart=on-failure
 RestartSec=5
 SuccessExitStatus=143
 NoNewPrivileges=true
 PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+ReadWritePaths=/opt/engineering-ops-erp/.local-data
 
 [Install]
 WantedBy=multi-user.target

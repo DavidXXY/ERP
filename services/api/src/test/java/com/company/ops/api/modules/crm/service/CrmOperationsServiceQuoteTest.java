@@ -11,6 +11,7 @@ import com.company.ops.api.common.exception.BusinessException;
 import com.company.ops.api.common.delete.DeleteGovernanceService;
 import com.company.ops.api.common.service.CodeGenerator;
 import com.company.ops.api.modules.crm.domain.ApprovalDecision;
+import com.company.ops.api.modules.crm.domain.Customer;
 import com.company.ops.api.modules.crm.domain.QuoteCustomerDecision;
 import com.company.ops.api.modules.crm.domain.QuoteCostRequest;
 import com.company.ops.api.modules.crm.domain.QuoteCostStatus;
@@ -18,8 +19,11 @@ import com.company.ops.api.modules.crm.domain.QuotePlan;
 import com.company.ops.api.modules.crm.domain.QuoteRevision;
 import com.company.ops.api.modules.crm.domain.QuoteStatus;
 import com.company.ops.api.modules.crm.domain.Receivable;
+import com.company.ops.api.modules.crm.domain.ReceivableReceipt;
+import com.company.ops.api.modules.crm.domain.ReceivableStatus;
 import com.company.ops.api.modules.crm.domain.ServiceContract;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ProcessQuoteApprovalRequest;
+import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.RecordReceiptRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.UpdateQuoteRequest;
 import com.company.ops.api.modules.crm.repository.CustomerRepository;
 import com.company.ops.api.modules.crm.repository.CrmAttachmentRepository;
@@ -35,7 +39,9 @@ import com.company.ops.api.modules.crm.repository.ServiceContractRepository;
 import com.company.ops.api.modules.ledger.service.LedgerService;
 import com.company.ops.api.modules.project.repository.ProjectRepository;
 import com.company.ops.api.modules.project.service.ProjectService;
+import com.company.ops.api.modules.system.security.DataScopeService;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -44,9 +50,13 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
 @ExtendWith(MockitoExtension.class)
 class CrmOperationsServiceQuoteTest {
+
+  private final UUID customerId = UUID.randomUUID();
+  private final UUID ownerUserId = UUID.randomUUID();
 
   @Mock
   private CustomerRepository customerRepository;
@@ -80,9 +90,22 @@ class CrmOperationsServiceQuoteTest {
   private CrmAttachmentRepository attachmentRepository;
   @Mock
   private CodeGenerator codeGenerator;
+  @Mock
+  private DataScopeService dataScopeService;
 
   @InjectMocks
   private CrmOperationsService crmOperationsService;
+
+  @org.junit.jupiter.api.BeforeEach
+  void allowCustomerAccess() {
+    Customer customer = new Customer();
+    customer.setId(customerId);
+    customer.setCode("KH-001");
+    customer.setName("测试客户");
+    customer.setOwnerUserId(ownerUserId);
+    when(customerRepository.findById(customerId)).thenReturn(Optional.of(customer));
+    when(dataScopeService.canViewOwner(ownerUserId)).thenReturn(true);
+  }
 
   @Test
   void submitQuoteRequiresConfirmedBudget() {
@@ -139,6 +162,7 @@ class CrmOperationsServiceQuoteTest {
     when(contractRepository.findByQuoteId(quoteId)).thenReturn(Optional.empty());
     when(quoteCostRequestRepository.findFirstByQuoteIdOrderByCreatedAtDesc(quoteId))
         .thenReturn(Optional.empty());
+    when(dataScopeService.currentActorName()).thenReturn("真实审批人");
 
     var response = crmOperationsService.processQuoteApproval(
         quoteId,
@@ -147,6 +171,10 @@ class CrmOperationsServiceQuoteTest {
 
     assertThat(response.status()).isEqualTo(QuoteStatus.APPROVED);
     assertThat(response.convertedContractId()).isNull();
+    ArgumentCaptor<com.company.ops.api.modules.crm.domain.QuoteApprovalRecord> approvalCaptor =
+        ArgumentCaptor.forClass(com.company.ops.api.modules.crm.domain.QuoteApprovalRecord.class);
+    verify(quoteApprovalRepository).save(approvalCaptor.capture());
+    assertThat(approvalCaptor.getValue().getApproverName()).isEqualTo("真实审批人");
     verify(contractRepository, never()).save(any(ServiceContract.class));
     verify(receivableRepository, never()).save(any(Receivable.class));
     verify(opportunityRepository, never()).save(any());
@@ -165,6 +193,7 @@ class CrmOperationsServiceQuoteTest {
     when(contractRepository.findByQuoteId(quoteId)).thenReturn(Optional.empty());
     when(quoteCostRequestRepository.findFirstByQuoteIdOrderByCreatedAtDesc(quoteId))
         .thenReturn(Optional.empty());
+    when(dataScopeService.currentActorName()).thenReturn("真实修改人");
 
     var version4 = crmOperationsService.updateQuote(
         quoteId,
@@ -213,9 +242,71 @@ class CrmOperationsServiceQuoteTest {
         .containsExactly(4, 5);
   }
 
+  @Test
+  void duplicateReceiptRetryIsIdempotent() {
+    UUID receivableId = UUID.randomUUID();
+    LocalDate receivedDate = LocalDate.of(2026, 8, 4);
+    Receivable receivable = receivable(receivableId);
+    ReceivableReceipt existing = new ReceivableReceipt();
+    existing.setReceivableId(receivableId);
+    existing.setAmount(new BigDecimal("250.00"));
+    existing.setReceivedDate(receivedDate);
+    existing.setReferenceNo("BANK-001");
+    when(receivableRepository.findByIdForUpdate(receivableId)).thenReturn(Optional.of(receivable));
+    when(receiptRepository.findByReferenceNo("BANK-001")).thenReturn(Optional.of(existing));
+
+    var response = crmOperationsService.recordReceipt(receivableId,
+        new RecordReceiptRequest(new BigDecimal("250.0"), receivedDate, " bank-001 ", "伪造登记人"));
+
+    assertThat(response.settledAmount()).isEqualByComparingTo(BigDecimal.ZERO);
+    verify(receiptRepository, never()).saveAndFlush(any(ReceivableReceipt.class));
+    verify(receivableRepository, never()).save(any(Receivable.class));
+  }
+
+  @Test
+  void conflictingReceiptReferenceIsRejected() {
+    UUID receivableId = UUID.randomUUID();
+    Receivable receivable = receivable(receivableId);
+    ReceivableReceipt existing = new ReceivableReceipt();
+    existing.setReceivableId(UUID.randomUUID());
+    existing.setAmount(new BigDecimal("250.00"));
+    existing.setReceivedDate(LocalDate.of(2026, 8, 4));
+    existing.setReferenceNo("BANK-002");
+    when(receivableRepository.findByIdForUpdate(receivableId)).thenReturn(Optional.of(receivable));
+    when(receiptRepository.findByReferenceNo("BANK-002")).thenReturn(Optional.of(existing));
+
+    assertThatThrownBy(() -> crmOperationsService.recordReceipt(receivableId,
+        new RecordReceiptRequest(new BigDecimal("250.00"), LocalDate.of(2026, 8, 4),
+            "BANK-002", "伪造登记人")))
+        .isInstanceOf(BusinessException.class)
+        .hasMessage("银行流水号已用于其他回款记录");
+  }
+
+  @Test
+  void receiptUsesAuthenticatedRecorderAndTranslatesUniqueConflict() {
+    UUID receivableId = UUID.randomUUID();
+    Receivable receivable = receivable(receivableId);
+    when(receivableRepository.findByIdForUpdate(receivableId)).thenReturn(Optional.of(receivable));
+    when(dataScopeService.currentActorName()).thenReturn("真实登记人");
+    when(receiptRepository.saveAndFlush(any(ReceivableReceipt.class)))
+        .thenThrow(new DataIntegrityViolationException("duplicate reference"));
+
+    assertThatThrownBy(() -> crmOperationsService.recordReceipt(receivableId,
+        new RecordReceiptRequest(new BigDecimal("250.00"), LocalDate.of(2026, 8, 4),
+            " bank-003 ", "伪造登记人")))
+        .isInstanceOf(BusinessException.class)
+        .hasMessage("银行流水号已用于其他回款记录");
+
+    ArgumentCaptor<ReceivableReceipt> receiptCaptor = ArgumentCaptor.forClass(ReceivableReceipt.class);
+    verify(receiptRepository).saveAndFlush(receiptCaptor.capture());
+    assertThat(receiptCaptor.getValue().getReferenceNo()).isEqualTo("BANK-003");
+    assertThat(receiptCaptor.getValue().getRecorderName()).isEqualTo("真实登记人");
+  }
+
   private QuotePlan quote(UUID id, QuoteStatus status, int versionNo) {
     QuotePlan quote = new QuotePlan();
     quote.setId(id);
+    quote.setCustomerId(customerId);
     quote.setCode("BJ-2026-001");
     quote.setServiceScope("年度服务");
     quote.setInspectCycle("季度服务");
@@ -229,6 +320,20 @@ class CrmOperationsServiceQuoteTest {
     quote.setVersionNo(versionNo);
     quote.setStatus(status);
     return quote;
+  }
+
+  private Receivable receivable(UUID id) {
+    Receivable receivable = new Receivable();
+    receivable.setId(id);
+    receivable.setCustomerId(customerId);
+    receivable.setCode("YS-2026-001");
+    receivable.setSourceNo("HT-2026-001");
+    receivable.setAmount(new BigDecimal("1000.00"));
+    receivable.setSettledAmount(BigDecimal.ZERO);
+    receivable.setDueDate(LocalDate.now().plusDays(30));
+    receivable.setInvoiceNo("INV-001");
+    receivable.setStatus(ReceivableStatus.PAYMENT_PENDING);
+    return receivable;
   }
 
   private QuoteCostRequest approvedCost(UUID quoteId) {

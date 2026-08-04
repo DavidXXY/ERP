@@ -1,98 +1,88 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 
-# ═══════════════════════════════════════════
-#  部署推送脚本
-#  用法:
-#    ./deploy/deploy.sh user@10.10.10.111 [/deploy/path]
-#  前提:
-#    - 先在本机执行 ./deploy/build.sh
-#    - 服务器上已配置好 ops-erp.env
-# ═══════════════════════════════════════════
-
-if [ $# -lt 1 ]; then
-  echo "用法: $0 <user@host> [远程路径]"
-  echo "示例: $0 root@10.10.10.111 /opt/engineering-ops-erp"
+if [[ $# -lt 1 || $# -gt 3 ]]; then
+  echo "Usage: $0 <user@host> [remote-app-dir] [remote-frontend-dir]" >&2
   exit 1
 fi
 
-REMOTE_HOST="$1"
-REMOTE_DIR="${2:-/opt/engineering-ops-erp}"
-FRONTEND_DIR="${3:-/var/www/ops-erp-admin}"
-ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-BUILD_TIME="$(date '+%Y-%m-%d %H:%M:%S')"
+remote_host="$1"
+remote_dir="${2:-/opt/engineering-ops-erp}"
+frontend_dir="${3:-/var/www/ops-erp-admin}"
+root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+release_id="$(date -u +%Y%m%dT%H%M%SZ)-$(git -C "$root_dir" rev-parse --short=8 HEAD)"
 
-echo "═══════════════════════════════════════════"
-echo "  工程运维 ERP — 部署推送"
-echo "  目标主机: $REMOTE_HOST"
-echo "  构建时间: $BUILD_TIME"
-echo "═══════════════════════════════════════════"
+[[ "$remote_host" =~ ^[A-Za-z0-9._@:-]+$ ]] || { echo "Invalid remote host." >&2; exit 1; }
+for path in "$remote_dir" "$frontend_dir"; do
+  [[ "$path" =~ ^/[A-Za-z0-9._/-]+$ && "$path" != "/" ]] || {
+    echo "Remote directories must be explicit absolute paths without shell metacharacters." >&2
+    exit 1
+  }
+done
 
-# ── 确认构建产物存在 ──
-BACKEND_JAR="$ROOT_DIR/services/api/target/ops-erp-api-0.1.0.jar"
-ALT_BACKEND_JAR="/private/tmp/ops-erp-build/api/ops-erp-api-0.1.0.jar"
-if [ -f "$ALT_BACKEND_JAR" ]; then
-  mkdir -p "$ROOT_DIR/services/api/target"
-  cp "$ALT_BACKEND_JAR" "$BACKEND_JAR"
-fi
+backend_jar="$root_dir/services/api/target/ops-erp-api-0.1.0.jar"
+frontend_dist="$root_dir/apps/admin/dist"
+[[ -f "$backend_jar" ]] || { echo "Backend artifact missing; run ./deploy/build.sh first." >&2; exit 1; }
+[[ -f "$frontend_dist/index.html" ]] || { echo "Frontend artifact missing; run ./deploy/build.sh first." >&2; exit 1; }
 
-if [ ! -f "$BACKEND_JAR" ]; then
-  echo "❌ 未找到后端 JAR，请先执行 ./deploy/build.sh"
+app_release="$remote_dir/releases/$release_id"
+frontend_release="$frontend_dir/releases/$release_id"
+
+echo "Deploying release $release_id to $remote_host"
+ssh "$remote_host" "mkdir -p '$app_release' '$frontend_release'"
+rsync -ahz --no-owner --no-group "$backend_jar" "$remote_host:$app_release/api.jar"
+rsync -ahz --delete --no-perms --no-owner --no-group "$frontend_dist/" "$remote_host:$frontend_release/"
+rsync -ahz "$root_dir/deploy/ops-erp.nginx.conf" "$remote_host:/etc/nginx/sites-available/ops-erp"
+rsync -ahz "$root_dir/deploy/ops-erp-api.service" "$remote_host:/etc/systemd/system/ops-erp-api.service"
+ssh "$remote_host" "mkdir -p '$remote_dir/scripts'"
+rsync -ahz "$root_dir/scripts/backup-data.sh" "$root_dir/scripts/verify-backup.sh" \
+  "$root_dir/scripts/restore-backup.sh" "$root_dir/scripts/backup-restore-drill.sh" \
+  "$remote_host:$remote_dir/scripts/"
+rsync -ahz "$root_dir/deploy/ops-erp-backup.service" "$root_dir/deploy/ops-erp-backup.timer" \
+  "$root_dir/deploy/ops-erp-restore-drill.service" "$root_dir/deploy/ops-erp-restore-drill.timer" \
+  "$remote_host:/etc/systemd/system/"
+
+ssh "$remote_host" bash -s -- "$remote_dir" "$frontend_dir" "$release_id" <<'REMOTE_SCRIPT'
+set -euo pipefail
+remote_dir="$1"
+frontend_dir="$2"
+release_id="$3"
+new_api="$remote_dir/releases/$release_id/api.jar"
+new_frontend="$frontend_dir/releases/$release_id"
+current_api="$remote_dir/current-api.jar"
+current_frontend="$frontend_dir/current"
+previous_api="$(readlink "$current_api" || true)"
+previous_frontend="$(readlink "$current_frontend" || true)"
+
+test -f "$new_api"
+test -f "$new_frontend/index.html"
+nginx -t
+ln -sfn "$new_api" "$current_api"
+ln -sfn "$new_frontend" "$current_frontend"
+systemctl daemon-reload
+systemctl enable --now ops-erp-backup.timer ops-erp-restore-drill.timer
+systemctl restart ops-erp-api
+
+healthy=false
+for _ in $(seq 1 45); do
+  if curl --fail --silent --max-time 2 http://127.0.0.1:8080/actuator/health | grep -q '"status":"UP"'; then
+    healthy=true
+    break
+  fi
+  sleep 2
+done
+
+if [[ "$healthy" != "true" ]]; then
+  echo "Health check failed; rolling back release $release_id." >&2
+  if [[ -n "$previous_api" ]]; then ln -sfn "$previous_api" "$current_api"; else rm -f -- "$current_api"; fi
+  if [[ -n "$previous_frontend" ]]; then ln -sfn "$previous_frontend" "$current_frontend"; else rm -f -- "$current_frontend"; fi
+  systemctl restart ops-erp-api || true
   exit 1
 fi
 
-FRONTEND_DIST="$ROOT_DIR/apps/admin/dist"
-if [ ! -d "$FRONTEND_DIST" ]; then
-  echo "❌ 未找到前端 dist/ 目录，请先执行 ./deploy/build.sh"
-  exit 1
-fi
+nginx -t
+systemctl reload nginx
+echo "Release $release_id is healthy and active."
+REMOTE_SCRIPT
 
-# ── 前端推送 ──
-echo ""
-echo "▸ 推送前端到 $REMOTE_HOST:$FRONTEND_DIR ……"
-ssh "$REMOTE_HOST" "mkdir -p $FRONTEND_DIR"
-# Keep old hashed assets during rollout. A browser can still be running the
-# previous index bundle for a short time and may request its old dynamic chunks.
-# The local dist directory may be owner-only. Do not copy its ownership or
-# permissions onto the Nginx document root.
-rsync -ahz --no-perms --no-owner --no-group "$FRONTEND_DIST/" "$REMOTE_HOST:$FRONTEND_DIR/"
-ssh "$REMOTE_HOST" "chmod 755 $FRONTEND_DIR"
-echo "  ✅ 前端部署完成"
-
-# ── 后端推送 ──
-echo ""
-echo "▸ 推送后端到 $REMOTE_HOST:$REMOTE_DIR ……"
-ssh "$REMOTE_HOST" "mkdir -p $REMOTE_DIR"
-rsync -ahz "$BACKEND_JAR" "$REMOTE_HOST:$REMOTE_DIR/ops-erp-api.jar"
-echo "  ✅ 后端部署完成"
-
-# ── 推送 Nginx 和 Systemd 配置 ──
-echo ""
-echo "▸ 推送 Nginx 和 Systemd 配置 ……"
-rsync -ahz "$ROOT_DIR/deploy/ops-erp.nginx.conf" "$REMOTE_HOST:/etc/nginx/sites-available/ops-erp"
-echo "  ⚡ 请登录服务器执行:"
-echo "     ln -sf /etc/nginx/sites-available/ops-erp /etc/nginx/sites-enabled/"
-echo "     nginx -t && systemctl reload nginx"
-rsync -ahz "$ROOT_DIR/deploy/ops-erp-api.service" "$REMOTE_HOST:/etc/systemd/system/"
-echo "  ⚡ 请登录服务器执行: systemctl daemon-reload"
-
-# ── 服务重启提示 ──
-echo ""
-echo "═══════════════════════════════════════════"
-echo "  推送完成！下一步（登录服务器执行）:"
-echo "═══════════════════════════════════════════"
-echo ""
-echo "  # 1. 确认环境变量"
-echo "  cat /etc/ops-erp/ops-erp.env"
-echo ""
-echo "  # 2. 重启后端（生产切换）"
-echo "  sudo systemctl restart ops-erp-api"
-echo "  sudo journalctl -u ops-erp-api -f"
-echo ""
-echo "  # 3. 重载 Nginx"
-echo "  sudo nginx -t && sudo systemctl reload nginx"
-echo ""
-echo "  # 4. 查看运行状态"
-echo "  sudo systemctl status ops-erp-api"
-echo "  curl http://localhost:8080/actuator/health"
-echo "═══════════════════════════════════════════"
+echo "Deployment completed: $release_id"

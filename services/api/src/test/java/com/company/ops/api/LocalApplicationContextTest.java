@@ -10,12 +10,16 @@ import com.company.ops.api.modules.finance.service.FinanceService;
 import com.company.ops.api.modules.ledger.service.LedgerService;
 import com.company.ops.api.modules.system.domain.SystemPermission;
 import com.company.ops.api.modules.system.domain.SystemUser;
+import com.company.ops.api.modules.system.security.UserPrincipal;
 import com.company.ops.api.modules.system.repository.SystemPermissionRepository;
 import com.company.ops.api.modules.system.repository.SystemUserRepository;
 import com.company.ops.api.modules.office.domain.SystemNotification;
 import com.company.ops.api.modules.office.domain.SystemNotificationRead;
 import com.company.ops.api.modules.office.repository.SystemNotificationRepository;
 import com.company.ops.api.modules.office.repository.SystemNotificationReadRepository;
+import com.company.ops.api.modules.office.domain.ApprovalType;
+import com.company.ops.api.modules.office.dto.OfficeDtos.CreateApprovalRequest;
+import com.company.ops.api.modules.office.service.OfficeService;
 import com.company.ops.api.modules.qualification.domain.CompanyQualification;
 import com.company.ops.api.modules.qualification.repository.CompanyQualificationRepository;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ApplyInvoiceRequest;
@@ -44,6 +48,8 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.data.domain.PageRequest;
 
@@ -72,6 +78,7 @@ class LocalApplicationContextTest {
   @Autowired private BiService biService;
   @Autowired private FinanceService financeService;
   @Autowired private LedgerService ledgerService;
+  @Autowired private OfficeService officeService;
   @Autowired private OrganizationService organizationService;
   @Autowired private PermissionService permissionService;
   @Autowired private RoleService roleService;
@@ -84,8 +91,11 @@ class LocalApplicationContextTest {
         "select max(cast(version as integer)) from flyway_schema_history where success = true",
         Integer.class
     );
-    assertThat(version).isEqualTo(93);
+    assertThat(version).isEqualTo(98);
     assertThat(jdbc.queryForObject("select count(*) from shedlock", Integer.class)).isZero();
+    assertThat(jdbc.queryForObject(
+        "select count(*) from sys_permissions where code = 'system:health:view'", Integer.class))
+        .isEqualTo(1);
   }
 
   @Test
@@ -239,6 +249,11 @@ class LocalApplicationContextTest {
         String.class
     );
     assertThat(anonymousWorkbench.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    var anonymousHealth = rest.getForEntity(
+        "http://localhost:" + port + "/api/system/health",
+        String.class
+    );
+    assertThat(anonymousHealth.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
 
     var loginHeaders = new HttpHeaders();
     loginHeaders.setOrigin("http://localhost:5180");
@@ -297,6 +312,36 @@ class LocalApplicationContextTest {
     var approvalsPage = objectMapper.readTree(mobileApprovals.getBody()).path("data");
     assertThat(approvalsPage.path("size").asInt()).isEqualTo(200);
     assertThat(approvalsPage.path("content").isArray()).isTrue();
+
+    var systemHealth = rest.exchange(
+        "http://localhost:" + port + "/api/system/health",
+        org.springframework.http.HttpMethod.GET,
+        new HttpEntity<>(headers),
+        String.class
+    );
+    assertThat(systemHealth.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(systemHealth.getBody())
+        .contains("\"application\"", "\"dependencies\"", "\"memory\"")
+        .doesNotContain("jdbc:", "redis://", "inputArguments", "absolutePath");
+  }
+
+  @Test
+  void ignoresForgedOfficeApplicantIdentity() {
+    SystemUser admin = userRepository.findByUsername("admin").orElseThrow();
+    UserPrincipal principal = new UserPrincipal(admin);
+    SecurityContextHolder.getContext().setAuthentication(
+        new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities()));
+    try {
+      String code = "TEST-OA-" + UUID.randomUUID().toString().substring(0, 8);
+      var approval = officeService.createApproval(new CreateApprovalRequest(
+          code, ApprovalType.OTHER, "身份校验审批", null, null, "伪造申请人", "身份校验",
+          null, null, null, null, null));
+
+      assertThat(approval.applicantName()).isEqualTo(admin.getDisplayName());
+      assertThat(approval.applicantName()).isNotEqualTo("伪造申请人");
+    } finally {
+      SecurityContextHolder.clearContext();
+    }
   }
 
   @Test
@@ -320,6 +365,11 @@ class LocalApplicationContextTest {
 
   @Test
   void completesInvoiceApprovalStateMachine() {
+    SystemUser admin = userRepository.findByUsername("admin").orElseThrow();
+    UserPrincipal principal = new UserPrincipal(admin);
+    SecurityContextHolder.getContext().setAuthentication(
+        new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities()));
+    try {
     UUID approvedId = insertReceivable("TEST-INVOICE-APPROVED");
     var applied = crmOperationsService.applyInvoice(
         approvedId,
@@ -353,6 +403,9 @@ class LocalApplicationContextTest {
     );
     assertThat(reapplied.invoiceRequestStatus()).isEqualTo("PENDING_APPROVAL");
     assertThat(reapplied.invoiceReviewComment()).isNull();
+    } finally {
+      SecurityContextHolder.clearContext();
+    }
   }
 
   @Test

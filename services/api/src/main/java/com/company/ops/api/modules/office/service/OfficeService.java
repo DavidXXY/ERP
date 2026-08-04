@@ -290,7 +290,7 @@ public class OfficeService {
 
   @Transactional
   public ApprovalResponse createApproval(CreateApprovalRequest request) {
-    ApprovalRequest saved = createApprovalEntity(request.code(), request.approvalType(), request.title(), request.sourceNo(), request.amount(), request.applicantName(), request.content(),
+    ApprovalRequest saved = createApprovalEntity(request.code(), request.approvalType(), request.title(), request.sourceNo(), request.amount(), currentActorName(), request.content(),
         request.departmentName(), request.businessType(), request.projectCode(), request.supplierRisk(), request.customerLevel());
     notify("APPROVAL", "新的审批待办", saved.getTitle(), "APPROVAL", saved.getId());
     return toApproval(saved);
@@ -306,9 +306,10 @@ public class OfficeService {
     List<ApprovalRuntimeNode> currentNodes = currentRuntimeNodes(approval);
     requireRuntimeApprover(currentNodes, approval.getDelegatedUserId());
     ApprovalRuntimeNode handled = selectRuntimeNode(currentNodes, approval.getDelegatedUserId());
+    String actorName = currentActorName();
     handled.setNodeStatus(request.decision() == ApprovalStatus.APPROVED ? "APPROVED" : "REJECTED");
     handled.setApproverId(approvalFlowSecurity.currentUserId());
-    handled.setApproverName(request.approverName());
+    handled.setApproverName(actorName);
     handled.setApprovalComment(request.comment());
     handled.setCompletedAt(OffsetDateTime.now());
     runtimeNodeRepository.save(handled);
@@ -321,7 +322,7 @@ public class OfficeService {
     }
     boolean finalStep = request.decision() == ApprovalStatus.REJECTED || noPendingRuntimeNodes(approval.getId());
     approval.setStatus(request.decision() == ApprovalStatus.REJECTED || finalStep ? request.decision() : ApprovalStatus.PENDING);
-    approval.setApproverName(request.approverName());
+    approval.setApproverName(actorName);
     approval.setApprovalComment(request.comment()); approval.setProcessedAt(OffsetDateTime.now());
     approval.setCurrentStep(finalStep ? approval.getCurrentStep() : nextPendingStep(approval.getId()));
     approval.setCurrentApproverName(finalStep ? null : currentRuntimeApproverNames(approval.getId(), approval.getCurrentStep()));
@@ -329,7 +330,7 @@ public class OfficeService {
     ApprovalRequest saved = approvalRepository.save(approval);
     ApprovalAction action = new ApprovalAction(); action.setApprovalId(saved.getId()); action.setDecision(request.decision());
     action.setOperatorId(approvalFlowSecurity.currentUserId());
-    action.setOperatorName(request.approverName()); action.setComment(request.comment()); action.setActionType(request.decision() == ApprovalStatus.APPROVED ? "APPROVE" : "REJECT");
+    action.setOperatorName(actorName); action.setComment(request.comment()); action.setActionType(request.decision() == ApprovalStatus.APPROVED ? "APPROVE" : "REJECT");
     action.setStepNo(completedApprovals + 1); actionRepository.save(action);
     if (saved.getApprovalType() == ApprovalType.EXPENSE) processExpenseSource(saved);
     if (saved.getApprovalType() == ApprovalType.OUTSOURCE) processOutsourceSource(saved);
@@ -350,7 +351,7 @@ public class OfficeService {
     approval.setDelegatedUserId(request.targetUserId());
     approval.setCurrentApproverName(target.getDisplayName());
     ApprovalRequest saved = approvalRepository.save(approval);
-    saveRuntimeAction(saved.getId(), "TRANSFER", request.operatorName(), request.comment(), completed + 1);
+    saveRuntimeAction(saved.getId(), "TRANSFER", request.comment(), completed + 1);
     notify("APPROVAL", "审批已转交", saved.getTitle() + " 转交给 " + target.getDisplayName(), "APPROVAL", saved.getId());
     return toApproval(saved);
   }
@@ -365,7 +366,7 @@ public class OfficeService {
     approval.setDelegatedUserId(request.targetUserId());
     approval.setCurrentApproverName(target.getDisplayName());
     ApprovalRequest saved = approvalRepository.save(approval);
-    saveRuntimeAction(saved.getId(), "ADD_SIGN", request.operatorName(), request.comment(), completed + 1);
+    saveRuntimeAction(saved.getId(), "ADD_SIGN", request.comment(), completed + 1);
     notify("APPROVAL", "审批已加签", saved.getTitle() + " 加签给 " + target.getDisplayName(), "APPROVAL", saved.getId());
     return toApproval(saved);
   }
@@ -376,13 +377,13 @@ public class OfficeService {
     if (approval.getStatus() != ApprovalStatus.PENDING) throw new BusinessException("只有待审批单据可以撤回");
     requireCurrentApplicant(approval);
     approval.setStatus(ApprovalStatus.REJECTED);
-    approval.setApproverName(request.operatorName());
+    approval.setApproverName(currentActorName());
     approval.setApprovalComment("撤回：" + request.comment());
     approval.setProcessedAt(OffsetDateTime.now());
     approval.setCurrentApproverName(null);
     approval.setDelegatedUserId(null);
     ApprovalRequest saved = approvalRepository.save(approval);
-    saveRuntimeAction(saved.getId(), "WITHDRAW", request.operatorName(), request.comment(), completedApprovals(id) + 1);
+    saveRuntimeAction(saved.getId(), "WITHDRAW", request.comment(), completedApprovals(id) + 1);
     if (saved.getApprovalType() == ApprovalType.EXPENSE) processExpenseSource(saved);
     if (saved.getApprovalType() == ApprovalType.OUTSOURCE) processOutsourceSource(saved);
     if (saved.getApprovalType() == ApprovalType.TRAVEL) processTravelSource(saved);
@@ -404,7 +405,7 @@ public class OfficeService {
     approval.setCurrentStep(targetStep);
     approval.setCurrentApproverName(currentRuntimeApproverNames(id, targetStep));
     ApprovalRequest saved = approvalRepository.save(approval);
-    saveRuntimeAction(id, "RETURN", request.operatorName(), request.comment(), targetStep);
+    saveRuntimeAction(id, "RETURN", request.comment(), targetStep);
     notify("APPROVAL", "审批已退回", saved.getTitle() + " 退回到第 " + targetStep + " 步", "APPROVAL", saved.getId());
     return toApproval(saved);
   }
@@ -419,7 +420,7 @@ public class OfficeService {
     runtimeNodeRepository.deleteByApprovalId(id);
     boolean autoApproved = isAutoApprovalPlan(plan);
     approval.setStatus(autoApproved ? ApprovalStatus.APPROVED : ApprovalStatus.PENDING);
-    approval.setApplicantName(request.applicantName()); approval.setApprovalComment("重新提交：" + request.comment());
+    approval.setApplicantName(currentActorName()); approval.setApprovalComment("重新提交：" + request.comment());
     approval.setProcessedAt(autoApproved ? OffsetDateTime.now() : null); approval.setApproverName(autoApproved ? "系统自动审批" : null);
     approval.setApprovalConfigVersion(plan.versionNo()); approval.setApprovalPlanSnapshot(planSnapshot(plan));
     approval.setApprovalMode(plan.mode()); approval.setCurrentStep(plan.configs().isEmpty() || autoApproved ? null : 1);
@@ -428,7 +429,7 @@ public class OfficeService {
     approval.setMatchedRuleText(ruleTextWithRuntime(plan));
     ApprovalRequest saved = approvalRepository.save(approval);
     createRuntimeNodes(saved, plan);
-    saveRuntimeAction(id, "RESUBMIT", request.applicantName(), request.comment(), saved.getCurrentStep() == null ? 1 : saved.getCurrentStep());
+    saveRuntimeAction(id, "RESUBMIT", request.comment(), saved.getCurrentStep() == null ? 1 : saved.getCurrentStep());
     if (saved.getApprovalType() == ApprovalType.EXPENSE) {
       expenseRepository.findByApprovalRequestId(id).ifPresent(expense -> {
         expense.setStatus(autoApproved ? ExpenseStatus.APPROVED : ExpenseStatus.PENDING_APPROVAL);
@@ -481,17 +482,19 @@ public class OfficeService {
     List<CreateExpenseLineRequest> lineRequests = normalizeExpenseLines(request);
     BigDecimal totalAmount = lineRequests.stream().map(CreateExpenseLineRequest::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
     CreateExpenseLineRequest firstLine = lineRequests.get(0);
-    ExpenseClaim item = new ExpenseClaim(); item.setCode(request.code()); item.setClaimantId(request.claimantId());
-    item.setClaimantName(request.claimantName()); item.setProjectId(request.projectId()); item.setWorkOrderId(request.workOrderId());
+    UUID actorId = currentActorId();
+    String actorName = currentActorName();
+    ExpenseClaim item = new ExpenseClaim(); item.setCode(request.code()); item.setClaimantId(actorId);
+    item.setClaimantName(actorName); item.setProjectId(request.projectId()); item.setWorkOrderId(request.workOrderId());
     item.setExpenseType(firstLine.expenseType()); item.setAmount(totalAmount); item.setExpenseDate(firstLine.expenseDate());
     item.setDescription(expenseSummary(lineRequests, request.description())); item.setStatus(ExpenseStatus.PENDING_APPROVAL);
     ExpenseClaim saved = expenseRepository.save(item);
     List<ExpenseClaimLine> savedLines = saveExpenseLines(saved.getId(), lineRequests);
-    ApprovalRequest approval = createApprovalEntity("SP-" + request.code(), ApprovalType.EXPENSE, "费用报销 " + request.code(), request.code(), totalAmount, request.claimantName(), saved.getDescription(),
+    ApprovalRequest approval = createApprovalEntity("SP-" + request.code(), ApprovalType.EXPENSE, "费用报销 " + request.code(), request.code(), totalAmount, actorName, saved.getDescription(),
         null, firstLine.expenseType().name(), project == null ? null : project.getCode(), null, null);
     saved.setApprovalRequestId(approval.getId()); expenseRepository.save(saved);
     if (approval.getStatus() == ApprovalStatus.APPROVED) processExpenseSource(approval);
-    notify("APPROVAL", "费用报销待审批", request.code() + " · " + request.claimantName(), "EXPENSE", saved.getId());
+    notify("APPROVAL", "费用报销待审批", request.code() + " · " + actorName, "EXPENSE", saved.getId());
     return toExpense(saved, project, order, savedLines);
   }
 
@@ -514,7 +517,7 @@ public class OfficeService {
     item.setProjectId(request.projectId()); item.setWorkOrderId(request.workOrderId()); item.setServiceType(request.serviceType());
     item.setDescription(request.description()); item.setAmount(request.amount()); item.setPlannedDate(request.plannedDate());
     item.setStatus(OutsourceStatus.PENDING_APPROVAL); OutsourceOrder saved = outsourceRepository.save(item);
-    ApprovalRequest approval = createApprovalEntity("SP-" + request.code(), ApprovalType.OUTSOURCE, "外包服务 " + request.code(), request.code(), request.amount(), request.applicantName(), request.description(),
+    ApprovalRequest approval = createApprovalEntity("SP-" + request.code(), ApprovalType.OUTSOURCE, "外包服务 " + request.code(), request.code(), request.amount(), currentActorName(), request.description(),
         null, request.serviceType(), project == null ? null : project.getCode(), supplier.getRiskStatus() == null ? null : supplier.getRiskStatus().name(), null);
     saved.setApprovalRequestId(approval.getId()); outsourceRepository.save(saved);
     if (approval.getStatus() == ApprovalStatus.APPROVED) processOutsourceSource(approval);
@@ -555,12 +558,13 @@ public class OfficeService {
   public TravelResponse createTravel(CreateTravelRequest request) {
     if (travelRepository.existsByCode(request.code())) throw new BusinessException("出差申请单号已存在");
     if (request.endDate().isBefore(request.startDate())) throw new BusinessException("结束日期不能早于开始日期");
-    userRepository.findById(request.applicantId()).orElseThrow(() -> new BusinessException("申请人不存在"));
+    UUID actorId = currentActorId();
+    String actorName = currentActorName();
     Project project = request.projectId() == null ? null : projectRepository.findById(request.projectId())
         .orElseThrow(() -> new BusinessException("项目不存在"));
     int travelDays = Math.toIntExact(ChronoUnit.DAYS.between(request.startDate(), request.endDate()) + 1);
     TravelApplication item = new TravelApplication();
-    item.setCode(request.code()); item.setApplicantId(request.applicantId()); item.setApplicantName(request.applicantName());
+    item.setCode(request.code()); item.setApplicantId(actorId); item.setApplicantName(actorName);
     item.setDepartmentName(request.departmentName()); item.setProjectId(request.projectId()); item.setDestination(request.destination());
     item.setPurpose(request.purpose()); item.setTransportType(request.transportType()); item.setStartDate(request.startDate());
     item.setEndDate(request.endDate()); item.setTravelDays(travelDays); item.setEstimatedAmount(request.estimatedAmount());
@@ -569,12 +573,12 @@ public class OfficeService {
     String content = request.destination() + " · " + request.startDate() + " 至 " + request.endDate() + " · " + request.purpose();
     ApprovalRequest approval = createApprovalEntity(
         "SP-" + request.code(), ApprovalType.TRAVEL, "出差申请 " + request.code(), request.code(), request.estimatedAmount(),
-        request.applicantName(), content, request.departmentName(), request.transportType(),
+        actorName, content, request.departmentName(), request.transportType(),
         project == null ? null : project.getCode(), null, null);
     saved.setApprovalRequestId(approval.getId());
     travelRepository.save(saved);
     if (approval.getStatus() == ApprovalStatus.APPROVED) processTravelSource(approval);
-    notify("APPROVAL", "出差申请待审批", request.code() + " · " + request.applicantName() + " · " + request.destination(), "TRAVEL", saved.getId());
+    notify("APPROVAL", "出差申请待审批", request.code() + " · " + actorName + " · " + request.destination(), "TRAVEL", saved.getId());
     return toTravel(saved, project);
   }
 
@@ -593,9 +597,10 @@ public class OfficeService {
     if (request.takeOut() && request.expectedReturnDate() == null) throw new BusinessException("外带用印必须填写预计归还日期");
     if (request.takeOut() && request.expectedReturnDate().isBefore(request.useDate())) throw new BusinessException("预计归还日期不能早于用印日期");
     if (!request.takeOut() && request.expectedReturnDate() != null) throw new BusinessException("非外带用印不应填写归还日期");
-    userRepository.findById(request.applicantId()).orElseThrow(() -> new BusinessException("申请人不存在"));
+    UUID actorId = currentActorId();
+    String actorName = currentActorName();
     SealApplication item = new SealApplication();
-    item.setCode(request.code()); item.setApplicantId(request.applicantId()); item.setApplicantName(request.applicantName());
+    item.setCode(request.code()); item.setApplicantId(actorId); item.setApplicantName(actorName);
     item.setDepartmentName(request.departmentName()); item.setSealType(request.sealType()); item.setDocumentName(request.documentName());
     item.setDocumentPurpose(request.documentPurpose()); item.setCounterparty(trimToNull(request.counterparty())); item.setCopyCount(request.copyCount());
     item.setUseDate(request.useDate()); item.setTakeOut(request.takeOut()); item.setExpectedReturnDate(request.expectedReturnDate());
@@ -607,11 +612,11 @@ public class OfficeService {
         + (request.takeOut() ? " · 外带至 " + request.expectedReturnDate() : " · 现场用印");
     ApprovalRequest approval = createApprovalEntity(
         "SP-" + request.code(), ApprovalType.SEAL, "用印申请 " + request.code(), request.code(), BigDecimal.ZERO,
-        request.applicantName(), content, request.departmentName(), businessType, null, null, null);
+        actorName, content, request.departmentName(), businessType, null, null, null);
     saved.setApprovalRequestId(approval.getId());
     sealRepository.save(saved);
     if (approval.getStatus() == ApprovalStatus.APPROVED) processSealSource(approval);
-    notify("APPROVAL", "用印申请待审批", request.code() + " · " + request.applicantName() + " · " + request.documentName(), "SEAL", saved.getId());
+    notify("APPROVAL", "用印申请待审批", request.code() + " · " + actorName + " · " + request.documentName(), "SEAL", saved.getId());
     return toSeal(saved);
   }
 
@@ -936,6 +941,18 @@ public class OfficeService {
     return authentication != null && authentication.getPrincipal() instanceof UserPrincipal principal ? principal : null;
   }
 
+  private UUID currentActorId() {
+    UserPrincipal principal = currentPrincipal();
+    if (principal == null) throw new BusinessException("无法识别当前操作人");
+    return principal.id();
+  }
+
+  private String currentActorName() {
+    UserPrincipal principal = currentPrincipal();
+    if (principal == null) throw new BusinessException("无法识别当前操作人");
+    return principal.displayName();
+  }
+
   private boolean hasCurrentAuthority(String authority) {
     var authentication = SecurityContextHolder.getContext().getAuthentication();
     return authentication != null && authentication.getAuthorities().stream()
@@ -1062,12 +1079,12 @@ public class OfficeService {
     ).getOrDefault(value, "动态审批人");
   }
 
-  private void saveRuntimeAction(UUID approvalId, String actionType, String operatorName, String comment, int stepNo) {
+  private void saveRuntimeAction(UUID approvalId, String actionType, String comment, int stepNo) {
     ApprovalAction action = new ApprovalAction();
     action.setApprovalId(approvalId);
     action.setDecision(ApprovalStatus.PENDING);
     action.setOperatorId(approvalFlowSecurity.currentUserId());
-    action.setOperatorName(operatorName);
+    action.setOperatorName(currentActorName());
     action.setComment(comment);
     action.setActionType(actionType);
     action.setStepNo(stepNo);

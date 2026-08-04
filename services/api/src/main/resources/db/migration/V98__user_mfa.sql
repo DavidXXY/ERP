@@ -1,0 +1,3 @@
+ALTER TABLE sys_users ADD COLUMN mfa_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE sys_users ADD COLUMN mfa_secret VARCHAR(1024);
+ALTER TABLE sys_users ADD COLUMN mfa_recovery_codes TEXT;

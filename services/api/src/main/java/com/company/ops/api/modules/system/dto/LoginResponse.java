@@ -4,8 +4,17 @@ import java.util.List;
 
 public record LoginResponse(
     String token,
-    CurrentUserResponse user
+    CurrentUserResponse user,
+    boolean mfaRequired
 ) {
+
+  public LoginResponse(String token, CurrentUserResponse user) {
+    this(token, user, false);
+  }
+
+  public static LoginResponse mfaChallenge() {
+    return new LoginResponse(null, null, true);
+  }
 
   public record CurrentUserResponse(
       String id,

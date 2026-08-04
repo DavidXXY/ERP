@@ -251,7 +251,7 @@
 
         <a-sub-menu
           v-if="
-            auth.can('system:view') ||
+            auth.can('system:health:view') ||
             auth.can('system:user:view') ||
             auth.can('system:organization:view') ||
             auth.can('system:role:view') ||
@@ -263,7 +263,9 @@
         >
           <template #icon><SettingOutlined /></template>
           <template #title>系统设置</template>
-          <a-menu-item v-if="auth.can('system:view')" key="/system/health"
+          <a-menu-item
+            v-if="auth.can('system:health:view')"
+            key="/system/health"
             >系统运行情况</a-menu-item
           >
           <a-menu-item v-if="auth.can('system:user:view')" key="/system/users"
@@ -307,7 +309,10 @@
           <a-menu-item key="/self/balances">我的额度</a-menu-item>
         </a-sub-menu>
       </a-menu>
-      <div class="sidebar-version" @click="router.push('/system/health')">
+      <div
+        class="sidebar-version"
+        @click="auth.can('system:health:view') && router.push('/system/health')"
+      >
         v{{ sysVersion }}
       </div>
     </a-layout-sider>

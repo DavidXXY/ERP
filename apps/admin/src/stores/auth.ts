@@ -16,15 +16,18 @@ export const useAuthStore = defineStore("auth", {
       const roleCodes = user.roleCodes ?? user.roles ?? [];
       return { ...user, roleCodes };
     },
-    async login(username: string, password: string) {
+    async login(username: string, password: string, mfaCode?: string) {
       this.token = "";
       this.user = null;
       sessionStorage.removeItem(AUTH_TOKEN_KEY);
-      const response = await loginApi({ username, password });
+      const response = await loginApi({ username, password, mfaCode });
+      if (response.mfaRequired) return false;
+      if (!response.token || !response.user) throw new Error("登录响应不完整");
       this.token = response.token;
       this.user = this.normalizeUser(response.user);
       this.initialized = true;
       sessionStorage.setItem(AUTH_TOKEN_KEY, response.token);
+      return true;
     },
     async loadCurrentUser() {
       if (!this.token) {

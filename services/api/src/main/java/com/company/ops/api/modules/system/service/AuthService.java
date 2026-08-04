@@ -11,6 +11,8 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AuthService {
@@ -18,14 +20,17 @@ public class AuthService {
   private final AuthenticationManager authenticationManager;
   private final JwtService jwtService;
   private final LoginAttemptService loginAttemptService;
+  private final MfaService mfaService;
 
   public AuthService(AuthenticationManager authenticationManager, JwtService jwtService,
-      LoginAttemptService loginAttemptService) {
+      LoginAttemptService loginAttemptService, MfaService mfaService) {
     this.authenticationManager = authenticationManager;
     this.jwtService = jwtService;
     this.loginAttemptService = loginAttemptService;
+    this.mfaService = mfaService;
   }
 
+  @Transactional
   public LoginResponse login(LoginRequest request, String clientAddress) {
     String normalizedUsername = request.username().trim().toLowerCase();
     String accountKey = "user|" + normalizedUsername;
@@ -45,10 +50,21 @@ public class AuthService {
       loginAttemptService.failed(addressKey);
       throw exception;
     }
+    UserPrincipal principal = (UserPrincipal) authentication.getPrincipal();
+    if (principal.mfaEnabled()) {
+      if (request.mfaCode() == null || request.mfaCode().isBlank()) {
+        return LoginResponse.mfaChallenge();
+      }
+      if (!mfaService.verifyLoginCode(principal.id(), request.mfaCode())) {
+        loginAttemptService.failed(accountKey);
+        loginAttemptService.failed(attemptKey);
+        loginAttemptService.failed(addressKey);
+        throw new BadCredentialsException("MFA verification failed");
+      }
+    }
     loginAttemptService.succeeded(accountKey);
     loginAttemptService.succeeded(attemptKey);
     loginAttemptService.succeeded(addressKey);
-    UserPrincipal principal = (UserPrincipal) authentication.getPrincipal();
     return new LoginResponse(jwtService.createToken(principal), toCurrentUser(principal));
   }
 

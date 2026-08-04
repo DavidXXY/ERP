@@ -1,9 +1,14 @@
 package com.company.ops.api.common.storage;
 
 import com.company.ops.api.common.exception.BusinessException;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.Locale;
 import java.util.Set;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 import org.springframework.core.io.Resource;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -42,6 +47,7 @@ public interface FileStorageService {
     String extension = extensionOf(original);
     if (!policy.allowedExtensions().contains(extension)) throw new BusinessException(policy.allowedExtensionsMessage());
     validateContentType(extension, normalizeContentType(file.getContentType()), policy);
+    if (policy.strictContentType()) validateSignature(file, extension);
     return new ValidatedFile(original, extension);
   }
 
@@ -64,19 +70,70 @@ public interface FileStorageService {
 
   private static void validateContentType(String extension, String contentType, FilePolicy policy) {
     if (contentType.isBlank() || "application/octet-stream".equals(contentType)) return;
-    if (isImage(extension) && IMAGE_TYPES.contains(contentType)) return;
+    if ((".jpg".equals(extension) || ".jpeg".equals(extension)) && "image/jpeg".equals(contentType)) return;
+    if (".png".equals(extension) && "image/png".equals(contentType)) return;
+    if (".webp".equals(extension) && "image/webp".equals(contentType)) return;
     if (".pdf".equals(extension) && PDF_TYPES.contains(contentType)) return;
-    if (isOffice(extension) && OFFICE_TYPES.contains(contentType)) return;
+    if (".doc".equals(extension) && "application/msword".equals(contentType)) return;
+    if (".docx".equals(extension)
+        && "application/vnd.openxmlformats-officedocument.wordprocessingml.document".equals(contentType)) return;
+    if (".xls".equals(extension) && "application/vnd.ms-excel".equals(contentType)) return;
+    if (".xlsx".equals(extension)
+        && "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet".equals(contentType)) return;
     if (!policy.strictContentType()) return;
     throw new BusinessException("文件类型与扩展名不匹配");
   }
 
-  private static boolean isImage(String extension) {
-    return Set.of(".jpg", ".jpeg", ".png", ".webp").contains(extension);
+  private static void validateSignature(MultipartFile file, String extension) {
+    try (InputStream input = file.getInputStream()) {
+      byte[] header = input.readNBytes(12);
+      boolean valid = switch (extension) {
+        case ".jpg", ".jpeg" -> startsWith(header, 0xFF, 0xD8, 0xFF);
+        case ".png" -> startsWith(header, 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A);
+        case ".webp" -> header.length >= 12
+            && asciiAt(header, 0, "RIFF") && asciiAt(header, 8, "WEBP");
+        case ".pdf" -> asciiAt(header, 0, "%PDF-");
+        case ".doc", ".xls" -> startsWith(header, 0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1);
+        case ".docx" -> isOpenXml(file, "word/");
+        case ".xlsx" -> isOpenXml(file, "xl/");
+        default -> false;
+      };
+      if (!valid) throw new BusinessException("文件内容与扩展名不匹配");
+    } catch (BusinessException exception) {
+      throw exception;
+    } catch (IOException exception) {
+      throw new BusinessException("无法读取上传文件");
+    }
   }
 
-  private static boolean isOffice(String extension) {
-    return Set.of(".doc", ".docx", ".xls", ".xlsx").contains(extension);
+  private static boolean isOpenXml(MultipartFile file, String requiredPrefix) throws IOException {
+    boolean contentTypes = false;
+    boolean requiredDirectory = false;
+    int entries = 0;
+    try (ZipInputStream zip = new ZipInputStream(file.getInputStream())) {
+      ZipEntry entry;
+      while ((entry = zip.getNextEntry()) != null && entries++ < 10_000) {
+        String name = entry.getName();
+        if ("[Content_Types].xml".equals(name)) contentTypes = true;
+        if (name.startsWith(requiredPrefix)) requiredDirectory = true;
+        if (contentTypes && requiredDirectory) return true;
+      }
+    }
+    return false;
+  }
+
+  private static boolean startsWith(byte[] bytes, int... expected) {
+    if (bytes.length < expected.length) return false;
+    for (int i = 0; i < expected.length; i++) {
+      if ((bytes[i] & 0xFF) != expected[i]) return false;
+    }
+    return true;
+  }
+
+  private static boolean asciiAt(byte[] bytes, int offset, String value) {
+    byte[] expected = value.getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+    return bytes.length >= offset + expected.length
+        && Arrays.equals(Arrays.copyOfRange(bytes, offset, offset + expected.length), expected);
   }
 
   record StoredFile(

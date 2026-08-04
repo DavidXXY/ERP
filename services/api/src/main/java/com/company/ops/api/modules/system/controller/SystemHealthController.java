@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.env.Environment;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -32,20 +33,8 @@ public class SystemHealthController {
   @Value("${ops.storage.type:local}")
   private String storageType;
 
-  @Value("${ops.storage.local-path:}")
-  private String localStoragePath;
-
-  @Value("${spring.datasource.url:}")
-  private String datasourceUrl;
-
   @Value("${spring.datasource.driver-class-name:}")
   private String datasourceDriver;
-
-  @Value("${spring.data.redis.host:}")
-  private String redisHost;
-
-  @Value("${spring.data.redis.port:}")
-  private String redisPort;
 
   public SystemHealthController(Environment environment, ApplicationVersion applicationVersion) {
     this.environment = environment;
@@ -53,6 +42,7 @@ public class SystemHealthController {
   }
 
   @GetMapping
+  @PreAuthorize("hasAuthority('system:health:view')")
   public ApiResponse<Map<String, Object>> getSystemHealth() {
     Map<String, Object> result = new LinkedHashMap<>();
     result.put("application", getApplicationInfo());
@@ -79,13 +69,8 @@ public class SystemHealthController {
 
   private Map<String, Object> getDependencyInfo() {
     Map<String, Object> deps = new LinkedHashMap<>();
-    deps.put("databaseUrl", maskSensitiveUrl(datasourceUrl));
     deps.put("databaseDriver", datasourceDriver);
-    deps.put("redisEndpoint", redisHost == null || redisHost.isBlank() ? "" : redisHost + ":" + redisPort);
     deps.put("storageType", storageType);
-    deps.put("localStoragePath", localStoragePath);
-    deps.put("tempDir", System.getProperty("java.io.tmpdir"));
-    deps.put("workingDir", System.getProperty("user.dir"));
     return deps;
   }
 
@@ -95,16 +80,6 @@ public class SystemHealthController {
       profiles = environment.getDefaultProfiles();
     }
     return String.join(", ", Arrays.stream(profiles).filter((item) -> !item.isBlank()).toList());
-  }
-
-  private String maskSensitiveUrl(String value) {
-    if (value == null || value.isBlank()) {
-      return "";
-    }
-    return value
-        .replaceAll("(?i)(password=)[^;&]+", "$1******")
-        .replaceAll("(?i)(pwd=)[^;&]+", "$1******")
-        .replaceAll("(?i)(://[^:/?#]+:)[^@/]+(@)", "$1******$2");
   }
 
   private Map<String, Object> getOperatingSystemInfo() {
@@ -193,7 +168,6 @@ public class SystemHealthController {
     jvm.put("jvmVersion", runtime.getVmVersion());
     jvm.put("jvmVendor", runtime.getVmVendor());
     jvm.put("uptime", runtime.getUptime());
-    jvm.put("inputArguments", runtime.getInputArguments());
     jvm.put("startTime", runtime.getStartTime());
     return jvm;
   }
@@ -203,7 +177,7 @@ public class SystemHealthController {
     List<Map<String, Object>> disks = new ArrayList<>();
     for (File root : roots) {
       Map<String, Object> disk = new LinkedHashMap<>();
-      disk.put("path", root.getAbsolutePath());
+      disk.put("name", "disk-" + (disks.size() + 1));
       disk.put("totalSpace", root.getTotalSpace());
       disk.put("freeSpace", root.getFreeSpace());
       disk.put("usableSpace", root.getUsableSpace());

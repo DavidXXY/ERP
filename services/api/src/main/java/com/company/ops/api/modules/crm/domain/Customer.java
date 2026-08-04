@@ -12,6 +12,7 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Entity
 @Table(name = "crm_customers")
@@ -32,6 +33,9 @@ public class Customer extends BaseEntity {
 
   @Column(name = "owner_name", nullable = false, length = 80)
   private String ownerName;
+
+  @Column(name = "owner_user_id")
+  private UUID ownerUserId;
 
   @Column(name = "payment_habit", length = 200)
   private String paymentHabit;
@@ -117,6 +121,14 @@ public class Customer extends BaseEntity {
 
   public void setOwnerName(String ownerName) {
     this.ownerName = ownerName;
+  }
+
+  public UUID getOwnerUserId() {
+    return ownerUserId;
+  }
+
+  public void setOwnerUserId(UUID ownerUserId) {
+    this.ownerUserId = ownerUserId;
   }
 
   public String getPaymentHabit() {

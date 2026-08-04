@@ -8,6 +8,9 @@ services/api/target/
 .dev/
 .local-data/
 .local-deploy/
+apps/admin/dist 2/
+apps/admin/public/qualification-assets/
+services/api/src/main/resources/qualification-import.json
 .env
 .env.local
 .env.*.local

@@ -44,7 +44,8 @@ public class DataInitializer implements CommandLineRunner {
       new RequiredPermission("finance:tax:manage", "发票作废红冲", "finance"),
       new RequiredPermission("finance:account:manage", "会计科目与期初余额维护", "finance"),
       new RequiredPermission("finance:operations:view", "财务运营工作台查看", "finance"),
-      new RequiredPermission("finance:operations:manage", "财务运营处理", "finance")
+      new RequiredPermission("finance:operations:manage", "财务运营处理", "finance"),
+      new RequiredPermission("system:health:view", "系统运行状态查看", "system")
   );
 
   private final SystemPermissionRepository permissionRepository;

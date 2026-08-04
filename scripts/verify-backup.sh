@@ -17,6 +17,19 @@ if [[ -f "$checksum_file" ]]; then
   }
 fi
 
+if [[ "$backup_file" == *.age ]]; then
+  command -v age >/dev/null 2>&1 || { echo "age is required to verify encrypted backups." >&2; exit 1; }
+  : "${BACKUP_ENCRYPTION_IDENTITY:?BACKUP_ENCRYPTION_IDENTITY is required to verify encrypted backup contents}"
+  decrypt_dir="$(mktemp -d "${TMPDIR:-/tmp}/ops-erp-decrypt.XXXXXX")"
+  cleanup_decrypt() { rm -rf -- "$decrypt_dir"; }
+  trap cleanup_decrypt EXIT
+  decrypted="$decrypt_dir/$(basename "${backup_file%.age}")"
+  age --decrypt --identity "$BACKUP_ENCRYPTION_IDENTITY" --output "$decrypted" "$backup_file"
+  "$0" "$decrypted"
+  echo "Encrypted backup integrity verified: $backup_file"
+  exit 0
+fi
+
 case "$backup_file" in
   *.dump)
     pg_restore --list "$backup_file" >/dev/null
@@ -72,7 +85,7 @@ case "$backup_file" in
     pg_restore --list "$verify_dir/postgres.dump" >/dev/null
     ;;
   *)
-    echo "Unsupported backup format: expected .dump or .tar.gz" >&2
+    echo "Unsupported backup format: expected .dump, .tar.gz, or .tar.gz.age" >&2
     exit 1
     ;;
 esac

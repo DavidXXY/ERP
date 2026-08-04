@@ -14,6 +14,8 @@ import com.company.ops.api.modules.system.repository.SystemOrganizationRepositor
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.HashMap;
@@ -23,7 +25,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.event.EventListener;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,13 +38,15 @@ public class QualificationDataImporter {
   private final QualificationPerformanceRepository performanceRepository;
   private final SystemOrganizationRepository organizationRepository;
   private final boolean importEnabled;
+  private final String importFile;
 
   public QualificationDataImporter(ObjectMapper objectMapper, QualificationEmployeeRepository employeeRepository,
                                    CompanyQualificationRepository companyRepository,
                                    PersonnelCertificateRepository certificateRepository,
                                    QualificationPerformanceRepository performanceRepository,
                                    SystemOrganizationRepository organizationRepository,
-                                   @Value("${ops.qualification.import:false}") boolean importEnabled) {
+                                   @Value("${ops.qualification.import:false}") boolean importEnabled,
+                                   @Value("${ops.qualification.import-file:}") String importFile) {
     this.objectMapper = objectMapper;
     this.employeeRepository = employeeRepository;
     this.companyRepository = companyRepository;
@@ -51,6 +54,7 @@ public class QualificationDataImporter {
     this.performanceRepository = performanceRepository;
     this.organizationRepository = organizationRepository;
     this.importEnabled = importEnabled;
+    this.importFile = importFile;
   }
 
   @EventListener(ApplicationReadyEvent.class)
@@ -60,13 +64,23 @@ public class QualificationDataImporter {
       log.info("Qualification legacy data import is disabled");
       return;
     }
+    if (importFile == null || importFile.isBlank()) {
+      throw new IllegalStateException("资质历史数据导入已启用，但未配置受控导入文件 ops.qualification.import-file");
+    }
+    Path source = Path.of(importFile).toAbsolutePath().normalize();
+    if (!Files.isRegularFile(source) || !Files.isReadable(source)) {
+      throw new IllegalStateException("资质历史数据导入文件不存在或不可读: " + source);
+    }
     try {
-      JsonNode root = objectMapper.readTree(new ClassPathResource("qualification-import.json").getInputStream());
+      JsonNode root;
+      try (var input = Files.newInputStream(source)) {
+        root = objectMapper.readTree(input);
+      }
       Map<String, QualificationEmployee> employees = importEmployees(root.path("employees"));
       importCompanyQualifications(root.path("companyQualifications"));
       importCertificates(root.path("certificates"), employees);
       importPerformances(root.path("performances"));
-      log.info("Qualification data ready: {} employees, {} certificates, {} company qualifications, {} performances",
+      log.info("Qualification data imported from controlled file: {} employees, {} certificates, {} company qualifications, {} performances",
           employeeRepository.count(), certificateRepository.count(), companyRepository.count(), performanceRepository.count());
     } catch (IOException exception) {
       throw new IllegalStateException("资质历史数据导入失败", exception);

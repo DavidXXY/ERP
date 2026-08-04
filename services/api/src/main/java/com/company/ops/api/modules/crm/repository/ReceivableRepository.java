@@ -3,18 +3,20 @@ package com.company.ops.api.modules.crm.repository;
 import com.company.ops.api.modules.crm.domain.Receivable;
 import java.util.List;
 import java.util.UUID;
+import java.util.Collection;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import jakarta.persistence.LockModeType;
 import java.util.Optional;
 import java.time.LocalDate;
-import java.util.Collection;
 import java.math.BigDecimal;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 public interface ReceivableRepository extends JpaRepository<Receivable, UUID> {
+  org.springframework.data.domain.Page<Receivable> findByCustomerIdInOrderByDueDateAsc(
+      Collection<UUID> customerIds, org.springframework.data.domain.Pageable pageable);
 
   List<Receivable> findByCustomerIdOrderByDueDateAsc(UUID customerId);
 

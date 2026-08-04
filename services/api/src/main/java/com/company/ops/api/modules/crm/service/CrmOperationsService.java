@@ -76,6 +76,7 @@ import com.company.ops.api.modules.project.dto.CreateProjectRequest;
 import com.company.ops.api.modules.project.dto.ProjectBudgetItemRequest;
 import com.company.ops.api.modules.project.repository.ProjectRepository;
 import com.company.ops.api.modules.project.service.ProjectService;
+import com.company.ops.api.modules.system.security.DataScopeService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
@@ -87,6 +88,7 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -110,6 +112,7 @@ public class CrmOperationsService {
   private final ProjectService projectService;
   private final ProjectRepository projectRepository;
   private final CrmAttachmentRepository attachmentRepository;
+  private final DataScopeService dataScopeService;
 
   @jakarta.persistence.PersistenceContext
   private jakarta.persistence.EntityManager entityManager;
@@ -132,7 +135,8 @@ public class CrmOperationsService {
       ProjectService projectService,
       ProjectRepository projectRepository,
       CrmAttachmentRepository attachmentRepository,
-                               CodeGenerator codeGenerator) {
+      CodeGenerator codeGenerator,
+      DataScopeService dataScopeService) {
     this.codeGenerator = codeGenerator;
     this.customerRepository = customerRepository;
     this.opportunityRepository = opportunityRepository;
@@ -149,11 +153,13 @@ public class CrmOperationsService {
     this.projectService = projectService;
     this.projectRepository = projectRepository;
     this.attachmentRepository = attachmentRepository;
+    this.dataScopeService = dataScopeService;
   }
 
   @Transactional(readOnly = true)
   public List<OpportunityResponse> listOpportunities() {
-    List<Opportunity> opportunities = deleteGovernanceService.visible("OPPORTUNITY", opportunityRepository.findAllByOrderByUpdatedAtDesc(), Opportunity::getId);
+    List<Opportunity> opportunities = deleteGovernanceService.visible("OPPORTUNITY", opportunityRepository.findAllByOrderByUpdatedAtDesc(), Opportunity::getId)
+        .stream().filter(this::canAccessOpportunity).toList();
     Map<UUID, Customer> customers = customerMap(opportunities.stream()
         .map(Opportunity::getCustomerId)
         .toList());
@@ -164,6 +170,7 @@ public class CrmOperationsService {
   public OpportunityResponse getOpportunity(UUID id) {
     Opportunity opportunity = opportunityRepository.findById(id)
         .orElseThrow(() -> new BusinessException("商机不存在"));
+    assertOpportunityAccess(opportunity);
     if (deleteGovernanceService.isHidden("OPPORTUNITY", id)) throw new BusinessException("商机不存在");
     return toOpportunity(opportunity, customerMap(nullableId(opportunity.getCustomerId())));
   }
@@ -189,6 +196,7 @@ public class CrmOperationsService {
     opportunity.setNextAction(request.nextAction());
     opportunity.setNextActionAt(request.nextActionAt());
     opportunity.setOwnerName(request.ownerName());
+    opportunity.setOwnerUserId(dataScopeService.requireVisibleOwnerId(request.ownerName()));
     Opportunity saved = opportunityRepository.save(opportunity);
     return toOpportunity(saved, customerMap(nullableId(saved.getCustomerId())));
   }
@@ -197,6 +205,7 @@ public class CrmOperationsService {
   public OpportunityResponse advanceOpportunity(UUID id, AdvanceOpportunityRequest request) {
     Opportunity opportunity = opportunityRepository.findById(id)
         .orElseThrow(() -> new BusinessException("商机不存在"));
+    assertOpportunityAccess(opportunity);
     if (opportunity.getStage() == OpportunityStage.WON || opportunity.getStage() == OpportunityStage.LOST) {
       throw new BusinessException("已结束商机不能继续推进");
     }
@@ -214,7 +223,8 @@ public class CrmOperationsService {
 
   @Transactional(readOnly = true)
   public List<QuoteResponse> listQuotes() {
-    List<QuotePlan> quotes = deleteGovernanceService.visible("QUOTE", quoteRepository.findAllByOrderByUpdatedAtDesc(), QuotePlan::getId);
+    List<QuotePlan> quotes = deleteGovernanceService.visible("QUOTE", quoteRepository.findAllByOrderByUpdatedAtDesc(), QuotePlan::getId)
+        .stream().filter(item -> canAccessCustomer(item.getCustomerId())).toList();
     Map<UUID, Customer> customers = customerMap(quotes.stream().map(QuotePlan::getCustomerId).toList());
     Map<UUID, Opportunity> opportunities = opportunityMap(quotes.stream()
         .map(QuotePlan::getOpportunityId)
@@ -226,6 +236,7 @@ public class CrmOperationsService {
   public QuoteResponse getQuote(UUID id) {
     QuotePlan quote = quoteRepository.findById(id)
         .orElseThrow(() -> new BusinessException("报价方案不存在"));
+    assertCustomerAccess(quote.getCustomerId());
     if (deleteGovernanceService.isHidden("QUOTE", id)) throw new BusinessException("报价不存在");
     return toQuote(
         quote,
@@ -241,6 +252,7 @@ public class CrmOperationsService {
     if (request.opportunityId() != null) {
       opportunity = opportunityRepository.findById(request.opportunityId())
           .orElseThrow(() -> new BusinessException("关联商机不存在"));
+      assertOpportunityAccess(opportunity);
       if (request.customerId() != null && opportunity.getCustomerId() != null
           && !request.customerId().equals(opportunity.getCustomerId())) {
         throw new BusinessException("报价客户与关联商机客户不一致");
@@ -279,7 +291,7 @@ public class CrmOperationsService {
     quote.setVersionNo(1);
     quote.setStatus(QuoteStatus.DRAFT);
     QuotePlan saved = quoteRepository.save(quote);
-    saveQuoteRevision(saved, "首次创建", request.editorName());
+    saveQuoteRevision(saved, "首次创建", currentActorName());
     Map<UUID, Customer> customers = customerMap(nullableId(saved.getCustomerId()));
     Map<UUID, Opportunity> opportunities = opportunity == null
         ? Map.of()
@@ -291,6 +303,7 @@ public class CrmOperationsService {
   public QuoteResponse updateQuote(UUID id, UpdateQuoteRequest request) {
     QuotePlan quote = quoteRepository.findById(id)
         .orElseThrow(() -> new BusinessException("报价方案不存在"));
+    assertCustomerAccess(quote.getCustomerId());
     if (quote.getStatus() == QuoteStatus.PENDING_APPROVAL) {
       throw new BusinessException("审批中的报价不能修改，请先完成审批");
     }
@@ -325,7 +338,7 @@ public class CrmOperationsService {
     }
     clearCustomerResult(quote);
     QuotePlan saved = quoteRepository.save(quote);
-    saveQuoteRevision(saved, request.revisionNote(), request.editorName());
+    saveQuoteRevision(saved, request.revisionNote(), currentActorName());
     return toQuote(
         saved,
         customerMap(nullableId(saved.getCustomerId())),
@@ -335,9 +348,8 @@ public class CrmOperationsService {
 
   @Transactional(readOnly = true)
   public List<QuoteRevisionResponse> listQuoteRevisions(UUID id) {
-    if (!quoteRepository.existsById(id)) {
-      throw new BusinessException("报价方案不存在");
-    }
+    QuotePlan quote = quoteRepository.findById(id).orElseThrow(() -> new BusinessException("报价方案不存在"));
+    assertCustomerAccess(quote.getCustomerId());
     return quoteRevisionRepository.findByQuoteIdOrderByVersionNoDesc(id).stream()
         .map(this::toQuoteRevision)
         .toList();
@@ -347,6 +359,7 @@ public class CrmOperationsService {
   public QuoteCostRequestResponse requestQuoteCost(UUID id, RequestQuoteCostRequest request) {
     QuotePlan quote = quoteRepository.findById(id)
         .orElseThrow(() -> new BusinessException("报价方案不存在"));
+    assertCustomerAccess(quote.getCustomerId());
     if (quote.getStatus() == QuoteStatus.PENDING_APPROVAL || quote.getStatus() == QuoteStatus.APPROVED
         || quote.getStatus() == QuoteStatus.CUSTOMER_ACCEPTED || quote.getStatus() == QuoteStatus.CONVERTED) {
       throw new BusinessException("当前报价状态不能再发起售前成本核算");
@@ -362,7 +375,7 @@ public class CrmOperationsService {
     cost.setOpportunityId(quote.getOpportunityId());
     cost.setCustomerId(quote.getCustomerId());
     cost.setStatus(QuoteCostStatus.REQUESTED);
-    cost.setRequestedBy(request.requestedBy());
+    cost.setRequestedBy(currentActorName());
     cost.setRequestedAt(OffsetDateTime.now());
     QuoteCostRequest saved = quoteCostRequestRepository.save(cost);
     quote.setStatus(QuoteStatus.COST_REQUESTED);
@@ -372,9 +385,8 @@ public class CrmOperationsService {
 
   @Transactional(readOnly = true)
   public List<QuoteCostRequestResponse> listQuoteCostRequests(UUID id) {
-    if (!quoteRepository.existsById(id)) {
-      throw new BusinessException("报价方案不存在");
-    }
+    QuotePlan quote = quoteRepository.findById(id).orElseThrow(() -> new BusinessException("报价方案不存在"));
+    assertCustomerAccess(quote.getCustomerId());
     return quoteCostRequestRepository.findByQuoteIdOrderByCreatedAtDesc(id).stream()
         .map(this::toQuoteCostRequest)
         .toList();
@@ -389,6 +401,7 @@ public class CrmOperationsService {
     }
     QuotePlan quote = quoteRepository.findById(cost.getQuoteId())
         .orElseThrow(() -> new BusinessException("报价方案不存在"));
+    assertCustomerAccess(quote.getCustomerId());
     cost.setProjectManager(request.projectManager());
     cost.setLaborCost(defaultAmount(request.laborCost()));
     cost.setLaborTaxRate(defaultLaborTaxRate(request.laborTaxRate()));
@@ -422,8 +435,9 @@ public class CrmOperationsService {
     }
     QuotePlan quote = quoteRepository.findById(cost.getQuoteId())
         .orElseThrow(() -> new BusinessException("报价方案不存在"));
+    assertCustomerAccess(quote.getCustomerId());
 
-    cost.setApprovedBy(request.approverName());
+    cost.setApprovedBy(currentActorName());
     cost.setApprovedAt(OffsetDateTime.now());
     cost.setApprovalComment(request.comment());
     if (request.decision() == ApprovalDecision.APPROVED) {
@@ -442,6 +456,7 @@ public class CrmOperationsService {
   public QuoteResponse submitQuote(UUID id) {
     QuotePlan quote = quoteRepository.findById(id)
         .orElseThrow(() -> new BusinessException("报价方案不存在"));
+    assertCustomerAccess(quote.getCustomerId());
     if (quote.getStatus() != QuoteStatus.COST_APPROVED) {
       throw new BusinessException("售前成本已核对并审批通过后，才可以提交报价审批");
     }
@@ -460,6 +475,7 @@ public class CrmOperationsService {
   public QuoteResponse processQuoteApproval(UUID id, ProcessQuoteApprovalRequest request) {
     QuotePlan quote = quoteRepository.findById(id)
         .orElseThrow(() -> new BusinessException("报价方案不存在"));
+    assertCustomerAccess(quote.getCustomerId());
     if (quote.getStatus() != QuoteStatus.PENDING_APPROVAL) {
       throw new BusinessException("只有审批中的报价可以处理");
     }
@@ -476,7 +492,7 @@ public class CrmOperationsService {
     approval.setQuoteVersion(quote.getVersionNo());
     approval.setDecision(request.decision());
     approval.setComment(request.comment());
-    approval.setApproverName(request.approverName());
+    approval.setApproverName(currentActorName());
     approval.setDecidedAt(OffsetDateTime.now());
     quoteApprovalRepository.save(approval);
 
@@ -492,13 +508,14 @@ public class CrmOperationsService {
   ) {
     QuotePlan quote = quoteRepository.findById(id)
         .orElseThrow(() -> new BusinessException("报价方案不存在"));
+    assertCustomerAccess(quote.getCustomerId());
     if (quote.getStatus() != QuoteStatus.APPROVED) {
       throw new BusinessException("只有内部审批通过的报价可以登记客户结果");
     }
     requireText(quote.getPaymentNodes(), "请输入付款方式/节点");
     quote.setCustomerDecision(request.decision());
     quote.setCustomerComment(request.comment());
-    quote.setCustomerDecisionBy(request.operatorName());
+    quote.setCustomerDecisionBy(currentActorName());
     quote.setCustomerDecidedAt(OffsetDateTime.now());
     quote.setStatus(request.decision() == QuoteCustomerDecision.ACCEPTED
         ? QuoteStatus.CUSTOMER_ACCEPTED
@@ -515,6 +532,7 @@ public class CrmOperationsService {
   public QuoteConversionResult convertQuote(UUID id, ConvertQuoteRequest request) {
     QuotePlan quote = quoteRepository.findById(id)
         .orElseThrow(() -> new BusinessException("报价方案不存在"));
+    assertCustomerAccess(quote.getCustomerId());
     if (quote.getStatus() != QuoteStatus.CUSTOMER_ACCEPTED) {
       throw new BusinessException("只有客户已接受的报价可以转为合同");
     }
@@ -537,7 +555,8 @@ public class CrmOperationsService {
 
   @Transactional(readOnly = true)
   public List<ContractResponse> listContracts() {
-    List<ServiceContract> contracts = deleteGovernanceService.visible("CONTRACT", contractRepository.findAllByOrderByEndDateAsc(), ServiceContract::getId);
+    List<ServiceContract> contracts = deleteGovernanceService.visible("CONTRACT", contractRepository.findAllByOrderByEndDateAsc(), ServiceContract::getId)
+        .stream().filter(item -> canAccessCustomer(item.getCustomerId())).toList();
     Map<UUID, Customer> customers = customerMap(contracts.stream()
         .map(ServiceContract::getCustomerId)
         .toList());
@@ -552,13 +571,15 @@ public class CrmOperationsService {
   public ContractResponse getContract(UUID id) {
     ServiceContract contract = contractRepository.findById(id)
         .orElseThrow(() -> new BusinessException("合同不存在"));
+    assertCustomerAccess(contract.getCustomerId());
     if (deleteGovernanceService.isHidden("CONTRACT", id)) throw new BusinessException("合同不存在");
     return toContract(contract, customerMap(nullableId(contract.getCustomerId())));
   }
 
   @Transactional(readOnly = true)
   public List<ReceivableResponse> listReceivables() {
-    List<Receivable> receivables = receivableRepository.findAllByOrderByDueDateAsc();
+    List<Receivable> receivables = receivableRepository.findAllByOrderByDueDateAsc().stream()
+        .filter(item -> canAccessCustomer(item.getCustomerId())).toList();
     Map<UUID, Customer> customers = customerMap(receivables.stream()
         .map(Receivable::getCustomerId)
         .toList());
@@ -571,9 +592,18 @@ public class CrmOperationsService {
   @Transactional(readOnly = true)
   public org.springframework.data.domain.Page<ReceivableResponse> listReceivables(
       UUID contractId, org.springframework.data.domain.Pageable pageable) {
-    var receivables = contractId == null
-        ? receivableRepository.findAllByOrderByDueDateAsc(pageable)
-        : receivableRepository.findByContractIdOrderByDueDateAsc(contractId, pageable);
+    org.springframework.data.domain.Page<Receivable> receivables;
+    if (contractId != null) {
+      ServiceContract contract = contractRepository.findById(contractId)
+          .orElseThrow(() -> new BusinessException("合同不存在"));
+      assertCustomerAccess(contract.getCustomerId());
+      receivables = receivableRepository.findByContractIdOrderByDueDateAsc(contractId, pageable);
+    } else {
+      List<UUID> customerIds = accessibleCustomerIds();
+      receivables = customerIds.isEmpty()
+          ? org.springframework.data.domain.Page.empty(pageable)
+          : receivableRepository.findByCustomerIdInOrderByDueDateAsc(customerIds, pageable);
+    }
     Map<UUID, Customer> customers = customerMap(receivables.getContent().stream()
         .map(Receivable::getCustomerId).toList());
     Map<UUID, ServiceContract> contracts = contractMap(receivables.getContent().stream()
@@ -585,6 +615,7 @@ public class CrmOperationsService {
   public ReceivableResponse applyInvoice(UUID id, ApplyInvoiceRequest request) {
     Receivable receivable = receivableRepository.findByIdForUpdate(id)
         .orElseThrow(() -> new BusinessException("应收单不存在"));
+    assertCustomerAccess(receivable.getCustomerId());
     if (receivable.getStatus() == ReceivableStatus.SETTLED) {
       throw new BusinessException("已核销应收不能申请开票");
     }
@@ -596,7 +627,7 @@ public class CrmOperationsService {
       throw new BusinessException("该应收已提交开票申请，请勿重复提交");
     }
     receivable.setInvoiceRequested(true);
-    receivable.setInvoiceRequestedBy(request.applicantName());
+    receivable.setInvoiceRequestedBy(currentActorName());
     receivable.setInvoiceRequestedAt(OffsetDateTime.now());
     receivable.setInvoiceRequestRemark(request.remark());
     receivable.setInvoiceRequestStatus(InvoiceRequestStatus.PENDING_APPROVAL);
@@ -611,6 +642,7 @@ public class CrmOperationsService {
   public ReceivableResponse reviewInvoice(UUID id, ReviewInvoiceRequest request) {
     Receivable receivable = receivableRepository.findByIdForUpdate(id)
         .orElseThrow(() -> new BusinessException("应收单不存在"));
+    assertCustomerAccess(receivable.getCustomerId());
     if (receivable.getInvoiceRequestStatus() != InvoiceRequestStatus.PENDING_APPROVAL) {
       throw new BusinessException("只有待审核的开票申请可以处理");
     }
@@ -622,7 +654,7 @@ public class CrmOperationsService {
       throw new BusinessException("驳回时必须填写原因");
     }
     receivable.setInvoiceRequestStatus(InvoiceRequestStatus.valueOf(decision));
-    receivable.setInvoiceReviewedBy(request.reviewerName());
+    receivable.setInvoiceReviewedBy(currentActorName());
     receivable.setInvoiceReviewedAt(OffsetDateTime.now());
     receivable.setInvoiceReviewComment(request.comment());
     return mapReceivable(receivableRepository.save(receivable));
@@ -632,6 +664,7 @@ public class CrmOperationsService {
   public ReceivableResponse registerInvoice(UUID id, RegisterInvoiceRequest request) {
     Receivable receivable = receivableRepository.findByIdForUpdate(id)
         .orElseThrow(() -> new BusinessException("应收单不存在"));
+    assertCustomerAccess(receivable.getCustomerId());
     if (receivable.getStatus() == ReceivableStatus.SETTLED) {
       throw new BusinessException("已核销应收不能登记发票");
     }
@@ -664,8 +697,19 @@ public class CrmOperationsService {
 
   @Transactional
   public ReceivableResponse recordReceipt(UUID id, RecordReceiptRequest request) {
-    Receivable receivable = receivableRepository.findById(id)
+    Receivable receivable = receivableRepository.findByIdForUpdate(id)
         .orElseThrow(() -> new BusinessException("应收单不存在"));
+    assertCustomerAccess(receivable.getCustomerId());
+    String referenceNo = request.referenceNo().trim().toUpperCase(java.util.Locale.ROOT);
+    ReceivableReceipt existing = receiptRepository.findByReferenceNo(referenceNo).orElse(null);
+    if (existing != null) {
+      if (existing.getReceivableId().equals(id)
+          && existing.getAmount().compareTo(request.amount()) == 0
+          && existing.getReceivedDate().equals(request.receivedDate())) {
+        return mapReceivable(receivable);
+      }
+      throw new BusinessException("银行流水号已用于其他回款记录");
+    }
     if (receivable.getStatus() == ReceivableStatus.SETTLED) {
       throw new BusinessException("该应收已全部核销");
     }
@@ -681,9 +725,13 @@ public class CrmOperationsService {
     receipt.setReceivableId(receivable.getId());
     receipt.setAmount(request.amount());
     receipt.setReceivedDate(request.receivedDate());
-    receipt.setReferenceNo(request.referenceNo());
-    receipt.setRecorderName(request.recorderName());
-    ReceivableReceipt savedReceipt = receiptRepository.save(receipt);
+    receipt.setReferenceNo(referenceNo);
+    receipt.setRecorderName(currentActorName());
+    try {
+      receiptRepository.saveAndFlush(receipt);
+    } catch (DataIntegrityViolationException exception) {
+      throw new BusinessException("银行流水号已用于其他回款记录");
+    }
 
     receivable.setSettledAmount(newSettledAmount);
     if (newSettledAmount.compareTo(defaultAmount(receivable.getAmount())) >= 0) {
@@ -694,9 +742,9 @@ public class CrmOperationsService {
           : ReceivableStatus.PAYMENT_PENDING);
     }
     Receivable saved = receivableRepository.save(receivable);
-    ledgerService.post("RECEIPT", savedReceipt.getId().toString(), request.receivedDate(),
+    ledgerService.post("RECEIPT", referenceNo, request.receivedDate(),
         "客户回款 " + receivable.getCode(), List.of(
-            new PostingLine("1002", "银行存款", request.amount(), BigDecimal.ZERO, request.referenceNo()),
+            new PostingLine("1002", "银行存款", request.amount(), BigDecimal.ZERO, referenceNo),
             new PostingLine("1122", "应收账款", BigDecimal.ZERO, request.amount(), receivable.getCode())
         ));
     return mapReceivable(saved);
@@ -707,6 +755,7 @@ public class CrmOperationsService {
     LocalDate today = LocalDate.now();
     LocalDate horizon = today.plusDays(365);
     List<ServiceContract> contracts = contractRepository.findAllByOrderByEndDateAsc().stream()
+        .filter(item -> canAccessCustomer(item.getCustomerId()))
         .filter(item -> item.getStatus() != ContractStatus.CLOSED)
         .filter(item -> !item.getEndDate().isAfter(horizon) || item.getStatus() != ContractStatus.ACTIVE)
         .toList();
@@ -741,7 +790,8 @@ public class CrmOperationsService {
 
   @Transactional(readOnly = true)
   public List<FollowUpResponse> listFollowUps() {
-    List<FollowUp> followUps = deleteGovernanceService.visible("FOLLOW_UP", followUpRepository.findAllByOrderByFollowedAtDesc(), FollowUp::getId);
+    List<FollowUp> followUps = deleteGovernanceService.visible("FOLLOW_UP", followUpRepository.findAllByOrderByFollowedAtDesc(), FollowUp::getId)
+        .stream().filter(this::canAccessFollowUp).toList();
     Map<UUID, Customer> customers = customerMap(followUps.stream().map(FollowUp::getCustomerId).toList());
     Map<UUID, Opportunity> opportunities = opportunityMap(followUps.stream()
         .map(FollowUp::getOpportunityId)
@@ -756,6 +806,7 @@ public class CrmOperationsService {
     if (request.opportunityId() != null) {
       opportunity = opportunityRepository.findById(request.opportunityId())
           .orElseThrow(() -> new BusinessException("关联商机不存在"));
+      assertOpportunityAccess(opportunity);
       if (opportunity.getCustomerId() != null && !request.customerId().equals(opportunity.getCustomerId())) {
         throw new BusinessException("跟进客户与关联商机客户不一致");
       }
@@ -770,6 +821,7 @@ public class CrmOperationsService {
     followUp.setFollowedAt(request.followedAt());
     followUp.setNextAction(request.nextAction());
     followUp.setOwnerName(request.ownerName());
+    followUp.setOwnerUserId(dataScopeService.requireVisibleOwnerId(request.ownerName()));
     FollowUp saved = followUpRepository.save(followUp);
     return toFollowUp(
         saved,
@@ -780,7 +832,8 @@ public class CrmOperationsService {
 
   @Transactional(readOnly = true)
   public List<CustomerProfileResponse> listCustomerProfiles() {
-    List<Customer> customers = customerRepository.findAllByOrderByCreatedAtDesc();
+    List<Customer> customers = customerRepository.findAllByOrderByCreatedAtDesc().stream()
+        .filter(item -> dataScopeService.canViewOwner(item.getOwnerUserId())).toList();
     List<Opportunity> opportunities = opportunityRepository.findAll();
     List<ServiceContract> contracts = contractRepository.findAll();
     List<Receivable> receivables = receivableRepository.findAll();
@@ -827,11 +880,10 @@ public class CrmOperationsService {
 
   @Transactional
   public void deleteOpportunity(UUID id) {
-    if (!opportunityRepository.existsById(id)) {
-      throw new BusinessException("商机不存在");
-    }
-    Opportunity opportunity = opportunityRepository.findById(id).orElse(null);
-    if (!deleteGovernanceService.allowPhysicalDelete("OPPORTUNITY", id, opportunity == null ? id.toString() : opportunity.getCode())) {
+    Opportunity opportunity = opportunityRepository.findById(id)
+        .orElseThrow(() -> new BusinessException("商机不存在"));
+    assertOpportunityAccess(opportunity);
+    if (!deleteGovernanceService.allowPhysicalDelete("OPPORTUNITY", id, opportunity.getCode())) {
       return;
     }
     // Cascade delete related records
@@ -851,11 +903,10 @@ public class CrmOperationsService {
 
   @Transactional
   public void deleteQuote(UUID id) {
-    if (!quoteRepository.existsById(id)) {
-      throw new BusinessException("报价方案不存在");
-    }
-    QuotePlan quote = quoteRepository.findById(id).orElse(null);
-    if (!deleteGovernanceService.allowPhysicalDelete("QUOTE", id, quote == null ? id.toString() : quote.getCode())) {
+    QuotePlan quote = quoteRepository.findById(id)
+        .orElseThrow(() -> new BusinessException("报价方案不存在"));
+    assertCustomerAccess(quote.getCustomerId());
+    if (!deleteGovernanceService.allowPhysicalDelete("QUOTE", id, quote.getCode())) {
       return;
     }
     entityManager.createNativeQuery("DELETE FROM crm_quote_revisions WHERE quote_id = ?1")
@@ -870,11 +921,10 @@ public class CrmOperationsService {
 
   @Transactional
   public void deleteContract(UUID id) {
-    if (!contractRepository.existsById(id)) {
-      throw new BusinessException("合同不存在");
-    }
-    ServiceContract contract = contractRepository.findById(id).orElse(null);
-    if (!deleteGovernanceService.allowPhysicalDelete("CONTRACT", id, contract == null ? id.toString() : contract.getCode())) {
+    ServiceContract contract = contractRepository.findById(id)
+        .orElseThrow(() -> new BusinessException("合同不存在"));
+    assertCustomerAccess(contract.getCustomerId());
+    if (!deleteGovernanceService.allowPhysicalDelete("CONTRACT", id, contract.getCode())) {
       return;
     }
     // Disassociate receivables (skip if fin_receivables table does not exist)
@@ -898,6 +948,7 @@ public class CrmOperationsService {
   public void deleteFollowUp(UUID id) {
     FollowUp f = followUpRepository.findById(id)
         .orElseThrow(() -> new BusinessException("跟进记录不存在"));
+    assertFollowUpAccess(f);
     if (!deleteGovernanceService.allowPhysicalDelete("FOLLOW_UP", id, f.getSubject() == null ? id.toString() : f.getSubject())) {
       return;
     }
@@ -1099,6 +1150,7 @@ public class CrmOperationsService {
   public ContractResponse approveContract(UUID id, String operatorName, String comment) {
     ServiceContract contract = contractRepository.findById(id)
         .orElseThrow(() -> new BusinessException("合同不存在"));
+    assertCustomerAccess(contract.getCustomerId());
     if (contract.getStatus() != ContractStatus.PENDING_APPROVAL) {
       throw new BusinessException("只有待合同审批的合同可以审批通过");
     }
@@ -1112,6 +1164,7 @@ public class CrmOperationsService {
   public ContractResponse submitSignedDocumentApproval(UUID id, String requestedBy, String comment) {
     ServiceContract contract = contractRepository.findById(id)
         .orElseThrow(() -> new BusinessException("合同不存在"));
+    assertCustomerAccess(contract.getCustomerId());
     if (contract.getStatus() != ContractStatus.PENDING_SEAL) {
       throw new BusinessException("合同审批通过后才可以提交双方盖章件审批");
     }
@@ -1126,7 +1179,7 @@ public class CrmOperationsService {
     change.setContractId(id);
     change.setChangeData("{\"type\":\"" + SIGNED_DOC_APPROVAL_TYPE + "\"}");
     change.setReason(hasText(comment) ? comment : "双方盖章件审批");
-    change.setRequestedBy(hasText(requestedBy) ? requestedBy : "当前用户");
+    change.setRequestedBy(currentActorName());
     change.setRequestedAt(OffsetDateTime.now());
     change.setStatus("PENDING");
     changeRepository.save(change);
@@ -1426,9 +1479,57 @@ public class CrmOperationsService {
   }
 
   private void validateCustomer(UUID customerId) {
-    if (customerId != null && !customerRepository.existsById(customerId)) {
-      throw new BusinessException("客户不存在");
-    }
+    if (customerId != null) assertCustomerAccess(customerId);
+  }
+
+  private List<UUID> accessibleCustomerIds() {
+    return customerRepository.findAll().stream()
+        .filter(item -> dataScopeService.canViewOwner(item.getOwnerUserId()))
+        .map(Customer::getId)
+        .toList();
+  }
+
+  private boolean canAccessCustomer(UUID customerId) {
+    if (customerId == null) return false;
+    return customerRepository.findById(customerId)
+        .map(item -> dataScopeService.canViewOwner(item.getOwnerUserId()))
+        .orElse(false);
+  }
+
+  private void assertCustomerAccess(UUID customerId) {
+    Customer customer = customerId == null ? null : customerRepository.findById(customerId).orElse(null);
+    if (customer == null) throw new BusinessException("客户不存在");
+    if (!dataScopeService.canViewOwner(customer.getOwnerUserId())) throw new BusinessException("无权访问该客户数据");
+  }
+
+  private void assertContractAccess(UUID contractId) {
+    ServiceContract contract = contractRepository.findById(contractId)
+        .orElseThrow(() -> new BusinessException("合同不存在"));
+    assertCustomerAccess(contract.getCustomerId());
+  }
+
+  private String currentActorName() {
+    return dataScopeService.currentActorName();
+  }
+
+  private boolean canAccessOpportunity(Opportunity opportunity) {
+    return opportunity.getCustomerId() != null
+        ? canAccessCustomer(opportunity.getCustomerId())
+        : dataScopeService.canViewOwner(opportunity.getOwnerUserId());
+  }
+
+  private void assertOpportunityAccess(Opportunity opportunity) {
+    if (!canAccessOpportunity(opportunity)) throw new BusinessException("无权访问该商机");
+  }
+
+  private boolean canAccessFollowUp(FollowUp followUp) {
+    return followUp.getCustomerId() != null
+        ? canAccessCustomer(followUp.getCustomerId())
+        : dataScopeService.canViewOwner(followUp.getOwnerUserId());
+  }
+
+  private void assertFollowUpAccess(FollowUp followUp) {
+    if (!canAccessFollowUp(followUp)) throw new BusinessException("无权访问该跟进记录");
   }
 
   private String renewalRisk(ServiceContract contract, long daysRemaining) {
@@ -1597,6 +1698,7 @@ public class CrmOperationsService {
   public ContractResponse renewContract(UUID id) {
     var contract = contractRepository.findById(id)
         .orElseThrow(() -> new BusinessException("合同不存在"));
+    assertCustomerAccess(contract.getCustomerId());
     ServiceContract renewal = new ServiceContract();
     renewal.setCustomerId(contract.getCustomerId());
     renewal.setQuoteId(contract.getQuoteId());
@@ -1618,6 +1720,7 @@ public class CrmOperationsService {
   public ReceivableResponse updateReceivable(UUID id, UpdateReceivableRequest request) {
     Receivable receivable = receivableRepository.findById(id)
         .orElseThrow(() -> new BusinessException("应收单不存在"));
+    assertCustomerAccess(receivable.getCustomerId());
     if (receivable.getContractId() == null) {
       throw new BusinessException("应收未关联合同，不能发起变更审批");
     }
@@ -1634,7 +1737,7 @@ public class CrmOperationsService {
     change.setContractId(receivable.getContractId());
     change.setChangeData(receivableUpdateData(id, request));
     change.setReason("应收计划变更：" + (receivable.getCode() == null ? id : receivable.getCode()));
-    change.setRequestedBy("当前用户");
+    change.setRequestedBy(currentActorName());
     change.setRequestedAt(OffsetDateTime.now());
     change.setStatus("PENDING");
     changeRepository.save(change);
@@ -1646,11 +1749,14 @@ public class CrmOperationsService {
 
   @Transactional
   public ContractChangeResponse createContractChangeRequest(UUID contractId, CreateContractChangeRequest request) {
+    ServiceContract contract = contractRepository.findById(contractId)
+        .orElseThrow(() -> new BusinessException("合同不存在"));
+    assertCustomerAccess(contract.getCustomerId());
     ContractChangeRequest change = new ContractChangeRequest();
     change.setContractId(contractId);
     change.setChangeData(request.changeData());
     change.setReason(request.reason());
-    change.setRequestedBy(request.requestedBy());
+    change.setRequestedBy(currentActorName());
     change.setRequestedAt(java.time.OffsetDateTime.now());
     change.setStatus("PENDING");
     ContractChangeRequest saved = changeRepository.save(change);
@@ -1661,6 +1767,7 @@ public class CrmOperationsService {
   public ContractChangeResponse approveContractChange(UUID id, String operatorName, String comment) {
     ContractChangeRequest change = changeRepository.findById(id)
         .orElseThrow(() -> new BusinessException("变更请求不存在"));
+    assertContractAccess(change.getContractId());
     if (!"PENDING".equals(change.getStatus())) {
       throw new BusinessException("该变更请求已处理");
     }
@@ -1672,7 +1779,7 @@ public class CrmOperationsService {
       applyContractChanges(change);
     }
     change.setStatus("APPROVED");
-    change.setApprovedBy(operatorName);
+    change.setApprovedBy(currentActorName());
     change.setApprovedAt(java.time.OffsetDateTime.now());
     change.setApprovalComment(comment);
     return toContractChangeResponse(changeRepository.save(change));
@@ -1682,6 +1789,7 @@ public class CrmOperationsService {
   public ContractChangeResponse rejectContractChange(UUID id, String operatorName, String comment) {
     ContractChangeRequest change = changeRepository.findById(id)
         .orElseThrow(() -> new BusinessException("变更请求不存在"));
+    assertContractAccess(change.getContractId());
     if (!"PENDING".equals(change.getStatus())) {
       throw new BusinessException("该变更请求已处理");
     }
@@ -1692,7 +1800,7 @@ public class CrmOperationsService {
       contractRepository.save(contract);
     }
     change.setStatus("REJECTED");
-    change.setApprovedBy(operatorName);
+    change.setApprovedBy(currentActorName());
     change.setApprovedAt(java.time.OffsetDateTime.now());
     change.setApprovalComment(comment);
     return toContractChangeResponse(changeRepository.save(change));
@@ -1804,12 +1912,19 @@ public class CrmOperationsService {
   public OpportunityResponse updateOpportunity(UUID id, CreateOpportunityRequest request) {
     Opportunity opp = opportunityRepository.findById(id)
         .orElseThrow(() -> new BusinessException("\u5546\u673a\u4e0d\u5b58\u5728"));
-    if (request.customerId() != null) opp.setCustomerId(request.customerId());
+    assertOpportunityAccess(opp);
+    if (request.customerId() != null) {
+      assertCustomerAccess(request.customerId());
+      opp.setCustomerId(request.customerId());
+    }
     if (request.needSummary() != null) opp.setNeedSummary(request.needSummary());
     if (request.expectedAmount() != null) opp.setExpectedAmount(request.expectedAmount());
     if (request.nextAction() != null) opp.setNextAction(request.nextAction());
     if (request.nextActionAt() != null) opp.setNextActionAt(request.nextActionAt());
-    if (request.ownerName() != null) opp.setOwnerName(request.ownerName());
+    if (request.ownerName() != null) {
+      opp.setOwnerName(request.ownerName());
+      opp.setOwnerUserId(dataScopeService.requireVisibleOwnerId(request.ownerName()));
+    }
     return toOpportunity(opportunityRepository.save(opp), customerMap(nullableId(opp.getCustomerId())));
   }
 
@@ -1817,6 +1932,7 @@ public class CrmOperationsService {
   public ContractResponse updateContract(UUID id, UpdateContractRequest request) {
     ServiceContract contract = contractRepository.findById(id)
         .orElseThrow(() -> new BusinessException("\u5408\u540c\u4e0d\u5b58\u5728"));
+    assertCustomerAccess(contract.getCustomerId());
     if (request.projectName() != null) contract.setProjectName(request.projectName());
     if (request.contractType() != null) contract.setContractType(request.contractType());
     if (request.amount() != null) contract.setAmount(request.amount());
@@ -1828,6 +1944,7 @@ public class CrmOperationsService {
   }
 
   public java.util.List<ContractChangeResponse> listContractChanges(UUID contractId) {
+    assertContractAccess(contractId);
     return changeRepository.findByContractIdOrderByCreatedAtDesc(contractId)
         .stream().map(this::toContractChangeResponse).toList();
   }

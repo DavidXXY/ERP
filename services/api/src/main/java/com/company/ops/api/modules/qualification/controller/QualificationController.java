@@ -152,8 +152,7 @@ public class QualificationController {
   @PostMapping(value = "/attachments", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   @ResponseStatus(HttpStatus.CREATED)
   @PreAuthorize("hasAnyAuthority('qualification:company:manage','qualification:employee:manage','qualification:certificate:manage','qualification:performance:manage')")
-  public ApiResponse<Attachment> uploadAttachment(@RequestPart MultipartFile file,
-                                                   @RequestParam(defaultValue = "当前用户") String operatorName) {
-    return ApiResponse.ok(attachmentService.store(file, operatorName));
+  public ApiResponse<Attachment> uploadAttachment(@RequestPart MultipartFile file) {
+    return ApiResponse.ok(attachmentService.store(file));
   }
 }

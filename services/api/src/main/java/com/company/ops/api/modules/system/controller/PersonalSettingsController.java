@@ -9,7 +9,14 @@ import com.company.ops.api.modules.system.dto.PersonalSettingsDtos.MyCertificate
 import com.company.ops.api.modules.system.dto.PersonalSettingsDtos.MyCertificateResponse;
 import com.company.ops.api.modules.system.dto.PersonalSettingsDtos.PersonalOverviewResponse;
 import com.company.ops.api.modules.system.dto.PersonalSettingsDtos.UpdateMyProfileRequest;
+import com.company.ops.api.modules.system.dto.MfaDtos.BeginMfaSetupRequest;
+import com.company.ops.api.modules.system.dto.MfaDtos.ConfirmMfaResponse;
+import com.company.ops.api.modules.system.dto.MfaDtos.MfaSetupResponse;
+import com.company.ops.api.modules.system.dto.MfaDtos.MfaStatusResponse;
+import com.company.ops.api.modules.system.dto.MfaDtos.ProtectedMfaRequest;
+import com.company.ops.api.modules.system.dto.MfaDtos.VerifyMfaRequest;
 import com.company.ops.api.modules.system.security.UserPrincipal;
+import com.company.ops.api.modules.system.service.MfaService;
 import com.company.ops.api.modules.system.service.PersonalSettingsService;
 import jakarta.validation.Valid;
 import java.util.UUID;
@@ -33,13 +40,16 @@ import org.springframework.web.multipart.MultipartFile;
 public class PersonalSettingsController {
   private final PersonalSettingsService personalSettingsService;
   private final QualificationAttachmentService attachmentService;
+  private final MfaService mfaService;
 
   public PersonalSettingsController(
       PersonalSettingsService personalSettingsService,
-      QualificationAttachmentService attachmentService
+      QualificationAttachmentService attachmentService,
+      MfaService mfaService
   ) {
     this.personalSettingsService = personalSettingsService;
     this.attachmentService = attachmentService;
+    this.mfaService = mfaService;
   }
 
   @GetMapping
@@ -61,6 +71,45 @@ public class PersonalSettingsController {
       @Valid @RequestBody ChangeMyPasswordRequest request
   ) {
     personalSettingsService.changePassword(principal.id(), request);
+    return ApiResponse.ok();
+  }
+
+  @GetMapping("/mfa")
+  public ApiResponse<MfaStatusResponse> mfaStatus(@AuthenticationPrincipal UserPrincipal principal) {
+    return ApiResponse.ok(mfaService.status(principal.id()));
+  }
+
+  @PostMapping("/mfa/setup")
+  public ApiResponse<MfaSetupResponse> beginMfaSetup(
+      @AuthenticationPrincipal UserPrincipal principal,
+      @Valid @RequestBody BeginMfaSetupRequest request
+  ) {
+    return ApiResponse.ok(mfaService.beginSetup(principal.id(), request.currentPassword()));
+  }
+
+  @PostMapping("/mfa/enable")
+  public ApiResponse<ConfirmMfaResponse> enableMfa(
+      @AuthenticationPrincipal UserPrincipal principal,
+      @Valid @RequestBody VerifyMfaRequest request
+  ) {
+    return ApiResponse.ok(mfaService.enable(principal.id(), request.code()));
+  }
+
+  @PostMapping("/mfa/recovery-codes")
+  public ApiResponse<ConfirmMfaResponse> regenerateMfaRecoveryCodes(
+      @AuthenticationPrincipal UserPrincipal principal,
+      @Valid @RequestBody ProtectedMfaRequest request
+  ) {
+    return ApiResponse.ok(mfaService.regenerateRecoveryCodes(
+        principal.id(), request.currentPassword(), request.code()));
+  }
+
+  @PostMapping("/mfa/disable")
+  public ApiResponse<Void> disableMfa(
+      @AuthenticationPrincipal UserPrincipal principal,
+      @Valid @RequestBody ProtectedMfaRequest request
+  ) {
+    mfaService.disable(principal.id(), request.currentPassword(), request.code());
     return ApiResponse.ok();
   }
 
@@ -98,6 +147,6 @@ public class PersonalSettingsController {
       @RequestPart MultipartFile file
   ) {
     personalSettingsService.assertEmployeeLinked(principal.id());
-    return ApiResponse.ok(attachmentService.store(file, principal.displayName()));
+    return ApiResponse.ok(attachmentService.store(file));
   }
 }

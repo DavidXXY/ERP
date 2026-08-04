@@ -12,6 +12,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface QualificationPerformanceRepository extends JpaRepository<QualificationPerformance, UUID> {
+  boolean existsByAttachmentsJsonContaining(String value);
   List<QualificationPerformance> findAllByOrderBySubjectCompanyAscNameAsc();
   Optional<QualificationPerformance> findByExternalId(String externalId);
   @Query("select p from QualificationPerformance p where "

@@ -5,6 +5,8 @@ import { useAuthStore } from "@/stores/auth";
 const auth = useAuthStore();
 const username = ref("");
 const password = ref("");
+const mfaCode = ref("");
+const mfaRequired = ref(false);
 const loading = ref(false);
 const error = ref("");
 
@@ -16,7 +18,16 @@ async function submit() {
   loading.value = true;
   error.value = "";
   try {
-    await auth.login(username.value.trim(), password.value);
+    const authenticated = await auth.login(
+      username.value.trim(),
+      password.value,
+      mfaCode.value || undefined,
+    );
+    if (!authenticated) {
+      mfaRequired.value = true;
+      error.value = "请输入验证器动态码或恢复码";
+      return;
+    }
     uni.switchTab({ url: "/pages/home/index" });
   } catch (e) {
     error.value = (e as Error).message;
@@ -55,10 +66,15 @@ async function wechatLogin() {
         <text class="field-label">密码</text>
         <input v-model="password" class="field-input" password placeholder="请输入密码" confirm-type="done" @confirm="submit" />
       </view>
+      <view v-if="mfaRequired" class="field">
+        <text class="field-label">动态验证码或恢复码</text>
+        <input v-model="mfaCode" class="field-input" placeholder="6 位动态码或恢复码" confirm-type="done" @confirm="submit" />
+      </view>
       <view v-if="error" class="error-line"><uni-icons type="info" size="16" color="#c33b3b" /><text>{{ error }}</text></view>
       <button class="primary-btn" :disabled="loading" @click="submit">
-        <uni-icons v-if="!loading" type="locked" size="19" color="#fff" />{{ loading ? "正在登录" : "登录" }}
+        <uni-icons v-if="!loading" type="locked" size="19" color="#fff" />{{ loading ? "正在登录" : mfaRequired ? "验证并登录" : "登录" }}
       </button>
+      <button v-if="mfaRequired" class="challenge-reset" :disabled="loading" @click="mfaRequired = false; mfaCode = ''; error = ''">返回账号登录</button>
       <!-- #ifdef MP-WEIXIN -->
       <button class="wechat-btn" :disabled="loading" @click="wechatLogin"><uni-icons type="weixin" size="22" color="#176b5b" />微信快捷登录</button>
       <!-- #endif -->
@@ -80,5 +96,6 @@ async function wechatLogin() {
 .panel-caption { display: block; margin: 10rpx 0 38rpx; color: #77808b; font-size: 24rpx; }
 .error-line { display: flex; align-items: center; gap: 9rpx; margin: -4rpx 0 22rpx; color: #c33b3b; font-size: 24rpx; }
 .wechat-btn { margin-top: 20rpx; min-height: 84rpx; display: flex; align-items: center; justify-content: center; gap: 12rpx; border: 1rpx solid #bad0cb; border-radius: 12rpx; color: #176b5b; background: #f7fbfa; font-size: 28rpx; }
+.challenge-reset { margin-top: 10rpx; border: 0; color: #176b5b; background: transparent; font-size: 25rpx; }
 .security-note { display: block; margin-top: 36rpx; text-align: center; color: #85908d; font-size: 22rpx; }
 </style>

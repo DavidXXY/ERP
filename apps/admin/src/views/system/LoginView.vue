@@ -38,6 +38,19 @@
             autocomplete="current-password"
           />
         </a-form-item>
+        <a-form-item
+          v-if="mfaRequired"
+          label="动态验证码或恢复码"
+          name="mfaCode"
+          :rules="[{ required: true, message: '请输入动态验证码或恢复码' }]"
+        >
+          <a-input
+            v-model:value="formState.mfaCode"
+            size="large"
+            autocomplete="one-time-code"
+            autofocus
+          />
+        </a-form-item>
         <a-button
           block
           size="large"
@@ -45,7 +58,15 @@
           html-type="submit"
           :loading="loading"
         >
-          登录系统
+          {{ mfaRequired ? "验证并登录" : "登录系统" }}
+        </a-button>
+        <a-button
+          v-if="mfaRequired"
+          block
+          type="link"
+          @click="resetMfaChallenge"
+        >
+          返回账号登录
         </a-button>
       </a-form>
     </a-card>
@@ -62,17 +83,28 @@ const route = useRoute();
 const router = useRouter();
 const loading = ref(false);
 const errorMessage = ref("");
+const mfaRequired = ref(false);
 
 const formState = reactive({
   username: "",
   password: "",
+  mfaCode: "",
 });
 
 async function handleLogin() {
   loading.value = true;
   errorMessage.value = "";
   try {
-    await auth.login(formState.username, formState.password);
+    const authenticated = await auth.login(
+      formState.username,
+      formState.password,
+      formState.mfaCode || undefined,
+    );
+    if (!authenticated) {
+      mfaRequired.value = true;
+      errorMessage.value = "请输入验证器中的动态验证码，或使用一个恢复码";
+      return;
+    }
     const redirect =
       typeof route.query.redirect === "string"
         ? route.query.redirect
@@ -83,5 +115,11 @@ async function handleLogin() {
   } finally {
     loading.value = false;
   }
+}
+
+function resetMfaChallenge() {
+  mfaRequired.value = false;
+  formState.mfaCode = "";
+  errorMessage.value = "";
 }
 </script>

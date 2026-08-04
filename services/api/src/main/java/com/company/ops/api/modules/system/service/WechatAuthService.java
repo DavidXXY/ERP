@@ -63,7 +63,9 @@ public class WechatAuthService {
 
   @Transactional
   public LoginResponse bind(WechatBindRequest request, String clientAddress) {
-    LoginResponse session = authService.login(new LoginRequest(request.username(), request.password()), clientAddress);
+    LoginResponse session = authService.login(
+        new LoginRequest(request.username(), request.password(), request.mfaCode()), clientAddress);
+    if (session.mfaRequired()) throw new BusinessException("请输入动态验证码后再绑定微信");
     SystemUser user = userRepository.findDetailById(UUID.fromString(session.user().id()))
         .orElseThrow(() -> new BusinessException("ERP账号不存在"));
     bindIdentity(user, exchange(request.code()));

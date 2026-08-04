@@ -617,7 +617,7 @@ const rootRoutes: RouteRecordRaw[] = [
     component: () => import("@/views/system/SystemHealthView.vue"),
     meta: {
       title: "\u7cfb\u7edf\u8fd0\u884c\u60c5\u51b5",
-      permission: "system:view",
+      permission: "system:health:view",
     },
   },
   {

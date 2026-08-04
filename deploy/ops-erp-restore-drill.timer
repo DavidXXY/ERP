@@ -1,0 +1,11 @@
+[Unit]
+Description=Weekly Engineering Ops ERP restore drill
+
+[Timer]
+OnCalendar=Sun *-*-* 04:30:00
+RandomizedDelaySec=30m
+Persistent=true
+Unit=ops-erp-restore-drill.service
+
+[Install]
+WantedBy=timers.target

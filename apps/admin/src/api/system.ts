@@ -539,13 +539,8 @@ export type SystemHealthResponse = {
     storageType: string;
   };
   dependencies?: {
-    databaseUrl: string;
     databaseDriver: string;
-    redisEndpoint: string;
     storageType: string;
-    localStoragePath: string;
-    tempDir: string;
-    workingDir: string;
   };
   operatingSystem: {
     name: string;
@@ -575,11 +570,10 @@ export type SystemHealthResponse = {
     jvmVersion: string;
     jvmVendor: string;
     uptime: number;
-    inputArguments: string[];
     startTime: number;
   };
   disk: {
-    path: string;
+    name: string;
     totalSpace: number;
     freeSpace: number;
     usableSpace: number;

@@ -1,6 +1,7 @@
 package com.company.ops.api.modules.system.service;
 
 import com.company.ops.api.common.exception.BusinessException;
+import com.company.ops.api.common.validation.PasswordPolicy;
 import com.company.ops.api.modules.qualification.domain.EmployeeContract;
 import com.company.ops.api.modules.qualification.domain.PersonnelCertificate;
 import com.company.ops.api.modules.qualification.domain.QualificationEmployee;
@@ -73,7 +74,9 @@ public class PersonalSettingsService {
   @Transactional
   public AccountProfile updateProfile(UUID userId, UpdateMyProfileRequest request) {
     SystemUser user = requireUser(userId);
-    user.setDisplayName(request.displayName().trim());
+    if (!user.getDisplayName().equals(request.displayName().trim())) {
+      throw new BusinessException("显示名由管理员维护，个人设置中不能修改");
+    }
     user.setPhone(normalize(request.phone()));
     user.setEmail(normalize(request.email()));
     employeeRepository.findBySystemUser_Id(userId).ifPresent(employee -> employee.setPhone(normalize(request.phone())));
@@ -86,6 +89,7 @@ public class PersonalSettingsService {
     if (!passwordEncoder.matches(request.currentPassword(), user.getPasswordHash())) {
       throw new BusinessException("当前密码不正确");
     }
+    PasswordPolicy.requireValid(request.newPassword(), user.getUsername());
     if (passwordEncoder.matches(request.newPassword(), user.getPasswordHash())) {
       throw new BusinessException("新密码不能与当前密码相同");
     }

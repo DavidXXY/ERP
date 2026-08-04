@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Engineering Ops ERP backup
+
+[Timer]
+OnCalendar=*-*-* 02:15:00
+RandomizedDelaySec=30m
+Persistent=true
+Unit=ops-erp-backup.service
+
+[Install]
+WantedBy=timers.target

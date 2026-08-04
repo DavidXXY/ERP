@@ -16,12 +16,18 @@ export const useAuthStore = defineStore("mobile-auth", {
       this.initialized = true;
       if (this.token) void this.refresh();
     },
-    async login(username: string, password: string) {
-      this.applySession(await loginApi(username, password));
+    async login(username: string, password: string, mfaCode?: string) {
+      const response = await loginApi(username, password, mfaCode);
+      if (response.mfaRequired) return false;
+      if (!response.token || !response.user) throw new Error("登录响应不完整");
+      this.applySession({ token: response.token, user: response.user });
+      return true;
     },
     async loginWithWechat() {
       const code = await new Promise<string>((resolve, reject) => uni.login({ provider: "weixin", success: (r) => r.code ? resolve(r.code) : reject(new Error("未获取到微信登录凭证")), fail: reject }));
-      this.applySession(await wechatLoginApi(code));
+      const response = await wechatLoginApi(code);
+      if (!response.token || !response.user) throw new Error("微信登录响应不完整");
+      this.applySession({ token: response.token, user: response.user });
     },
     async refresh() {
       try {

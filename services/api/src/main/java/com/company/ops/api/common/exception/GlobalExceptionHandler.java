@@ -62,7 +62,7 @@ public class GlobalExceptionHandler {
   public ResponseEntity<ApiResponse<Void>> handleAuthentication(AuthenticationException exception) {
     return ResponseEntity
         .status(HttpStatus.UNAUTHORIZED)
-        .body(ApiResponse.fail("账号或密码错误"));
+        .body(ApiResponse.fail("账号、密码或验证码错误"));
   }
 
   @ExceptionHandler(AccessDeniedException.class)

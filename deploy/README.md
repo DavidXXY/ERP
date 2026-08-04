@@ -42,9 +42,7 @@ npm ci --prefix apps/mobile
 ./deploy/build.sh
 ```
 
-自动执行：
-- `mvn clean package -DskipTests` → 产出 `services/api/target/ops-erp-api-0.1.0.jar`
-- `npm run build` → 产出 `apps/admin/dist/`
+自动执行完整发布门禁：`npm run verify`、`mvn clean verify`、前后端覆盖率阈值和 SBOM 生成，全部通过后才产出发布文件。
 
 **第 2 步 — 推送至正式服务器**
 
@@ -52,19 +50,16 @@ npm ci --prefix apps/mobile
 ./deploy/deploy.sh root@10.10.10.111
 ```
 
-脚本会自动执行：
-- `rsync` 推送 `dist/` → 服务器的 `/var/www/ops-erp-admin/`
-- `rsync` 推送 `ops-erp-api.jar` → 服务器的 `/opt/engineering-ops-erp/`
-- 推送 Nginx 和 systemd 配置
+脚本将前后端上传到带时间戳与 Git 提交号的 `releases/` 目录，通过软链接原子切换。后端重启后 90 秒内健康检查未达到 `UP` 时，会自动恢复上一版本。
 
 **第 3 步 — 服务器上初始化环境（仅首次）**
 
 ```bash
 # 创建操作系统用户和目录
 sudo useradd -r -s /sbin/nologin -M ops-erp
-sudo mkdir -p /opt/engineering-ops-erp /var/www/ops-erp-admin /etc/ops-erp
+sudo mkdir -p /opt/engineering-ops-erp/.local-data /var/www/ops-erp-admin /etc/ops-erp /var/backups/ops-erp
 sudo mkdir -p /etc/nginx/tls
-sudo chown ops-erp:ops-erp /opt/engineering-ops-erp
+sudo chown -R ops-erp:ops-erp /opt/engineering-ops-erp /var/backups/ops-erp
 
 # 配置环境变量
 sudo cp deploy/ops-erp.env.example /etc/ops-erp/ops-erp.env
@@ -110,9 +105,9 @@ docker compose -f docker-compose.yml up -d
 
 微信小程序的 AppID、域名、构建和审核步骤见 `docs/WECHAT_MINIPROGRAM_DEPLOYMENT.md`。小程序使用同一套 Spring Boot API，不需要单独部署应用服务器。
 
-全新空库首先执行 `B77__fresh_install_baseline.sql`，一次性创建截至 V77 的完整结构和基础权限配置，随后继续执行 V78 之后的增量迁移。当前增量版本为 V90。
+全新空库首先执行 `B77__fresh_install_baseline.sql`，一次性创建截至 V77 的完整结构和基础权限配置，随后继续执行 V78 之后的增量迁移。当前增量版本为 V98。
 
-已有 V77 数据库会跳过 B77 基线并继续执行增量迁移。应用默认仅忽略已合并且不再随包发布的历史迁移缺失记录，仍校验当前发布迁移的顺序和校验和。升级前必须备份数据库，并先在预发布副本验证 V78 至 V90；不要关闭 Flyway 当前迁移校验。
+已有 V77 数据库会跳过 B77 基线并继续执行增量迁移。应用默认仅忽略已合并且不再随包发布的历史迁移缺失记录，仍校验当前发布迁移的顺序和校验和。升级前必须备份数据库，并先在预发布副本验证 V78 至 V98；不要关闭 Flyway 当前迁移校验。
 
 ```bash
 # 后端健康检查
@@ -143,8 +138,8 @@ sudo systemctl restart ops-erp-api
 # 重新部署（仅推送变动的文件）
 ./deploy/build.sh && ./deploy/deploy.sh root@10.10.10.111
 
-# 生成并校验 PostgreSQL + MinIO 联合备份（生产必须安装 mc）
-BACKUP_OBJECTS=required DB_PASSWORD='...' \
+# 生成并校验 PostgreSQL + MinIO 联合备份（生产需安装 age、mc）
+BACKUP_OBJECTS=required BACKUP_ENCRYPTION_RECIPIENT='age1...' DB_PASSWORD='...' \
   MINIO_ENDPOINT='http://127.0.0.1:9000' MINIO_ACCESS_KEY='...' \
   MINIO_SECRET_KEY='...' MINIO_BUCKET='ops-erp' \
   ../scripts/backup-data.sh
@@ -154,10 +149,13 @@ RESTORE_TARGET=ops_erp_restore_drill RESTORE_CONFIRM=ops_erp_restore_drill \
   RESTORE_OBJECTS_CONFIRM=ops-erp-drill MINIO_BUCKET=ops-erp-drill \
   DB_PASSWORD='...' MINIO_ENDPOINT='http://127.0.0.1:9000' \
   MINIO_ACCESS_KEY='...' MINIO_SECRET_KEY='...' \
-  ../scripts/restore-backup.sh ../backups/ops-erp-backup-YYYYMMDD-HHMMSS.tar.gz
+  BACKUP_ENCRYPTION_IDENTITY=/etc/ops-erp/backup-age-identity.txt \
+  ../scripts/restore-backup.sh ../backups/ops-erp-backup-YYYYMMDD-HHMMSS.tar.gz.age
 ```
 
-备份包包含 `manifest.env`、内部逐文件校验、`postgres.dump` 和可选的 `objects/`，外层另有 `.sha256`。`verify-backup.sh` 仍兼容旧 `.dump`，但新生产备份应统一使用 V2 联合包。恢复演练不得使用生产数据库名或生产 bucket；若只需演练数据库，可显式设置 `RESTORE_OBJECTS=false`。
+备份包包含 `manifest.env`、内部逐文件校验、`postgres.dump` 和可选的 `objects/`，经 age 公钥加密为 `.tar.gz.age`，外层另有 `.sha256`。私钥文件应离线托管并仅授予备份/恢复账号读取。`BACKUP_RETENTION_DAYS` 控制本地保留期，`BACKUP_OFFSITE_REMOTE` 可配置 rclone 异地副本。systemd 每日生成备份、每周恢复到名称以 `_restore_drill` 结尾的隔离库并检查 Flyway 历史。
+
+UniApp 依赖当前锁定在同一 alpha 构建号。升级必须在独立分支同时通过 H5、微信小程序构建、移动端测试及真机登录/工单/附件回归，禁止只升级其中一个 `@dcloudio` 包或在发布窗口临时漂移版本。
 
 ### 数据加密密钥轮换
 
@@ -189,6 +187,8 @@ RESTORE_TARGET=ops_erp_restore_drill RESTORE_CONFIRM=ops_erp_restore_drill \
 - [ ] 确认 Actuator 仅暴露 `health,prometheus`，其他 `/actuator/` 路径返回 404
 - [ ] 配置防火墙，仅开放 80/443 端口对外
 - [ ] 使用隔离数据库和 bucket 定期运行联合恢复演练，而不只是检查备份文件存在
+- [ ] 将 age 私钥离线备份并验证 `ops-erp-backup.timer`、`ops-erp-restore-drill.timer` 最近一次运行成功
+- [ ] 配置 `BACKUP_OFFSITE_REMOTE` 并验证异地对象的外层校验和
 - [ ] 关闭 Docker 基础设施端口的外部访问（已配置 `127.0.0.1:`）
 - [ ] MinIO bucket 保持私有读写，通过后端接口或预签名链接访问附件
 - [ ] 配置 MinIO 生命周期策略，按公司档案保留制度清理临时/过期对象

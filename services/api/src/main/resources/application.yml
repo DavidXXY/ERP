@@ -86,6 +86,7 @@ ops:
     local-path: ${LOCAL_STORAGE_PATH:.local-data/uploads}
   qualification:
     import: ${QUALIFICATION_IMPORT_ENABLED:false}
+    import-file: ${QUALIFICATION_IMPORT_FILE:}
   audit:
     retention-days: ${AUDIT_RETENTION_DAYS:365}
     cleanup-batch-size: ${AUDIT_CLEANUP_BATCH_SIZE:1000}

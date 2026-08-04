@@ -1,6 +1,7 @@
 package com.company.ops.api.modules.system.dto;
 
 import com.company.ops.api.modules.qualification.dto.QualificationDtos.Attachment;
+import com.company.ops.api.common.validation.StrongPassword;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -36,7 +37,7 @@ public final class PersonalSettingsDtos {
 
   public record ChangeMyPasswordRequest(
       @NotBlank String currentPassword,
-      @NotBlank @Size(min = 8, max = 100) String newPassword
+      @NotBlank @StrongPassword String newPassword
   ) {}
 
   public record MyCertificateRequest(

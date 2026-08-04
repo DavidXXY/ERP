@@ -278,44 +278,102 @@
 
           <a-tab-pane key="security" tab="账号安全">
             <section class="settings-surface security-surface">
-              <div class="section-heading"><strong>修改密码</strong></div>
-              <a-form
-                ref="passwordFormRef"
-                :model="passwordForm"
-                layout="vertical"
-                class="compact-form"
-              >
-                <a-form-item
-                  label="当前密码"
-                  name="currentPassword"
-                  :rules="requiredRules"
-                  ><a-input-password
-                    v-model:value="passwordForm.currentPassword"
-                    autocomplete="current-password"
-                /></a-form-item>
-                <a-form-item
-                  label="新密码"
-                  name="newPassword"
-                  :rules="passwordRules"
-                  ><a-input-password
-                    v-model:value="passwordForm.newPassword"
-                    autocomplete="new-password"
-                /></a-form-item>
-                <a-form-item
-                  label="确认新密码"
-                  name="confirmPassword"
-                  :rules="requiredRules"
-                  ><a-input-password
-                    v-model:value="passwordForm.confirmPassword"
-                    autocomplete="new-password"
-                /></a-form-item>
-                <a-button
-                  type="primary"
-                  :loading="saving"
-                  @click="changePassword"
-                  >修改密码</a-button
-                >
-              </a-form>
+              <div class="security-grid">
+                <div class="settings-block">
+                  <div class="section-heading"><strong>修改密码</strong></div>
+                  <a-form
+                    ref="passwordFormRef"
+                    :model="passwordForm"
+                    layout="vertical"
+                    class="compact-form"
+                  >
+                    <a-form-item
+                      label="当前密码"
+                      name="currentPassword"
+                      :rules="requiredRules"
+                      ><a-input-password
+                        v-model:value="passwordForm.currentPassword"
+                        autocomplete="current-password"
+                    /></a-form-item>
+                    <a-form-item
+                      label="新密码"
+                      name="newPassword"
+                      :rules="passwordRules"
+                      ><a-input-password
+                        v-model:value="passwordForm.newPassword"
+                        autocomplete="new-password"
+                    /></a-form-item>
+                    <a-form-item
+                      label="确认新密码"
+                      name="confirmPassword"
+                      :rules="requiredRules"
+                      ><a-input-password
+                        v-model:value="passwordForm.confirmPassword"
+                        autocomplete="new-password"
+                    /></a-form-item>
+                    <a-button
+                      type="primary"
+                      :loading="saving"
+                      @click="changePassword"
+                      >修改密码</a-button
+                    >
+                  </a-form>
+                </div>
+
+                <div class="settings-block mfa-block">
+                  <div class="section-heading">
+                    <strong>多因素认证</strong>
+                    <a-tag :color="mfaStatus.enabled ? 'green' : 'default'">
+                      {{ mfaStatus.enabled ? "已启用" : "未启用" }}
+                    </a-tag>
+                  </div>
+                  <a-alert
+                    v-if="mfaStatus.enabled"
+                    type="success"
+                    show-icon
+                    :message="`可用恢复码 ${mfaStatus.recoveryCodesRemaining} 个`"
+                  />
+                  <a-form layout="vertical" class="compact-form mfa-form">
+                    <a-form-item label="当前密码">
+                      <a-input-password
+                        v-model:value="mfaForm.currentPassword"
+                        autocomplete="current-password"
+                      />
+                    </a-form-item>
+                    <template v-if="mfaStatus.enabled">
+                      <a-form-item label="动态验证码或恢复码">
+                        <a-input
+                          v-model:value="mfaForm.code"
+                          autocomplete="one-time-code"
+                        />
+                      </a-form-item>
+                      <a-space wrap>
+                        <a-button
+                          :loading="mfaSaving"
+                          @click="regenerateRecoveryCodes"
+                        >
+                          生成新恢复码
+                        </a-button>
+                        <a-button
+                          danger
+                          :loading="mfaSaving"
+                          @click="confirmDisableMfa"
+                        >
+                          禁用多因素认证
+                        </a-button>
+                      </a-space>
+                    </template>
+                    <a-button
+                      v-else
+                      type="primary"
+                      :loading="mfaSaving"
+                      @click="beginMfaSetup"
+                    >
+                      启用多因素认证
+                    </a-button>
+                  </a-form>
+                </div>
+              </div>
             </section>
           </a-tab-pane>
         </a-tabs>
@@ -400,6 +458,42 @@
     </a-modal>
 
     <a-modal
+      v-model:open="mfaSetupOpen"
+      title="绑定验证器"
+      :confirm-loading="mfaSaving"
+      ok-text="确认启用"
+      @ok="enableMfa"
+    >
+      <div class="mfa-setup">
+        <img v-if="mfaQrCode" :src="mfaQrCode" alt="多因素认证二维码" />
+        <a-typography-text copyable class="mfa-secret">{{
+          mfaSetup?.secret
+        }}</a-typography-text>
+        <a-form-item label="6 位动态验证码" required>
+          <a-input
+            v-model:value="mfaSetupCode"
+            autocomplete="one-time-code"
+            inputmode="numeric"
+            maxlength="6"
+          />
+        </a-form-item>
+      </div>
+    </a-modal>
+
+    <a-modal
+      v-model:open="recoveryCodesOpen"
+      title="恢复码（仅显示一次）"
+      :footer="null"
+    >
+      <div class="recovery-code-list">
+        <code v-for="code in recoveryCodes" :key="code">{{ code }}</code>
+      </div>
+      <a-button block @click="copyRecoveryCodes">
+        <template #icon><CopyOutlined /></template>复制全部恢复码
+      </a-button>
+    </a-modal>
+
+    <a-modal
       v-model:open="previewOpen"
       title="附件"
       width="900px"
@@ -427,7 +521,9 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
-import { message, type FormInstance } from "ant-design-vue";
+import { message, Modal, type FormInstance } from "ant-design-vue";
+import QRCode from "qrcode";
+import CopyOutlined from "@ant-design/icons-vue/CopyOutlined";
 import DeleteOutlined from "@ant-design/icons-vue/DeleteOutlined";
 import EditOutlined from "@ant-design/icons-vue/EditOutlined";
 import PlusOutlined from "@ant-design/icons-vue/PlusOutlined";
@@ -439,15 +535,21 @@ import {
 } from "@/api/qualification";
 import {
   changeMyPasswordApi,
+  beginMfaSetupApi,
   createMyCertificateApi,
   deleteMyCertificateApi,
+  disableMfaApi,
+  enableMfaApi,
+  getMfaStatusApi,
   getPersonalOverviewApi,
+  regenerateMfaRecoveryCodesApi,
   updateMyCertificateApi,
   updateMyProfileApi,
   uploadMyAttachmentApi,
   type MyCertificate,
   type MyCertificatePayload,
   type PersonalOverview,
+  type MfaSetup,
 } from "@/api/personal";
 import { useAuthStore } from "@/stores/auth";
 
@@ -455,6 +557,7 @@ const auth = useAuthStore();
 const loading = ref(false);
 const saving = ref(false);
 const uploading = ref(false);
+const mfaSaving = ref(false);
 const activeTab = ref("profile");
 const overview = ref<PersonalOverview>();
 const profileFormRef = ref<FormInstance>();
@@ -464,6 +567,14 @@ const certificateOpen = ref(false);
 const certificateEditingId = ref("");
 const previewOpen = ref(false);
 const previewAttachments = ref<Attachment[]>([]);
+const mfaStatus = reactive({ enabled: false, recoveryCodesRemaining: 0 });
+const mfaForm = reactive({ currentPassword: "", code: "" });
+const mfaSetupOpen = ref(false);
+const mfaSetup = ref<MfaSetup>();
+const mfaSetupCode = ref("");
+const mfaQrCode = ref("");
+const recoveryCodesOpen = ref(false);
+const recoveryCodes = ref<string[]>([]);
 
 const profileForm = reactive({ displayName: "", phone: "", email: "" });
 const passwordForm = reactive({
@@ -478,7 +589,10 @@ const emailRules = [
 ];
 const passwordRules = [
   { required: true, message: "请输入新密码" },
-  { min: 8, message: "密码至少 8 位" },
+  {
+    pattern: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9\s])\S{12,100}$/,
+    message: "密码须为12-100位，且包含大小写字母、数字和特殊字符",
+  },
 ];
 const initial = computed(() =>
   (overview.value?.account.displayName || "员").trim().slice(0, 1),
@@ -500,7 +614,19 @@ const contractColumns = [
   { title: "附件", key: "attachments", width: 110 },
 ];
 
-onMounted(loadOverview);
+onMounted(() => {
+  void Promise.all([loadOverview(), loadMfaStatus()]);
+});
+
+async function loadMfaStatus() {
+  try {
+    Object.assign(mfaStatus, await getMfaStatusApi());
+  } catch (error) {
+    message.error(
+      error instanceof Error ? error.message : "加载账号安全状态失败",
+    );
+  }
+}
 
 async function loadOverview() {
   loading.value = true;
@@ -555,6 +681,113 @@ async function changePassword() {
     message.error(error instanceof Error ? error.message : "密码修改失败");
   } finally {
     saving.value = false;
+  }
+}
+
+async function beginMfaSetup() {
+  if (!mfaForm.currentPassword) {
+    message.warning("请输入当前密码");
+    return;
+  }
+  mfaSaving.value = true;
+  try {
+    mfaSetup.value = await beginMfaSetupApi(mfaForm.currentPassword);
+    mfaQrCode.value = await QRCode.toDataURL(mfaSetup.value.otpauthUri, {
+      width: 220,
+      margin: 1,
+      errorCorrectionLevel: "M",
+    });
+    mfaSetupCode.value = "";
+    mfaSetupOpen.value = true;
+  } catch (error) {
+    message.error(
+      error instanceof Error ? error.message : "无法开始多因素认证设置",
+    );
+  } finally {
+    mfaSaving.value = false;
+  }
+}
+
+async function enableMfa() {
+  if (!/^\d{6}$/.test(mfaSetupCode.value.trim())) {
+    message.warning("请输入 6 位动态验证码");
+    return;
+  }
+  mfaSaving.value = true;
+  try {
+    const result = await enableMfaApi(mfaSetupCode.value.trim());
+    mfaSetupOpen.value = false;
+    showRecoveryCodes(result.recoveryCodes);
+    Object.assign(mfaForm, { currentPassword: "", code: "" });
+    await loadMfaStatus();
+    message.success("多因素认证已启用");
+  } catch (error) {
+    message.error(
+      error instanceof Error ? error.message : "多因素认证启用失败",
+    );
+  } finally {
+    mfaSaving.value = false;
+  }
+}
+
+async function regenerateRecoveryCodes() {
+  if (!mfaForm.currentPassword || !mfaForm.code) {
+    message.warning("请输入当前密码和动态验证码");
+    return;
+  }
+  mfaSaving.value = true;
+  try {
+    const result = await regenerateMfaRecoveryCodesApi(mfaForm);
+    showRecoveryCodes(result.recoveryCodes);
+    mfaForm.code = "";
+    await loadMfaStatus();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "恢复码生成失败");
+  } finally {
+    mfaSaving.value = false;
+  }
+}
+
+function confirmDisableMfa() {
+  if (!mfaForm.currentPassword || !mfaForm.code) {
+    message.warning("请输入当前密码和动态验证码");
+    return;
+  }
+  Modal.confirm({
+    title: "确认禁用多因素认证？",
+    okText: "确认禁用",
+    okType: "danger",
+    cancelText: "取消",
+    onOk: disableMfa,
+  });
+}
+
+async function disableMfa() {
+  mfaSaving.value = true;
+  try {
+    await disableMfaApi(mfaForm);
+    auth.logout();
+    window.location.assign("/login");
+  } catch (error) {
+    message.error(
+      error instanceof Error ? error.message : "多因素认证禁用失败",
+    );
+  } finally {
+    mfaSaving.value = false;
+  }
+}
+
+function showRecoveryCodes(codes: string[]) {
+  recoveryCodes.value = codes;
+  recoveryCodesOpen.value = true;
+}
+
+async function copyRecoveryCodes() {
+  try {
+    await navigator.clipboard.writeText(recoveryCodes.value.join("\n"));
+    message.success("恢复码已复制");
+  } catch {
+    message.error("浏览器未允许复制，请逐项保存恢复码");
   }
 }
 
@@ -865,6 +1098,48 @@ function contractStatusColor(value: string) {
 .security-surface {
   min-height: 360px;
 }
+.security-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(280px, 1fr));
+  gap: 48px;
+}
+.mfa-block .ant-alert {
+  margin-bottom: 18px;
+}
+.mfa-form {
+  margin-top: 18px;
+}
+.mfa-setup {
+  display: grid;
+  justify-items: center;
+  gap: 18px;
+}
+.mfa-setup img {
+  width: 220px;
+  height: 220px;
+}
+.mfa-secret {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.mfa-setup .ant-form-item {
+  width: 100%;
+  margin-bottom: 0;
+}
+.recovery-code-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.recovery-code-list code {
+  padding: 9px 10px;
+  border: 1px solid #d0d5dd;
+  border-radius: 4px;
+  background: #f8fafc;
+  text-align: center;
+}
 .attachment-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -908,6 +1183,10 @@ function contractStatusColor(value: string) {
     grid-template-columns: 1fr;
     gap: 28px;
   }
+  .security-grid {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
   .certificate-desktop-table {
     display: none;
   }
@@ -941,6 +1220,9 @@ function contractStatusColor(value: string) {
   }
   .personal-identity {
     grid-column: auto;
+  }
+  .recovery-code-list {
+    grid-template-columns: 1fr;
   }
 }
 </style>

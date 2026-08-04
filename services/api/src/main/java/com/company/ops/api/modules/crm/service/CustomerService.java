@@ -18,7 +18,6 @@ import com.company.ops.api.modules.crm.repository.OpportunityRepository;
 import com.company.ops.api.modules.crm.repository.ReceivableRepository;
 import com.company.ops.api.modules.crm.repository.ServiceContractRepository;
 import com.company.ops.api.modules.system.security.DataScopeService;
-import com.company.ops.api.modules.system.repository.SystemUserRepository;
 import com.company.ops.api.modules.project.repository.ProjectRepository;
 import java.math.BigDecimal;
 import java.util.List;
@@ -38,7 +37,6 @@ public class CustomerService {
   private final ReceivableRepository receivableRepository;
   private final FollowUpRepository followUpRepository;
   private final DataScopeService dataScopeService;
-  private final SystemUserRepository userRepository;
   private final ProjectRepository projectRepository;
   private final DeleteGovernanceService deleteGovernanceService;
 
@@ -53,7 +51,6 @@ public class CustomerService {
       ReceivableRepository receivableRepository,
       FollowUpRepository followUpRepository,
       DataScopeService dataScopeService,
-      SystemUserRepository userRepository,
       ProjectRepository projectRepository,
       DeleteGovernanceService deleteGovernanceService
   ) {
@@ -64,7 +61,6 @@ public class CustomerService {
     this.receivableRepository = receivableRepository;
     this.followUpRepository = followUpRepository;
     this.dataScopeService = dataScopeService;
-    this.userRepository = userRepository;
     this.projectRepository = projectRepository;
     this.deleteGovernanceService = deleteGovernanceService;
   }
@@ -91,7 +87,7 @@ public class CustomerService {
             )
         ));
     return deleteGovernanceService.visible("CUSTOMER", customerRepository.findAllByOrderByCreatedAtDesc(), Customer::getId).stream()
-        .filter(customer -> dataScopeService.canViewOwner(customer.getOwnerName()))
+        .filter(customer -> dataScopeService.canViewOwner(customer.getOwnerUserId()))
         .map(customer -> toSummary(
             customer,
             signedOrderAmounts.getOrDefault(customer.getId(), BigDecimal.ZERO),
@@ -105,7 +101,7 @@ public class CustomerService {
   public CustomerDetailResponse getCustomer(UUID id) {
     Customer customer = customerRepository.findById(id)
         .orElseThrow(() -> new BusinessException("客户不存在"));
-    if (!dataScopeService.canViewOwner(customer.getOwnerName())) throw new BusinessException("无权查看该客户");
+    if (!dataScopeService.canViewOwner(customer.getOwnerUserId())) throw new BusinessException("无权查看该客户");
     if (deleteGovernanceService.isHidden("CUSTOMER", id)) throw new BusinessException("客户不存在");
     var contracts = contractRepository.findByCustomerIdOrderByStartDateDesc(id);
     var opportunities = opportunityRepository.findByCustomerIdOrderByUpdatedAtDesc(id);
@@ -233,12 +229,12 @@ public class CustomerService {
       throw new BusinessException("客户编码已存在");
     }
 
-    assertOwnerVisible(request.ownerName());
+    UUID ownerUserId = dataScopeService.requireVisibleOwnerId(request.ownerName());
 
     Customer customer = new Customer();
     customer.setCode(generatedCode);
     applyCustomerDetails(customer, request.name(), request.industry(), request.level(),
-        request.ownerName(), request.paymentHabit(), request.riskStatus(), request.riskNote(),
+        request.ownerName(), ownerUserId, request.paymentHabit(), request.riskStatus(), request.riskNote(),
         request.invoice(), request.contacts(), request.sites());
 
     Customer saved = customerRepository.save(customer);
@@ -249,12 +245,12 @@ public class CustomerService {
   public CustomerDetailResponse updateCustomer(UUID id, UpdateCustomerRequest request) {
     Customer customer = customerRepository.findById(id)
         .orElseThrow(() -> new BusinessException("客户不存在"));
-    if (!dataScopeService.canViewOwner(customer.getOwnerName())) {
+    if (!dataScopeService.canViewOwner(customer.getOwnerUserId())) {
       throw new BusinessException("无权编辑该客户");
     }
-    assertOwnerVisible(request.ownerName());
+    UUID ownerUserId = dataScopeService.requireVisibleOwnerId(request.ownerName());
     applyCustomerDetails(customer, request.name(), request.industry(), request.level(),
-        request.ownerName(), request.paymentHabit(), request.riskStatus(), request.riskNote(),
+        request.ownerName(), ownerUserId, request.paymentHabit(), request.riskStatus(), request.riskNote(),
         request.invoice(), request.contacts(), request.sites());
     customerRepository.save(customer);
     return getCustomer(id);
@@ -265,11 +261,12 @@ public class CustomerService {
     Customer customer = customerRepository.findById(id)
         .orElseThrow(() -> new BusinessException("客户不存在"));
     if (deleteGovernanceService.isHidden("CUSTOMER", id)) throw new BusinessException("客户不存在");
-    if (!dataScopeService.canViewOwner(customer.getOwnerName())) {
+    if (!dataScopeService.canViewOwner(customer.getOwnerUserId())) {
       throw new BusinessException("无权转交该客户");
     }
-    assertOwnerExists(ownerName);
+    UUID ownerUserId = dataScopeService.requireVisibleOwnerId(ownerName);
     customer.setOwnerName(ownerName);
+    customer.setOwnerUserId(ownerUserId);
     customerRepository.save(customer);
   }
 
@@ -279,6 +276,7 @@ public class CustomerService {
       String industry,
       com.company.ops.api.modules.crm.domain.CustomerLevel level,
       String ownerName,
+      UUID ownerUserId,
       String paymentHabit,
       RiskStatus riskStatus,
       String riskNote,
@@ -290,6 +288,7 @@ public class CustomerService {
     customer.setIndustry(industry);
     customer.setLevel(level);
     customer.setOwnerName(ownerName);
+    customer.setOwnerUserId(ownerUserId);
     customer.setPaymentHabit(paymentHabit);
     customer.setRiskStatus(riskStatus == null ? RiskStatus.NORMAL : riskStatus);
     customer.setRiskNote(riskNote);
@@ -332,25 +331,11 @@ public class CustomerService {
     }
   }
 
-  private void assertOwnerVisible(String ownerName) {
-    if (!dataScopeService.canViewOwner(ownerName)) {
-      throw new BusinessException("无权将客户分配给该负责人");
-    }
-    assertOwnerExists(ownerName);
-  }
-
-  private void assertOwnerExists(String ownerName) {
-    if (userRepository.findByDisplayNameAndEnabledTrue(ownerName).isEmpty()) {
-      throw new BusinessException("负责人必须是组织架构中的启用用户");
-    }
-  }
-
   @Transactional
   public void deleteCustomer(UUID id) {
-    if (!customerRepository.existsById(id)) {
-      throw new BusinessException("客户不存在");
-    }
-    Customer customer = customerRepository.findById(id).orElse(null);
+    Customer customer = customerRepository.findById(id)
+        .orElseThrow(() -> new BusinessException("客户不存在"));
+    if (!dataScopeService.canViewOwner(customer.getOwnerUserId())) throw new BusinessException("无权删除该客户");
     if (!deleteGovernanceService.allowPhysicalDelete("CUSTOMER", id, customer == null ? id.toString() : customer.getCode() + " · " + customer.getName())) {
       return;
     }

@@ -1,7 +1,9 @@
 package com.company.ops.api.modules.system.domain;
 
 import com.company.ops.api.common.domain.BaseEntity;
+import com.company.ops.api.common.security.EncryptedStringConverter;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
@@ -41,6 +43,16 @@ public class SystemUser extends BaseEntity {
 
   @Column(name = "auth_version", nullable = false)
   private long authVersion;
+
+  @Column(name = "mfa_enabled", nullable = false)
+  private boolean mfaEnabled;
+
+  @Convert(converter = EncryptedStringConverter.class)
+  @Column(name = "mfa_secret", length = 1024)
+  private String mfaSecret;
+
+  @Column(name = "mfa_recovery_codes", columnDefinition = "text")
+  private String mfaRecoveryCodes;
 
   @ManyToMany(fetch = FetchType.EAGER)
   @JoinTable(
@@ -109,6 +121,18 @@ public class SystemUser extends BaseEntity {
   public long getAuthVersion() { return authVersion; }
 
   public void bumpAuthVersion() { authVersion++; }
+
+  public boolean isMfaEnabled() { return mfaEnabled; }
+
+  public void setMfaEnabled(boolean mfaEnabled) { this.mfaEnabled = mfaEnabled; }
+
+  public String getMfaSecret() { return mfaSecret; }
+
+  public void setMfaSecret(String mfaSecret) { this.mfaSecret = mfaSecret; }
+
+  public String getMfaRecoveryCodes() { return mfaRecoveryCodes; }
+
+  public void setMfaRecoveryCodes(String mfaRecoveryCodes) { this.mfaRecoveryCodes = mfaRecoveryCodes; }
 
   public Set<SystemRole> getRoles() {
     return roles;

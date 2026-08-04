@@ -31,7 +31,7 @@ class LocalFileStorageServiceTest {
         "file",
         "../contract.pdf",
         "application/pdf",
-        "hello".getBytes()
+        "%PDF-1.7\nhello".getBytes()
     );
 
     var stored = service.store(file, "office", PDF_ONLY);

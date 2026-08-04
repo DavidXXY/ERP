@@ -74,6 +74,40 @@ test("login reaches the requested work area and applies command permissions", as
   await expect(page.getByText("财务中心", { exact: true })).toHaveCount(0);
 });
 
+test("MFA challenge only creates a session after the second verification step", async ({ page }) => {
+  const loginPayloads: Array<Record<string, unknown>> = [];
+  await page.route("**/api/auth/login", async (route) => {
+    const payload = route.request().postDataJSON() as Record<string, unknown>;
+    loginPayloads.push(payload);
+    if (!payload.mfaCode) {
+      await route.fulfill({ json: ok({ mfaRequired: true }) });
+      return;
+    }
+    await route.fulfill({ json: ok({ token: "mfa-e2e-token", user }) });
+  });
+
+  await page.goto("/login?redirect=/system/users");
+  await page.getByLabel("账号").fill("auditor");
+  await page.getByLabel("密码").fill("correct-password");
+  await page.getByRole("button", { name: "登录系统" }).click();
+
+  await expect(page.getByLabel("动态验证码或恢复码")).toBeVisible();
+  await expect(page.getByRole("button", { name: "验证并登录" })).toBeVisible();
+  expect(await page.evaluate(() => sessionStorage.getItem("ops_erp_admin_token"))).toBeNull();
+
+  await page.getByLabel("动态验证码或恢复码").fill("123456");
+  await page.getByRole("button", { name: "验证并登录" }).click();
+
+  await expect(page).toHaveURL(/\/system\/users$/);
+  expect(loginPayloads).toEqual([
+    { username: "auditor", password: "correct-password" },
+    { username: "auditor", password: "correct-password", mfaCode: "123456" },
+  ]);
+  expect(
+    await page.evaluate(() => sessionStorage.getItem("ops_erp_admin_token")),
+  ).toBe("mfa-e2e-token");
+});
+
 test("route guard redirects an unauthorized deep link", async ({ page }) => {
   await page.addInitScript(() => sessionStorage.setItem("ops_erp_admin_token", "e2e-token"));
   await page.goto("/finance/overview");

@@ -61,9 +61,8 @@ class CustomerServiceTest {
     Customer customer = customer(customerId);
     when(customerRepository.findById(customerId)).thenReturn(Optional.of(customer));
     when(customerRepository.save(customer)).thenReturn(customer);
-    when(dataScopeService.canViewOwner("客户经理A")).thenReturn(true);
-    when(userRepository.findByDisplayNameAndEnabledTrue("客户经理A"))
-        .thenReturn(List.of(new SystemUser()));
+    when(dataScopeService.canViewOwner(customer.getOwnerUserId())).thenReturn(true);
+    when(dataScopeService.requireVisibleOwnerId("客户经理A")).thenReturn(customer.getOwnerUserId());
 
     var request = new UpdateCustomerRequest(
         "华东轨交能源集团",
@@ -106,9 +105,8 @@ class CustomerServiceTest {
     UUID customerId = UUID.randomUUID();
     Customer customer = customer(customerId);
     when(customerRepository.findById(customerId)).thenReturn(Optional.of(customer));
-    when(dataScopeService.canViewOwner("客户经理A")).thenReturn(true);
-    when(userRepository.findByDisplayNameAndEnabledTrue("客户经理A"))
-        .thenReturn(List.of(new SystemUser()));
+    when(dataScopeService.canViewOwner(customer.getOwnerUserId())).thenReturn(true);
+    when(dataScopeService.requireVisibleOwnerId("客户经理A")).thenReturn(customer.getOwnerUserId());
 
     var request = new UpdateCustomerRequest(
         "华东轨交能源中心",
@@ -139,6 +137,7 @@ class CustomerServiceTest {
     customer.setIndustry("轨道交通");
     customer.setLevel(CustomerLevel.KEY);
     customer.setOwnerName("客户经理A");
+    customer.setOwnerUserId(UUID.randomUUID());
     customer.setRiskStatus(RiskStatus.NORMAL);
     return customer;
   }

@@ -1,6 +1,7 @@
 package com.company.ops.api.modules.system.service;
 
 import com.company.ops.api.common.exception.BusinessException;
+import com.company.ops.api.common.validation.PasswordPolicy;
 import com.company.ops.api.modules.system.domain.SystemOrganization;
 import com.company.ops.api.modules.system.domain.SystemRole;
 import com.company.ops.api.modules.system.domain.SystemUser;
@@ -68,6 +69,7 @@ public class UserService {
 
   @Transactional
   public UserResponse createUser(CreateUserRequest request) {
+    PasswordPolicy.requireValid(request.password(), request.username());
     if (userRepository.existsByUsername(request.username())) {
       throw new BusinessException("用户名已存在");
     }
@@ -137,6 +139,7 @@ public class UserService {
   @Transactional
   public void resetPassword(UUID id, String newPassword) {
     SystemUser user = userRepository.findById(id).orElseThrow();
+    PasswordPolicy.requireValid(newPassword, user.getUsername());
     user.setPasswordHash(passwordEncoder.encode(newPassword));
     user.bumpAuthVersion();
     userRepository.save(user);

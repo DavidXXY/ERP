@@ -38,6 +38,9 @@ public class FollowUp extends BaseEntity {
   @Column(name = "owner_name", nullable = false, length = 80)
   private String ownerName;
 
+  @Column(name = "owner_user_id")
+  private UUID ownerUserId;
+
   public UUID getCustomerId() {
     return customerId;
   }
@@ -100,5 +103,13 @@ public class FollowUp extends BaseEntity {
 
   public void setOwnerName(String ownerName) {
     this.ownerName = ownerName;
+  }
+
+  public UUID getOwnerUserId() {
+    return ownerUserId;
+  }
+
+  public void setOwnerUserId(UUID ownerUserId) {
+    this.ownerUserId = ownerUserId;
   }
 }

@@ -5,6 +5,7 @@ import com.company.ops.api.modules.system.domain.SystemUser;
 import com.company.ops.api.modules.system.domain.SystemOrganization;
 import com.company.ops.api.modules.system.repository.SystemOrganizationRepository;
 import com.company.ops.api.modules.system.repository.SystemUserRepository;
+import com.company.ops.api.common.exception.BusinessException;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -29,9 +30,40 @@ public class DataScopeService {
   }
 
   @Transactional(readOnly = true)
+  public boolean canViewOwner(UUID ownerUserId) {
+    UserPrincipal principal = principal();
+    return principal != null && (principal.dataScopes().contains("ALL")
+        || ownerUserId != null && visibleUserIds(principal).contains(ownerUserId));
+  }
+
+  @Transactional(readOnly = true)
   public boolean canViewOwner(String ownerName) {
     UserPrincipal principal = principal();
-    return principal != null && (principal.dataScopes().contains("ALL") || visibleDisplayNames(principal).contains(ownerName));
+    return principal != null && (principal.dataScopes().contains("ALL")
+        || visibleDisplayNames(principal).contains(ownerName));
+  }
+
+  @Transactional(readOnly = true)
+  public UUID requireVisibleOwnerId(String ownerName) {
+    if (ownerName == null || ownerName.isBlank()) throw new BusinessException("负责人不能为空");
+    List<SystemUser> matches = userRepository.findByDisplayNameAndEnabledTrue(ownerName.trim());
+    if (matches.isEmpty()) throw new BusinessException("负责人必须是组织架构中的启用用户");
+    if (matches.size() > 1) throw new BusinessException("负责人姓名不唯一，请由管理员调整账号显示名");
+    UUID ownerUserId = matches.get(0).getId();
+    if (!canViewAssignee(ownerUserId, false)) throw new BusinessException("无权分配给该负责人");
+    return ownerUserId;
+  }
+
+  public String currentActorName() {
+    UserPrincipal principal = principal();
+    if (principal == null) throw new BusinessException("无法识别当前操作人");
+    return principal.displayName();
+  }
+
+  public UUID currentUserId() {
+    UserPrincipal principal = principal();
+    if (principal == null) throw new BusinessException("无法识别当前操作人");
+    return principal.id();
   }
 
   @Transactional(readOnly = true)

@@ -36,11 +36,13 @@ import com.company.ops.api.modules.office.domain.ApprovalStatus;
 import com.company.ops.api.modules.office.repository.ApprovalRequestRepository;
 import com.company.ops.api.modules.maintenance.domain.WorkOrder;
 import com.company.ops.api.modules.maintenance.repository.WorkOrderRepository;
+import com.company.ops.api.modules.system.security.UserPrincipal;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
@@ -100,6 +102,12 @@ public class HrService {
     private QualificationEmployee findEmployee(UUID id) {
         return employeeRepository.findById(id)
             .orElseThrow(() -> new BusinessException("员工不存在: " + id));
+    }
+
+    private String currentActorName() {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication != null && authentication.getPrincipal() instanceof UserPrincipal principal
+            ? principal.displayName() : "系统";
     }
 
     // ====== Education ======
@@ -285,7 +293,7 @@ public class HrService {
         } else {
             entity.setStatus("REJECTED");
         }
-        entity.setApprovedBy(req.operatorName());
+        entity.setApprovedBy(currentActorName());
         entity.setApprovedAt(LocalDate.now());
         entity.setRemark(req.remark());
         return toLifecycleResponse(lifecycleRepository.save(entity));
@@ -347,7 +355,7 @@ public class HrService {
             throw new BusinessException("该申请已处理");
         }
         entity.setStatus(req.approved() ? "APPROVED" : "REJECTED");
-        entity.setApprovedBy(req.operatorName());
+        entity.setApprovedBy(currentActorName());
         entity.setApprovedAt(java.time.LocalDateTime.now());
         entity.setApprovalRemark(req.remark());
         var saved = leaveRequestRepository.save(entity);

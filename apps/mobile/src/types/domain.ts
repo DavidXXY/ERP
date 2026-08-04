@@ -7,7 +7,11 @@ export type CurrentUser = {
   permissions: string[];
 };
 
-export type LoginResponse = { token: string; user: CurrentUser };
+export type LoginResponse = {
+  token?: string;
+  user?: CurrentUser;
+  mfaRequired?: boolean;
+};
 
 export type MobileWorkbench = {
   generatedAt: string;

@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 import vue from "@vitejs/plugin-vue";
 import Components from "unplugin-vue-components/vite";
 import { AntDesignVueResolver } from "unplugin-vue-components/resolvers";
@@ -57,6 +57,20 @@ export default defineConfig({
       },
     },
   ],
+  test: {
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "json-summary", "html"],
+      include: ["src/**/*.{ts,vue}"],
+      exclude: ["src/**/*.d.ts", "src/main.ts"],
+      thresholds: {
+        lines: 4,
+        functions: 5,
+        statements: 4,
+        branches: 2,
+      },
+    },
+  },
   build: {
     chunkSizeWarningLimit: 500,
     rollupOptions: {

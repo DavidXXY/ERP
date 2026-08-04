@@ -3,10 +3,14 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BACKUP_DIR="${BACKUP_DIR:-$ROOT_DIR/backups}"
+BACKUP_RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-30}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$BACKUP_DIR"
 
 command -v pg_dump >/dev/null 2>&1 || { echo "pg_dump is required." >&2; exit 1; }
+command -v age >/dev/null 2>&1 || { echo "age is required for encrypted backups." >&2; exit 1; }
+: "${BACKUP_ENCRYPTION_RECIPIENT:?BACKUP_ENCRYPTION_RECIPIENT is required}"
+[[ "$BACKUP_RETENTION_DAYS" =~ ^[0-9]+$ ]] || { echo "BACKUP_RETENTION_DAYS must be a non-negative integer." >&2; exit 1; }
 work_dir="$(mktemp -d "$BACKUP_DIR/.ops-erp-backup-$STAMP.XXXXXX")"
 cleanup() { rm -rf -- "$work_dir"; }
 trap cleanup EXIT
@@ -62,10 +66,22 @@ fi
   fi
 )
 
-output="$BACKUP_DIR/ops-erp-backup-$STAMP.tar.gz"
+plain_archive="$work_dir/ops-erp-backup-$STAMP.tar.gz"
+output="$BACKUP_DIR/ops-erp-backup-$STAMP.tar.gz.age"
 tar_items=(manifest.env checksums.sha256 postgres.dump)
 if [[ -d "$work_dir/objects" ]]; then tar_items+=(objects); fi
-tar -C "$work_dir" -czf "$output" "${tar_items[@]}"
+tar -C "$work_dir" -czf "$plain_archive" "${tar_items[@]}"
+"$ROOT_DIR/scripts/verify-backup.sh" "$plain_archive"
+age --encrypt --recipient "$BACKUP_ENCRYPTION_RECIPIENT" --output "$output" "$plain_archive"
 shasum -a 256 "$output" > "${output}.sha256"
-"$ROOT_DIR/scripts/verify-backup.sh" "$output"
+
+if [[ -n "${BACKUP_OFFSITE_REMOTE:-}" ]]; then
+  command -v rclone >/dev/null 2>&1 || { echo "rclone is required for BACKUP_OFFSITE_REMOTE." >&2; exit 1; }
+  rclone copyto "$output" "${BACKUP_OFFSITE_REMOTE%/}/$(basename "$output")"
+  rclone copyto "${output}.sha256" "${BACKUP_OFFSITE_REMOTE%/}/$(basename "${output}.sha256")"
+fi
+
+while IFS= read -r -d '' expired; do
+  rm -f -- "$expired" "${expired}.sha256"
+done < <(find "$BACKUP_DIR" -maxdepth 1 -type f -name 'ops-erp-backup-*.tar.gz.age' -mtime "+$BACKUP_RETENTION_DAYS" -print0)
 echo "$output"

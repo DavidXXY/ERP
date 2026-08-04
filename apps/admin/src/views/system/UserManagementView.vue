@@ -285,7 +285,13 @@ const columns = [
 const formRules = {
   username: [{ required: true, message: "请输入登录账号" }],
   displayName: [{ required: true, message: "请输入姓名" }],
-  password: [{ required: true, min: 6, message: "初始密码至少 6 位" }],
+  password: [
+    { required: true, message: "请输入初始密码" },
+    {
+      pattern: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9\s])\S{12,100}$/,
+      message: "密码须为12-100位，且包含大小写字母、数字和特殊字符",
+    },
+  ],
 };
 const statusOptions = [
   { label: "全部状态", value: "ALL" },

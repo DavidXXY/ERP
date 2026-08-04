@@ -16,10 +16,15 @@ import com.company.ops.api.modules.finance.dto.PaymentApplicationResponse;
 import com.company.ops.api.modules.finance.dto.PaymentRecordResponse;
 import com.company.ops.api.modules.finance.dto.ProcessPaymentApplicationRequest;
 import com.company.ops.api.modules.finance.service.FinanceService;
+import com.company.ops.api.modules.finance.service.FinanceAnalyticsService;
+import com.company.ops.api.modules.finance.dto.FinanceAnalyticsDtos.AdjustTaxInvoiceRequest;
+import com.company.ops.api.modules.finance.dto.FinanceAnalyticsDtos.FinanceAnalyticsResponse;
+import com.company.ops.api.modules.finance.dto.FinanceAnalyticsDtos.TaxInvoiceLine;
 import com.company.ops.api.modules.system.service.ApprovalFlowSecurity;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
+import java.time.LocalDate;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -29,6 +34,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 
@@ -39,21 +45,51 @@ public class FinanceController {
   private final FinanceService financeService;
   private final CrmOperationsService crmOperationsService;
   private final ApprovalFlowSecurity approvalFlowSecurity;
+  private final FinanceAnalyticsService analyticsService;
 
   public FinanceController(
       FinanceService financeService,
       CrmOperationsService crmOperationsService,
-      ApprovalFlowSecurity approvalFlowSecurity
+      ApprovalFlowSecurity approvalFlowSecurity,
+      FinanceAnalyticsService analyticsService
   ) {
     this.financeService = financeService;
     this.crmOperationsService = crmOperationsService;
     this.approvalFlowSecurity = approvalFlowSecurity;
+    this.analyticsService = analyticsService;
   }
 
   @GetMapping("/overview")
   @PreAuthorize("hasAuthority('finance:view')")
   public ApiResponse<FinanceOverviewResponse> overview() {
     return ApiResponse.ok(financeService.overview());
+  }
+
+  @GetMapping("/analytics")
+  @PreAuthorize("hasAuthority('finance:view')")
+  public ApiResponse<FinanceAnalyticsResponse> analytics(
+      @RequestParam(required = false) LocalDate asOf,
+      @RequestParam(required = false) Integer year) {
+    return ApiResponse.ok(analyticsService.analytics(asOf, year));
+  }
+
+  @GetMapping("/tax-ledger")
+  @PreAuthorize("hasAuthority('finance:tax:view')")
+  public ApiResponse<List<TaxInvoiceLine>> taxLedger(
+      @RequestParam(required = false) LocalDate from,
+      @RequestParam(required = false) LocalDate to,
+      @RequestParam(required = false) String side,
+      @RequestParam(required = false) String status) {
+    return ApiResponse.ok(analyticsService.taxLedger(from, to, side, status));
+  }
+
+  @PostMapping("/tax-ledger/{side}/{id}/adjust")
+  @PreAuthorize("hasAuthority('finance:tax:manage')")
+  public ApiResponse<TaxInvoiceLine> adjustTaxInvoice(
+      @PathVariable String side,
+      @PathVariable UUID id,
+      @Valid @RequestBody AdjustTaxInvoiceRequest request) {
+    return ApiResponse.ok(analyticsService.adjustTaxInvoice(side, id, request));
   }
 
   @GetMapping("/receivables")

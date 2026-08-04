@@ -234,6 +234,11 @@
             key="/finance/ledger"
             >总账报表</a-menu-item
           >
+          <a-menu-item
+            v-if="auth.can('finance:tax:view')"
+            key="/finance/tax-ledger"
+            >税务台账</a-menu-item
+          >
         </a-sub-menu>
 
         <a-sub-menu

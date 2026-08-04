@@ -18,6 +18,10 @@ public class SupplierInvoice extends BaseEntity {
   @Column(name="approved_by_name",length=80) private String approvedByName;
   @Column(name="approved_at") private OffsetDateTime approvedAt;
   @Column(name="attachment_document_id") private UUID attachmentDocumentId;
+  @Column(name="tax_status",nullable=false,length=24) private String taxStatus="NORMAL";
+  @Column(name="tax_adjustment_reason",length=500) private String taxAdjustmentReason;
+  @Column(name="tax_adjusted_at") private OffsetDateTime taxAdjustedAt;
+  @Column(name="tax_adjusted_by",length=80) private String taxAdjustedBy;
   public String getCode(){return code;} public void setCode(String v){code=v;} public String getInvoiceNo(){return invoiceNo;} public void setInvoiceNo(String v){invoiceNo=v;}
   public UUID getOrderId(){return orderId;} public void setOrderId(UUID v){orderId=v;} public UUID getSupplierId(){return supplierId;} public void setSupplierId(UUID v){supplierId=v;}
   public BigDecimal getAmount(){return amount;} public void setAmount(BigDecimal v){amount=v;} public BigDecimal getTaxRate(){return taxRate;} public void setTaxRate(BigDecimal v){taxRate=v;}
@@ -33,4 +37,8 @@ public class SupplierInvoice extends BaseEntity {
   public String getApprovedByName(){return approvedByName;} public void setApprovedByName(String v){approvedByName=v;}
   public OffsetDateTime getApprovedAt(){return approvedAt;} public void setApprovedAt(OffsetDateTime v){approvedAt=v;}
   public UUID getAttachmentDocumentId(){return attachmentDocumentId;} public void setAttachmentDocumentId(UUID v){attachmentDocumentId=v;}
+  public String getTaxStatus(){return taxStatus;} public void setTaxStatus(String v){taxStatus=v;}
+  public String getTaxAdjustmentReason(){return taxAdjustmentReason;} public void setTaxAdjustmentReason(String v){taxAdjustmentReason=v;}
+  public OffsetDateTime getTaxAdjustedAt(){return taxAdjustedAt;} public void setTaxAdjustedAt(OffsetDateTime v){taxAdjustedAt=v;}
+  public String getTaxAdjustedBy(){return taxAdjustedBy;} public void setTaxAdjustedBy(String v){taxAdjustedBy=v;}
 }

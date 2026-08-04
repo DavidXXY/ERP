@@ -5,6 +5,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Collection;
 import java.util.UUID;
+import java.time.LocalDate;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -18,6 +19,13 @@ public interface AccountingEntryRepository extends JpaRepository<AccountingEntry
       + "JOIN AccountingVoucher v ON v.id = e.voucherId WHERE v.status IN ('POSTED','REVERSED') "
       + "GROUP BY e.accountCode, e.accountName ORDER BY e.accountCode")
   List<Object[]> aggregateByAccount();
+
+  @Query("SELECT e.accountCode, e.accountName, COALESCE(SUM(e.debit), 0), "
+      + "COALESCE(SUM(e.credit), 0) FROM AccountingEntry e "
+      + "JOIN AccountingVoucher v ON v.id = e.voucherId WHERE v.status IN ('POSTED','REVERSED') "
+      + "AND v.voucherDate BETWEEN :from AND :to "
+      + "GROUP BY e.accountCode, e.accountName ORDER BY e.accountCode")
+  List<Object[]> aggregateByAccountBetween(@Param("from") LocalDate from, @Param("to") LocalDate to);
 
   @Query("SELECT COALESCE(SUM(e.debit), 0) FROM AccountingEntry e JOIN AccountingVoucher v ON v.id = e.voucherId WHERE e.accountCode = :accountCode AND v.status IN ('POSTED','REVERSED')")
   BigDecimal sumDebitByAccountCode(@Param("accountCode") String accountCode);

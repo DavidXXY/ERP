@@ -39,7 +39,12 @@ public class DataInitializer implements CommandLineRunner {
       new RequiredPermission("finance:voucher:create", "凭证草稿新增", "finance"),
       new RequiredPermission("finance:voucher:review", "凭证复核", "finance"),
       new RequiredPermission("finance:voucher:post", "凭证记账", "finance"),
-      new RequiredPermission("finance:voucher:reverse", "凭证冲销", "finance")
+      new RequiredPermission("finance:voucher:reverse", "凭证冲销", "finance"),
+      new RequiredPermission("finance:tax:view", "税务台账查看", "finance"),
+      new RequiredPermission("finance:tax:manage", "发票作废红冲", "finance"),
+      new RequiredPermission("finance:account:manage", "会计科目与期初余额维护", "finance"),
+      new RequiredPermission("finance:operations:view", "财务运营工作台查看", "finance"),
+      new RequiredPermission("finance:operations:manage", "财务运营处理", "finance")
   );
 
   private final SystemPermissionRepository permissionRepository;

@@ -594,6 +594,12 @@ const rootRoutes: RouteRecordRaw[] = [
       permission: "finance:ledger:view",
     },
   },
+  {
+    path: "finance/tax-ledger",
+    name: "finance-tax-ledger",
+    component: () => import("@/views/finance/TaxLedgerView.vue"),
+    meta: { title: "税务台账", permission: "finance:tax:view" },
+  },
   // System
   { path: "system", redirect: "/system/health" },
   {

@@ -1,8 +1,8 @@
 <template>
   <div class="page-stack">
-    <a-card title="总账与财务报表">
+    <a-card class="ledger-overview-card" title="总账与财务报表">
       <template #extra>
-        <a-space>
+        <a-space wrap class="ledger-actions">
           <a-button
             v-if="auth.can('finance:voucher:create')"
             type="primary"
@@ -220,6 +220,21 @@
         </a-tab-pane>
 
         <a-tab-pane key="statements" tab="财务报表">
+          <a-space wrap class="table-toolbar statement-toolbar">
+            <span>报表期间</span>
+            <a-input
+              v-model:value="statementRange.from"
+              type="date"
+              class="date-input"
+            />
+            <span>至</span>
+            <a-input
+              v-model:value="statementRange.to"
+              type="date"
+              class="date-input"
+            />
+            <a-button type="primary" @click="loadStatements">生成报表</a-button>
+          </a-space>
           <a-descriptions
             bordered
             :column="{ xs: 1, md: 3 }"
@@ -230,6 +245,9 @@
             }}</a-descriptions-item>
             <a-descriptions-item label="负债合计（元，税价不适用）">{{
               formatMoney(statements.totalLiabilities)
+            }}</a-descriptions-item>
+            <a-descriptions-item label="所有者权益合计（元，税价不适用）">{{
+              formatMoney(statements.totalEquity)
             }}</a-descriptions-item>
             <a-descriptions-item label="本期利润（元，税价不适用）">
               <strong :class="{ 'text-danger': statements.profit < 0 }">{{
@@ -252,7 +270,11 @@
               <a-table
                 size="small"
                 :columns="statementColumns"
-                :data-source="[...statements.assets, ...statements.liabilities]"
+                :data-source="[
+                  ...statements.assets,
+                  ...statements.liabilities,
+                  ...statements.equity,
+                ]"
                 :pagination="false"
                 :row-key="(item: StatementLine) => item.accountCode"
               >
@@ -292,6 +314,118 @@
               </a-table>
             </a-col>
           </a-row>
+        </a-tab-pane>
+
+        <a-tab-pane key="accounts" tab="会计科目">
+          <div class="table-toolbar toolbar-between">
+            <a-space wrap>
+              <a-input-search
+                v-model:value="accountKeyword"
+                allow-clear
+                placeholder="搜索科目编码或名称"
+                style="width: 260px"
+              />
+              <a-select
+                v-model:value="accountCategoryFilter"
+                allow-clear
+                placeholder="科目类别"
+                :options="accountCategoryOptions"
+                style="width: 140px"
+              />
+            </a-space>
+            <a-button
+              v-if="auth.can('finance:account:manage')"
+              type="primary"
+              @click="openAccountModal()"
+            >
+              <template #icon><PlusOutlined /></template>新增科目
+            </a-button>
+          </div>
+          <a-table
+            :columns="accountColumns"
+            :data-source="filteredAccounts"
+            :pagination="{ pageSize: 12 }"
+            :row-key="(item: AccountingAccount) => item.id"
+            :scroll="{ x: 900 }"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'category'">{{
+                accountCategoryLabel(record.category)
+              }}</template>
+              <template v-else-if="column.key === 'direction'">{{
+                record.normalDirection === "DEBIT" ? "借" : "贷"
+              }}</template>
+              <template v-else-if="column.key === 'properties'">
+                <a-space
+                  ><a-tag v-if="record.cashAccount" color="blue">现金类</a-tag
+                  ><a-tag v-if="record.systemAccount">系统</a-tag
+                  ><a-tag :color="record.active ? 'green' : 'default'">{{
+                    record.active ? "启用" : "停用"
+                  }}</a-tag></a-space
+                >
+              </template>
+              <template v-else-if="column.key === 'action'">
+                <a-button
+                  v-if="auth.can('finance:account:manage')"
+                  type="link"
+                  size="small"
+                  @click="openAccountModal(record)"
+                  >编辑</a-button
+                >
+              </template>
+            </template>
+          </a-table>
+        </a-tab-pane>
+
+        <a-tab-pane key="opening" tab="期初余额">
+          <div class="table-toolbar toolbar-between">
+            <a-space
+              ><span>会计年度</span
+              ><a-input-number
+                v-model:value="openingYear"
+                :min="2000"
+                :max="2200"
+                @change="loadOpeningBalances"
+            /></a-space>
+            <a-button
+              v-if="auth.can('finance:account:manage')"
+              type="primary"
+              @click="openOpeningModal"
+            >
+              <template #icon><PlusOutlined /></template>录入期初余额
+            </a-button>
+          </div>
+          <a-alert
+            class="section-alert"
+            type="info"
+            show-icon
+            message="期初余额按年度和科目唯一保存；同一科目只能填写借方或贷方。"
+          />
+          <a-table
+            :columns="openingColumns"
+            :data-source="openingBalances"
+            :pagination="{ pageSize: 12 }"
+            :row-key="(item: OpeningBalance) => item.id"
+            :scroll="{ x: 900 }"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'debit'">{{
+                record.debitBalance ? formatMoney(record.debitBalance) : "-"
+              }}</template>
+              <template v-else-if="column.key === 'credit'">{{
+                record.creditBalance ? formatMoney(record.creditBalance) : "-"
+              }}</template>
+              <template v-else-if="column.key === 'action'">
+                <a-button
+                  v-if="auth.can('finance:account:manage')"
+                  type="link"
+                  size="small"
+                  @click="openOpeningModal(record)"
+                  >编辑</a-button
+                >
+              </template>
+            </template>
+          </a-table>
         </a-tab-pane>
       </a-tabs>
     </a-card>
@@ -381,8 +515,14 @@
           :key="index"
           class="entry-editor-row"
         >
-          <a-input v-model:value="line.accountCode" placeholder="科目编码" />
-          <a-input v-model:value="line.accountName" placeholder="科目名称" />
+          <a-select
+            v-model:value="line.accountCode"
+            show-search
+            placeholder="选择会计科目"
+            :filter-option="filterAccountOption"
+            :options="activeAccountOptions"
+            @change="selectDraftAccount(line)"
+          />
           <a-input-number
             v-model:value="line.debit"
             :min="0"
@@ -409,6 +549,108 @@
           show-icon
           :message="`借方（元，税价不适用）${formatMoney(draftDebit)} · 贷方（元，税价不适用）${formatMoney(draftCredit)} · 差额（元，税价不适用）${formatMoney(Math.abs(draftBalance))}`"
         />
+      </a-form>
+    </a-modal>
+
+    <a-modal
+      v-model:open="accountModalOpen"
+      :title="accountForm.id ? '编辑会计科目' : '新增会计科目'"
+      :confirm-loading="submitting"
+      @ok="saveAccount"
+    >
+      <a-form layout="vertical">
+        <a-row :gutter="16">
+          <a-col :span="12"
+            ><a-form-item label="科目编码" required
+              ><a-input
+                v-model:value="accountForm.code"
+                :disabled="accountForm.systemAccount"
+                :maxlength="32" /></a-form-item
+          ></a-col>
+          <a-col :span="12"
+            ><a-form-item label="科目名称" required
+              ><a-input
+                v-model:value="accountForm.name"
+                :maxlength="120" /></a-form-item
+          ></a-col>
+          <a-col :span="12"
+            ><a-form-item label="科目类别" required
+              ><a-select
+                v-model:value="accountForm.category"
+                :disabled="accountForm.systemAccount"
+                :options="accountCategoryOptions" /></a-form-item
+          ></a-col>
+          <a-col :span="12"
+            ><a-form-item label="余额方向" required
+              ><a-radio-group
+                v-model:value="accountForm.normalDirection"
+                :disabled="accountForm.systemAccount"
+                ><a-radio-button value="DEBIT">借方</a-radio-button
+                ><a-radio-button value="CREDIT"
+                  >贷方</a-radio-button
+                ></a-radio-group
+              ></a-form-item
+            ></a-col
+          >
+        </a-row>
+        <a-space
+          ><a-checkbox v-model:checked="accountForm.cashAccount"
+            >现金类科目</a-checkbox
+          ><a-checkbox
+            v-model:checked="accountForm.active"
+            :disabled="accountForm.systemAccount"
+            >启用</a-checkbox
+          ></a-space
+        >
+      </a-form>
+    </a-modal>
+
+    <a-modal
+      v-model:open="openingModalOpen"
+      title="录入期初余额（元，税价不适用）"
+      :confirm-loading="submitting"
+      @ok="saveOpening"
+    >
+      <a-form layout="vertical">
+        <a-form-item label="会计年度" required
+          ><a-input-number
+            v-model:value="openingForm.fiscalYear"
+            :min="2000"
+            :max="2200"
+            class="full-input"
+        /></a-form-item>
+        <a-form-item label="会计科目" required
+          ><a-select
+            v-model:value="openingForm.accountCode"
+            show-search
+            :disabled="Boolean(openingForm.id)"
+            :filter-option="filterAccountOption"
+            :options="activeAccountOptions"
+        /></a-form-item>
+        <a-row :gutter="16">
+          <a-col :span="12"
+            ><a-form-item label="借方余额（元，税价不适用）"
+              ><a-input-number
+                v-model:value="openingForm.debitBalance"
+                :min="0"
+                :precision="2"
+                class="full-input" /></a-form-item
+          ></a-col>
+          <a-col :span="12"
+            ><a-form-item label="贷方余额（元，税价不适用）"
+              ><a-input-number
+                v-model:value="openingForm.creditBalance"
+                :min="0"
+                :precision="2"
+                class="full-input" /></a-form-item
+          ></a-col>
+        </a-row>
+        <a-form-item label="备注"
+          ><a-textarea
+            v-model:value="openingForm.note"
+            :rows="3"
+            :maxlength="500"
+        /></a-form-item>
       </a-form>
     </a-modal>
 
@@ -444,14 +686,21 @@ import PlusOutlined from "@ant-design/icons-vue/PlusOutlined";
 import {
   getFinancialStatements,
   getLedgerOverview,
+  listAccountingAccounts,
+  listOpeningBalances,
   listVouchers,
+  createAccountingAccount,
+  updateAccountingAccount,
+  saveOpeningBalance,
   createVoucherDraft,
   postVoucher,
   reverseVoucher,
   reviewVoucher,
   type AccountingVoucher,
+  type AccountingAccount,
   type FinancialStatements,
   type LedgerOverview,
+  type OpeningBalance,
   type StatementLine,
   type VoucherEntry,
 } from "@/api/ledger";
@@ -473,6 +722,35 @@ const submitting = ref(false);
 const draftModalOpen = ref(false);
 const reverseModalOpen = ref(false);
 const reverseTarget = ref<AccountingVoucher>();
+const accounts = ref<AccountingAccount[]>([]);
+const openingBalances = ref<OpeningBalance[]>([]);
+const accountKeyword = ref("");
+const accountCategoryFilter = ref<string>();
+const openingYear = ref(new Date().getFullYear());
+const accountModalOpen = ref(false);
+const openingModalOpen = ref(false);
+const statementRange = reactive({
+  from: `${new Date().getFullYear()}-01-01`,
+  to: today(),
+});
+const accountForm = reactive({
+  id: "",
+  code: "",
+  name: "",
+  category: "ASSET" as AccountingAccount["category"],
+  normalDirection: "DEBIT" as AccountingAccount["normalDirection"],
+  cashAccount: false,
+  active: true,
+  systemAccount: false,
+});
+const openingForm = reactive({
+  id: "",
+  fiscalYear: new Date().getFullYear(),
+  accountCode: "",
+  debitBalance: 0,
+  creditBalance: 0,
+  note: "",
+});
 const emptyDraftLine = () => ({
   accountCode: "",
   accountName: "",
@@ -498,12 +776,17 @@ const overview = reactive<LedgerOverview>({
   cashBalance: 0,
 });
 const statements = reactive<FinancialStatements>({
+  from: statementRange.from,
+  to: statementRange.to,
   assets: [],
   liabilities: [],
+  equity: [],
   revenue: [],
   expenses: [],
   totalAssets: 0,
   totalLiabilities: 0,
+  totalEquity: 0,
+  totalLiabilitiesAndEquity: 0,
   totalRevenue: 0,
   totalExpense: 0,
   profit: 0,
@@ -521,8 +804,7 @@ const trialBalanceDiff = computed(() =>
 const balanceSheetDiff = computed(() =>
   roundMoney(
     Number(statements.totalAssets || 0) -
-      Number(statements.totalLiabilities || 0) -
-      Number(statements.profit || 0),
+      Number(statements.totalLiabilitiesAndEquity || 0),
   ),
 );
 const reversedCount = computed(
@@ -581,6 +863,27 @@ const filteredVouchers = computed(() => {
     );
   });
 });
+const accountCategoryOptions = [
+  { label: "资产", value: "ASSET" },
+  { label: "负债", value: "LIABILITY" },
+  { label: "所有者权益", value: "EQUITY" },
+  { label: "收入", value: "REVENUE" },
+  { label: "成本费用", value: "EXPENSE" },
+];
+const activeAccountOptions = computed(() =>
+  accounts.value
+    .filter((item) => item.active)
+    .map((item) => ({ label: `${item.code} ${item.name}`, value: item.code })),
+);
+const filteredAccounts = computed(() => {
+  const term = accountKeyword.value.trim().toLowerCase();
+  return accounts.value.filter(
+    (item) =>
+      (!accountCategoryFilter.value ||
+        item.category === accountCategoryFilter.value) &&
+      (!term || `${item.code} ${item.name}`.toLowerCase().includes(term)),
+  );
+});
 
 const voucherColumns = [
   { title: "凭证", key: "voucher", width: 300 },
@@ -605,24 +908,64 @@ const entryColumns = [
   { title: "借方（元，税价不适用）", key: "debit", width: 190 },
   { title: "贷方（元，税价不适用）", key: "credit", width: 190 },
 ];
+const accountColumns = [
+  { title: "科目编码", dataIndex: "code", width: 130 },
+  { title: "科目名称", dataIndex: "name", width: 220 },
+  { title: "类别", key: "category", width: 120 },
+  { title: "余额方向", key: "direction", width: 100 },
+  { title: "属性", key: "properties" },
+  { title: "操作", key: "action", width: 90 },
+];
+const openingColumns = [
+  { title: "年度", dataIndex: "fiscalYear", width: 90 },
+  { title: "科目编码", dataIndex: "accountCode", width: 120 },
+  { title: "科目名称", dataIndex: "accountName" },
+  { title: "借方余额（元，税价不适用）", key: "debit", width: 220 },
+  { title: "贷方余额（元，税价不适用）", key: "credit", width: 220 },
+  { title: "备注", dataIndex: "note" },
+  { title: "操作", key: "action", width: 90 },
+];
 
 onMounted(loadData);
 
 async function loadData() {
   loading.value = true;
   try {
-    const [overviewData, voucherData, statementData] = await Promise.all([
-      getLedgerOverview(),
-      listVouchers(),
-      getFinancialStatements(),
-    ]);
+    const [overviewData, voucherData, statementData, accountData, openingData] =
+      await Promise.all([
+        getLedgerOverview(),
+        listVouchers(),
+        getFinancialStatements(statementRange),
+        listAccountingAccounts(),
+        listOpeningBalances(openingYear.value),
+      ]);
     Object.assign(overview, overviewData);
     vouchers.value = voucherData;
     Object.assign(statements, statementData);
+    accounts.value = accountData;
+    openingBalances.value = openingData;
   } catch (error) {
     message.error(error instanceof Error ? error.message : "总账数据加载失败");
   } finally {
     loading.value = false;
+  }
+}
+
+async function loadStatements() {
+  try {
+    Object.assign(statements, await getFinancialStatements(statementRange));
+  } catch (error) {
+    message.error((error as Error).message);
+  }
+}
+
+async function loadOpeningBalances() {
+  try {
+    openingBalances.value = await listOpeningBalances(
+      Number(openingYear.value),
+    );
+  } catch (error) {
+    message.error((error as Error).message);
   }
 }
 
@@ -643,6 +986,113 @@ function openDraftModal() {
 }
 function addDraftLine() {
   draftForm.lines.push(emptyDraftLine());
+}
+function selectDraftAccount(line: {
+  accountCode: string;
+  accountName: string;
+}) {
+  line.accountName =
+    accounts.value.find((item) => item.code === line.accountCode)?.name ?? "";
+}
+function filterAccountOption(input: string, option?: { label?: string }) {
+  return String(option?.label ?? "")
+    .toLowerCase()
+    .includes(input.toLowerCase());
+}
+
+function openAccountModal(item?: AccountingAccount) {
+  Object.assign(
+    accountForm,
+    item
+      ? { ...item }
+      : {
+          id: "",
+          code: "",
+          name: "",
+          category: "ASSET",
+          normalDirection: "DEBIT",
+          cashAccount: false,
+          active: true,
+          systemAccount: false,
+        },
+  );
+  accountModalOpen.value = true;
+}
+
+async function saveAccount() {
+  if (!accountForm.code.trim() || !accountForm.name.trim()) {
+    message.warning("请填写科目编码和名称");
+    return;
+  }
+  submitting.value = true;
+  try {
+    const payload = {
+      code: accountForm.code.trim(),
+      name: accountForm.name.trim(),
+      category: accountForm.category,
+      normalDirection: accountForm.normalDirection,
+      cashAccount: accountForm.cashAccount,
+      active: accountForm.active,
+    };
+    if (accountForm.id) await updateAccountingAccount(accountForm.id, payload);
+    else await createAccountingAccount(payload);
+    message.success(accountForm.id ? "会计科目已更新" : "会计科目已新增");
+    accountModalOpen.value = false;
+    accounts.value = await listAccountingAccounts();
+  } catch (error) {
+    message.error((error as Error).message);
+  } finally {
+    submitting.value = false;
+  }
+}
+
+function openOpeningModal(item?: OpeningBalance) {
+  Object.assign(
+    openingForm,
+    item
+      ? { ...item, note: item.note ?? "" }
+      : {
+          id: "",
+          fiscalYear: openingYear.value,
+          accountCode: "",
+          debitBalance: 0,
+          creditBalance: 0,
+          note: "",
+        },
+  );
+  openingModalOpen.value = true;
+}
+
+async function saveOpening() {
+  if (!openingForm.accountCode) {
+    message.warning("请选择会计科目");
+    return;
+  }
+  if (
+    Number(openingForm.debitBalance) > 0 &&
+    Number(openingForm.creditBalance) > 0
+  ) {
+    message.warning("期初余额不能同时填写借方和贷方");
+    return;
+  }
+  submitting.value = true;
+  try {
+    await saveOpeningBalance({
+      fiscalYear: Number(openingForm.fiscalYear),
+      accountCode: openingForm.accountCode,
+      debitBalance: Number(openingForm.debitBalance || 0),
+      creditBalance: Number(openingForm.creditBalance || 0),
+      note: openingForm.note.trim() || undefined,
+    });
+    message.success("期初余额已保存");
+    openingModalOpen.value = false;
+    openingYear.value = Number(openingForm.fiscalYear);
+    await loadOpeningBalances();
+  } catch (error) {
+    message.error((error as Error).message);
+  } finally {
+    submitting.value = false;
+  }
 }
 async function saveDraft() {
   if (
@@ -763,10 +1213,25 @@ function exportStatements() {
   const rows = [
     ...statements.assets.map((item) => statementRow("资产", item)),
     ...statements.liabilities.map((item) => statementRow("负债", item)),
+    ...statements.equity.map((item) => statementRow("所有者权益", item)),
     ...statements.revenue.map((item) => statementRow("收入", item)),
     ...statements.expenses.map((item) => statementRow("成本费用", item)),
   ];
   downloadCsv(`ledger-statements-${today()}.csv`, headers, rows);
+}
+
+function accountCategoryLabel(value: string) {
+  return (
+    (
+      {
+        ASSET: "资产",
+        LIABILITY: "负债",
+        EQUITY: "所有者权益",
+        REVENUE: "收入",
+        EXPENSE: "成本费用",
+      } as Record<string, string>
+    )[value] ?? value
+  );
 }
 
 function statementRow(type: string, item: StatementLine) {
@@ -918,6 +1383,18 @@ h3 {
 .statement-summary {
   margin-bottom: 20px;
 }
+.statement-toolbar {
+  margin-bottom: 14px;
+}
+.date-input {
+  width: 150px;
+}
+.toolbar-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
 
 h3 {
   margin: 8px 0 12px;
@@ -935,11 +1412,37 @@ h3 {
 }
 .entry-editor-row {
   display: grid;
-  grid-template-columns: 110px 150px 120px 120px minmax(140px, 1fr) 56px;
+  grid-template-columns: 260px 120px 120px minmax(140px, 1fr) 56px;
   gap: 8px;
   margin-bottom: 8px;
 }
 @media (max-width: 768px) {
+  .panel-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .ledger-overview-card :deep(.ant-card-head-wrapper) {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .ledger-overview-card :deep(.ant-card-head-title) {
+    padding-bottom: 0;
+  }
+  .ledger-overview-card :deep(.ant-card-extra) {
+    width: 100%;
+    margin-inline-start: 0;
+    padding-top: 0;
+  }
+  .ledger-actions {
+    display: flex;
+    width: 100%;
+    flex-wrap: wrap;
+  }
+  .toolbar-between {
+    align-items: stretch;
+    flex-direction: column;
+  }
   .entry-editor-row {
     grid-template-columns: 1fr 1fr;
   }

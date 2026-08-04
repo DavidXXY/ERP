@@ -39,6 +39,18 @@ public class Receivable extends BaseEntity {
   @Column(name = "invoice_date")
   private LocalDate invoiceDate;
 
+  @Column(name = "tax_status", nullable = false, length = 24)
+  private String taxStatus = "NORMAL";
+
+  @Column(name = "tax_adjustment_reason", length = 500)
+  private String taxAdjustmentReason;
+
+  @Column(name = "tax_adjusted_at")
+  private OffsetDateTime taxAdjustedAt;
+
+  @Column(name = "tax_adjusted_by", length = 80)
+  private String taxAdjustedBy;
+
   @Column(name = "invoice_requested", nullable = false)
   private boolean invoiceRequested = false;
 
@@ -142,6 +154,15 @@ public class Receivable extends BaseEntity {
   public void setInvoiceDate(LocalDate invoiceDate) {
     this.invoiceDate = invoiceDate;
   }
+
+  public String getTaxStatus() { return taxStatus; }
+  public void setTaxStatus(String value) { taxStatus = value; }
+  public String getTaxAdjustmentReason() { return taxAdjustmentReason; }
+  public void setTaxAdjustmentReason(String value) { taxAdjustmentReason = value; }
+  public OffsetDateTime getTaxAdjustedAt() { return taxAdjustedAt; }
+  public void setTaxAdjustedAt(OffsetDateTime value) { taxAdjustedAt = value; }
+  public String getTaxAdjustedBy() { return taxAdjustedBy; }
+  public void setTaxAdjustedBy(String value) { taxAdjustedBy = value; }
 
   public boolean isInvoiceRequested() {
     return invoiceRequested;

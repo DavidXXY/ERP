@@ -648,10 +648,16 @@ public class CrmOperationsService {
         ? ReceivableStatus.OVERDUE
         : ReceivableStatus.PAYMENT_PENDING);
     Receivable saved = receivableRepository.save(receivable);
+    BigDecimal taxRate = saved.getContractId() == null ? BigDecimal.valueOf(13)
+        : contractRepository.findById(saved.getContractId()).map(ServiceContract::getTaxRate)
+            .orElse(BigDecimal.valueOf(13));
+    BigDecimal netAmount = netAmount(saved.getAmount(), taxRate);
+    BigDecimal taxAmount = saved.getAmount().subtract(netAmount);
     ledgerService.post("INVOICE", saved.getCode(), request.invoiceDate(),
         "客户开票 " + saved.getCode(), List.of(
             new PostingLine("1122", "应收账款", saved.getAmount(), BigDecimal.ZERO, request.invoiceNo()),
-            new PostingLine("6001", "主营业务收入", BigDecimal.ZERO, saved.getAmount(), saved.getCode())
+            new PostingLine("6001", "主营业务收入", BigDecimal.ZERO, netAmount, saved.getCode()),
+            new PostingLine("222101", "应交增值税-销项税额", BigDecimal.ZERO, taxAmount, request.invoiceNo())
         ));
     return mapReceivable(saved);
   }

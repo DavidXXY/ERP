@@ -7,6 +7,7 @@ import com.company.ops.api.modules.crm.domain.ReceivableReceipt;
 import com.company.ops.api.modules.crm.repository.ReceivableReceiptRepository;
 import com.company.ops.api.modules.finance.domain.PaymentRecord;
 import com.company.ops.api.modules.finance.repository.PaymentRecordRepository;
+import com.company.ops.api.modules.finance.service.FinanceOperationsService;
 import com.company.ops.api.modules.governance.domain.*;
 import com.company.ops.api.modules.governance.repository.AccountingPeriodRepository;
 import com.company.ops.api.modules.governance.repository.BankStatementLineRepository;
@@ -61,6 +62,7 @@ public class GovernanceService {
   private final ReceivableReceiptRepository receipts;
   private final GovernanceActionLogRepository actionLogs;
   private final ObjectMapper objectMapper;
+  private final FinanceOperationsService financeOperations;
 
   public GovernanceService(
       BusinessControlRecordRepository controls,
@@ -70,7 +72,8 @@ public class GovernanceService {
       PaymentRecordRepository payments,
       ReceivableReceiptRepository receipts,
       GovernanceActionLogRepository actionLogs,
-      ObjectMapper objectMapper) {
+      ObjectMapper objectMapper,
+      FinanceOperationsService financeOperations) {
     this.controls = controls;
     this.periods = periods;
     this.bankLines = bankLines;
@@ -79,6 +82,7 @@ public class GovernanceService {
     this.receipts = receipts;
     this.actionLogs = actionLogs;
     this.objectMapper = objectMapper;
+    this.financeOperations = financeOperations;
   }
 
   @Transactional(readOnly = true)
@@ -256,6 +260,7 @@ public class GovernanceService {
     if (highRisk > 0) blockers.add("存在 " + highRisk + " 项到期未闭环的高风险经营控制");
     long unmatched = bankLines.countByReconciliationStatusNotAndTransactionDateLessThanEqual(ReconciliationStatus.MATCHED, to);
     if (unmatched > 0) blockers.add("截至期末仍有 " + unmatched + " 条银行流水未完成对账");
+    blockers.addAll(financeOperations.periodCloseBlockers(year, month));
     return new CloseReadinessResponse(blockers.isEmpty(), blockers);
   }
 
@@ -273,6 +278,10 @@ public class GovernanceService {
     item.setClosedBy(principalName()); item.setCloseReason(reason);
     AccountingPeriod saved = periods.save(item);
     logAction("PERIOD", saved.getId(), periodNo(saved), "CLOSE", AccountingPeriodStatus.OPEN.name(), saved.getStatus().name(), reason);
+    financeOperations.capturePeriodClose(year, month, Map.of(
+        "period", periodNo(saved), "closedBy", saved.getClosedBy(), "closedAt", saved.getClosedAt(),
+        "forced", request.force(), "reason", reason == null ? "" : reason,
+        "readiness", readiness));
     return toPeriod(saved);
   }
 

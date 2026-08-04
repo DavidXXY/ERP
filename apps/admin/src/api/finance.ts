@@ -14,6 +14,97 @@ export type FinanceOverview = {
   pendingPaymentApplications: number;
 };
 
+export type MonthlyCashFlow = {
+  month: number;
+  receipt: number;
+  payment: number;
+  net: number;
+};
+export type FinanceForecastBucket = {
+  key: string;
+  label: string;
+  horizonDays: number;
+  receivable: number;
+  payable: number;
+  net: number;
+};
+export type FinanceAgingBucket = {
+  key: string;
+  label: string;
+  receivable: number;
+  payable: number;
+  receivableCount: number;
+  payableCount: number;
+};
+export type FinanceReconciliationItem = {
+  key: string;
+  businessAmount: number;
+  ledgerAmount: number;
+  difference: number;
+};
+export type FinanceAnalytics = {
+  asOf: string;
+  fiscalYear: number;
+  monthlyCashFlow: MonthlyCashFlow[];
+  forecast: FinanceForecastBucket[];
+  aging: FinanceAgingBucket[];
+  reconciliation: {
+    ledger: FinanceReconciliationItem[];
+    bankLineCount: number;
+    matchedBankLines: number;
+    suggestedBankLines: number;
+    unmatchedBankLines: number;
+    unmatchedBankAmount: number;
+  };
+  tax: {
+    outputGross: number;
+    outputNet: number;
+    outputTax: number;
+    inputGross: number;
+    inputNet: number;
+    inputTax: number;
+    netTaxPayable: number;
+    pendingOutputInvoices: number;
+    inputInvoiceExceptions: number;
+    adjustedInvoices: number;
+  };
+  cashPlan: {
+    baseline: number;
+    committed: number;
+    actual: number;
+    forecast: number;
+    variance: number;
+    activePlans: number;
+  };
+  risks: Array<{
+    key: string;
+    severity: "HIGH" | "MEDIUM" | "LOW";
+    category: string;
+    title: string;
+    description: string;
+    amount: number;
+    count: number;
+  }>;
+};
+
+export type TaxInvoiceLine = {
+  id: string;
+  side: "OUTPUT" | "INPUT";
+  businessNo: string;
+  invoiceNo: string;
+  partnerName: string;
+  invoiceDate: string;
+  grossAmount: number;
+  netAmount: number;
+  taxAmount: number;
+  taxRate: number;
+  status: "NORMAL" | "VOIDED" | "RED_FLUSHED";
+  verificationStatus?: string;
+  adjustmentReason?: string;
+  adjustedAt?: string;
+  adjustedBy?: string;
+};
+
 export type FinancePayableStatus =
   | "PENDING"
   | "PARTIAL_PAID"
@@ -114,6 +205,43 @@ export type FinanceReceivableDetail = {
 
 export function getFinanceOverview() {
   return request<FinanceOverview>({ method: "GET", url: "/finance/overview" });
+}
+
+export function getFinanceAnalytics(params?: { asOf?: string; year?: number }) {
+  return request<FinanceAnalytics>({
+    method: "GET",
+    url: "/finance/analytics",
+    params,
+  });
+}
+
+export function listTaxLedger(params?: {
+  from?: string;
+  to?: string;
+  side?: string;
+  status?: string;
+}) {
+  return request<TaxInvoiceLine[]>({
+    method: "GET",
+    url: "/finance/tax-ledger",
+    params,
+  });
+}
+
+export function adjustTaxInvoice(
+  side: TaxInvoiceLine["side"],
+  id: string,
+  payload: {
+    status: "VOIDED" | "RED_FLUSHED";
+    adjustmentDate: string;
+    reason: string;
+  },
+) {
+  return request<TaxInvoiceLine>({
+    method: "POST",
+    url: `/finance/tax-ledger/${side}/${id}/adjust`,
+    data: payload,
+  });
 }
 
 export function listFinanceReceivables() {

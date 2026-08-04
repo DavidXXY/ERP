@@ -571,9 +571,12 @@ public class ProcurementControlService {
     }
     SupplierInvoice saved = invoices.save(invoice);
     if ("APPROVED".equals(decision)) {
+      BigDecimal netAmount = netAmount(saved.getAmount(), saved.getTaxRate());
+      BigDecimal taxAmount = saved.getAmount().subtract(netAmount);
       ledgerService.post("SUPPLIER_INVOICE", saved.getCode(), saved.getInvoiceDate(),
           "供应商发票 " + saved.getInvoiceNo(), List.of(
-              new PostingLine("1405", "库存商品", saved.getAmount(), BigDecimal.ZERO, saved.getInvoiceNo()),
+              new PostingLine("1405", "库存商品", netAmount, BigDecimal.ZERO, saved.getInvoiceNo()),
+              new PostingLine("22210101", "应交增值税-进项税额", taxAmount, BigDecimal.ZERO, saved.getInvoiceNo()),
               new PostingLine("2202", "应付账款", BigDecimal.ZERO, saved.getAmount(), saved.getCode())
           ));
     }
@@ -751,6 +754,12 @@ public class ProcurementControlService {
 
   private BigDecimal add(BigDecimal left, BigDecimal right) {
     return valueOr(left, BigDecimal.ZERO).add(valueOr(right, BigDecimal.ZERO));
+  }
+
+  private BigDecimal netAmount(BigDecimal grossAmount, BigDecimal taxRate) {
+    BigDecimal rate = valueOr(taxRate, BigDecimal.valueOf(13));
+    return valueOr(grossAmount, BigDecimal.ZERO)
+        .divide(BigDecimal.ONE.add(rate.movePointLeft(2)), 2, RoundingMode.HALF_UP);
   }
 
   private Map<String, Object> quoteView(SupplierQuotation quote) {

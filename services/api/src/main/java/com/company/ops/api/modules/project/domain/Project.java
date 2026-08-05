@@ -21,6 +21,9 @@ public class Project extends BaseEntity {
   @Column(name = "contract_id")
   private UUID contractId;
 
+  @Column(name = "parent_project_id")
+  private UUID parentProjectId;
+
   @Column(nullable = false, length = 64)
   private String code;
 
@@ -124,6 +127,10 @@ public class Project extends BaseEntity {
   public void setContractId(UUID contractId) {
     this.contractId = contractId;
   }
+
+  public UUID getParentProjectId() { return parentProjectId; }
+
+  public void setParentProjectId(UUID parentProjectId) { this.parentProjectId = parentProjectId; }
 
   public String getCode() {
     return code;

@@ -10,7 +10,7 @@
           <a-button
             v-if="auth.can('project:create')"
             type="primary"
-            @click="openCreate"
+            @click="openCreate()"
           >
             <template #icon><PlusOutlined /></template>
             新增项目
@@ -130,6 +130,13 @@
                 >{{ record.code }} ·
                 {{ record.customerName || "未关联客户" }}</span
               >
+              <span v-if="record.parentProjectName" class="table-subtitle">
+                子项目 · 父项目 {{ record.parentProjectCode }}
+                {{ record.parentProjectName }}
+              </span>
+              <span v-else-if="record.childProjectCount" class="table-subtitle">
+                一级项目 · {{ record.childProjectCount }} 个子项目
+              </span>
             </template>
             <template v-else-if="column.key === 'owner'">
               {{ projectTypeLabel(record.projectType) }}
@@ -180,6 +187,13 @@
                   @click="router.push(`/projects/${record.id}`)"
                   >详情</a-button
                 >
+                <a-button
+                  v-if="auth.can('project:create') && !record.parentProjectId"
+                  type="link"
+                  size="small"
+                  @click="openCreate(record)"
+                  >新增子项目</a-button
+                >
                 <a-popconfirm
                   v-if="auth.can('project:delete')"
                   title="确认将该项目移入回收站？业务记录与审计数据会保留，可由管理员恢复。"
@@ -201,7 +215,7 @@
                 <a-button
                   v-if="
                     auth.can('project:approve') &&
-                    record.approvalStatus === 'APPROVED'
+                    record.approvalStatus !== 'REJECTED'
                   "
                   type="link"
                   size="small"
@@ -1271,7 +1285,7 @@
         type="info"
         show-icon
         :message="`${activeProject.code} · ${activeProject.name}`"
-        description="审批只决定是否立项；审批通过后再单独分配项目经理。"
+        description="子项目审批通过前需先分配项目经理，并完善现场信息与分类预算。"
       />
       <a-form :model="projectApprovalForm" layout="vertical">
         <a-form-item label="审批结论" required>
@@ -1318,6 +1332,9 @@
       v-model:cost-open="costOpen"
       :saving="saving"
       :customer-options="customerOptions"
+      :parent-project-options="parentProjectOptions"
+      :default-parent-project-id="defaultParentProjectId"
+      :default-customer-id="defaultCustomerId"
       :category-options="categoryOptions"
       :project-type-options="projectTypeOptions"
       :source-options="sourceOptions"
@@ -1403,6 +1420,8 @@ const detailLoading = ref(false);
 const detailHydrating = ref(false);
 const saving = ref(false);
 const createOpen = ref(false);
+const defaultParentProjectId = ref<string>();
+const defaultCustomerId = ref<string>();
 const detailOpen = ref(false);
 const approvalOpen = ref(false);
 const projectApprovalOpen = ref(false);
@@ -1590,6 +1609,16 @@ const customerOptions = computed(() =>
     label: `${item.name} (${item.code})`,
     value: item.id,
   })),
+);
+const parentProjectOptions = computed(() =>
+  projects.value
+    .filter(
+      (item) =>
+        !item.parentProjectId &&
+        item.executionStatus !== "CANCELLED" &&
+        item.executionStatus !== "CLOSED",
+    )
+    .map((item) => ({ label: `${item.code} · ${item.name}`, value: item.id })),
 );
 const visibleUserOptions = computed(() => {
   const options = visibleUsers.value
@@ -1993,7 +2022,9 @@ async function handleProjectUpdated() {
     await hydrateProjectDetails(true);
   }
 }
-function openCreate() {
+function openCreate(parent?: Project) {
+  defaultParentProjectId.value = parent?.id;
+  defaultCustomerId.value = parent?.customerId;
   createOpen.value = true;
 }
 function openApproval(project: Project) {
@@ -2259,7 +2290,8 @@ function canAssignManager(project: Project) {
   return (
     auth.can("project:approve") &&
     canManageProjectAssignment.value &&
-    project.approvalStatus === "APPROVED"
+    project.approvalStatus !== "REJECTED" &&
+    !["CANCELLED", "CLOSED"].includes(project.executionStatus)
   );
 }
 function stageLabel(stage: ProjectStage) {

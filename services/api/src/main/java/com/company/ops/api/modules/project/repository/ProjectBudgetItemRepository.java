@@ -9,4 +9,5 @@ public interface ProjectBudgetItemRepository extends JpaRepository<ProjectBudget
 
   List<ProjectBudgetItem> findByProjectIdOrderByCategoryAsc(UUID projectId);
   List<ProjectBudgetItem> findByProjectIdIn(java.util.Collection<UUID> projectIds);
+  void deleteByProjectId(UUID projectId);
 }

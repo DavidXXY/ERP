@@ -17,6 +17,13 @@ public class ServiceContract extends BaseEntity {
   @Column(name = "quote_id")
   private UUID quoteId;
 
+  @Column(name = "parent_contract_id")
+  private UUID parentContractId;
+
+  @Enumerated(EnumType.STRING)
+  @Column(name = "contract_kind", nullable = false, length = 32)
+  private ContractKind contractKind = ContractKind.STANDARD;
+
   @Column(name = "customer_id", nullable = false)
   private UUID customerId;
 
@@ -29,7 +36,7 @@ public class ServiceContract extends BaseEntity {
   @Column(name = "contract_type", nullable = false, length = 80)
   private String contractType;
 
-  @Column(nullable = false, precision = 14, scale = 2)
+  @Column(precision = 14, scale = 2)
   private BigDecimal amount;
 
   @Column(name = "tax_rate", nullable = false, precision = 5, scale = 2)
@@ -55,6 +62,14 @@ public class ServiceContract extends BaseEntity {
   public void setQuoteId(UUID quoteId) {
     this.quoteId = quoteId;
   }
+
+  public UUID getParentContractId() { return parentContractId; }
+
+  public void setParentContractId(UUID parentContractId) { this.parentContractId = parentContractId; }
+
+  public ContractKind getContractKind() { return contractKind; }
+
+  public void setContractKind(ContractKind contractKind) { this.contractKind = contractKind; }
 
   public UUID getCustomerId() {
     return customerId;

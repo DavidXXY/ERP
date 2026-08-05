@@ -16,10 +16,12 @@ public class EmployeeCertificate extends BaseEntity {
   @Column(name = "issue_date") private LocalDate issueDate;
   @Column(name = "expiry_date", nullable = false) private LocalDate expiryDate;
   @Column(name = "issuing_authority", length = 180) private String issuingAuthority;
+  @Column(length = 500) private String remark;
   public UUID getUserId() { return userId; } public void setUserId(UUID value) { userId = value; }
   public String getCertificateType() { return certificateType; } public void setCertificateType(String value) { certificateType = value; }
   public String getCertificateNo() { return certificateNo; } public void setCertificateNo(String value) { certificateNo = value; }
   public LocalDate getIssueDate() { return issueDate; } public void setIssueDate(LocalDate value) { issueDate = value; }
   public LocalDate getExpiryDate() { return expiryDate; } public void setExpiryDate(LocalDate value) { expiryDate = value; }
   public String getIssuingAuthority() { return issuingAuthority; } public void setIssuingAuthority(String value) { issuingAuthority = value; }
+  public String getRemark() { return remark; } public void setRemark(String value) { remark = value; }
 }

@@ -24,5 +24,6 @@ public record CreateProjectRequest(
     @NotNull LocalDate plannedEndDate,
     @NotNull List<@Valid ProjectBudgetItemRequest> budgetItems,
     LocalDate warrantyEndDate,
-    UUID contractId // null　则不关联合同
+    UUID contractId, // null　则不关联合同
+    UUID parentProjectId
 ) {}

@@ -28,8 +28,13 @@
         >查看合同</a-button
       >
       <a-button
-        v-if="auth.can('procurement:purchase:create')"
+        v-if="canPrepareChildProject"
         type="primary"
+        @click="openPreparation"
+        >完善立项资料</a-button
+      >
+      <a-button
+        v-if="auth.can('procurement:purchase:create')"
         @click="router.push(`/procurement/requests?projectId=${projectId}`)"
         >发起采购</a-button
       >
@@ -253,11 +258,66 @@
         </a-tab-pane>
       </a-tabs>
     </a-card>
+
+    <a-modal
+      v-model:open="preparationOpen"
+      title="完善子项目立项资料"
+      width="760px"
+      :confirm-loading="preparationSaving"
+      @ok="savePreparation"
+    >
+      <a-alert
+        type="info"
+        show-icon
+        message="资料保存后进入待审批状态；需先分配项目经理并填写有效预算。"
+        class="section-gap"
+      />
+      <a-form layout="vertical">
+        <a-form-item label="现场地址" required>
+          <a-input v-model:value="preparationForm.siteAddress" />
+        </a-form-item>
+        <a-row :gutter="16">
+          <a-col :xs="24" :md="8">
+            <a-form-item label="计划开始日期" required>
+              <a-input v-model:value="preparationForm.plannedStartDate" type="date" />
+            </a-form-item>
+          </a-col>
+          <a-col :xs="24" :md="8">
+            <a-form-item label="计划结束日期" required>
+              <a-input v-model:value="preparationForm.plannedEndDate" type="date" />
+            </a-form-item>
+          </a-col>
+          <a-col :xs="24" :md="8">
+            <a-form-item label="质保截止日期">
+              <a-input v-model:value="preparationForm.warrantyEndDate" type="date" />
+            </a-form-item>
+          </a-col>
+        </a-row>
+        <a-divider>分类预算（含税，元）</a-divider>
+        <a-row :gutter="16">
+          <a-col
+            v-for="item in preparationCategories"
+            :key="item.value"
+            :xs="24"
+            :md="8"
+          >
+            <a-form-item :label="item.label">
+              <a-input-number
+                v-model:value="preparationForm.budgets[item.value]"
+                :min="0"
+                :precision="2"
+                style="width: 100%"
+              />
+            </a-form-item>
+          </a-col>
+        </a-row>
+      </a-form>
+    </a-modal>
   </BusinessDetailPage>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { message } from "ant-design-vue";
 import BusinessDetailPage, {
@@ -265,7 +325,9 @@ import BusinessDetailPage, {
 } from "@/components/BusinessDetailPage.vue";
 import {
   getProject,
+  prepareChildProject,
   type ProjectDetail,
+  type ProjectCostCategory,
   type ProjectStage,
 } from "@/api/project";
 import { listPurchaseOrders, type PurchaseOrder } from "@/api/procurement";
@@ -280,6 +342,39 @@ const loading = ref(false);
 const detail = ref<ProjectDetail | null>(null);
 const orders = ref<PurchaseOrder[]>([]);
 const receivables = ref<Receivable[]>([]);
+const preparationOpen = ref(false);
+const preparationSaving = ref(false);
+const preparationCategories: Array<{
+  label: string;
+  value: ProjectCostCategory;
+}> = [
+  { label: "人工预算", value: "LABOR" },
+  { label: "物料预算", value: "MATERIAL" },
+  { label: "外包预算", value: "SUBCONTRACT" },
+  { label: "差旅预算", value: "TRAVEL" },
+  { label: "其他预算", value: "OTHER" },
+];
+const preparationForm = reactive({
+  siteAddress: "",
+  plannedStartDate: "",
+  plannedEndDate: "",
+  warrantyEndDate: "",
+  budgets: {
+    LABOR: 0,
+    MATERIAL: 0,
+    SUBCONTRACT: 0,
+    TRAVEL: 0,
+    OTHER: 0,
+  } as Record<ProjectCostCategory, number>,
+});
+const canPrepareChildProject = computed(
+  () =>
+    Boolean(detail.value?.project.parentProjectId) &&
+    detail.value?.project.approvalStatus !== "APPROVED" &&
+    (auth.can("project:create") ||
+      auth.can("project:approve") ||
+      auth.can("project:stage:update")),
+);
 const metrics = computed<DetailMetric[]>(() =>
   detail.value
     ? [
@@ -403,6 +498,61 @@ async function loadData() {
     message.error(error instanceof Error ? error.message : "项目详情加载失败");
   } finally {
     loading.value = false;
+  }
+}
+function openPreparation() {
+  if (!detail.value) return;
+  const budgets = Object.fromEntries(
+    preparationCategories.map((item) => [item.value, 0]),
+  ) as Record<ProjectCostCategory, number>;
+  detail.value.budgetItems.forEach((item) => {
+    budgets[item.category] = Number(item.plannedAmount || 0);
+  });
+  Object.assign(preparationForm, {
+    siteAddress: detail.value.project.siteAddress || "",
+    plannedStartDate: detail.value.project.plannedStartDate || "",
+    plannedEndDate: detail.value.project.plannedEndDate || "",
+    warrantyEndDate: detail.value.project.warrantyEndDate || "",
+    budgets,
+  });
+  preparationOpen.value = true;
+}
+async function savePreparation() {
+  if (
+    !preparationForm.siteAddress.trim() ||
+    !preparationForm.plannedStartDate ||
+    !preparationForm.plannedEndDate
+  ) {
+    message.warning("请完整填写现场地址和计划周期");
+    return;
+  }
+  const budgetTotal = Object.values(preparationForm.budgets).reduce(
+    (sum, value) => sum + Number(value || 0),
+    0,
+  );
+  if (budgetTotal <= 0) {
+    message.warning("请至少填写一项有效预算");
+    return;
+  }
+  preparationSaving.value = true;
+  try {
+    detail.value = await prepareChildProject(projectId.value, {
+      siteAddress: preparationForm.siteAddress.trim(),
+      plannedStartDate: preparationForm.plannedStartDate,
+      plannedEndDate: preparationForm.plannedEndDate,
+      warrantyEndDate: preparationForm.warrantyEndDate || undefined,
+      budgetItems: preparationCategories.map((item) => ({
+        category: item.value,
+        plannedAmount: Number(preparationForm.budgets[item.value] || 0),
+        remark: `${item.label}（立项准备）`,
+      })),
+    });
+    preparationOpen.value = false;
+    message.success("子项目立项资料已保存");
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "立项资料保存失败");
+  } finally {
+    preparationSaving.value = false;
   }
 }
 function money(value?: number) {

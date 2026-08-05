@@ -6,5 +6,6 @@ import java.util.UUID;
 
 public record AssignProjectManagerRequest(
     @NotNull UUID managerUserId,
-    @Size(max = 500) String comment
+    @Size(max = 500) String comment,
+    Boolean syncChildProjects
 ) {}

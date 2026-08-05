@@ -8,6 +8,7 @@ import com.company.ops.api.modules.project.dto.ChangeProjectExecutionStatusReque
 import com.company.ops.api.modules.project.dto.CreateProjectCostRequest;
 import com.company.ops.api.modules.project.dto.CreateProjectRequest;
 import com.company.ops.api.modules.project.dto.ProcessProjectApprovalRequest;
+import com.company.ops.api.modules.project.dto.PrepareChildProjectRequest;
 import com.company.ops.api.modules.project.dto.ProjectDetailResponse;
 import com.company.ops.api.modules.project.dto.ProjectProfitabilityResponse;
 import com.company.ops.api.modules.project.dto.ProjectManagerOption;
@@ -37,6 +38,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -156,6 +158,15 @@ public class ProjectController {
       @Valid @RequestBody AssignProjectManagerRequest request
   ) {
     return ApiResponse.ok(projectService.assignManager(id, request));
+  }
+
+  @PutMapping("/{id}/preparation")
+  @PreAuthorize("hasAnyAuthority('project:create', 'project:approve', 'project:stage:update')")
+  public ApiResponse<ProjectDetailResponse> prepareChildProject(
+      @PathVariable UUID id,
+      @Valid @RequestBody PrepareChildProjectRequest request
+  ) {
+    return ApiResponse.ok(projectService.prepareChildProject(id, request));
   }
 
   @PostMapping("/{id}/stage")

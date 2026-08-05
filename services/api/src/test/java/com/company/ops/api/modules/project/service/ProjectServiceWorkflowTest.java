@@ -11,7 +11,9 @@ import com.company.ops.api.common.delete.DeleteGovernanceService;
 import com.company.ops.api.common.exception.BusinessException;
 import com.company.ops.api.common.service.CodeGenerator;
 import com.company.ops.api.modules.crm.repository.CustomerRepository;
+import com.company.ops.api.modules.crm.repository.ReceivableRepository;
 import com.company.ops.api.modules.crm.repository.ServiceContractRepository;
+import com.company.ops.api.modules.office.repository.SystemNotificationRepository;
 import com.company.ops.api.modules.project.domain.Project;
 import com.company.ops.api.modules.project.domain.ProjectApprovalStatus;
 import com.company.ops.api.modules.project.domain.ProjectExecutionStatus;
@@ -47,6 +49,7 @@ import org.mockito.quality.Strictness;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class ProjectServiceWorkflowTest {
   @Mock private ServiceContractRepository contractRepository;
+  @Mock private ReceivableRepository receivableRepository;
   @Mock private ProjectRepository projectRepository;
   @Mock private ProjectBudgetItemRepository budgetRepository;
   @Mock private ProjectCostEntryRepository costRepository;
@@ -56,6 +59,7 @@ class ProjectServiceWorkflowTest {
   @Mock private DataScopeService dataScopeService;
   @Mock private DeleteGovernanceService deleteGovernanceService;
   @Mock private SystemUserRepository userRepository;
+  @Mock private SystemNotificationRepository notificationRepository;
   @Mock private CodeGenerator codeGenerator;
   @InjectMocks private ProjectService service;
 
@@ -112,7 +116,7 @@ class ProjectServiceWorkflowTest {
     SystemUser assigner = user("assigner", "分配负责人");
     when(dataScopeService.currentPrincipal()).thenReturn(new UserPrincipal(assigner));
 
-    service.assignManager(project.getId(), new AssignProjectManagerRequest(manager.getId(), "正式分配"));
+    service.assignManager(project.getId(), new AssignProjectManagerRequest(manager.getId(), "正式分配", false));
 
     assertThat(project.getManagerUserId()).isEqualTo(manager.getId());
     assertThat(project.getManagerName()).isEqualTo(manager.getDisplayName());
@@ -123,11 +127,18 @@ class ProjectServiceWorkflowTest {
   }
 
   @Test
-  void pendingProjectCannotSkipApprovalByAssigningManager() {
-    assertThatThrownBy(() -> service.assignManager(project.getId(),
-        new AssignProjectManagerRequest(UUID.randomUUID(), "绕过审批")))
-        .isInstanceOf(BusinessException.class)
-        .hasMessageContaining("立项审批通过后");
+  void pendingProjectCanAssignManagerWithoutSkippingApproval() {
+    SystemUser manager = user("pm-pending", "待审批项目经理");
+    SystemRole role = new SystemRole();
+    role.setCode("PROJECT_MANAGER");
+    manager.getRoles().add(role);
+    when(userRepository.findDetailById(manager.getId())).thenReturn(Optional.of(manager));
+
+    service.assignManager(project.getId(),
+        new AssignProjectManagerRequest(manager.getId(), "审批前准备", false));
+
+    assertThat(project.getManagerUserId()).isEqualTo(manager.getId());
+    assertThat(project.getApprovalStatus()).isEqualTo(ProjectApprovalStatus.PENDING);
   }
 
   @Test
@@ -147,6 +158,55 @@ class ProjectServiceWorkflowTest {
         new ChangeProjectExecutionStatusRequest(ProjectExecutionStatus.ACTIVE, "尝试恢复")))
         .isInstanceOf(BusinessException.class)
         .hasMessageContaining("不允许");
+  }
+
+  @Test
+  void frameworkProjectCannotCancelWhileChildProjectIsActive() {
+    project.setApprovalStatus(ProjectApprovalStatus.APPROVED);
+    Project child = new Project();
+    child.setId(UUID.randomUUID());
+    child.setParentProjectId(project.getId());
+    child.setExecutionStatus(ProjectExecutionStatus.ACTIVE);
+    when(projectRepository.findByParentProjectId(project.getId())).thenReturn(List.of(child));
+
+    assertThatThrownBy(() -> service.changeExecutionStatus(project.getId(),
+        new ChangeProjectExecutionStatusRequest(ProjectExecutionStatus.CANCELLED, "取消框架")))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("仍有未结项或未取消的子项目");
+  }
+
+  @Test
+  void parentManagerChangeSynchronizesActiveChildren() {
+    project.setApprovalStatus(ProjectApprovalStatus.APPROVED);
+    Project child = new Project();
+    child.setId(UUID.randomUUID());
+    child.setParentProjectId(project.getId());
+    child.setCode("XM-001-01");
+    child.setName("一期子项目");
+    child.setExecutionStatus(ProjectExecutionStatus.ACTIVE);
+    when(projectRepository.findByParentProjectId(project.getId())).thenReturn(List.of(child));
+    SystemUser manager = user("pm-sync", "同步项目经理");
+    SystemRole role = new SystemRole();
+    role.setCode("PROJECT_MANAGER");
+    manager.getRoles().add(role);
+    when(userRepository.findDetailById(manager.getId())).thenReturn(Optional.of(manager));
+
+    service.assignManager(project.getId(),
+        new AssignProjectManagerRequest(manager.getId(), "统一调整", true));
+
+    assertThat(child.getManagerUserId()).isEqualTo(manager.getId());
+    assertThat(child.getManagerName()).isEqualTo("同步项目经理");
+    assertThat(child.getManagerAssignmentComment()).contains("随框架项目");
+  }
+
+  @Test
+  void childProjectApprovalRequiresAssignedManager() {
+    project.setParentProjectId(UUID.randomUUID());
+
+    assertThatThrownBy(() -> service.processApproval(project.getId(),
+        new ProcessProjectApprovalRequest(ProjectApprovalStatus.APPROVED, "尝试通过")))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("请先分配项目经理");
   }
 
   private SystemUser user(String username, String displayName) {

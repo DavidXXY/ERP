@@ -126,6 +126,15 @@
           <a-menu-item key="/inventory/movements">库存移动</a-menu-item>
           <a-menu-item key="/inventory/analytics">库存分析</a-menu-item>
         </a-sub-menu>
+        <a-sub-menu v-if="canAccessMaintenance" key="maintenance">
+          <template #icon><ToolOutlined /></template>
+          <template #title>售后维保</template>
+          <a-menu-item key="/maintenance">维保工单</a-menu-item>
+          <a-menu-item key="/maintenance?tab=equipment">设备台账</a-menu-item>
+          <a-menu-item key="/maintenance?tab=plans">维护计划</a-menu-item>
+          <a-menu-item key="/maintenance?tab=workforce">现场排班</a-menu-item>
+          <a-menu-item key="/maintenance?tab=certificates">现场资质</a-menu-item>
+        </a-sub-menu>
         <a-sub-menu v-if="canAccessHumanResources" key="hr">
           <template #icon><CalendarOutlined /></template>
           <template #title>人事管理</template>
@@ -387,6 +396,7 @@ import SafetyCertificateOutlined from "@ant-design/icons-vue/SafetyCertificateOu
 import SettingOutlined from "@ant-design/icons-vue/SettingOutlined";
 import ShoppingCartOutlined from "@ant-design/icons-vue/ShoppingCartOutlined";
 import TeamOutlined from "@ant-design/icons-vue/TeamOutlined";
+import ToolOutlined from "@ant-design/icons-vue/ToolOutlined";
 import WalletOutlined from "@ant-design/icons-vue/WalletOutlined";
 import WarningOutlined from "@ant-design/icons-vue/WarningOutlined";
 import UserOutlined from "@ant-design/icons-vue/UserOutlined";
@@ -400,11 +410,23 @@ import { useAuthStore } from "@/stores/auth";
 const app = useAppStore();
 const auth = useAuthStore();
 const unreadCount = ref(0);
+let notificationCountInitialized = false;
 let notificationTimer: ReturnType<typeof setInterval> | undefined;
 
 async function refreshUnreadCount() {
   try {
-    unreadCount.value = await getUnreadNotificationCount();
+    const nextCount = await getUnreadNotificationCount();
+    if (
+      notificationCountInitialized &&
+      nextCount > unreadCount.value &&
+      localStorage.getItem("ops_erp_browser_notifications") === "enabled" &&
+      "Notification" in window &&
+      Notification.permission === "granted"
+    ) {
+      new Notification("企业管理系统", { body: `您有 ${nextCount} 条未读消息` });
+    }
+    unreadCount.value = nextCount;
+    notificationCountInitialized = true;
   } catch {}
 }
 
@@ -449,6 +471,8 @@ const openKeys = ref<string[]>(
                 ? ["procurement"]
                 : route.path.startsWith("/inventory")
                   ? ["inventory"]
+                  : route.path.startsWith("/maintenance")
+                    ? ["maintenance"]
                   : route.path.startsWith("/projects")
                     ? ["projects"]
                     : [],
@@ -536,6 +560,16 @@ const canAccessHumanResources = computed(() =>
     "qualification:employee:view",
     "qualification:certificate:view",
     "workforce:view",
+  ].some((permission) => auth.can(permission)),
+);
+const canAccessMaintenance = computed(() =>
+  [
+    "maintenance:view",
+    "maintenance:order:manage",
+    "maintenance:equipment:view",
+    "maintenance:plan:view",
+    "maintenance:certificate:view",
+    "maintenance:schedule:view",
   ].some((permission) => auth.can(permission)),
 );
 const canAccessQualification = computed(() =>

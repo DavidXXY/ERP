@@ -69,7 +69,7 @@ public class MaintenanceController {
   }
 
   @GetMapping("/mobile/assignees")
-  @PreAuthorize("hasAuthority('maintenance:order:manage')")
+  @PreAuthorize("hasAnyAuthority('maintenance:order:manage', 'maintenance:view', 'maintenance:plan:manage')")
   public ApiResponse<List<AssigneeOption>> mobileAssignees() {
     return ApiResponse.ok(service.mobileAssignees());
   }
@@ -179,10 +179,48 @@ public class MaintenanceController {
     return ApiResponse.ok(service.listEquipment());
   }
 
+  @PostMapping("/equipment")
+  @ResponseStatus(HttpStatus.CREATED)
+  @PreAuthorize("hasAnyAuthority('maintenance:equipment:create', 'maintenance:order:manage')")
+  public ApiResponse<EquipmentResponse> createEquipment(@Valid @RequestBody CreateEquipmentRequest request) {
+    return ApiResponse.ok(service.createEquipment(request));
+  }
+
+  @PutMapping("/equipment/{id}")
+  @PreAuthorize("hasAuthority('maintenance:order:manage')")
+  public ApiResponse<EquipmentResponse> updateEquipment(@PathVariable UUID id, @Valid @RequestBody CreateEquipmentRequest request) {
+    return ApiResponse.ok(service.updateEquipment(id, request));
+  }
+
   @GetMapping("/plans")
-  @PreAuthorize("hasAuthority('maintenance:plan:manage')")
+  @PreAuthorize("hasAnyAuthority('maintenance:plan:manage', 'maintenance:plan:view', 'maintenance:view')")
   public ApiResponse<List<PlanResponse>> plans() {
     return ApiResponse.ok(service.listPlans());
+  }
+
+  @PostMapping("/plans")
+  @ResponseStatus(HttpStatus.CREATED)
+  @PreAuthorize("hasAnyAuthority('maintenance:plan:manage', 'maintenance:plan:create')")
+  public ApiResponse<PlanResponse> createPlan(@Valid @RequestBody CreatePlanRequest request) {
+    return ApiResponse.ok(service.createPlan(request));
+  }
+
+  @PutMapping("/plans/{id}")
+  @PreAuthorize("hasAuthority('maintenance:plan:manage')")
+  public ApiResponse<PlanResponse> updatePlan(@PathVariable UUID id, @Valid @RequestBody CreatePlanRequest request) {
+    return ApiResponse.ok(service.updatePlan(id, request));
+  }
+
+  @PutMapping("/plans/{id}/enabled")
+  @PreAuthorize("hasAuthority('maintenance:plan:manage')")
+  public ApiResponse<PlanResponse> setPlanEnabled(@PathVariable UUID id, @RequestParam boolean enabled) {
+    return ApiResponse.ok(service.setPlanEnabled(id, enabled));
+  }
+
+  @PostMapping("/plans/generate")
+  @PreAuthorize("hasAnyAuthority('maintenance:plan:manage', 'maintenance:plan:generate')")
+  public ApiResponse<GeneratePlanResponse> generatePlans(@RequestBody(required = false) GeneratePlanRequest request) {
+    return ApiResponse.ok(service.generatePlans(request == null ? null : request.planId()));
   }
 
   @GetMapping("/certificates")
@@ -191,9 +229,36 @@ public class MaintenanceController {
     return ApiResponse.ok(service.listCertificates());
   }
 
+  @PostMapping("/certificates")
+  @ResponseStatus(HttpStatus.CREATED)
+  @PreAuthorize("hasAuthority('maintenance:order:manage')")
+  public ApiResponse<CertificateResponse> createCertificate(@Valid @RequestBody CreateCertificateRequest request) {
+    return ApiResponse.ok(service.createCertificate(request));
+  }
+
+  @DeleteMapping("/certificates/{id}")
+  @PreAuthorize("hasAuthority('maintenance:order:manage')")
+  public ApiResponse<Void> deleteCertificate(@PathVariable UUID id) {
+    service.deleteCertificate(id);
+    return ApiResponse.ok();
+  }
+
   @GetMapping("/schedules")
   @PreAuthorize("hasAnyAuthority('maintenance:schedule:view', 'maintenance:view')")
   public ApiResponse<List<ScheduleResponse>> schedules() {
     return ApiResponse.ok(service.listSchedules());
+  }
+
+  @PostMapping("/schedules")
+  @ResponseStatus(HttpStatus.CREATED)
+  @PreAuthorize("hasAuthority('maintenance:order:manage')")
+  public ApiResponse<ScheduleResponse> createSchedule(@Valid @RequestBody CreateScheduleRequest request) {
+    return ApiResponse.ok(service.createSchedule(request));
+  }
+
+  @GetMapping("/attendance")
+  @PreAuthorize("hasAnyAuthority('maintenance:schedule:view', 'maintenance:view')")
+  public ApiResponse<List<AttendanceResponse>> attendance() {
+    return ApiResponse.ok(service.listAttendance());
   }
 }

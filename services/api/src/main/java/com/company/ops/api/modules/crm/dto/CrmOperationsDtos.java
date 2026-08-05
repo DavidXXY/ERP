@@ -228,7 +228,9 @@ public final class CrmOperationsDtos {
       @Size(max = 64) String receivableCode,
       @DecimalMin("0") BigDecimal firstReceivableAmount,
       LocalDate firstReceivableDueDate,
-      java.util.List<ReceivablePlanRequest> receivables
+      java.util.List<ReceivablePlanRequest> receivables,
+      com.company.ops.api.modules.crm.domain.ContractKind contractKind,
+      Boolean frameworkAmountSpecified
   ) {
   }
 
@@ -318,9 +320,27 @@ public final class CrmOperationsDtos {
       String projectCode,
       String projectStage,
       String projectApprovalStatus,
-      String projectManagerName
+      String projectManagerName,
+      com.company.ops.api.modules.crm.domain.ContractKind contractKind,
+      UUID parentContractId,
+      String parentContractCode,
+      int childOrderCount,
+      BigDecimal childOrderAmount,
+      BigDecimal childOrderNetAmount
   ) {
   }
+
+  public record CreateChildOrderRequest(
+      @Size(max = 64) String code,
+      @NotBlank @Size(max = 160) String projectName,
+      @NotBlank @Size(max = 80) String contractType,
+      @NotNull @DecimalMin("0.01") BigDecimal amount,
+      @DecimalMin("0") BigDecimal taxRate,
+      @NotNull LocalDate startDate,
+      @NotNull LocalDate endDate,
+      @Size(max = 120) String serviceCycle,
+      @NotNull java.util.List<ReceivablePlanRequest> receivables
+  ) {}
 
   public record ReceivableResponse(
       UUID id,

@@ -351,6 +351,25 @@ const rootRoutes: RouteRecordRaw[] = [
     component: () => import("@/views/inventory/StockMovementsView.vue"),
     meta: { title: "库存移动", permission: "inventory:view" },
   },
+  // Maintenance
+  {
+    path: "maintenance",
+    name: "maintenance-center",
+    component: () => import("@/views/maintenance/MaintenanceCenterView.vue"),
+    meta: {
+      title: "售后维保中心",
+      permissions: [
+        "maintenance:view",
+        "maintenance:order:manage",
+        "maintenance:equipment:view",
+        "maintenance:plan:view",
+      ],
+    },
+  },
+  { path: "maintenance/equipment", redirect: "/maintenance?tab=equipment" },
+  { path: "maintenance/plans", redirect: "/maintenance?tab=plans" },
+  { path: "maintenance/schedules", redirect: "/maintenance?tab=workforce" },
+  { path: "maintenance/certificates", redirect: "/maintenance?tab=certificates" },
   // HR
   {
     path: "hr",

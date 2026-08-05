@@ -592,7 +592,11 @@
         type="success"
         show-icon
         :message="`${selectedQuote.code} V${selectedQuote.versionNo} 已获客户接受`"
-        description="确认后生成待审批合同及全部应收，同时将关联商机标记为赢单；合同审批通过后再上传双方盖章件。"
+        :description="
+          conversionForm.contractKind === 'FRAMEWORK'
+            ? '确认后生成待审批框架订单，不直接生成应收；合同生效后再逐笔创建子订单结算。'
+            : '确认后生成待审批合同及全部应收，同时将关联商机标记为赢单；合同审批通过后再上传双方盖章件。'
+        "
       />
       <a-form
         ref="conversionFormRef"
@@ -602,6 +606,29 @@
       >
         <a-divider>合同信息</a-divider>
         <a-row :gutter="16">
+          <a-col :span="24">
+            <a-form-item label="订单模式">
+              <a-radio-group
+                v-model:value="conversionForm.contractKind"
+                button-style="solid"
+              >
+                <a-radio-button value="STANDARD">普通合同</a-radio-button>
+                <a-radio-button value="FRAMEWORK">框架订单</a-radio-button>
+              </a-radio-group>
+            </a-form-item>
+          </a-col>
+          <a-col v-if="conversionForm.contractKind === 'FRAMEWORK'" :span="24">
+            <a-form-item label="框架金额上限（含税，元）">
+              <a-switch
+                v-model:checked="conversionForm.frameworkAmountSpecified"
+                checked-children="采用报价金额"
+                un-checked-children="不设总金额"
+              />
+              <span class="form-help" style="margin-left: 12px"
+                >框架订单不直接生成应收，后续按子订单结算。</span
+              >
+            </a-form-item>
+          </a-col>
           <a-col :xs="24" :md="8"
             ><a-form-item label="合同编号" name="contractCode"
               ><a-input
@@ -668,81 +695,83 @@
           </div>
         </a-form-item>
 
-        <a-divider>应收账款分期</a-divider>
-        <div class="receivable-summary" style="margin-bottom: 12px">
-          <a-statistic
-            title="合同总额（含税，元）"
-            :value="selectedQuote?.amount || 0"
-            :formatter="moneyFormatter"
-            style="display: inline-block; margin-right: 32px"
-          /><a-statistic
-            title="已分配（含税，元）"
-            :value="receivableAllocated"
-            :formatter="moneyFormatter"
-            style="display: inline-block; margin-right: 32px"
-          /><a-statistic
-            title="剩余（含税，元）"
-            :value="
-              Math.max(0, (selectedQuote?.amount || 0) - receivableAllocated)
-            "
-            :formatter="moneyFormatter"
-            style="display: inline-block"
-            :value-style="{
-              color:
-                receivableAllocated > (selectedQuote?.amount || 0)
-                  ? '#ff4d4f'
-                  : '#52c41a',
-            }"
-          />
-        </div>
-        <a-table
-          :data-source="conversionForm.receivables"
-          :columns="receivableColumns"
-          :pagination="false"
-          row-key="rowKey"
-          size="small"
-          ><template #bodyCell="{ column, record, index }"
-            ><template v-if="column.key === 'amount'"
-              ><a-input-number
-                v-model:value="record.amount"
-                :min="0"
-                :precision="2"
-                style="width: 100%"
-                @change="
-                  (val: any) => syncReceivable(index, 'amount', val)
-                " /></template
-            ><template v-else-if="column.key === 'ratio'"
-              ><a-input-number
-                v-model:value="record.ratio"
-                :min="0"
-                :max="100"
-                :precision="1"
-                style="width: 100%"
-                @change="
-                  (val: any) => syncReceivable(index, 'ratio', val)
-                " /></template
-            ><template v-else-if="column.key === 'dueDate'"
-              ><a-input
-                v-model:value="record.dueDate"
-                type="date"
-                style="width: 100%" /></template
-            ><template v-else-if="column.key === 'action'"
-              ><a-button
-                type="link"
-                danger
-                size="small"
-                @click="removeReceivable(index)"
-                >删除</a-button
+        <template v-if="conversionForm.contractKind !== 'FRAMEWORK'">
+          <a-divider>应收账款分期</a-divider>
+          <div class="receivable-summary" style="margin-bottom: 12px">
+            <a-statistic
+              title="合同总额（含税，元）"
+              :value="selectedQuote?.amount || 0"
+              :formatter="moneyFormatter"
+              style="display: inline-block; margin-right: 32px"
+            /><a-statistic
+              title="已分配（含税，元）"
+              :value="receivableAllocated"
+              :formatter="moneyFormatter"
+              style="display: inline-block; margin-right: 32px"
+            /><a-statistic
+              title="剩余（含税，元）"
+              :value="
+                Math.max(0, (selectedQuote?.amount || 0) - receivableAllocated)
+              "
+              :formatter="moneyFormatter"
+              style="display: inline-block"
+              :value-style="{
+                color:
+                  receivableAllocated > (selectedQuote?.amount || 0)
+                    ? '#ff4d4f'
+                    : '#52c41a',
+              }"
+            />
+          </div>
+          <a-table
+            :data-source="conversionForm.receivables"
+            :columns="receivableColumns"
+            :pagination="false"
+            row-key="rowKey"
+            size="small"
+            ><template #bodyCell="{ column, record, index }"
+              ><template v-if="column.key === 'amount'"
+                ><a-input-number
+                  v-model:value="record.amount"
+                  :min="0"
+                  :precision="2"
+                  style="width: 100%"
+                  @change="
+                    (val: any) => syncReceivable(index, 'amount', val)
+                  " /></template
+              ><template v-else-if="column.key === 'ratio'"
+                ><a-input-number
+                  v-model:value="record.ratio"
+                  :min="0"
+                  :max="100"
+                  :precision="1"
+                  style="width: 100%"
+                  @change="
+                    (val: any) => syncReceivable(index, 'ratio', val)
+                  " /></template
+              ><template v-else-if="column.key === 'dueDate'"
+                ><a-input
+                  v-model:value="record.dueDate"
+                  type="date"
+                  style="width: 100%" /></template
+              ><template v-else-if="column.key === 'action'"
+                ><a-button
+                  type="link"
+                  danger
+                  size="small"
+                  @click="removeReceivable(index)"
+                  >删除</a-button
+                ></template
               ></template
-            ></template
-          ></a-table
-        ><a-button
-          type="dashed"
-          block
-          style="margin-top: 8px"
-          @click="addReceivable"
-          >+ 新增分期</a-button
-        >
+            ></a-table
+          ><a-button
+            type="dashed"
+            block
+            style="margin-top: 8px"
+            @click="addReceivable"
+            >+ 新增分期</a-button
+          >
+        </template>
       </a-form>
     </a-modal>
 
@@ -1980,6 +2009,8 @@ function initialConversionForm(record?: QuotePlan) {
     startDate: formatDate(today),
     endDate: formatDate(end),
     serviceCycle: record?.inspectCycle || "",
+    contractKind: "STANDARD" as "STANDARD" | "FRAMEWORK",
+    frameworkAmountSpecified: true,
     receivables: [
       {
         rowKey: "r1",

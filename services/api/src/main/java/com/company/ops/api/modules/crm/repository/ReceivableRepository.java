@@ -23,6 +23,7 @@ public interface ReceivableRepository extends JpaRepository<Receivable, UUID> {
   List<Receivable> findAllByOrderByDueDateAsc();
   Page<Receivable> findAllByOrderByDueDateAsc(Pageable pageable);
   Page<Receivable> findByContractIdOrderByDueDateAsc(UUID contractId, Pageable pageable);
+  List<Receivable> findByContractIdOrderByDueDateDesc(UUID contractId);
   List<Receivable> findByDueDateBetweenOrderByDueDateAsc(LocalDate startDate,LocalDate endDate);
 
   boolean existsByCode(String code);
@@ -32,6 +33,7 @@ public interface ReceivableRepository extends JpaRepository<Receivable, UUID> {
   Optional<Receivable> findByIdForUpdate(UUID id);
 
   List<Receivable> findByContractIdIn(Collection<UUID> contractIds);
+  Page<Receivable> findByContractIdInOrderByDueDateAsc(Collection<UUID> contractIds, Pageable pageable);
 
   @Query("select r from Receivable r where r.dueDate < :today and r.amount > r.settledAmount")
   List<Receivable> findOverdueOutstanding(LocalDate today);

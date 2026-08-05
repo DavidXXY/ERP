@@ -5,6 +5,7 @@ import com.company.ops.api.common.exception.BusinessException;
 import com.company.ops.api.common.service.CodeGenerator;
 import com.company.ops.api.modules.crm.domain.ApprovalDecision;
 import com.company.ops.api.modules.crm.domain.ContractStatus;
+import com.company.ops.api.modules.crm.domain.ContractKind;
 import com.company.ops.api.modules.crm.domain.Customer;
 import com.company.ops.api.modules.crm.domain.FollowUp;
 import com.company.ops.api.modules.crm.domain.Opportunity;
@@ -26,6 +27,7 @@ import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.AdvanceOpportunityR
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ContractResponse;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ConvertQuoteRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.CreateFollowUpRequest;
+import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.CreateChildOrderRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.CreateOpportunityRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.CreateQuoteRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.CustomerProfileResponse;
@@ -539,7 +541,9 @@ public class CrmOperationsService {
     requireText(quote.getPaymentNodes(), "请输入付款方式/节点");
 
     ServiceContract contract = createContractFromAcceptedQuote(quote, request);
-    List<Receivable> receivables = createReceivables(quote, contract, request);
+    List<Receivable> receivables = contract.getContractKind() == ContractKind.FRAMEWORK
+        ? List.of()
+        : createReceivables(quote, contract, request);
     markOpportunityWon(quote, contract);
     quote.setStatus(QuoteStatus.CONVERTED);
     quoteRepository.save(quote);
@@ -577,6 +581,77 @@ public class CrmOperationsService {
   }
 
   @Transactional(readOnly = true)
+  public org.springframework.data.domain.Page<ContractResponse> listChildOrders(
+      UUID frameworkId, org.springframework.data.domain.Pageable pageable
+  ) {
+    ServiceContract framework = contractRepository.findById(frameworkId)
+        .orElseThrow(() -> new BusinessException("框架订单不存在"));
+    assertCustomerAccess(framework.getCustomerId());
+    if (framework.getContractKind() != ContractKind.FRAMEWORK) {
+      throw new BusinessException("只有框架订单可以查询子订单");
+    }
+    org.springframework.data.domain.Page<ServiceContract> page =
+        contractRepository.findByParentContractIdOrderByStartDateDesc(frameworkId, pageable);
+    Map<UUID, Customer> customers = customerMap(page.getContent().stream()
+        .map(ServiceContract::getCustomerId).toList());
+    Map<UUID, Project> projects = projectRepository.findByContractIdIn(page.getContent().stream()
+            .map(ServiceContract::getId).toList()).stream()
+        .collect(Collectors.toMap(Project::getContractId, Function.identity(), (first, ignored) -> first));
+    return page.map(item -> toContract(item, customers, projects.get(item.getId())));
+  }
+
+  @Transactional
+  public ContractResponse createChildOrder(UUID frameworkId, CreateChildOrderRequest request) {
+    ServiceContract framework = contractRepository.findByIdForUpdate(frameworkId)
+        .orElseThrow(() -> new BusinessException("框架订单不存在"));
+    assertCustomerAccess(framework.getCustomerId());
+    if (framework.getContractKind() != ContractKind.FRAMEWORK) {
+      throw new BusinessException("只有框架订单可以创建子订单");
+    }
+    if (framework.getStatus() != ContractStatus.ACTIVE) {
+      throw new BusinessException("只有生效中的框架订单可以创建子订单");
+    }
+    if (request.endDate().isBefore(request.startDate())) {
+      throw new BusinessException("子订单结束日期不能早于开始日期");
+    }
+    if (request.startDate().isBefore(framework.getStartDate())
+        || request.endDate().isAfter(framework.getEndDate())) {
+      throw new BusinessException("子订单日期必须在框架订单有效期内");
+    }
+    BigDecimal orderAmount = defaultAmount(request.amount());
+    BigDecimal used = contractRepository.findByParentContractIdOrderByStartDateDesc(frameworkId).stream()
+        .map(ServiceContract::getAmount).map(this::defaultAmount)
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
+    BigDecimal frameworkAmount = used.add(orderAmount);
+    if (framework.getAmount() != null) {
+      if (frameworkAmount.compareTo(framework.getAmount()) > 0) {
+        throw new BusinessException("子订单累计金额不能超过框架订单总金额");
+      }
+    }
+    String code = hasText(request.code()) ? request.code().trim() : codeGenerator.generate("CONTRACT");
+    if (contractRepository.existsByCode(code)) throw new BusinessException("合同编号已存在");
+
+    ServiceContract order = new ServiceContract();
+    order.setParentContractId(frameworkId);
+    order.setContractKind(ContractKind.CHILD_ORDER);
+    order.setCustomerId(framework.getCustomerId());
+    order.setCode(code);
+    order.setProjectName(request.projectName());
+    order.setContractType(request.contractType());
+    order.setAmount(orderAmount);
+    order.setTaxRate(defaultTaxRate(request.taxRate()));
+    order.setStartDate(request.startDate());
+    order.setEndDate(request.endDate());
+    order.setServiceCycle(request.serviceCycle());
+    order.setStatus(ContractStatus.ACTIVE);
+    ServiceContract saved = contractRepository.save(order);
+    createReceivables(saved.getCustomerId(), orderAmount, saved, request.receivables());
+    Project parentProject = ensureFrameworkProject(framework);
+    projectService.createChildProjectFromOrder(saved, parentProject, frameworkAmount);
+    return toContract(saved, customerMap(nullableId(saved.getCustomerId())));
+  }
+
+  @Transactional(readOnly = true)
   public List<ReceivableResponse> listReceivables() {
     List<Receivable> receivables = receivableRepository.findAllByOrderByDueDateAsc().stream()
         .filter(item -> canAccessCustomer(item.getCustomerId())).toList();
@@ -597,7 +672,16 @@ public class CrmOperationsService {
       ServiceContract contract = contractRepository.findById(contractId)
           .orElseThrow(() -> new BusinessException("合同不存在"));
       assertCustomerAccess(contract.getCustomerId());
-      receivables = receivableRepository.findByContractIdOrderByDueDateAsc(contractId, pageable);
+      if (contract.getContractKind() == ContractKind.FRAMEWORK) {
+        List<UUID> childOrderIds = contractRepository
+            .findByParentContractIdOrderByStartDateDesc(contractId).stream()
+            .map(ServiceContract::getId).toList();
+        receivables = childOrderIds.isEmpty()
+            ? org.springframework.data.domain.Page.empty(pageable)
+            : receivableRepository.findByContractIdInOrderByDueDateAsc(childOrderIds, pageable);
+      } else {
+        receivables = receivableRepository.findByContractIdOrderByDueDateAsc(contractId, pageable);
+      }
     } else {
       List<UUID> customerIds = accessibleCustomerIds();
       receivables = customerIds.isEmpty()
@@ -616,6 +700,7 @@ public class CrmOperationsService {
     Receivable receivable = receivableRepository.findByIdForUpdate(id)
         .orElseThrow(() -> new BusinessException("应收单不存在"));
     assertCustomerAccess(receivable.getCustomerId());
+    assertSettlesByOrder(receivable);
     if (receivable.getStatus() == ReceivableStatus.SETTLED) {
       throw new BusinessException("已核销应收不能申请开票");
     }
@@ -643,6 +728,7 @@ public class CrmOperationsService {
     Receivable receivable = receivableRepository.findByIdForUpdate(id)
         .orElseThrow(() -> new BusinessException("应收单不存在"));
     assertCustomerAccess(receivable.getCustomerId());
+    assertSettlesByOrder(receivable);
     if (receivable.getInvoiceRequestStatus() != InvoiceRequestStatus.PENDING_APPROVAL) {
       throw new BusinessException("只有待审核的开票申请可以处理");
     }
@@ -665,6 +751,7 @@ public class CrmOperationsService {
     Receivable receivable = receivableRepository.findByIdForUpdate(id)
         .orElseThrow(() -> new BusinessException("应收单不存在"));
     assertCustomerAccess(receivable.getCustomerId());
+    assertSettlesByOrder(receivable);
     if (receivable.getStatus() == ReceivableStatus.SETTLED) {
       throw new BusinessException("已核销应收不能登记发票");
     }
@@ -700,6 +787,7 @@ public class CrmOperationsService {
     Receivable receivable = receivableRepository.findByIdForUpdate(id)
         .orElseThrow(() -> new BusinessException("应收单不存在"));
     assertCustomerAccess(receivable.getCustomerId());
+    assertSettlesByOrder(receivable);
     String referenceNo = request.referenceNo().trim().toUpperCase(java.util.Locale.ROOT);
     ReceivableReceipt existing = receiptRepository.findByReferenceNo(referenceNo).orElse(null);
     if (existing != null) {
@@ -1058,7 +1146,13 @@ public class CrmOperationsService {
     contract.setCode(contractCode);
     contract.setProjectName(request.projectName());
     contract.setContractType(request.contractType());
-    contract.setAmount(defaultAmount(quote.getAmount()));
+    ContractKind kind = request.contractKind() == null ? ContractKind.STANDARD : request.contractKind();
+    if (kind == ContractKind.CHILD_ORDER) {
+      throw new BusinessException("子订单只能从框架订单下创建");
+    }
+    contract.setContractKind(kind);
+    contract.setAmount(kind == ContractKind.FRAMEWORK && Boolean.FALSE.equals(request.frameworkAmountSpecified())
+        ? null : defaultAmount(quote.getAmount()));
     contract.setTaxRate(defaultTaxRate(quote.getTaxRate()));
     contract.setStartDate(request.startDate());
     contract.setEndDate(request.endDate());
@@ -1079,8 +1173,19 @@ public class CrmOperationsService {
     if (plans.isEmpty()) {
       throw new BusinessException("请至少填写一条应收计划");
     }
+    return createReceivables(quote.getCustomerId(), defaultAmount(quote.getAmount()), contract, plans);
+  }
+
+  private List<Receivable> createReceivables(
+      UUID customerId, BigDecimal contractAmount, ServiceContract contract, List<ReceivablePlanRequest> requestedPlans
+  ) {
+    if (contract.getContractKind() == ContractKind.FRAMEWORK) {
+      throw new BusinessException("框架订单不能直接生成应收，请在子订单中结算");
+    }
+    List<ReceivablePlanRequest> plans = requestedPlans == null ? List.of() : requestedPlans;
+    if (plans.isEmpty()) throw new BusinessException("请至少填写一条应收计划");
     BigDecimal total = plans.stream().map(item -> defaultAmount(item.amount())).reduce(BigDecimal.ZERO, BigDecimal::add);
-    if (total.compareTo(defaultAmount(quote.getAmount())) != 0) {
+    if (total.compareTo(defaultAmount(contractAmount)) != 0) {
       throw new BusinessException("应收计划合计必须等于合同总额");
     }
     java.util.Set<String> codes = new java.util.HashSet<>();
@@ -1095,9 +1200,9 @@ public class CrmOperationsService {
     }
     return plans.stream().map(plan -> {
       Receivable receivable = new Receivable();
-      receivable.setCustomerId(quote.getCustomerId());
+      receivable.setCustomerId(customerId);
       receivable.setContractId(contract.getId());
-      Customer customer = customerRepository.findById(quote.getCustomerId()).orElse(null);
+      Customer customer = customerRepository.findById(customerId).orElse(null);
       receivable.setOrganizationId(customer == null ? null
           : dataScopeService.organizationIdForUser(customer.getOwnerUserId()));
       receivable.setSalesOwnerUserId(customer == null ? null : customer.getOwnerUserId());
@@ -1115,9 +1220,7 @@ public class CrmOperationsService {
     if (projectRepository.existsByContractId(contract.getId())) {
       return;
     }
-    if (contract.getQuoteId() == null) {
-      throw new BusinessException("合同未关联报价，不能自动生成项目");
-    }
+    if (contract.getQuoteId() == null) return;
     QuotePlan quote = quoteRepository.findById(contract.getQuoteId())
         .orElseThrow(() -> new BusinessException("合同关联报价不存在"));
     Customer customer = customerRepository.findById(quote.getCustomerId())
@@ -1135,7 +1238,8 @@ public class CrmOperationsService {
         null,
         managerName,
         siteAddress,
-        defaultAmount(quote.getAmount()),
+        contract.getContractKind() == ContractKind.FRAMEWORK
+            ? frameworkOrderAmount(contract.getId()) : defaultAmount(quote.getAmount()),
         contract.getStartDate(),
         contract.getEndDate(),
         List.of(
@@ -1146,8 +1250,115 @@ public class CrmOperationsService {
             new ProjectBudgetItemRequest(ProjectCostCategory.OTHER, defaultAmount(quote.getOtherBudget()), "报价成本核对-设备/风险/其他")
         ),
         null,
-        contract.getId()
+        contract.getId(),
+        null
     ));
+  }
+
+  private Project ensureFrameworkProject(ServiceContract framework) {
+    Project parent = projectRepository.findLatestByContractId(framework.getId()).orElse(null);
+    if (parent != null) return parent;
+    createProjectFromApprovedContract(framework);
+    return projectRepository.findLatestByContractId(framework.getId())
+        .orElseThrow(() -> new BusinessException("框架订单尚未生成一级项目，请先完成框架订单转项目"));
+  }
+
+  private BigDecimal frameworkOrderAmount(UUID frameworkId) {
+    return contractRepository.findByParentContractIdOrderByStartDateDesc(frameworkId).stream()
+        .map(ServiceContract::getAmount)
+        .map(this::defaultAmount)
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
+  }
+
+  private void synchronizeContractHierarchy(ServiceContract contract) {
+    if (contract.getStartDate() == null || contract.getEndDate() == null
+        || contract.getEndDate().isBefore(contract.getStartDate())) {
+      throw new BusinessException("合同结束日期不能早于开始日期");
+    }
+    ContractKind kind = contract.getContractKind() == null
+        ? ContractKind.STANDARD : contract.getContractKind();
+    if (kind == ContractKind.CHILD_ORDER) {
+      synchronizeChildOrder(contract);
+      return;
+    }
+    if (kind == ContractKind.FRAMEWORK) {
+      List<ServiceContract> children = contractRepository
+          .findByParentContractIdOrderByStartDateDesc(contract.getId());
+      boolean outsidePeriod = children.stream().anyMatch(child ->
+          child.getStartDate().isBefore(contract.getStartDate())
+              || child.getEndDate().isAfter(contract.getEndDate()));
+      if (outsidePeriod) throw new BusinessException("框架订单有效期不能排除已有子订单");
+      BigDecimal total = children.stream().map(ServiceContract::getAmount)
+          .map(this::defaultAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+      if (contract.getAmount() != null && total.compareTo(contract.getAmount()) > 0) {
+        throw new BusinessException("框架订单金额上限不能低于已有子订单累计金额");
+      }
+      projectService.synchronizeProjectFromContract(contract, total);
+      return;
+    }
+    projectService.synchronizeProjectFromContract(contract, contract.getAmount());
+  }
+
+  private void synchronizeChildOrder(ServiceContract order) {
+    if (order.getParentContractId() == null) {
+      throw new BusinessException("子订单缺少框架订单关联");
+    }
+    if (defaultAmount(order.getAmount()).compareTo(BigDecimal.ZERO) <= 0) {
+      throw new BusinessException("子订单金额必须大于0");
+    }
+    ServiceContract framework = contractRepository.findByIdForUpdate(order.getParentContractId())
+        .orElseThrow(() -> new BusinessException("框架订单不存在"));
+    if (framework.getContractKind() != ContractKind.FRAMEWORK) {
+      throw new BusinessException("子订单关联的合同不是框架订单");
+    }
+    if (order.getStartDate().isBefore(framework.getStartDate())
+        || order.getEndDate().isAfter(framework.getEndDate())) {
+      throw new BusinessException("子订单日期必须在框架订单有效期内");
+    }
+    BigDecimal total = contractRepository
+        .findByParentContractIdOrderByStartDateDesc(framework.getId()).stream()
+        .map(child -> child.getId().equals(order.getId()) ? order.getAmount() : child.getAmount())
+        .map(this::defaultAmount)
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
+    if (framework.getAmount() != null && total.compareTo(framework.getAmount()) > 0) {
+      throw new BusinessException("子订单累计金额不能超过框架订单总金额");
+    }
+    rebalanceChildOrderReceivables(order);
+    projectService.synchronizeProjectFromContract(order, total);
+  }
+
+  private void rebalanceChildOrderReceivables(ServiceContract order) {
+    List<Receivable> plans = receivableRepository.findByContractIdOrderByDueDateDesc(order.getId());
+    if (plans.isEmpty()) throw new BusinessException("子订单必须至少保留一笔应收计划");
+    BigDecimal target = defaultAmount(order.getAmount());
+    BigDecimal settled = plans.stream().map(Receivable::getSettledAmount)
+        .map(this::defaultAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+    if (target.compareTo(settled) < 0) {
+      throw new BusinessException("子订单金额不能低于累计已收金额");
+    }
+    BigDecimal current = plans.stream().map(Receivable::getAmount)
+        .map(this::defaultAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+    BigDecimal delta = target.subtract(current);
+    if (delta.compareTo(BigDecimal.ZERO) > 0) {
+      Receivable latest = plans.get(0);
+      latest.setAmount(defaultAmount(latest.getAmount()).add(delta));
+      refreshReceivableStatus(latest);
+    } else if (delta.compareTo(BigDecimal.ZERO) < 0) {
+      BigDecimal remainingReduction = delta.abs();
+      for (Receivable plan : plans) {
+        BigDecimal reducible = defaultAmount(plan.getAmount())
+            .subtract(defaultAmount(plan.getSettledAmount()));
+        BigDecimal reduction = reducible.min(remainingReduction);
+        plan.setAmount(defaultAmount(plan.getAmount()).subtract(reduction));
+        remainingReduction = remainingReduction.subtract(reduction);
+        refreshReceivableStatus(plan);
+        if (remainingReduction.compareTo(BigDecimal.ZERO) == 0) break;
+      }
+      if (remainingReduction.compareTo(BigDecimal.ZERO) > 0) {
+        throw new BusinessException("应收计划已结算部分过高，无法降低子订单金额");
+      }
+    }
+    receivableRepository.saveAll(plans);
   }
 
   @Transactional
@@ -1332,6 +1543,10 @@ public class CrmOperationsService {
   }
 
   private ContractResponse toContract(ServiceContract item, Map<UUID, Customer> customers, Project project) {
+    List<ServiceContract> childOrders = item.getContractKind() == ContractKind.FRAMEWORK
+        ? contractRepository.findByParentContractIdOrderByStartDateDesc(item.getId()) : List.of();
+    ServiceContract parent = item.getParentContractId() == null ? null
+        : contractRepository.findById(item.getParentContractId()).orElse(null);
     return new ContractResponse(
         item.getId(),
         item.getQuoteId(),
@@ -1342,7 +1557,7 @@ public class CrmOperationsService {
         item.getContractType(),
         item.getAmount(),
         defaultTaxRate(item.getTaxRate()),
-        netAmount(item.getAmount(), item.getTaxRate()),
+        item.getAmount() == null ? null : netAmount(item.getAmount(), item.getTaxRate()),
         item.getStartDate(),
         item.getEndDate(),
         contractSalesOwnerName(item, customers),
@@ -1352,7 +1567,16 @@ public class CrmOperationsService {
         project == null ? null : project.getCode(),
         project == null || project.getStage() == null ? null : project.getStage().name(),
         project == null || project.getApprovalStatus() == null ? null : project.getApprovalStatus().name(),
-        project == null ? null : project.getManagerName()
+        project == null ? null : project.getManagerName(),
+        item.getContractKind() == null ? ContractKind.STANDARD : item.getContractKind(),
+        item.getParentContractId(),
+        parent == null ? null : parent.getCode(),
+        childOrders.size(),
+        childOrders.stream().map(ServiceContract::getAmount).map(this::defaultAmount)
+            .reduce(BigDecimal.ZERO, BigDecimal::add),
+        childOrders.stream()
+            .map(child -> netAmount(child.getAmount(), child.getTaxRate()))
+            .reduce(BigDecimal.ZERO, BigDecimal::add)
     );
   }
 
@@ -1414,6 +1638,14 @@ public class CrmOperationsService {
 
   private BigDecimal outstandingAmount(Receivable receivable) {
     return defaultAmount(receivable.getAmount()).subtract(defaultAmount(receivable.getSettledAmount()));
+  }
+
+  private void assertSettlesByOrder(Receivable receivable) {
+    if (receivable.getContractId() == null) return;
+    ServiceContract contract = contractRepository.findById(receivable.getContractId()).orElse(null);
+    if (contract != null && contract.getContractKind() == ContractKind.FRAMEWORK) {
+      throw new BusinessException("框架订单不能直接开票或回款，请按子订单结算");
+    }
   }
 
   private void requireText(String value, String message) {
@@ -1811,7 +2043,7 @@ public class CrmOperationsService {
   }
 
   private void applyContractChanges(ContractChangeRequest change) {
-    ServiceContract contract = contractRepository.findById(change.getContractId())
+    ServiceContract contract = contractRepository.findByIdForUpdate(change.getContractId())
         .orElseThrow(() -> new BusinessException("合同不存在"));
     String data = change.getChangeData();
     if (data == null || data.isBlank()) return;
@@ -1826,6 +2058,9 @@ public class CrmOperationsService {
       if (root.has("endDate")) contract.setEndDate(java.time.LocalDate.parse(root.get("endDate").asText()));
       if (root.has("serviceCycle")) contract.setServiceCycle(root.get("serviceCycle").asText());
       contractRepository.save(contract);
+      synchronizeContractHierarchy(contract);
+    } catch (BusinessException e) {
+      throw e;
     } catch (Exception e) {
       throw new BusinessException("变更数据解析失败: " + e.getMessage());
     }
@@ -1934,7 +2169,7 @@ public class CrmOperationsService {
 
   @Transactional
   public ContractResponse updateContract(UUID id, UpdateContractRequest request) {
-    ServiceContract contract = contractRepository.findById(id)
+    ServiceContract contract = contractRepository.findByIdForUpdate(id)
         .orElseThrow(() -> new BusinessException("\u5408\u540c\u4e0d\u5b58\u5728"));
     assertCustomerAccess(contract.getCustomerId());
     if (request.projectName() != null) contract.setProjectName(request.projectName());
@@ -1944,7 +2179,9 @@ public class CrmOperationsService {
     if (request.serviceCycle() != null) contract.setServiceCycle(request.serviceCycle());
     if (request.startDate() != null) contract.setStartDate(LocalDate.parse(request.startDate()));
     if (request.endDate() != null) contract.setEndDate(LocalDate.parse(request.endDate()));
-    return toContract(contractRepository.save(contract), customerMap(nullableId(contract.getCustomerId())));
+    ServiceContract saved = contractRepository.save(contract);
+    synchronizeContractHierarchy(saved);
+    return toContract(saved, customerMap(nullableId(contract.getCustomerId())));
   }
 
   public java.util.List<ContractChangeResponse> listContractChanges(UUID contractId) {

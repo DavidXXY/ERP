@@ -2172,6 +2172,9 @@ public class CrmOperationsService {
     ServiceContract contract = contractRepository.findByIdForUpdate(id)
         .orElseThrow(() -> new BusinessException("\u5408\u540c\u4e0d\u5b58\u5728"));
     assertCustomerAccess(contract.getCustomerId());
+    if (contract.getStatus() != ContractStatus.PENDING_APPROVAL) {
+      throw new BusinessException("合同进入审批后不能直接修改，请发起合同变更申请");
+    }
     if (request.projectName() != null) contract.setProjectName(request.projectName());
     if (request.contractType() != null) contract.setContractType(request.contractType());
     if (request.amount() != null) contract.setAmount(request.amount());

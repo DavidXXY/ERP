@@ -80,7 +80,10 @@ public final class OfficeDtos {
   public record ExpenseResponse(UUID id, String code, UUID claimantId, String claimantName, UUID projectId,
                                 String projectCode, UUID workOrderId, String workOrderCode, ExpenseType expenseType,
                                 BigDecimal amount, LocalDate expenseDate, String description, ExpenseStatus status,
-                                UUID approvalRequestId, List<ExpenseLineResponse> lines) {}
+                                UUID approvalRequestId, List<ExpenseLineResponse> lines,
+                                LocalDate paidDate, String paymentReference, String paidByName, OffsetDateTime paidAt) {}
+  public record PayExpenseRequest(@NotNull LocalDate paidDate,
+                                  @NotBlank @Size(max=120) String paymentReference) {}
   public record CreateOutsourceRequest(// auto-gen
     String code, @NotNull UUID supplierId,
                                        UUID projectId, UUID workOrderId, @NotBlank @Size(max=100) String serviceType,

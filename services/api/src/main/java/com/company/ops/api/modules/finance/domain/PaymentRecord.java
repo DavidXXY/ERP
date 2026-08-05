@@ -42,6 +42,9 @@ public class PaymentRecord extends BaseEntity {
   @Column(name = "payer_name", nullable = false, length = 80)
   private String payerName;
 
+  @Column(name = "payer_user_id")
+  private UUID payerUserId;
+
   public String getCode() {
     return code;
   }
@@ -113,4 +116,7 @@ public class PaymentRecord extends BaseEntity {
   public void setPayerName(String payerName) {
     this.payerName = payerName;
   }
+
+  public UUID getPayerUserId() { return payerUserId; }
+  public void setPayerUserId(UUID payerUserId) { this.payerUserId = payerUserId; }
 }

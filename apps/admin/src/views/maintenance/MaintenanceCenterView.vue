@@ -64,16 +64,26 @@
                 ></template
               >
               <template v-else-if="column.key === 'action'"
-                ><a-button
-                  v-if="
-                    canManage && ['CREATED', 'ASSIGNED'].includes(record.status)
-                  "
-                  type="link"
-                  size="small"
-                  @click="openAssign(record)"
-                  >派工</a-button
-                ></template
-              >
+                ><a-space size="small"
+                  ><a-button
+                    v-if="
+                      canManage &&
+                      ['CREATED', 'ASSIGNED'].includes(record.status)
+                    "
+                    type="link"
+                    size="small"
+                    @click="openAssign(record)"
+                    >派工</a-button
+                  ><a-tooltip title="客户验收并生成应收"
+                    ><a-button
+                      v-if="canManage && record.status === 'COMPLETED'"
+                      type="text"
+                      size="small"
+                      aria-label="客户验收"
+                      @click="openAccept(record)"
+                      ><template #icon
+                        ><CheckCircleOutlined /></template></a-button></a-tooltip></a-space
+              ></template>
             </template>
           </a-table>
         </a-tab-pane>
@@ -296,6 +306,41 @@
     </a-modal>
 
     <a-modal
+      v-model:open="acceptOpen"
+      title="客户验收"
+      :confirm-loading="saving"
+      @ok="saveAccept"
+    >
+      <a-form layout="vertical">
+        <a-form-item label="工单"
+          ><a-input :value="acceptingOrder?.code" disabled
+        /></a-form-item>
+        <a-form-item label="应计费金额（含税，元）">
+          <a-input-number
+            :value="acceptingOrder?.billableAmount || 0"
+            disabled
+            style="width: 100%"
+          />
+        </a-form-item>
+        <a-form-item label="确认实际成本（含税，元）">
+          <a-input-number
+            v-model:value="acceptForm.actualCost"
+            :min="0"
+            :precision="2"
+            style="width: 100%"
+          />
+        </a-form-item>
+        <a-form-item label="验收意见">
+          <a-textarea
+            v-model:value="acceptForm.remarks"
+            :rows="3"
+            :maxlength="500"
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <a-modal
       v-model:open="planOpen"
       :title="editingPlanId ? '编辑维护计划' : '新增维护计划'"
       :confirm-loading="saving"
@@ -447,6 +492,7 @@ import dayjs, { type Dayjs } from "dayjs";
 import { message } from "ant-design-vue";
 import { useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
+import CheckCircleOutlined from "@ant-design/icons-vue/CheckCircleOutlined";
 import WorkforceView from "@/views/hr/WorkforceView.vue";
 import * as api from "@/api/maintenance";
 import type {
@@ -548,7 +594,7 @@ const orderColumns = [
   { title: "计划日期", dataIndex: "plannedDate", width: 120 },
   { title: "优先级", key: "priority", width: 90 },
   { title: "状态", key: "status", width: 100 },
-  { title: "操作", key: "action", fixed: "right", width: 90 },
+  { title: "操作", key: "action", fixed: "right", width: 120 },
 ];
 const equipmentColumns = [
   { title: "设备", key: "equipment", width: 240 },
@@ -827,6 +873,35 @@ async function saveAssign() {
     await loadAll();
   } catch (error: any) {
     message.error(error.message || "派工失败");
+  } finally {
+    saving.value = false;
+  }
+}
+
+const acceptOpen = ref(false);
+const acceptingOrder = ref<WorkOrder>();
+const acceptForm = reactive<{ actualCost?: number; remarks: string }>({
+  remarks: "",
+});
+function openAccept(item: WorkOrder) {
+  acceptingOrder.value = item;
+  Object.assign(acceptForm, { actualCost: item.costAmount || 0, remarks: "" });
+  acceptOpen.value = true;
+}
+async function saveAccept() {
+  if (!acceptingOrder.value) return;
+  saving.value = true;
+  try {
+    await api.acceptWorkOrder(acceptingOrder.value.id, acceptForm);
+    acceptOpen.value = false;
+    message.success(
+      Number(acceptingOrder.value.billableAmount || 0) > 0
+        ? "验收完成，应收单已生成"
+        : "验收完成",
+    );
+    await loadAll();
+  } catch (error: any) {
+    message.error(error.message || "验收失败");
   } finally {
     saving.value = false;
   }

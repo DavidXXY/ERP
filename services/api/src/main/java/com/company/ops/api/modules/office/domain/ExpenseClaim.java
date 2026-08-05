@@ -8,6 +8,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity @Table(name = "oa_expense_claims")
@@ -23,6 +24,11 @@ public class ExpenseClaim extends BaseEntity {
   @Column(nullable = false, length = 500) private String description;
   @Enumerated(EnumType.STRING) @Column(nullable = false, length = 40) private ExpenseStatus status;
   @Column(name = "approval_request_id") private UUID approvalRequestId;
+  @Column(name = "paid_date") private LocalDate paidDate;
+  @Column(name = "payment_reference", length = 120) private String paymentReference;
+  @Column(name = "paid_by_user_id") private UUID paidByUserId;
+  @Column(name = "paid_by_name", length = 80) private String paidByName;
+  @Column(name = "paid_at") private OffsetDateTime paidAt;
   public String getCode() { return code; } public void setCode(String v) { code = v; }
   public UUID getClaimantId() { return claimantId; } public void setClaimantId(UUID v) { claimantId = v; }
   public String getClaimantName() { return claimantName; } public void setClaimantName(String v) { claimantName = v; }
@@ -34,4 +40,9 @@ public class ExpenseClaim extends BaseEntity {
   public String getDescription() { return description; } public void setDescription(String v) { description = v; }
   public ExpenseStatus getStatus() { return status; } public void setStatus(ExpenseStatus v) { status = v; }
   public UUID getApprovalRequestId() { return approvalRequestId; } public void setApprovalRequestId(UUID v) { approvalRequestId = v; }
+  public LocalDate getPaidDate() { return paidDate; } public void setPaidDate(LocalDate v) { paidDate = v; }
+  public String getPaymentReference() { return paymentReference; } public void setPaymentReference(String v) { paymentReference = v; }
+  public UUID getPaidByUserId() { return paidByUserId; } public void setPaidByUserId(UUID v) { paidByUserId = v; }
+  public String getPaidByName() { return paidByName; } public void setPaidByName(String v) { paidByName = v; }
+  public OffsetDateTime getPaidAt() { return paidAt; } public void setPaidAt(OffsetDateTime v) { paidAt = v; }
 }

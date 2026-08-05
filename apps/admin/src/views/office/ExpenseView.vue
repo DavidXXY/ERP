@@ -1,6 +1,6 @@
 <template>
   <div class="page-stack">
-    <a-card>
+    <a-card class="expense-card">
       <template #title>费用报销</template>
       <template #extra>
         <a-space>
@@ -52,13 +52,28 @@
             }}</a-tag></template
           >
           <template v-else-if="column.key === 'action'">
-            <a-button
-              v-if="record.approvalRequestId"
-              type="link"
-              size="small"
-              @click="openApproval(record)"
-              >查看/审批</a-button
-            >
+            <a-space size="small">
+              <a-button
+                v-if="record.approvalRequestId"
+                type="link"
+                size="small"
+                @click="openApproval(record)"
+                >查看/审批</a-button
+              >
+              <a-tooltip title="登记报销付款">
+                <a-button
+                  v-if="
+                    record.status === 'APPROVED' &&
+                    auth.can('finance:payment:execute')
+                  "
+                  type="text"
+                  size="small"
+                  aria-label="登记报销付款"
+                  @click="openPayment(record)"
+                  ><template #icon><PayCircleOutlined /></template
+                ></a-button>
+              </a-tooltip>
+            </a-space>
           </template>
         </template>
       </a-table>
@@ -198,6 +213,33 @@
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <a-modal
+      v-model:open="paymentOpen"
+      title="登记报销付款"
+      :confirm-loading="paying"
+      @ok="handlePayment"
+    >
+      <a-form layout="vertical">
+        <a-form-item label="报销单">
+          <a-input :value="payingExpense?.code" disabled />
+        </a-form-item>
+        <a-form-item label="付款日期" required>
+          <a-date-picker
+            v-model:value="paymentForm.paidDate"
+            value-format="YYYY-MM-DD"
+            class="full-width"
+          />
+        </a-form-item>
+        <a-form-item label="银行流水号" required>
+          <a-input
+            v-model:value="paymentForm.paymentReference"
+            :maxlength="120"
+            placeholder="请输入银行付款流水号"
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
@@ -207,10 +249,12 @@ import { useRouter } from "vue-router";
 import { message } from "ant-design-vue";
 import PlusOutlined from "@ant-design/icons-vue/PlusOutlined";
 import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
+import PayCircleOutlined from "@ant-design/icons-vue/PayCircleOutlined";
 import {
   createExpense,
   getOfficeReferences,
   listExpenses,
+  payExpense,
   uploadDocument,
   type Expense,
   type ExpenseLine,
@@ -226,10 +270,14 @@ const auth = useAuthStore();
 const router = useRouter();
 const loading = ref(false);
 const saving = ref(false);
+const paying = ref(false);
 const expenses = ref<Expense[]>([]);
 const references = reactive({ users: [], projects: [], workOrders: [] } as any);
 const approvalCenterRef = ref<InstanceType<typeof ApprovalCenterView>>();
 const expenseOpen = ref(false);
+const paymentOpen = ref(false);
+const payingExpense = ref<Expense>();
+const paymentForm = reactive({ paidDate: today(), paymentReference: "" });
 const expenseFormRef = ref();
 const expenseForm = reactive({
   code: "",
@@ -249,7 +297,7 @@ const expenseColumns = [
   { title: "发生日期", dataIndex: "expenseDate", width: 120 },
   { title: "报销金额（含税，元）", key: "amount", width: 190 },
   { title: "状态", key: "status", width: 130 },
-  { title: "审批", key: "action", width: 120, fixed: "right" as const },
+  { title: "操作", key: "action", width: 150, fixed: "right" as const },
 ];
 const lineColumns = [
   { title: "费用类型", key: "expenseType", width: 130 },
@@ -410,6 +458,32 @@ async function uploadInvoiceFiles(
 function openApproval(record: Expense) {
   approvalCenterRef.value?.openApprovalById(record.approvalRequestId);
 }
+function openPayment(record: Expense) {
+  payingExpense.value = record;
+  Object.assign(paymentForm, { paidDate: today(), paymentReference: "" });
+  paymentOpen.value = true;
+}
+async function handlePayment() {
+  if (!payingExpense.value) return;
+  if (!paymentForm.paidDate || !paymentForm.paymentReference.trim()) {
+    message.warning("请填写付款日期和银行流水号");
+    return;
+  }
+  paying.value = true;
+  try {
+    await payExpense(payingExpense.value.id, {
+      paidDate: paymentForm.paidDate,
+      paymentReference: paymentForm.paymentReference.trim(),
+    });
+    message.success("报销付款已登记");
+    paymentOpen.value = false;
+    await loadData();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "付款登记失败");
+  } finally {
+    paying.value = false;
+  }
+}
 function generateCode(prefix: string) {
   const d = new Date();
   return (
@@ -472,3 +546,24 @@ function formatMoney(v: number) {
   }).format(v || 0);
 }
 </script>
+
+<style scoped>
+@media (max-width: 560px) {
+  .expense-card :deep(.ant-card-head-wrapper) {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+    padding-block: 12px;
+  }
+
+  .expense-card :deep(.ant-card-head-title) {
+    width: 100%;
+    padding: 0;
+  }
+
+  .expense-card :deep(.ant-card-extra) {
+    margin-inline-start: 0;
+    padding: 0;
+  }
+}
+</style>

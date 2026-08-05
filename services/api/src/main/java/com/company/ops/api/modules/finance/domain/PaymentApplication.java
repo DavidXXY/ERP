@@ -33,6 +33,9 @@ public class PaymentApplication extends BaseEntity {
   @Column(name = "applicant_name", nullable = false, length = 80)
   private String applicantName;
 
+  @Column(name = "applicant_user_id")
+  private UUID applicantUserId;
+
   @Column(nullable = false, length = 300)
   private String purpose;
 
@@ -45,6 +48,9 @@ public class PaymentApplication extends BaseEntity {
 
   @Column(name = "approver_name", length = 80)
   private String approverName;
+
+  @Column(name = "approver_user_id")
+  private UUID approverUserId;
 
   @Column(name = "approved_at")
   private OffsetDateTime approvedAt;
@@ -100,6 +106,9 @@ public class PaymentApplication extends BaseEntity {
     this.applicantName = applicantName;
   }
 
+  public UUID getApplicantUserId() { return applicantUserId; }
+  public void setApplicantUserId(UUID applicantUserId) { this.applicantUserId = applicantUserId; }
+
   public String getPurpose() {
     return purpose;
   }
@@ -131,6 +140,9 @@ public class PaymentApplication extends BaseEntity {
   public void setApproverName(String approverName) {
     this.approverName = approverName;
   }
+
+  public UUID getApproverUserId() { return approverUserId; }
+  public void setApproverUserId(UUID approverUserId) { this.approverUserId = approverUserId; }
 
   public OffsetDateTime getApprovedAt() {
     return approvedAt;

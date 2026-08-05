@@ -237,6 +237,7 @@ public class GovernanceService {
   public PeriodResponse openPeriod(OpenPeriodRequest request) {
     AccountingPeriod item = periods.findByFiscalYearAndPeriodNo(request.fiscalYear(), request.periodNo()).orElseGet(AccountingPeriod::new);
     if (item.getId() != null && item.getStatus() == AccountingPeriodStatus.CLOSED) throw new BusinessException("已关闭期间必须通过反结账重新打开");
+    if (item.getId() != null && item.getPendingAction() != null) throw new BusinessException("该期间存在待复核操作，请先完成复核");
     item.setFiscalYear(request.fiscalYear()); item.setPeriodNo(request.periodNo()); item.setStatus(AccountingPeriodStatus.OPEN);
     if (item.getOpenedAt() == null) item.setOpenedAt(OffsetDateTime.now());
     AccountingPeriod saved = periods.save(item);
@@ -273,9 +274,21 @@ public class GovernanceService {
     String reason = trim(request.reason());
     if (!readiness.ready() && !request.force()) throw new BusinessException(String.join("；", readiness.blockers()));
     if (!readiness.ready() && request.force() && reason == null) throw new BusinessException("强制关账必须填写原因");
+    if (!readiness.ready()) {
+      if (!"FORCE_CLOSE".equals(item.getPendingAction())) {
+        requestPeriodAction(item, "FORCE_CLOSE", reason);
+        AccountingPeriod requested = periods.save(item);
+        logAction("PERIOD", requested.getId(), periodNo(requested), "REQUEST_FORCE_CLOSE",
+            requested.getStatus().name(), requested.getStatus().name(), reason);
+        return toPeriod(requested);
+      }
+      requireIndependentReviewer(item);
+      reason = item.getActionRequestReason();
+    }
     item.setStatus(AccountingPeriodStatus.CLOSING); item.setClosingStartedAt(OffsetDateTime.now());
     item.setStatus(AccountingPeriodStatus.CLOSED); item.setClosedAt(OffsetDateTime.now());
     item.setClosedBy(principalName()); item.setCloseReason(reason);
+    clearPeriodAction(item);
     AccountingPeriod saved = periods.save(item);
     logAction("PERIOD", saved.getId(), periodNo(saved), "CLOSE", AccountingPeriodStatus.OPEN.name(), saved.getStatus().name(), reason);
     financeOperations.capturePeriodClose(year, month, Map.of(
@@ -290,11 +303,42 @@ public class GovernanceService {
     AccountingPeriod item = periods.findByFiscalYearAndPeriodNo(year, month)
         .orElseThrow(() -> new BusinessException("会计期间不存在"));
     if (item.getStatus() != AccountingPeriodStatus.CLOSED) throw new BusinessException("只有已关账期间可以反结账");
+    if (!"REOPEN".equals(item.getPendingAction())) {
+      requestPeriodAction(item, "REOPEN", request.reason().trim());
+      AccountingPeriod requested = periods.save(item);
+      logAction("PERIOD", requested.getId(), periodNo(requested), "REQUEST_REOPEN",
+          AccountingPeriodStatus.CLOSED.name(), AccountingPeriodStatus.CLOSED.name(), request.reason().trim());
+      return toPeriod(requested);
+    }
+    requireIndependentReviewer(item);
+    String approvedReason = item.getActionRequestReason();
     item.setStatus(AccountingPeriodStatus.OPEN); item.setReopenedAt(OffsetDateTime.now());
-    item.setReopenedBy(principalName()); item.setReopenReason(request.reason().trim());
+    item.setReopenedBy(principalName()); item.setReopenReason(approvedReason);
+    clearPeriodAction(item);
     AccountingPeriod saved = periods.save(item);
-    logAction("PERIOD", saved.getId(), periodNo(saved), "REOPEN", AccountingPeriodStatus.CLOSED.name(), saved.getStatus().name(), request.reason().trim());
+    logAction("PERIOD", saved.getId(), periodNo(saved), "REOPEN", AccountingPeriodStatus.CLOSED.name(), saved.getStatus().name(), approvedReason);
     return toPeriod(saved);
+  }
+
+  private void requestPeriodAction(AccountingPeriod item, String action, String reason) {
+    item.setPendingAction(action);
+    item.setActionRequestedById(principalId());
+    item.setActionRequestedBy(principalName());
+    item.setActionRequestedAt(OffsetDateTime.now());
+    item.setActionRequestReason(reason);
+  }
+
+  private void requireIndependentReviewer(AccountingPeriod item) {
+    UUID currentId = principalId();
+    boolean same = item.getActionRequestedById() != null && currentId != null
+        ? item.getActionRequestedById().equals(currentId)
+        : Objects.equals(item.getActionRequestedBy(), principalName());
+    if (same) throw new BusinessException("该操作正在等待其他财务人员复核");
+  }
+
+  private void clearPeriodAction(AccountingPeriod item) {
+    item.setPendingAction(null); item.setActionRequestedById(null); item.setActionRequestedBy(null);
+    item.setActionRequestedAt(null); item.setActionRequestReason(null);
   }
 
   @Transactional(readOnly = true)
@@ -466,6 +510,11 @@ public class GovernanceService {
     if (authentication == null || !(authentication.getPrincipal() instanceof UserPrincipal principal)) throw new AccessDeniedException("请先登录");
     return principal.displayName();
   }
+  private UUID principalId() {
+    var authentication = SecurityContextHolder.getContext().getAuthentication();
+    if (authentication == null || !(authentication.getPrincipal() instanceof UserPrincipal principal)) throw new AccessDeniedException("请先登录");
+    return principal.id();
+  }
   private String principalNameOrSystem() {
     var authentication = SecurityContextHolder.getContext().getAuthentication();
     return authentication != null && authentication.getPrincipal() instanceof UserPrincipal principal
@@ -505,7 +554,8 @@ public class GovernanceService {
   private PeriodResponse toPeriod(AccountingPeriod item) {
     return new PeriodResponse(item.getId(), item.getFiscalYear(), item.getPeriodNo(), item.getStatus(), item.getOpenedAt(),
         item.getClosingStartedAt(), item.getClosedAt(), item.getClosedBy(), item.getCloseReason(), item.getReopenedAt(),
-        item.getReopenedBy(), item.getReopenReason());
+        item.getReopenedBy(), item.getReopenReason(), item.getPendingAction(), item.getActionRequestedBy(),
+        item.getActionRequestedAt(), item.getActionRequestReason());
   }
   private BankLineResponse toBankLine(BankStatementLine item) {
     return new BankLineResponse(item.getId(), item.getAccountNoMasked(), item.getTransactionDate(), item.getDirection(),

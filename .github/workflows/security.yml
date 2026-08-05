@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   codeql:
-    name: CodeQL
+    name: CodeQL (${{ matrix.language }})
     runs-on: ubuntu-latest
     permissions:
       security-events: write
@@ -20,13 +20,29 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [java-kotlin, javascript-typescript]
+        include:
+          - language: java-kotlin
+            build-mode: manual
+          - language: javascript-typescript
+            build-mode: none
     steps:
       - uses: actions/checkout@v4
+      - name: Set up Java
+        if: matrix.language == 'java-kotlin'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+          cache-dependency-path: services/api/pom.xml
       - uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
-      - uses: github/codeql-action/autobuild@v3
+          build-mode: ${{ matrix.build-mode }}
+      - name: Compile Java sources
+        if: matrix.language == 'java-kotlin'
+        working-directory: services/api
+        run: mvn --batch-mode --no-transfer-progress -DskipTests compile
       - uses: github/codeql-action/analyze@v3
 
   secrets:

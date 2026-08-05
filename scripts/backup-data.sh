@@ -4,8 +4,9 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BACKUP_DIR="${BACKUP_DIR:-$ROOT_DIR/backups}"
 BACKUP_RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-30}"
+STATUS_DIR="${OPS_STATUS_DIR:-$BACKUP_DIR/.status}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
-mkdir -p "$BACKUP_DIR"
+mkdir -p "$BACKUP_DIR" "$STATUS_DIR"
 
 command -v pg_dump >/dev/null 2>&1 || { echo "pg_dump is required." >&2; exit 1; }
 command -v age >/dev/null 2>&1 || { echo "age is required for encrypted backups." >&2; exit 1; }
@@ -84,4 +85,7 @@ fi
 while IFS= read -r -d '' expired; do
   rm -f -- "$expired" "${expired}.sha256"
 done < <(find "$BACKUP_DIR" -maxdepth 1 -type f -name 'ops-erp-backup-*.tar.gz.age' -mtime "+$BACKUP_RETENTION_DAYS" -print0)
+marker_tmp="$STATUS_DIR/.backup-last-success.$STAMP.tmp"
+date +%s > "$marker_tmp"
+mv -f -- "$marker_tmp" "$STATUS_DIR/backup-last-success.epoch"
 echo "$output"

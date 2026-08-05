@@ -880,12 +880,12 @@ const controlMetrics = computed(() => [
     tab: "cash",
   },
   {
-    key: "evidence",
-    label: "审计快照",
-    value: overview.snapshots,
-    tone: "",
-    note: "不可变摘要",
-    tab: "evidence",
+    key: "tax",
+    label: "未锁税务期间",
+    value: overview.unlockedTaxPeriods,
+    tone: overview.unlockedTaxPeriods ? "warning" : "",
+    note: "待勾稽或锁定",
+    tab: "tax",
   },
 ]);
 const openingDescription = computed(() =>

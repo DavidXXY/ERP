@@ -62,6 +62,8 @@ ops:
   version: ${OPS_VERSION:}
   commit: ${OPS_COMMIT:}
   build-time: ${OPS_BUILD_TIME:}
+  backup:
+    status-directory: ${OPS_STATUS_DIR:backups/.status}
   bootstrap-admin:
     username: ${BOOTSTRAP_ADMIN_USERNAME:admin}
     password: ${BOOTSTRAP_ADMIN_PASSWORD:}

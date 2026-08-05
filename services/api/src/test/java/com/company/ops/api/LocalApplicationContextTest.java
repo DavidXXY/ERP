@@ -7,6 +7,10 @@ import com.company.ops.api.common.exception.BusinessException;
 import com.company.ops.api.common.delete.DeleteGovernanceService;
 import com.company.ops.api.modules.bi.service.BiService;
 import com.company.ops.api.modules.finance.service.FinanceService;
+import com.company.ops.api.modules.finance.service.FinanceOperationsService;
+import com.company.ops.api.modules.finance.service.TaxFilingGuard;
+import com.company.ops.api.modules.finance.dto.FinanceOperationsDtos.LockTaxFilingRequest;
+import com.company.ops.api.modules.finance.dto.FinanceOperationsDtos.SavePeriodJobRequest;
 import com.company.ops.api.modules.ledger.service.LedgerService;
 import com.company.ops.api.modules.system.domain.SystemPermission;
 import com.company.ops.api.modules.system.domain.SystemUser;
@@ -36,6 +40,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
 import java.util.List;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
@@ -77,6 +82,8 @@ class LocalApplicationContextTest {
   @Autowired private CrmOperationsService crmOperationsService;
   @Autowired private BiService biService;
   @Autowired private FinanceService financeService;
+  @Autowired private FinanceOperationsService financeOperationsService;
+  @Autowired private TaxFilingGuard taxFilingGuard;
   @Autowired private LedgerService ledgerService;
   @Autowired private OfficeService officeService;
   @Autowired private OrganizationService organizationService;
@@ -452,6 +459,93 @@ class LocalApplicationContextTest {
           .isInstanceOf(BusinessException.class)
           .hasMessageContaining("权限不存在");
     }
+  }
+
+  @Test
+  void keepsPeriodEndExecutionIdempotentAndRejectsDuplicateTaskKeys() {
+    authenticateAdmin();
+    try {
+      YearMonth period = YearMonth.now();
+      String key = "period-e2e-" + UUID.randomUUID();
+      var request = new SavePeriodJobRequest(
+          period.getYear(), period.getMonthValue(), "DEPRECIATION", "期末折旧测试",
+          new java.math.BigDecimal("1250.00"), "1602", "2201", false, null, key);
+
+      var created = financeOperationsService.createPeriodJob(request);
+      var completed = financeOperationsService.executePeriodJob(created.id());
+      var retried = financeOperationsService.executePeriodJob(created.id());
+
+      assertThat(completed.status()).isEqualTo("COMPLETED");
+      assertThat(retried.voucherId()).isEqualTo(completed.voucherId());
+      var jdbc = new JdbcTemplate(dataSource);
+      assertThat(jdbc.queryForObject(
+          "select attempt_count from fin_voucher_generation_requests where tenant_id='default' and idempotency_key=?",
+          Integer.class, key)).isEqualTo(1);
+      assertThatThrownBy(() -> financeOperationsService.createPeriodJob(request))
+          .isInstanceOf(BusinessException.class)
+          .hasMessageContaining("幂等键");
+    } finally {
+      SecurityContextHolder.clearContext();
+    }
+  }
+
+  @Test
+  void locksTaxEvidenceAndBlocksChangesInLockedPeriod() {
+    authenticateAdmin();
+    try {
+      var jdbc = new JdbcTemplate(dataSource);
+      UUID filingId = UUID.randomUUID();
+      jdbc.update("insert into fin_tax_filings(id,tenant_id,fiscal_year,period_no,output_tax,input_tax,tax_payable,"
+              + "ledger_tax,difference_amount,status,created_by,version) values(?,'default',2199,9,100,20,80,80,0,'RECONCILED','test',0)",
+          filingId);
+
+      var locked = financeOperationsService.lockTax(2199, 9, new LockTaxFilingRequest("TAX-2199-09"));
+
+      assertThat(locked.status()).isEqualTo("LOCKED");
+      assertThat(locked.snapshotId()).isNotNull();
+      assertThatThrownBy(() -> taxFilingGuard.assertUnlocked(LocalDate.of(2199, 9, 15)))
+          .isInstanceOf(BusinessException.class)
+          .hasMessageContaining("已锁定");
+    } finally {
+      SecurityContextHolder.clearContext();
+    }
+  }
+
+  @Test
+  void reportsCloseBlockersAndIsolatesFinanceOperationsByTenant() {
+    authenticateAdmin();
+    try {
+      var jdbc = new JdbcTemplate(dataSource);
+      UUID foreignJob = UUID.randomUUID();
+      jdbc.update("insert into fin_period_end_jobs(id,tenant_id,fiscal_year,period_no,process_type,description,amount,"
+              + "debit_account_code,credit_account_code,auto_reverse,status,idempotency_key,version) "
+              + "values(?,'other-tenant',2198,12,'ACCRUAL','foreign',100,'1602','2201',false,'PENDING',?,0)",
+          foreignJob, "foreign-" + foreignJob);
+      assertThat(financeOperationsService.periodJobs(2198, 12)).isEmpty();
+
+      UUID localJob = UUID.randomUUID();
+      jdbc.update("insert into fin_period_end_jobs(id,tenant_id,fiscal_year,period_no,process_type,description,amount,"
+              + "debit_account_code,credit_account_code,auto_reverse,status,idempotency_key,version) "
+              + "values(?,'default',2198,12,'ACCRUAL','local',100,'1602','2201',false,'PENDING',?,0)",
+          localJob, "local-" + localJob);
+
+      assertThat(financeOperationsService.periodJobs(2198, 12))
+          .extracting(item -> item.id())
+          .containsExactly(localJob);
+      assertThat(financeOperationsService.periodCloseBlockers(2198, 12))
+          .anyMatch(message -> message.contains("期末处理未完成"))
+          .anyMatch(message -> message.contains("税务申报尚未"))
+          .anyMatch(message -> message.contains("历史数据校验未通过"));
+    } finally {
+      SecurityContextHolder.clearContext();
+    }
+  }
+
+  private void authenticateAdmin() {
+    SystemUser admin = userRepository.findByUsername("admin").orElseThrow();
+    UserPrincipal principal = new UserPrincipal(admin);
+    SecurityContextHolder.getContext().setAuthentication(
+        new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities()));
   }
 
   private UUID insertReceivable(String code) {

@@ -360,3 +360,94 @@ test("finance analytics switch organization and salesperson contribution scopes"
     .poll(() => contributionRequests.at(-1))
     .toContain("subjectId=20000000-0000-0000-0000-000000000001");
 });
+
+test("finance operations lock a reconciled tax period with an evidence reference", async ({
+  page,
+  isMobile,
+}) => {
+  await page.unroute("**/api/**");
+  const financeUser = {
+    ...user,
+    username: "finance-manager",
+    displayName: "财务主管",
+    roleCodes: ["FINANCE_MANAGER"],
+    permissions: ["finance:operations:view", "finance:operations:manage"],
+  };
+  let locked = false;
+  let lockPayload: unknown;
+  await page.route("**/api/**", async (route) => {
+    const url = new URL(route.request().url());
+    const method = route.request().method();
+    if (url.pathname.endsWith("/auth/me")) {
+      await route.fulfill({ json: ok(financeUser) });
+      return;
+    }
+    if (url.pathname.endsWith("/office/notifications/count")) {
+      await route.fulfill({ json: ok(0) });
+      return;
+    }
+    if (url.pathname.endsWith("/finance/operations/overview")) {
+      await route.fulfill({
+        json: ok({
+          pendingPeriodJobs: 0,
+          failedVoucherRequests: 0,
+          unreconciledPartners: 0,
+          unlockedTaxPeriods: locked ? 0 : 1,
+          draftConsolidations: 0,
+          snapshots: locked ? 1 : 0,
+          budgetVariance: 0,
+          forecastLiquidity: 500000,
+        }),
+      });
+      return;
+    }
+    if (url.pathname.endsWith("/finance/operations/tax-filings/2026/8/lock") && method === "POST") {
+      lockPayload = route.request().postDataJSON();
+      locked = true;
+      await route.fulfill({ json: ok({ status: "LOCKED" }) });
+      return;
+    }
+    if (url.pathname.endsWith("/finance/operations/tax-filings")) {
+      await route.fulfill({
+        json: ok([
+          {
+            id: "40000000-0000-0000-0000-000000000001",
+            fiscalYear: 2026,
+            periodNo: 8,
+            outputTax: 13000,
+            inputTax: 5000,
+            taxPayable: 8000,
+            ledgerTax: 8000,
+            difference: 0,
+            status: locked ? "LOCKED" : "RECONCILED",
+            filingReference: locked ? "TAX-2026-08" : null,
+          },
+        ]),
+      });
+      return;
+    }
+    await route.fulfill({ json: ok([]) });
+  });
+  await page.addInitScript(() =>
+    sessionStorage.setItem("ops_erp_admin_token", "finance-operations-token"),
+  );
+
+  await page.goto("/finance/operations");
+  await expect(
+    page.getByRole("heading", { name: "财务运营工作台", level: 2 }),
+  ).toBeVisible();
+  const taxTab = page.getByRole("tab", { name: "税务申报" });
+  const taxControl = page.getByRole("button", { name: /未锁税务期间/ });
+  if (isMobile) await taxControl.tap();
+  else await taxControl.click();
+  await expect(taxTab).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByText("2026-08", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "锁定申报" }).click();
+  await page.getByPlaceholder("请输入税务申报回执编号").fill("TAX-2026-08");
+  await page.locator(".ant-modal").getByRole("button", { name: "确 定" }).click();
+
+  await expect(page.getByText("申报已锁定并固化快照")).toBeVisible();
+  await expect.poll(() => lockPayload).toEqual({ filingReference: "TAX-2026-08" });
+  await expect(page.getByRole("button", { name: "锁定申报" })).toHaveCount(0);
+  await expect(page.getByText("TAX-2026-08", { exact: true })).toBeVisible();
+});

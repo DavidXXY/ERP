@@ -47,6 +47,7 @@ spring:
   # Flyway — 校验迁移脚本完整性
   flyway:
     enabled: true
+    baseline-on-migrate: false
     validate-on-migrate: true
     clean-disabled: true
 
@@ -88,6 +89,8 @@ springdoc:
 
 # 业务配置
 ops:
+  backup:
+    status-directory: ${OPS_STATUS_DIR:/var/backups/ops-erp/.status}
   security:
     jwt-secret: ${JWT_SECRET}
     jwt-expire-minutes: ${JWT_EXPIRE_MINUTES:30}

@@ -153,7 +153,7 @@ RESTORE_TARGET=ops_erp_restore_drill RESTORE_CONFIRM=ops_erp_restore_drill \
   ../scripts/restore-backup.sh ../backups/ops-erp-backup-YYYYMMDD-HHMMSS.tar.gz.age
 ```
 
-备份包包含 `manifest.env`、内部逐文件校验、`postgres.dump` 和可选的 `objects/`，经 age 公钥加密为 `.tar.gz.age`，外层另有 `.sha256`。私钥文件应离线托管并仅授予备份/恢复账号读取。`BACKUP_RETENTION_DAYS` 控制本地保留期，`BACKUP_OFFSITE_REMOTE` 可配置 rclone 异地副本。systemd 每日生成备份、每周恢复到名称以 `_restore_drill` 结尾的隔离库并检查 Flyway 历史。
+备份包包含 `manifest.env`、内部逐文件校验、`postgres.dump` 和可选的 `objects/`，经 age 公钥加密为 `.tar.gz.age`，外层另有 `.sha256`。私钥文件应离线托管并仅授予备份/恢复账号读取。`BACKUP_RETENTION_DAYS` 控制本地保留期，`BACKUP_OFFSITE_REMOTE` 可配置 rclone 异地副本。systemd 每日生成备份、每周恢复到名称以 `_restore_drill` 结尾的隔离库并检查 Flyway 历史。两项任务只有在完整成功后才会原子更新 `OPS_STATUS_DIR` 下的时间戳文件，应用将其暴露为 Prometheus 指标。
 
 UniApp 依赖当前锁定在同一 alpha 构建号。升级必须在独立分支同时通过 H5、微信小程序构建、移动端测试及真机登录/工单/附件回归，禁止只升级其中一个 `@dcloudio` 包或在发布窗口临时漂移版本。
 
@@ -171,7 +171,7 @@ UniApp 依赖当前锁定在同一 alpha 构建号。升级必须在独立分支
 
 ### Prometheus
 
-生产应用只在 `127.0.0.1:8080` 监听，Actuator 只暴露 `health,prometheus`。示例抓取配置位于 `deploy/monitoring/prometheus.yml`，告警规则位于同目录 `alerts.yml`。Prometheus 与应用同机时直接抓取 `127.0.0.1:8080`；跨主机部署应通过防火墙、私网或 mTLS 单独授权，不要放开当前 Nginx 的公网限制。
+生产应用只在 `127.0.0.1:8080` 监听，Actuator 只暴露 `health,prometheus`。示例抓取配置位于 `deploy/monitoring/prometheus.yml`，告警规则位于同目录 `alerts.yml`。`ops_erp_backup_last_success_timestamp_seconds` 和 `ops_erp_restore_drill_last_success_timestamp_seconds` 分别证明最近一次完整备份及隔离恢复演练成功；默认超过 26 小时和 8 天触发告警。Prometheus 与应用同机时直接抓取 `127.0.0.1:8080`；跨主机部署应通过防火墙、私网或 mTLS 单独授权，不要放开当前 Nginx 的公网限制。
 
 ## 生产安全清单
 

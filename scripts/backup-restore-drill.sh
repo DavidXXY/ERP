@@ -3,8 +3,10 @@ set -euo pipefail
 
 root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 backup_dir="${BACKUP_DIR:-$root_dir/backups}"
+status_dir="${OPS_STATUS_DIR:-$backup_dir/.status}"
 target="${RESTORE_DRILL_TARGET:-ops_erp_restore_drill}"
 production_db="${DB_NAME:-ops_erp}"
+mkdir -p "$status_dir"
 
 [[ "$target" =~ ^[A-Za-z0-9_]+_restore_drill$ ]] || {
   echo "RESTORE_DRILL_TARGET must end with _restore_drill." >&2; exit 1;
@@ -33,4 +35,9 @@ RESTORE_TARGET="$target" RESTORE_CONFIRM="$target" RESTORE_OBJECTS=false \
 row_count="$(psql "${db_args[@]}" --dbname "$target" --tuples-only --no-align \
   --command 'select count(*) from flyway_schema_history where success = true')"
 [[ "$row_count" =~ ^[1-9][0-9]*$ ]] || { echo "Restore drill schema verification failed." >&2; exit 1; }
+cleanup
+trap - EXIT
+marker_tmp="$status_dir/.restore-drill-last-success.$$.tmp"
+date +%s > "$marker_tmp"
+mv -f -- "$marker_tmp" "$status_dir/restore-drill-last-success.epoch"
 echo "Restore drill completed from $(basename "$latest") with $row_count successful migrations."

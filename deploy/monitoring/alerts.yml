@@ -25,3 +25,15 @@ groups:
         labels: { severity: warning }
         annotations:
           summary: "ERP database connection pool has pending callers"
+      - alert: OpsErpBackupMissingOrStale
+        expr: (time() - ops_erp_backup_last_success_timestamp_seconds{application="ops-erp-api"} > 93600) or absent(ops_erp_backup_last_success_timestamp_seconds{application="ops-erp-api"})
+        for: 15m
+        labels: { severity: critical }
+        annotations:
+          summary: "ERP encrypted backup has not succeeded within 26 hours"
+      - alert: OpsErpRestoreDrillMissingOrStale
+        expr: (time() - ops_erp_restore_drill_last_success_timestamp_seconds{application="ops-erp-api"} > 691200) or absent(ops_erp_restore_drill_last_success_timestamp_seconds{application="ops-erp-api"})
+        for: 30m
+        labels: { severity: warning }
+        annotations:
+          summary: "ERP restore drill has not succeeded within 8 days"

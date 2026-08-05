@@ -253,11 +253,7 @@
             <a-form-item label="寻源方式">
               <a-select
                 v-model:value="inquiryForm.sourcingMethod"
-                :options="[
-                  { label: '竞争性询价', value: 'COMPETITIVE' },
-                  { label: '单一来源', value: 'SINGLE_SOURCE' },
-                  { label: '框架协议', value: 'FRAMEWORK' },
-                ]"
+                :options="sourcingMethodOptions"
                 @change="
                   inquiryForm.minQuoteCount =
                     inquiryForm.sourcingMethod === 'SINGLE_SOURCE' ? 1 : 3
@@ -306,6 +302,7 @@ import {
   type ProcurementPurchasePoolItem,
 } from "@/api/procurement";
 import { useAuthStore } from "@/stores/auth";
+import { sourcingMethodOptions } from "@/utils/procurement-sourcing";
 
 const auth = useAuthStore();
 const router = useRouter();

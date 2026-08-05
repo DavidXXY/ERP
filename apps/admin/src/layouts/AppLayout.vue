@@ -133,7 +133,9 @@
           <a-menu-item key="/maintenance?tab=equipment">设备台账</a-menu-item>
           <a-menu-item key="/maintenance?tab=plans">维护计划</a-menu-item>
           <a-menu-item key="/maintenance?tab=workforce">现场排班</a-menu-item>
-          <a-menu-item key="/maintenance?tab=certificates">现场资质</a-menu-item>
+          <a-menu-item key="/maintenance?tab=certificates"
+            >现场资质</a-menu-item
+          >
         </a-sub-menu>
         <a-sub-menu v-if="canAccessHumanResources" key="hr">
           <template #icon><CalendarOutlined /></template>
@@ -423,7 +425,9 @@ async function refreshUnreadCount() {
       "Notification" in window &&
       Notification.permission === "granted"
     ) {
-      new Notification("企业管理系统", { body: `您有 ${nextCount} 条未读消息` });
+      new Notification("企业管理系统", {
+        body: `您有 ${nextCount} 条未读消息`,
+      });
     }
     unreadCount.value = nextCount;
     notificationCountInitialized = true;
@@ -473,9 +477,9 @@ const openKeys = ref<string[]>(
                   ? ["inventory"]
                   : route.path.startsWith("/maintenance")
                     ? ["maintenance"]
-                  : route.path.startsWith("/projects")
-                    ? ["projects"]
-                    : [],
+                    : route.path.startsWith("/projects")
+                      ? ["projects"]
+                      : [],
 );
 
 const activeKey = computed(() => route.path);

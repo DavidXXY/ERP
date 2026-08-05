@@ -369,7 +369,10 @@ const rootRoutes: RouteRecordRaw[] = [
   { path: "maintenance/equipment", redirect: "/maintenance?tab=equipment" },
   { path: "maintenance/plans", redirect: "/maintenance?tab=plans" },
   { path: "maintenance/schedules", redirect: "/maintenance?tab=workforce" },
-  { path: "maintenance/certificates", redirect: "/maintenance?tab=certificates" },
+  {
+    path: "maintenance/certificates",
+    redirect: "/maintenance?tab=certificates",
+  },
   // HR
   {
     path: "hr",

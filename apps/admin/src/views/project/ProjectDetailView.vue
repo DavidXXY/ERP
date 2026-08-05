@@ -279,17 +279,26 @@
         <a-row :gutter="16">
           <a-col :xs="24" :md="8">
             <a-form-item label="计划开始日期" required>
-              <a-input v-model:value="preparationForm.plannedStartDate" type="date" />
+              <a-input
+                v-model:value="preparationForm.plannedStartDate"
+                type="date"
+              />
             </a-form-item>
           </a-col>
           <a-col :xs="24" :md="8">
             <a-form-item label="计划结束日期" required>
-              <a-input v-model:value="preparationForm.plannedEndDate" type="date" />
+              <a-input
+                v-model:value="preparationForm.plannedEndDate"
+                type="date"
+              />
             </a-form-item>
           </a-col>
           <a-col :xs="24" :md="8">
             <a-form-item label="质保截止日期">
-              <a-input v-model:value="preparationForm.warrantyEndDate" type="date" />
+              <a-input
+                v-model:value="preparationForm.warrantyEndDate"
+                type="date"
+              />
             </a-form-item>
           </a-col>
         </a-row>

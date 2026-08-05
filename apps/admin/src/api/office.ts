@@ -661,8 +661,21 @@ export type NotificationDelivery = {
   lastError?: string;
 };
 export const listNotificationChannelPreferences = () =>
-  request<NotificationChannelPreference[]>({ method: "GET", url: "/office/notification-channels/preferences" });
-export const updateNotificationChannelPreference = (channel: "WEBHOOK", enabled: boolean) =>
-  request<NotificationChannelPreference>({ method: "PUT", url: "/office/notification-channels/preferences", data: { channel, enabled } });
+  request<NotificationChannelPreference[]>({
+    method: "GET",
+    url: "/office/notification-channels/preferences",
+  });
+export const updateNotificationChannelPreference = (
+  channel: "WEBHOOK",
+  enabled: boolean,
+) =>
+  request<NotificationChannelPreference>({
+    method: "PUT",
+    url: "/office/notification-channels/preferences",
+    data: { channel, enabled },
+  });
 export const listNotificationDeliveries = () =>
-  request<NotificationDelivery[]>({ method: "GET", url: "/office/notification-channels/deliveries" });
+  request<NotificationDelivery[]>({
+    method: "GET",
+    url: "/office/notification-channels/deliveries",
+  });

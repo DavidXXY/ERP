@@ -5,10 +5,12 @@ import StateView from "@/components/StateView.vue";
 import { listNotifications, markNotificationRead, refreshNotifications } from "@/api/office";
 import type { NotificationRecord } from "@/types/domain";
 import { dateText } from "@/utils/format";
+import { useAuthStore } from "@/stores/auth";
 
+const auth=useAuthStore();
 const records=ref<NotificationRecord[]>([]);const loading=ref(true);const error=ref("");const onlyUnread=ref(false);
 const filtered=computed(()=>onlyUnread.value?records.value.filter(i=>!i.read):records.value);
-async function load(refresh=false){loading.value=!records.value.length;error.value="";try{if(refresh)await refreshNotifications();records.value=await listNotifications();}catch(e){error.value=(e as Error).message;}finally{loading.value=false;uni.stopPullDownRefresh();}}
+async function load(refresh=false){loading.value=!records.value.length;error.value="";if(!auth.can("office:notification:view")){records.value=[];error.value="当前账号未开通消息中心";loading.value=false;uni.stopPullDownRefresh();return;}try{if(refresh)await refreshNotifications();records.value=await listNotifications();}catch(e){error.value=(e as Error).message;}finally{loading.value=false;uni.stopPullDownRefresh();}}
 async function open(item:NotificationRecord){if(!item.read){try{await markNotificationRead(item.id);item.read=true;}catch{}}if(item.relatedType==="WORK_ORDER"&&item.relatedId)uni.navigateTo({url:`/pages/work-orders/detail?id=${item.relatedId}`});else if(item.relatedId&&item.relatedType?.includes("APPROVAL"))uni.navigateTo({url:`/pages/approvals/detail?id=${item.relatedId}`});}
 function toggleUnread(event:Event){onlyUnread.value=Boolean((event as Event & {detail:{value:boolean}}).detail.value);}
 onShow(()=>load(false));onPullDownRefresh(()=>load(true));

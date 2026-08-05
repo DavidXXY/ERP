@@ -117,7 +117,7 @@
               onChange: handleRequestPageChange,
             }"
             :row-key="(record: PurchaseRequest) => record.id"
-            :scroll="{ x: 1120 }"
+            :scroll="{ x: 880 }"
             size="middle"
           >
             <template #bodyCell="{ column, record }">
@@ -263,14 +263,19 @@
               onChange: handleRequestPageChange,
             }"
             :row-key="(record: PurchaseOrder) => record.id"
-            :scroll="{ x: 1280 }"
+            :scroll="{ x: 880 }"
             size="middle"
           >
             <template #bodyCell="{ column, record }">
               <template v-if="column.key === 'code'">
                 <strong>{{ record.code }}</strong>
                 <span class="table-subtitle"
-                  >来源 {{ record.requestCode || "未关联申请" }}</span
+                  >{{ record.supplierName }} · 来源
+                  {{ record.requestCode || "未关联申请" }}</span
+                >
+                <span class="table-subtitle"
+                  >{{ costTypeLabel(record.costType) }} ·
+                  {{ record.costTargetName }}</span
                 >
               </template>
               <template v-else-if="column.key === 'part'">
@@ -278,6 +283,9 @@
                 <span class="table-subtitle"
                   >单价 {{ formatMoney(record.unitPrice) }} · 税率
                   {{ formatTaxRate(record.taxRate) }}</span
+                >
+                <span class="table-subtitle"
+                  >订单金额 {{ formatMoney(record.orderAmount) }}</span
                 >
               </template>
               <template v-else-if="column.key === 'quantity'">
@@ -395,7 +403,7 @@
             :loading="loading"
             :pagination="{ pageSize: 8 }"
             :row-key="(record: GoodsReceipt) => record.id"
-            :scroll="{ x: 1080 }"
+            :scroll="{ x: 900 }"
             size="middle"
           >
             <template #bodyCell="{ column, record }">
@@ -437,7 +445,7 @@
             :loading="loading"
             :pagination="{ pageSize: 8 }"
             :row-key="(record: ProcurementCostAllocation) => record.id"
-            :scroll="{ x: 980 }"
+            :scroll="{ x: 840 }"
             size="middle"
           >
             <template #bodyCell="{ column, record }">
@@ -471,7 +479,7 @@
             :loading="loading"
             :pagination="{ pageSize: 8 }"
             :row-key="(record: ProcurementPayable) => record.id"
-            :scroll="{ x: 1080 }"
+            :scroll="{ x: 900 }"
             size="middle"
           >
             <template #bodyCell="{ column, record }">
@@ -1114,24 +1122,41 @@ const orderStatusOptions = [
 ];
 
 const requestColumns = [
-  { title: "申请", key: "code", width: 260, sorter: true },
-  { title: "物料 / 数量", key: "part", width: 210 },
-  { title: "成本归属", key: "costTarget", width: 220 },
-  { title: "期望到货", dataIndex: "expectedDate", width: 120, sorter: true },
-  { title: "状态 / 审批", key: "status", width: 300 },
-  { title: "操作", key: "action", width: 120, fixed: "right" },
+  { title: "申请", key: "code", width: 180, sorter: true },
+  { title: "物料 / 数量", key: "part", width: 170 },
+  { title: "成本归属", key: "costTarget", width: 170 },
+  { title: "期望到货", dataIndex: "expectedDate", width: 95, sorter: true },
+  { title: "状态 / 审批", key: "status", width: 170 },
+  { title: "操作", key: "action", width: 90, fixed: "right" },
 ];
 const orderColumns = [
   { title: "订单", key: "code", width: 230, sorter: true },
-  { title: "供应商", dataIndex: "supplierName", width: 200 },
+  {
+    title: "供应商",
+    dataIndex: "supplierName",
+    width: 180,
+    responsive: ["xxl"],
+  },
   { title: "物料 / 单价（含税，元）", key: "part", width: 250 },
-  { title: "成本归属", key: "costTarget", width: 200 },
+  {
+    title: "成本归属",
+    key: "costTarget",
+    width: 200,
+    responsive: ["xxl"],
+  },
   { title: "已收 / 订购", key: "quantity", width: 160 },
-  { title: "订单金额（含税，元）", key: "amount", width: 190, sorter: true },
+  {
+    title: "订单金额（含税，元）",
+    key: "amount",
+    width: 190,
+    sorter: true,
+    responsive: ["xxl"],
+  },
   {
     title: "预计到货",
     dataIndex: "expectedDeliveryDate",
     width: 120,
+    responsive: ["xxl"],
     sorter: true,
   },
   { title: "状态", key: "status", width: 110 },

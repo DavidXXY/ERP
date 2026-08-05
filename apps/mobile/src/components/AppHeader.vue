@@ -9,7 +9,7 @@ defineProps<{ title: string; subtitle?: string; badge?: number }>();
       <text class="title">{{ title }}</text>
       <text v-if="subtitle" class="subtitle">{{ subtitle }}</text>
     </view>
-    <view class="header-mark" aria-hidden="true"><text>OPS</text><text v-if="badge" class="badge">{{ badge > 99 ? "99+" : badge }}</text></view>
+    <view class="header-mark" aria-hidden="true"><text>OPS</text><text v-if="badge && badge > 0" class="badge">{{ badge > 99 ? "99+" : badge }}</text></view>
   </view>
 </template>
 

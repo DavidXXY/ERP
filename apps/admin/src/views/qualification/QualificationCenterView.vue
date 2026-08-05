@@ -2823,7 +2823,7 @@ function warningRowKey(item: QualificationWarning) {
   color: #475569;
   font-size: 13px;
 }
-@container employee-directory (max-width: 860px) {
+@container employee-directory (max-width: 1040px) {
   .employee-desktop-table {
     display: none;
   }

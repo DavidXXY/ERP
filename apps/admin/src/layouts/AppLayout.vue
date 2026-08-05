@@ -343,14 +343,26 @@
         </div>
         <GlobalSearch />
         <a-space class="app-header-actions">
-          <a-badge :count="unreadCount" :overflow-count="99">
-            <a-button type="text" @click="router.push('/office/notifications')">
-              消息
+          <a-tooltip v-if="canAccessNotifications" title="消息中心">
+            <a-badge :count="unreadCount" :overflow-count="99">
+              <a-button
+                type="text"
+                aria-label="消息中心"
+                @click="router.push('/office/notifications')"
+              >
+                <template #icon><BellOutlined /></template>
+              </a-button>
+            </a-badge>
+          </a-tooltip>
+          <a-tooltip v-if="canAccessRiskCenter" title="统一风险中心">
+            <a-button
+              type="text"
+              aria-label="统一风险中心"
+              @click="router.push('/risk-center')"
+            >
+              <template #icon><WarningOutlined /></template>
             </a-button>
-          </a-badge>
-          <a-button type="text" @click="router.push('/risk-center')"
-            >风险</a-button
-          >
+          </a-tooltip>
           <a-dropdown :trigger="['click']">
             <a-button type="text">
               {{ auth.user?.displayName || "当前用户" }}
@@ -370,9 +382,15 @@
               </a-menu>
             </template>
           </a-dropdown>
-          <a-button type="text" @click="app.toggleSidebar">
-            <template #icon><MenuFoldOutlined /></template>
-          </a-button>
+          <a-tooltip title="收起或展开导航">
+            <a-button
+              type="text"
+              aria-label="收起或展开导航"
+              @click="app.toggleSidebar"
+            >
+              <template #icon><MenuFoldOutlined /></template>
+            </a-button>
+          </a-tooltip>
         </a-space>
       </a-layout-header>
 
@@ -390,6 +408,7 @@ import DashboardOutlined from "@ant-design/icons-vue/DashboardOutlined";
 import CalendarOutlined from "@ant-design/icons-vue/CalendarOutlined";
 import ApartmentOutlined from "@ant-design/icons-vue/ApartmentOutlined";
 import AuditOutlined from "@ant-design/icons-vue/AuditOutlined";
+import BellOutlined from "@ant-design/icons-vue/BellOutlined";
 import FileDoneOutlined from "@ant-design/icons-vue/FileDoneOutlined";
 import InboxOutlined from "@ant-design/icons-vue/InboxOutlined";
 import MenuFoldOutlined from "@ant-design/icons-vue/MenuFoldOutlined";
@@ -402,7 +421,6 @@ import ToolOutlined from "@ant-design/icons-vue/ToolOutlined";
 import WalletOutlined from "@ant-design/icons-vue/WalletOutlined";
 import WarningOutlined from "@ant-design/icons-vue/WarningOutlined";
 import UserOutlined from "@ant-design/icons-vue/UserOutlined";
-import SearchOutlined from "@ant-design/icons-vue/SearchOutlined";
 import GlobalSearch from "./GlobalSearch.vue";
 import { getUnreadNotificationCount } from "@/api/office";
 import { useAppStore } from "@/stores/app";
@@ -416,6 +434,10 @@ let notificationCountInitialized = false;
 let notificationTimer: ReturnType<typeof setInterval> | undefined;
 
 async function refreshUnreadCount() {
+  if (!canAccessNotifications.value) {
+    unreadCount.value = 0;
+    return;
+  }
   try {
     const nextCount = await getUnreadNotificationCount();
     if (
@@ -441,6 +463,7 @@ function handleNotificationCountChanged(event: Event) {
 }
 
 onMounted(async () => {
+  if (!canAccessNotifications.value) return;
   await refreshUnreadCount();
   window.addEventListener(
     "notification-count-changed",
@@ -483,6 +506,9 @@ const openKeys = ref<string[]>(
 );
 
 const activeKey = computed(() => route.path);
+const canAccessNotifications = computed(() =>
+  auth.can("office:notification:view"),
+);
 const canAccessCrm = computed(() =>
   [
     "crm:customer:view",

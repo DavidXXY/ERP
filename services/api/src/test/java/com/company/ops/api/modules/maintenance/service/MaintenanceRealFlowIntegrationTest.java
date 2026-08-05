@@ -11,10 +11,12 @@ import com.company.ops.api.config.TenantConfig;
 import com.company.ops.api.modules.crm.domain.Customer;
 import com.company.ops.api.modules.crm.domain.CustomerLevel;
 import com.company.ops.api.modules.crm.repository.CustomerRepository;
+import com.company.ops.api.modules.crm.repository.ReceivableRepository;
 import com.company.ops.api.modules.maintenance.domain.WorkOrderPriority;
 import com.company.ops.api.modules.maintenance.domain.WorkOrderStatus;
 import com.company.ops.api.modules.maintenance.domain.WorkOrderType;
 import com.company.ops.api.modules.maintenance.dto.MaintenanceDtos.AssignWorkOrderRequest;
+import com.company.ops.api.modules.maintenance.dto.MaintenanceDtos.AcceptWorkOrderRequest;
 import com.company.ops.api.modules.maintenance.dto.MaintenanceDtos.CheckInRequest;
 import com.company.ops.api.modules.maintenance.dto.MaintenanceDtos.CompleteWorkOrderRequest;
 import com.company.ops.api.modules.maintenance.dto.MaintenanceDtos.CreateCertificateRequest;
@@ -63,6 +65,7 @@ class MaintenanceRealFlowIntegrationTest {
   @MockBean private FileStorageService fileStorageService;
   @Autowired private MaintenanceService service;
   @Autowired private CustomerRepository customers;
+  @Autowired private ReceivableRepository receivables;
   @Autowired private SystemUserRepository users;
   @Autowired private WorkOrderRepository workOrders;
 
@@ -116,8 +119,12 @@ class MaintenanceRealFlowIntegrationTest {
     assertThat(service.listAttendance()).anyMatch(item -> item.orderId().equals(order.getId()) && "上海测试现场".equals(item.checkInLocation()));
 
     service.complete(order.getId(), new CompleteWorkOrderRequest(
-        null, null, null, null, null, null, null, "巡检完成", "设备运行正常"));
+        null, null, null, null, null, null, new java.math.BigDecimal("800"), "巡检完成", "设备运行正常"));
     assertThat(service.listAttendance()).anyMatch(item -> item.orderId().equals(order.getId())
         && item.checkOutAt() != null);
+    service.accept(order.getId(), new AcceptWorkOrderRequest(new java.math.BigDecimal("500"), "客户确认完成"));
+    assertThat(receivables.existsBySourceNo(order.getCode())).isTrue();
+    assertThatThrownBy(() -> service.assign(order.getId(), new AssignWorkOrderRequest(engineerId, "现场工程师")))
+        .isInstanceOf(BusinessException.class).hasMessageContaining("待指派或待接单");
   }
 }

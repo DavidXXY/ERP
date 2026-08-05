@@ -56,6 +56,7 @@ import com.company.ops.api.modules.procurement.repository.SupplierQuotationLineR
 import com.company.ops.api.modules.procurement.repository.ProcurementInquiryRepository;
 import com.company.ops.api.modules.procurement.repository.ProcurementInquiryRequestRepository;
 import com.company.ops.api.modules.procurement.repository.ProcurementContractRepository;
+import com.company.ops.api.modules.procurement.repository.ProcurementReturnOrderRepository;
 import com.company.ops.api.modules.project.domain.Project;
 import com.company.ops.api.modules.project.domain.ProjectApprovalStatus;
 import com.company.ops.api.modules.project.domain.ProjectStage;
@@ -113,6 +114,7 @@ public class ProcurementService {
   private final SupplierQuotationRepository quoteRepository;
   private final SupplierQuotationLineRepository quoteLineRepository;
   private final ProcurementContractRepository contractRepository;
+  private final ProcurementReturnOrderRepository returnRepository;
   private final ProcurementArrivalService arrivals;
 
   public ProcurementService(
@@ -134,6 +136,7 @@ public class ProcurementService {
       SupplierQuotationRepository quoteRepository,
       SupplierQuotationLineRepository quoteLineRepository,
       ProcurementContractRepository contractRepository,
+      ProcurementReturnOrderRepository returnRepository,
       ProcurementArrivalService arrivals
   ) {
     this.codeGenerator = codeGenerator;
@@ -154,6 +157,7 @@ public class ProcurementService {
     this.quoteRepository = quoteRepository;
     this.quoteLineRepository = quoteLineRepository;
     this.contractRepository = contractRepository;
+    this.returnRepository = returnRepository;
     this.arrivals = arrivals;
   }
 
@@ -772,6 +776,10 @@ public class ProcurementService {
     if (order.getStatus() != PurchaseOrderStatus.ORDERED) {
       throw new BusinessException("只有已下单的订单才能取消");
     }
+    boolean hasRegisteredArrival = !receiptRepository.findByOrderId(id).isEmpty();
+    if (hasRegisteredArrival) {
+      throw new BusinessException("订单已有到货记录，必须完成质检和退换货处理后再关闭，不能直接取消");
+    }
     order.setStatus(PurchaseOrderStatus.CANCELLED);
     PurchaseOrder saved = orderRepository.save(order);
     // Revert the associated purchase request back to APPROVED
@@ -800,6 +808,11 @@ public class ProcurementService {
         .anyMatch(receipt -> "PENDING".equals(receipt.getInspectionStatus()));
     if (pendingInspection) {
       throw new BusinessException("仍有待质检到货记录，不能关闭订单");
+    }
+    boolean openReturn = returnRepository.findByOrderId(id).stream()
+        .anyMatch(item -> !"COMPLETED".equals(item.getStatus()));
+    if (openReturn) {
+      throw new BusinessException("仍有未结案退换货记录，不能关闭订单");
     }
     order.setStatus(PurchaseOrderStatus.CLOSED);
     order.setClosedAt(OffsetDateTime.now());

@@ -10,6 +10,7 @@ import com.company.ops.api.common.delete.DeleteGovernanceService;
 import com.company.ops.api.common.service.CodeGenerator;
 import com.company.ops.api.common.storage.FileStorageService;
 import com.company.ops.api.modules.crm.repository.CustomerRepository;
+import com.company.ops.api.modules.crm.repository.ReceivableRepository;
 import com.company.ops.api.modules.crm.repository.ServiceContractRepository;
 import com.company.ops.api.modules.maintenance.domain.WorkOrder;
 import com.company.ops.api.modules.maintenance.domain.WorkOrderPriority;
@@ -57,7 +58,7 @@ class MaintenanceServiceMobileTest {
         orders, mock(EquipmentAssetRepository.class), mock(MaintenancePlanRepository.class),
         mock(EmployeeCertificateRepository.class), mock(FieldScheduleRepository.class),
         mock(FieldAttendanceRepository.class), logs, attachments, materials, operations,
-        mock(CustomerRepository.class), mock(ServiceContractRepository.class), mock(CodeGenerator.class),
+        mock(CustomerRepository.class), mock(ServiceContractRepository.class), mock(ReceivableRepository.class), mock(CodeGenerator.class),
         deletion, mock(FileStorageService.class), mock(SystemUserRepository.class)
     );
 

@@ -27,6 +27,7 @@ public interface ReceivableRepository extends JpaRepository<Receivable, UUID> {
   List<Receivable> findByDueDateBetweenOrderByDueDateAsc(LocalDate startDate,LocalDate endDate);
 
   boolean existsByCode(String code);
+  boolean existsBySourceNo(String sourceNo);
 
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select r from Receivable r where r.id = :id")

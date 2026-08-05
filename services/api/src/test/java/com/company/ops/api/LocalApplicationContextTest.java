@@ -23,6 +23,7 @@ import com.company.ops.api.modules.office.repository.SystemNotificationRepositor
 import com.company.ops.api.modules.office.repository.SystemNotificationReadRepository;
 import com.company.ops.api.modules.office.domain.ApprovalType;
 import com.company.ops.api.modules.office.dto.OfficeDtos.CreateApprovalRequest;
+import com.company.ops.api.modules.office.dto.OfficeDtos.PayExpenseRequest;
 import com.company.ops.api.modules.office.service.OfficeService;
 import com.company.ops.api.modules.qualification.domain.CompanyQualification;
 import com.company.ops.api.modules.qualification.repository.CompanyQualificationRepository;
@@ -98,7 +99,7 @@ class LocalApplicationContextTest {
         "select max(cast(version as integer)) from flyway_schema_history where success = true",
         Integer.class
     );
-    assertThat(version).isEqualTo(104);
+    assertThat(version).isEqualTo(105);
     assertThat(jdbc.queryForObject(
         "select count(*) from information_schema.columns where lower(table_name) = 'crm_service_contracts' and lower(column_name) in ('contract_kind', 'parent_contract_id')",
         Integer.class)).isEqualTo(2);
@@ -354,6 +355,40 @@ class LocalApplicationContextTest {
 
       assertThat(approval.applicantName()).isEqualTo(admin.getDisplayName());
       assertThat(approval.applicantName()).isNotEqualTo("伪造申请人");
+    } finally {
+      SecurityContextHolder.clearContext();
+    }
+  }
+
+  @Test
+  void closesApprovedExpenseThroughPaymentAndPostsVoucherOnce() {
+    authenticateAdmin();
+    var jdbc = new JdbcTemplate(dataSource);
+    UUID expenseId = UUID.randomUUID();
+    String code = "TEST-EXP-PAY-" + UUID.randomUUID().toString().substring(0, 8);
+    LocalDate paidDate = LocalDate.now();
+    try {
+      jdbc.update("insert into oa_expense_claims "
+              + "(id, tenant_id, code, claimant_name, expense_type, amount, expense_date, description, status, version) "
+              + "values (?, 'default', ?, '测试报销人', 'OTHER', 128.50, ?, '付款闭环测试', 'APPROVED', 0)",
+          expenseId, code, paidDate);
+
+      var paid = officeService.payExpense(expenseId, new PayExpenseRequest(paidDate, "BANK-TEST-001"));
+
+      assertThat(paid.status().name()).isEqualTo("PAID");
+      assertThat(paid.paymentReference()).isEqualTo("BANK-TEST-001");
+      assertThat(paid.paidByName()).isNotBlank();
+      assertThat(jdbc.queryForObject(
+          "select count(*) from fin_accounting_vouchers where biz_type = 'EXPENSE_PAYMENT' and biz_no = ?",
+          Integer.class, code)).isEqualTo(1);
+      assertThat(jdbc.queryForObject(
+          "select count(*) from fin_accounting_entries e join fin_accounting_vouchers v on v.id = e.voucher_id "
+              + "where v.biz_type = 'EXPENSE_PAYMENT' and v.biz_no = ? and e.account_code in ('2241', '1002')",
+          Integer.class, code)).isEqualTo(2);
+
+      assertThatThrownBy(() -> officeService.payExpense(
+          expenseId, new PayExpenseRequest(paidDate, "BANK-TEST-002")))
+          .isInstanceOf(BusinessException.class).hasMessageContaining("审批通过");
     } finally {
       SecurityContextHolder.clearContext();
     }

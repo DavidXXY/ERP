@@ -5,7 +5,10 @@ import com.company.ops.api.common.service.CodeGenerator;
 import com.company.ops.api.common.exception.BusinessException;
 import com.company.ops.api.common.storage.FileStorageService;
 import com.company.ops.api.modules.crm.domain.Customer;
+import com.company.ops.api.modules.crm.domain.Receivable;
+import com.company.ops.api.modules.crm.domain.ReceivableStatus;
 import com.company.ops.api.modules.crm.repository.CustomerRepository;
+import com.company.ops.api.modules.crm.repository.ReceivableRepository;
 import com.company.ops.api.modules.crm.repository.ServiceContractRepository;
 import com.company.ops.api.modules.maintenance.domain.EquipmentAsset;
 import com.company.ops.api.modules.maintenance.domain.EmployeeCertificate;
@@ -69,6 +72,7 @@ public class MaintenanceService {
   private final WorkOrderMobileOperationRepository mobileOperationRepository;
   private final CustomerRepository customerRepository;
   private final ServiceContractRepository contractRepository;
+  private final ReceivableRepository receivableRepository;
   private final CodeGenerator codeGenerator;
   private final DeleteGovernanceService deleteGovernanceService;
   private final FileStorageService storageService;
@@ -87,6 +91,7 @@ public class MaintenanceService {
       WorkOrderMobileOperationRepository mobileOperationRepository,
       CustomerRepository customerRepository,
       ServiceContractRepository contractRepository,
+      ReceivableRepository receivableRepository,
       CodeGenerator codeGenerator,
       DeleteGovernanceService deleteGovernanceService,
       FileStorageService storageService,
@@ -103,6 +108,7 @@ public class MaintenanceService {
     this.mobileOperationRepository = mobileOperationRepository;
     this.customerRepository = customerRepository;
     this.contractRepository = contractRepository;
+    this.receivableRepository = receivableRepository;
     this.codeGenerator = codeGenerator;
     this.deleteGovernanceService = deleteGovernanceService;
     this.storageService = storageService;
@@ -297,6 +303,9 @@ public class MaintenanceService {
   @Transactional
   public WorkOrderResponse assign(UUID id, AssignWorkOrderRequest r) {
     WorkOrder o = getOrder(id);
+    if (o.getStatus() != WorkOrderStatus.CREATED && o.getStatus() != WorkOrderStatus.ASSIGNED) {
+      throw new BusinessException("只有待指派或待接单工单可以调整负责人");
+    }
     validateCertificate(o, r.assigneeId());
     WorkOrderStatus from = o.getStatus();
     o.setAssigneeId(r.assigneeId());
@@ -311,6 +320,9 @@ public class MaintenanceService {
   @Transactional
   public WorkOrderResponse checkIn(UUID id, CheckInRequest r) {
     WorkOrder o = getOrder(id);
+    if (o.getStatus() != WorkOrderStatus.ASSIGNED) {
+      throw new BusinessException("只有已指派工单可以现场签到");
+    }
     WorkOrderStatus from = o.getStatus();
     o.setCheckInAt(r.checkInAt());
     o.setCheckInLocation(r.checkInLocation());
@@ -325,6 +337,12 @@ public class MaintenanceService {
   @Transactional
   public WorkOrderResponse complete(UUID id, CompleteWorkOrderRequest r) {
     WorkOrder o = getOrder(id);
+    if (o.getStatus() != WorkOrderStatus.IN_PROGRESS) {
+      throw new BusinessException("只有进行中的工单可以提交完工");
+    }
+    if (r.serviceResult() == null || r.serviceResult().isBlank()) {
+      throw new BusinessException("请填写服务结果");
+    }
     WorkOrderStatus from = o.getStatus();
     o.setLaborHours(nvl(r.laborHours()));
     o.setLaborCost(nvl(r.laborCost()));
@@ -346,14 +364,43 @@ public class MaintenanceService {
   @Transactional
   public WorkOrderResponse accept(UUID id, AcceptWorkOrderRequest r) {
     WorkOrder o = getOrder(id);
+    if (o.getStatus() != WorkOrderStatus.COMPLETED) {
+      throw new BusinessException("只有已完工工单可以客户验收");
+    }
+    if (o.isFreeWarranty() && nvl(o.getBillableAmount()).signum() > 0) {
+      throw new BusinessException("免费质保工单不能生成收费应收");
+    }
     WorkOrderStatus from = o.getStatus();
     o.setCostAmount(nvl(r.actualCost()));
     o.setAcceptanceNote(r.remarks());
     o.setStatus(WorkOrderStatus.ACCEPTED);
     o.setAcceptedAt(OffsetDateTime.now());
     WorkOrder saved = workOrderRepository.save(o);
+    createReceivableForAcceptedWorkOrder(saved);
     addStatusLog(saved, from, "客户验收", currentOperator());
     return toResponse(saved);
+  }
+
+  private void createReceivableForAcceptedWorkOrder(WorkOrder order) {
+    BigDecimal billable = nvl(order.getBillableAmount());
+    if (billable.signum() <= 0 || order.isFreeWarranty()) return;
+    if (order.getCustomerId() == null) {
+      throw new BusinessException("收费工单未关联客户，不能生成应收");
+    }
+    if (receivableRepository.existsBySourceNo(order.getCode())) return;
+    Customer customer = customerRepository.findById(order.getCustomerId())
+        .orElseThrow(() -> new BusinessException("工单客户不存在"));
+    Receivable receivable = new Receivable();
+    receivable.setCustomerId(order.getCustomerId());
+    receivable.setContractId(order.getContractId());
+    receivable.setSalesOwnerUserId(customer.getOwnerUserId());
+    receivable.setCode(codeGenerator.generate("RECEIVABLE"));
+    receivable.setSourceNo(order.getCode());
+    receivable.setAmount(billable);
+    receivable.setSettledAmount(BigDecimal.ZERO);
+    receivable.setDueDate(LocalDate.now().plusDays(30));
+    receivable.setStatus(ReceivableStatus.INVOICE_PENDING);
+    receivableRepository.save(receivable);
   }
 
   @Transactional

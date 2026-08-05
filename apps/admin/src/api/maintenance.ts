@@ -48,6 +48,8 @@ export interface WorkOrder {
   checkInAt?: string;
   checkInLocation?: string;
   completedAt?: string;
+  billableAmount?: number;
+  costAmount?: number;
 }
 export interface Equipment {
   id: string;
@@ -160,6 +162,15 @@ export const assignWorkOrder = (
   request<WorkOrder>({
     method: "PUT",
     url: `/maintenance/work-orders/${id}/assign`,
+    data,
+  });
+export const acceptWorkOrder = (
+  id: string,
+  data: { actualCost?: number; remarks?: string },
+) =>
+  request<WorkOrder>({
+    method: "PUT",
+    url: `/maintenance/work-orders/${id}/accept`,
     data,
   });
 export const listEquipment = () =>

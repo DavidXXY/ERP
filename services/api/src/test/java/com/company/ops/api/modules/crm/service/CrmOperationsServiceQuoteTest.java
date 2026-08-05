@@ -367,10 +367,9 @@ class CrmOperationsServiceQuoteTest {
   }
 
   @Test
-  void childOrderAmountChangeRebalancesReceivableAndSynchronizesProjects() {
+  void activeContractCannotBypassChangeApproval() {
     UUID frameworkId = UUID.randomUUID();
     UUID orderId = UUID.randomUUID();
-    ServiceContract framework = framework(frameworkId, new BigDecimal("500000"));
     ServiceContract order = new ServiceContract();
     order.setId(orderId);
     order.setParentContractId(frameworkId);
@@ -384,31 +383,12 @@ class CrmOperationsServiceQuoteTest {
     order.setStartDate(LocalDate.of(2026, 8, 1));
     order.setEndDate(LocalDate.of(2026, 10, 31));
     order.setStatus(ContractStatus.ACTIVE);
-    Receivable receivable = new Receivable();
-    receivable.setContractId(orderId);
-    receivable.setAmount(new BigDecimal("120000"));
-    receivable.setSettledAmount(new BigDecimal("20000"));
-    receivable.setDueDate(LocalDate.of(2026, 11, 10));
-    receivable.setStatus(ReceivableStatus.PAYMENT_PENDING);
-
     when(contractRepository.findByIdForUpdate(orderId)).thenReturn(Optional.of(order));
-    when(contractRepository.findByIdForUpdate(frameworkId)).thenReturn(Optional.of(framework));
-    when(contractRepository.findByParentContractIdOrderByStartDateDesc(frameworkId))
-        .thenReturn(List.of(order));
-    when(receivableRepository.findByContractIdOrderByDueDateDesc(orderId))
-        .thenReturn(List.of(receivable));
-    when(contractRepository.save(any(ServiceContract.class)))
-        .thenAnswer(invocation -> invocation.getArgument(0));
-    when(contractRepository.findById(frameworkId)).thenReturn(Optional.of(framework));
-    when(projectRepository.findLatestByContractId(orderId)).thenReturn(Optional.empty());
 
-    crmOperationsService.updateContract(orderId, new UpdateContractRequest(
-        "变更后子订单", null, new BigDecimal("90000"), null, null, null, null));
-
-    assertThat(order.getProjectName()).isEqualTo("变更后子订单");
-    assertThat(receivable.getAmount()).isEqualByComparingTo("90000");
-    verify(receivableRepository).saveAll(List.of(receivable));
-    verify(projectService).synchronizeProjectFromContract(eq(order), eq(new BigDecimal("90000")));
+    assertThatThrownBy(() -> crmOperationsService.updateContract(orderId, new UpdateContractRequest(
+        "变更后子订单", null, new BigDecimal("90000"), null, null, null, null)))
+        .isInstanceOf(BusinessException.class).hasMessageContaining("合同变更申请");
+    verify(contractRepository, never()).save(any(ServiceContract.class));
   }
 
   private ServiceContract framework(UUID id, BigDecimal amount) {

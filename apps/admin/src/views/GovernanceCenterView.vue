@@ -410,12 +410,26 @@
                 ></template
               >
               <template v-else-if="column.key === 'status'"
-                ><a-tag :color="periodStatusColor(record.status)">{{
-                  periodStatusLabel(record.status)
-                }}</a-tag></template
+                ><a-space size="small"
+                  ><a-tag :color="periodStatusColor(record.status)">{{
+                    periodStatusLabel(record.status)
+                  }}</a-tag
+                  ><a-tag v-if="record.pendingAction" color="orange"
+                    >待复核</a-tag
+                  ></a-space
+                ></template
               >
               <template v-else-if="column.key === 'operator'">{{
-                record.closedBy || record.reopenedBy || "-"
+                record.actionRequestedBy ||
+                record.closedBy ||
+                record.reopenedBy ||
+                "-"
+              }}</template>
+              <template v-else-if="column.key === 'reason'">{{
+                record.actionRequestReason ||
+                record.closeReason ||
+                record.reopenReason ||
+                "-"
               }}</template>
               <template v-else-if="column.key === 'action'">
                 <a-button
@@ -423,7 +437,11 @@
                   type="link"
                   size="small"
                   @click="prepareClose(record)"
-                  >关账</a-button
+                  >{{
+                    record.pendingAction === "FORCE_CLOSE"
+                      ? "复核强制关账"
+                      : "关账"
+                  }}</a-button
                 >
                 <a-button
                   v-if="canClosePeriod && record.status === 'CLOSED'"
@@ -431,7 +449,9 @@
                   size="small"
                   danger
                   @click="prepareReopen(record)"
-                  >反结账</a-button
+                  >{{
+                    record.pendingAction === "REOPEN" ? "复核反结账" : "反结账"
+                  }}</a-button
                 >
                 <a-button
                   type="link"
@@ -1033,7 +1053,7 @@ const periodColumns = [
   { title: "状态", key: "status" },
   { title: "关账时间", dataIndex: "closedAt" },
   { title: "最近操作人", key: "operator" },
-  { title: "关账/反结账原因", dataIndex: "closeReason" },
+  { title: "关账/反结账原因", key: "reason" },
   { title: "操作", key: "action", width: 160 },
 ];
 const bankColumns = [
@@ -1248,7 +1268,7 @@ async function prepareClose(period: AccountingPeriod) {
     );
     selectedPeriod.value = period;
     periodBlockers.value = readiness.blockers;
-    periodReason.value = "";
+    periodReason.value = period.actionRequestReason || "";
     periodAction.value = "close";
     periodModalOpen.value = true;
   } catch (error) {
@@ -1258,7 +1278,7 @@ async function prepareClose(period: AccountingPeriod) {
 function prepareReopen(period: AccountingPeriod) {
   selectedPeriod.value = period;
   periodBlockers.value = [];
-  periodReason.value = "";
+  periodReason.value = period.actionRequestReason || "";
   periodAction.value = "reopen";
   periodModalOpen.value = true;
 }
@@ -1274,21 +1294,25 @@ async function submitPeriodAction() {
   }
   submitting.value = true;
   try {
-    if (periodAction.value === "close")
-      await closeAccountingPeriod(
-        period.fiscalYear,
-        period.periodNo,
-        periodBlockers.value.length > 0,
-        periodReason.value,
-      );
-    else
-      await reopenAccountingPeriod(
-        period.fiscalYear,
-        period.periodNo,
-        periodReason.value,
-      );
+    const result =
+      periodAction.value === "close"
+        ? await closeAccountingPeriod(
+            period.fiscalYear,
+            period.periodNo,
+            periodBlockers.value.length > 0,
+            periodReason.value,
+          )
+        : await reopenAccountingPeriod(
+            period.fiscalYear,
+            period.periodNo,
+            periodReason.value,
+          );
     message.success(
-      periodAction.value === "close" ? "会计期间已关账" : "会计期间已反结账",
+      result.pendingAction
+        ? "申请已提交，等待另一位财务人员复核"
+        : periodAction.value === "close"
+          ? "会计期间已关账"
+          : "会计期间已反结账",
     );
     periodModalOpen.value = false;
     await loadAll();

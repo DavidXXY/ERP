@@ -98,6 +98,10 @@ export type Expense = {
   status: ExpenseStatus;
   approvalRequestId: string;
   lines?: ExpenseLine[];
+  paidDate?: string;
+  paymentReference?: string;
+  paidByName?: string;
+  paidAt?: string;
 };
 export type Outsource = {
   id: string;
@@ -374,6 +378,16 @@ export function createExpense(data: {
   lines?: ExpenseLine[];
 }) {
   return request<Expense>({ method: "POST", url: "/office/expenses", data });
+}
+export function payExpense(
+  id: string,
+  data: { paidDate: string; paymentReference: string },
+) {
+  return request<Expense>({
+    method: "POST",
+    url: `/office/expenses/${id}/pay`,
+    data,
+  });
 }
 export function listOutsourcing() {
   return request<Outsource[]>({ method: "GET", url: "/office/outsourcing" });

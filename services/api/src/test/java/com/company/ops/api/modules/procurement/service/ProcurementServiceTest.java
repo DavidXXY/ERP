@@ -26,6 +26,7 @@ import com.company.ops.api.modules.procurement.dto.ReviewSupplierAdmissionReques
 import com.company.ops.api.modules.procurement.repository.GoodsReceiptRepository;
 import com.company.ops.api.modules.procurement.repository.ProcurementCostAllocationRepository;
 import com.company.ops.api.modules.procurement.repository.ProcurementPayableRepository;
+import com.company.ops.api.modules.procurement.repository.ProcurementReturnOrderRepository;
 import com.company.ops.api.modules.procurement.repository.ProcurementInquiryRequestRepository;
 import com.company.ops.api.modules.procurement.repository.SupplierQuotationLineRepository;
 import com.company.ops.api.modules.procurement.repository.PurchaseOrderRepository;
@@ -43,6 +44,7 @@ import com.company.ops.api.modules.system.domain.SystemOrganization;
 import com.company.ops.api.modules.system.repository.SystemOrganizationRepository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -62,6 +64,7 @@ class ProcurementServiceTest {
   @Mock private GoodsReceiptRepository receiptRepository;
   @Mock private ProcurementPayableRepository payableRepository;
   @Mock private ProcurementCostAllocationRepository costAllocationRepository;
+  @Mock private ProcurementReturnOrderRepository returnRepository;
   @Mock private ProcurementInquiryRequestRepository inquiryRequestRepository;
   @Mock private SupplierQuotationLineRepository quoteLineRepository;
   @Mock private InventoryPartRepository partRepository;
@@ -228,6 +231,22 @@ class ProcurementServiceTest {
     assertThat(project.getActualCost()).isEqualByComparingTo("500");
     verify(projectCostRepository, never()).save(any(ProjectCostEntry.class));
     verify(payableRepository, never()).save(any(ProcurementPayable.class));
+  }
+
+  @Test
+  void orderWithRegisteredArrivalCannotBeCancelled() {
+    PurchaseOrder order = new PurchaseOrder();
+    order.setId(UUID.randomUUID());
+    order.setStatus(PurchaseOrderStatus.ORDERED);
+    GoodsReceipt receipt = new GoodsReceipt();
+    receipt.setOrderId(order.getId());
+    receipt.setInspectionStatus("PENDING");
+    when(orderRepository.findByIdForUpdate(order.getId())).thenReturn(Optional.of(order));
+    when(receiptRepository.findByOrderId(order.getId())).thenReturn(List.of(receipt));
+
+    assertThatThrownBy(() -> procurementService.cancelPurchaseOrder(order.getId()))
+        .isInstanceOf(BusinessException.class).hasMessageContaining("已有到货记录");
+    verify(orderRepository, never()).save(any(PurchaseOrder.class));
   }
 
   private InventoryPart part(String name) {

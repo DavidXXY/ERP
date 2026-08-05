@@ -21,6 +21,7 @@ import com.company.ops.api.modules.office.dto.OfficeDtos.ExpenseResponse;
 import com.company.ops.api.modules.office.dto.OfficeDtos.NotificationResponse;
 import com.company.ops.api.modules.office.dto.OfficeDtos.OfficeOverview;
 import com.company.ops.api.modules.office.dto.OfficeDtos.OfficeReferenceResponse;
+import com.company.ops.api.modules.office.dto.OfficeDtos.PayExpenseRequest;
 import com.company.ops.api.modules.office.dto.OfficeDtos.OutsourceResponse;
 import com.company.ops.api.modules.office.dto.OfficeDtos.SealResponse;
 import com.company.ops.api.modules.office.dto.OfficeDtos.TravelResponse;
@@ -91,6 +92,8 @@ public class OfficeController {
   public ApiResponse<List<ExpenseResponse>> expenses() { return ApiResponse.ok(service.listExpenses()); }
   @PostMapping("/expenses") @ResponseStatus(HttpStatus.CREATED) @PreAuthorize("hasAuthority('office:expense:create')")
   public ApiResponse<ExpenseResponse> createExpense(@Valid @RequestBody CreateExpenseRequest request) { return ApiResponse.ok(service.createExpense(request)); }
+  @PostMapping("/expenses/{id}/pay") @PreAuthorize("hasAuthority('finance:payment:execute')")
+  public ApiResponse<ExpenseResponse> payExpense(@PathVariable UUID id, @Valid @RequestBody PayExpenseRequest request) { return ApiResponse.ok(service.payExpense(id, request)); }
   @GetMapping("/outsourcing") @PreAuthorize("hasAuthority('office:outsource:view')")
   public ApiResponse<List<OutsourceResponse>> outsourcing() { return ApiResponse.ok(service.listOutsource()); }
   @PostMapping("/outsourcing") @ResponseStatus(HttpStatus.CREATED) @PreAuthorize("hasAuthority('office:outsource:create')")

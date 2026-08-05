@@ -446,6 +446,11 @@ public class ProcurementControlService {
     }
     PurchaseOrder order = orders.findByIdForUpdate(receipt.getOrderId())
         .orElseThrow(() -> new BusinessException("订单不存在"));
+    if (order.getApprovalStatus() != ApprovalStatus.APPROVED
+        || (order.getStatus() != PurchaseOrderStatus.ORDERED
+        && order.getStatus() != PurchaseOrderStatus.PARTIAL_RECEIVED)) {
+      throw new BusinessException("采购订单已取消或关闭，不能继续质检入库");
+    }
     String operator = currentName();
     receipt.setQualifiedQty(request.qualifiedQty());
     receipt.setRejectedQty(request.rejectedQty());
@@ -494,15 +499,52 @@ public class ProcurementControlService {
     if ("COMPLETED".equals(item.getStatus())) {
       throw new BusinessException("该退换货记录已结案");
     }
-    item.setReplacementQty(valueOr(request.replacementQty(), BigDecimal.ZERO));
-    item.setCreditAmount(valueOr(request.creditAmount(), BigDecimal.ZERO));
-    item.setClaimAmount(valueOr(request.claimAmount(), BigDecimal.ZERO));
+    PurchaseOrder order = orders.findByIdForUpdate(item.getOrderId())
+        .orElseThrow(() -> new BusinessException("采购订单不存在"));
+    GoodsReceipt originalReceipt = receipts.findById(item.getReceiptId())
+        .orElseThrow(() -> new BusinessException("原到货记录不存在"));
+    BigDecimal replacementQty = valueOr(request.replacementQty(), BigDecimal.ZERO);
+    BigDecimal creditAmount = valueOr(request.creditAmount(), BigDecimal.ZERO);
+    BigDecimal claimAmount = valueOr(request.claimAmount(), BigDecimal.ZERO);
+    if (replacementQty.signum() == 0 && creditAmount.signum() == 0 && claimAmount.signum() == 0) {
+      throw new BusinessException("请至少登记换货、折让或索赔中的一项处理结果");
+    }
+    if (replacementQty.compareTo(item.getQuantity()) > 0) {
+      throw new BusinessException("换货数量不能超过不合格数量");
+    }
+    BigDecimal unresolvedAmount = item.getQuantity().subtract(replacementQty)
+        .multiply(order.getUnitPrice());
+    if (creditAmount.add(claimAmount).compareTo(unresolvedAmount) > 0) {
+      throw new BusinessException("折让与索赔金额合计不能超过未换货部分金额");
+    }
+    item.setReplacementQty(replacementQty);
+    item.setCreditAmount(creditAmount);
+    item.setClaimAmount(claimAmount);
     item.setCorrectiveAction(request.correctiveAction());
     item.setSupplierResponse(request.supplierResponse());
     item.setHandlerName(currentName());
     item.setStatus("COMPLETED");
     item.setCompletedAt(OffsetDateTime.now());
-    return returns.save(item);
+    ProcurementReturnOrder saved = returns.save(item);
+    if (replacementQty.signum() > 0) {
+      GoodsReceipt replacement = new GoodsReceipt();
+      replacement.setCode("DH-" + order.getCode() + "-R"
+          + String.format("%02d", receipts.countByOrderId(order.getId()) + 1));
+      replacement.setOrderId(order.getId());
+      replacement.setPartId(originalReceipt.getPartId());
+      replacement.setQuantity(replacementQty);
+      replacement.setUnitPrice(originalReceipt.getUnitPrice());
+      replacement.setTaxRate(originalReceipt.getTaxRate());
+      replacement.setAmount(replacementQty.multiply(originalReceipt.getUnitPrice()));
+      replacement.setReceivedDate(LocalDate.now());
+      replacement.setDeliveryNo("换货-" + item.getCode());
+      replacement.setReceiverName(currentName());
+      replacement.setPayableDueDate(originalReceipt.getPayableDueDate());
+      replacement.setInspectionStatus("PENDING");
+      replacement.setClientRequestId("RETURN:" + item.getId());
+      receipts.save(replacement);
+    }
+    return saved;
   }
 
   @Transactional

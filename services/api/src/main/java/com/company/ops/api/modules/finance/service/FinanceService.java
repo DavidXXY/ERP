@@ -218,6 +218,7 @@ public class FinanceService {
     application.setRequestedAmount(request.requestedAmount());
     application.setRequestedDate(request.requestedDate());
     application.setApplicantName(currentName());
+    application.setApplicantUserId(currentUserId());
     application.setPurpose(request.purpose());
     application.setStatus(PaymentApplicationStatus.PENDING_APPROVAL);
     PaymentApplication saved = applicationRepository.save(application);
@@ -239,9 +240,13 @@ public class FinanceService {
         && request.decision() != PaymentApplicationStatus.REJECTED) {
       throw new BusinessException("审批结论只能选择通过或驳回");
     }
+    if (sameActor(application.getApplicantUserId(), application.getApplicantName())) {
+      throw new BusinessException("付款申请人与审批人必须分离");
+    }
     application.setStatus(request.decision());
     application.setApprovalComment(request.comment());
     application.setApproverName(currentName());
+    application.setApproverUserId(currentUserId());
     application.setApprovedAt(OffsetDateTime.now());
     PaymentApplication saved = applicationRepository.save(application);
     ProcurementPayable payable = payableRepository.findById(saved.getPayableId()).orElse(null);
@@ -259,6 +264,10 @@ public class FinanceService {
         .orElseThrow(() -> new BusinessException("付款申请不存在"));
     if (application.getStatus() != PaymentApplicationStatus.APPROVED) {
       throw new BusinessException("付款申请审批通过后才能付款");
+    }
+    if (sameActor(application.getApplicantUserId(), application.getApplicantName())
+        || sameActor(application.getApproverUserId(), application.getApproverName())) {
+      throw new BusinessException("付款申请、审批和执行必须由不同人员完成");
     }
     ProcurementPayable payable = payableRepository.findByIdForUpdate(application.getPayableId())
         .orElseThrow(() -> new BusinessException("应付单不存在"));
@@ -280,6 +289,7 @@ public class FinanceService {
     payment.setPaymentMethod(request.paymentMethod());
     payment.setBankReference(request.bankReference());
     payment.setPayerName(currentName());
+    payment.setPayerUserId(currentUserId());
     PaymentRecord savedPayment = paymentRepository.save(payment);
 
     BigDecimal paidAmount = amount(payable.getPaidAmount()).add(request.amount());
@@ -511,5 +521,17 @@ public class FinanceService {
     var authentication = SecurityContextHolder.getContext().getAuthentication();
     return authentication != null && authentication.getPrincipal() instanceof UserPrincipal principal
         ? principal.displayName() : "系统";
+  }
+
+  private UUID currentUserId() {
+    var authentication = SecurityContextHolder.getContext().getAuthentication();
+    return authentication != null && authentication.getPrincipal() instanceof UserPrincipal principal
+        ? principal.id() : null;
+  }
+
+  private boolean sameActor(UUID recordedId, String recordedName) {
+    UUID currentId = currentUserId();
+    if (recordedId != null && currentId != null) return recordedId.equals(currentId);
+    return recordedName != null && recordedName.equals(currentName());
   }
 }

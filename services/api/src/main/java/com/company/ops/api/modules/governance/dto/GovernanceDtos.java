@@ -78,7 +78,9 @@ public final class GovernanceDtos {
   public record PeriodResponse(
       UUID id, int fiscalYear, int periodNo, AccountingPeriodStatus status, OffsetDateTime openedAt,
       OffsetDateTime closingStartedAt, OffsetDateTime closedAt, String closedBy, String closeReason,
-      OffsetDateTime reopenedAt, String reopenedBy, String reopenReason) {}
+      OffsetDateTime reopenedAt, String reopenedBy, String reopenReason,
+      String pendingAction, String actionRequestedBy, OffsetDateTime actionRequestedAt,
+      String actionRequestReason) {}
   public record CloseReadinessResponse(boolean ready, List<String> blockers) {}
 
   public record ImportBankLine(

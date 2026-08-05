@@ -106,6 +106,10 @@ export type AccountingPeriod = {
   reopenedAt?: string;
   reopenedBy?: string;
   reopenReason?: string;
+  pendingAction?: "FORCE_CLOSE" | "REOPEN";
+  actionRequestedBy?: string;
+  actionRequestedAt?: string;
+  actionRequestReason?: string;
 };
 export type CloseReadiness = { ready: boolean; blockers: string[] };
 export type BankLine = {

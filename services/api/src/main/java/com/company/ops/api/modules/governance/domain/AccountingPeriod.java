@@ -8,6 +8,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "biz_accounting_periods", uniqueConstraints = @UniqueConstraint(
@@ -24,6 +25,11 @@ public class AccountingPeriod extends BaseEntity {
   @Column(name = "reopened_at") private OffsetDateTime reopenedAt;
   @Column(name = "reopened_by", length = 80) private String reopenedBy;
   @Column(name = "reopen_reason", length = 500) private String reopenReason;
+  @Column(name = "pending_action", length = 32) private String pendingAction;
+  @Column(name = "action_requested_by_id") private UUID actionRequestedById;
+  @Column(name = "action_requested_by", length = 80) private String actionRequestedBy;
+  @Column(name = "action_requested_at") private OffsetDateTime actionRequestedAt;
+  @Column(name = "action_request_reason", length = 500) private String actionRequestReason;
 
   public int getFiscalYear() { return fiscalYear; }
   public void setFiscalYear(int value) { fiscalYear = value; }
@@ -47,4 +53,14 @@ public class AccountingPeriod extends BaseEntity {
   public void setReopenedBy(String value) { reopenedBy = value; }
   public String getReopenReason() { return reopenReason; }
   public void setReopenReason(String value) { reopenReason = value; }
+  public String getPendingAction() { return pendingAction; }
+  public void setPendingAction(String value) { pendingAction = value; }
+  public UUID getActionRequestedById() { return actionRequestedById; }
+  public void setActionRequestedById(UUID value) { actionRequestedById = value; }
+  public String getActionRequestedBy() { return actionRequestedBy; }
+  public void setActionRequestedBy(String value) { actionRequestedBy = value; }
+  public OffsetDateTime getActionRequestedAt() { return actionRequestedAt; }
+  public void setActionRequestedAt(OffsetDateTime value) { actionRequestedAt = value; }
+  public String getActionRequestReason() { return actionRequestReason; }
+  public void setActionRequestReason(String value) { actionRequestReason = value; }
 }

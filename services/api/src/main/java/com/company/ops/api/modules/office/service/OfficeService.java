@@ -48,6 +48,7 @@ import com.company.ops.api.modules.office.dto.OfficeDtos.ExpenseResponse;
 import com.company.ops.api.modules.office.dto.OfficeDtos.NotificationResponse;
 import com.company.ops.api.modules.office.dto.OfficeDtos.OfficeOverview;
 import com.company.ops.api.modules.office.dto.OfficeDtos.OfficeReferenceResponse;
+import com.company.ops.api.modules.office.dto.OfficeDtos.PayExpenseRequest;
 import com.company.ops.api.modules.office.dto.OfficeDtos.OutsourceResponse;
 import com.company.ops.api.modules.office.dto.OfficeDtos.SealResponse;
 import com.company.ops.api.modules.office.dto.OfficeDtos.TravelResponse;
@@ -496,6 +497,32 @@ public class OfficeService {
     if (approval.getStatus() == ApprovalStatus.APPROVED) processExpenseSource(approval);
     notify("APPROVAL", "费用报销待审批", request.code() + " · " + actorName, "EXPENSE", saved.getId());
     return toExpense(saved, project, order, savedLines);
+  }
+
+  @Transactional
+  public ExpenseResponse payExpense(UUID id, PayExpenseRequest request) {
+    ExpenseClaim expense = expenseRepository.findByIdForUpdate(id)
+        .orElseThrow(() -> new BusinessException("报销单不存在"));
+    if (expense.getStatus() != ExpenseStatus.APPROVED) {
+      throw new BusinessException("只有审批通过的报销单可以付款");
+    }
+    ledgerService.post("EXPENSE_PAYMENT", expense.getCode(), request.paidDate(),
+        "支付费用报销 " + expense.getCode(), List.of(
+            new PostingLine("2241", "其他应付款", expense.getAmount(), BigDecimal.ZERO, expense.getClaimantName()),
+            new PostingLine("1002", "银行存款", BigDecimal.ZERO, expense.getAmount(), request.paymentReference())
+        ));
+    expense.setStatus(ExpenseStatus.PAID);
+    expense.setPaidDate(request.paidDate());
+    expense.setPaymentReference(request.paymentReference().trim());
+    expense.setPaidByUserId(currentActorId());
+    expense.setPaidByName(currentActorName());
+    expense.setPaidAt(OffsetDateTime.now());
+    ExpenseClaim saved = expenseRepository.save(expense);
+    notify("EXPENSE_PAID", "费用报销已付款", saved.getCode() + " · " + saved.getClaimantName(), "EXPENSE", saved.getId());
+    Project project = saved.getProjectId() == null ? null : projectRepository.findById(saved.getProjectId()).orElse(null);
+    WorkOrder order = saved.getWorkOrderId() == null ? null : workOrderRepository.findById(saved.getWorkOrderId()).orElse(null);
+    return toExpense(saved, project, order,
+        expenseLineRepository.findByExpenseIdOrderByLineNoAsc(saved.getId()));
   }
 
   @Transactional(readOnly = true)
@@ -1397,7 +1424,7 @@ public class OfficeService {
     return null;
   }
   private ApprovalRuntimeNodeResponse toRuntimeNode(ApprovalRuntimeNode item) { return new ApprovalRuntimeNodeResponse(item.getId(), item.getStepNo(), item.getNodeStatus(), item.getApprovalMode(), item.getStepPolicy(), item.getAssigneeType(), item.getAssigneeId(), item.getAssigneeName(), item.getSourceType(), item.getSourceValue(), item.getConditionText(), item.getSlaHours(), item.getDueAt(), item.getRemindedAt(), item.getEscalatedAt(), item.getCompletedAt(), item.getApproverName(), item.getApprovalComment()); }
-  private ExpenseResponse toExpense(ExpenseClaim item, Project project, WorkOrder order, List<ExpenseClaimLine> lines) { return new ExpenseResponse(item.getId(), item.getCode(), item.getClaimantId(), item.getClaimantName(), item.getProjectId(), project == null ? null : project.getCode(), item.getWorkOrderId(), order == null ? null : order.getCode(), item.getExpenseType(), item.getAmount(), item.getExpenseDate(), item.getDescription(), item.getStatus(), item.getApprovalRequestId(), lines.stream().map(this::toExpenseLine).toList()); }
+  private ExpenseResponse toExpense(ExpenseClaim item, Project project, WorkOrder order, List<ExpenseClaimLine> lines) { return new ExpenseResponse(item.getId(), item.getCode(), item.getClaimantId(), item.getClaimantName(), item.getProjectId(), project == null ? null : project.getCode(), item.getWorkOrderId(), order == null ? null : order.getCode(), item.getExpenseType(), item.getAmount(), item.getExpenseDate(), item.getDescription(), item.getStatus(), item.getApprovalRequestId(), lines.stream().map(this::toExpenseLine).toList(), item.getPaidDate(), item.getPaymentReference(), item.getPaidByName(), item.getPaidAt()); }
   private ExpenseLineResponse toExpenseLine(ExpenseClaimLine item) { return new ExpenseLineResponse(item.getId(), item.getLineNo(), item.getExpenseType(), item.getAmount(), item.getExpenseDate(), item.getDescription(), item.getInvoiceFileName(), item.getInvoiceContentType(), item.getInvoiceSizeBytes()); }
   private OutsourceResponse toOutsource(OutsourceOrder item, Supplier supplier, Project project, WorkOrder order) { return new OutsourceResponse(item.getId(), item.getCode(), item.getSupplierId(), supplier == null ? null : supplier.getName(), item.getProjectId(), project == null ? null : project.getCode(), item.getWorkOrderId(), order == null ? null : order.getCode(), item.getServiceType(), item.getDescription(), item.getAmount(), item.getPlannedDate(), item.getStatus(), item.getApprovalRequestId(), item.getAcceptanceNote()); }
   private TravelResponse toTravel(TravelApplication item, Project project) { return new TravelResponse(item.getId(), item.getCode(), item.getApplicantId(), item.getApplicantName(), item.getDepartmentName(), item.getProjectId(), project == null ? null : project.getCode(), item.getDestination(), item.getPurpose(), item.getTransportType(), item.getStartDate(), item.getEndDate(), item.getTravelDays(), item.getEstimatedAmount(), item.getCompanionNames(), item.getStatus(), item.getApprovalRequestId(), item.getCreatedAt()); }

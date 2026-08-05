@@ -12,6 +12,8 @@ import com.company.ops.api.modules.crm.repository.ReceivableReceiptRepository;
 import com.company.ops.api.modules.finance.repository.PaymentRecordRepository;
 import com.company.ops.api.modules.finance.service.FinanceOperationsService;
 import com.company.ops.api.modules.governance.domain.BusinessControlRecord;
+import com.company.ops.api.modules.governance.domain.AccountingPeriod;
+import com.company.ops.api.modules.governance.domain.AccountingPeriodStatus;
 import com.company.ops.api.modules.governance.domain.ControlStatus;
 import com.company.ops.api.modules.governance.domain.ControlType;
 import com.company.ops.api.modules.governance.repository.AccountingPeriodRepository;
@@ -19,6 +21,7 @@ import com.company.ops.api.modules.governance.repository.BankStatementLineReposi
 import com.company.ops.api.modules.governance.repository.BusinessControlRecordRepository;
 import com.company.ops.api.modules.governance.repository.GovernanceActionLogRepository;
 import com.company.ops.api.modules.ledger.repository.AccountingVoucherRepository;
+import com.company.ops.api.modules.system.security.UserPrincipal;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -27,9 +30,13 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 @ExtendWith(MockitoExtension.class)
 class GovernanceServiceTest {
@@ -41,6 +48,9 @@ class GovernanceServiceTest {
   @Mock private ReceivableReceiptRepository receipts;
   @Mock private GovernanceActionLogRepository actionLogs;
   @Mock private FinanceOperationsService financeOperations;
+
+  @AfterEach
+  void clearSecurity() { SecurityContextHolder.clearContext(); }
 
   @Test
   void detectsOverdueBudgetAndReviewExceptions() {
@@ -104,6 +114,49 @@ class GovernanceServiceTest {
     assertThat(result.businessDomain()).isEqualTo("SERVICE");
     assertThat(result.details()).containsEntry("responseHours", 2);
     assertThat(result.controlCode()).startsWith("CTL-SER-");
+  }
+
+  @Test
+  void forceCloseRequiresASecondUserToReview() {
+    AccountingPeriod period = new AccountingPeriod();
+    period.setId(UUID.randomUUID()); period.setFiscalYear(2026); period.setPeriodNo(7);
+    period.setStatus(AccountingPeriodStatus.OPEN); period.setOpenedAt(java.time.OffsetDateTime.now());
+    when(periods.findByFiscalYearAndPeriodNo(2026, 7)).thenReturn(Optional.of(period));
+    when(periods.save(any(AccountingPeriod.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    when(vouchers.findAll()).thenReturn(List.of()); when(controls.findAll()).thenReturn(List.of());
+    when(bankLines.countByReconciliationStatusNotAndTransactionDateLessThanEqual(any(), any())).thenReturn(1L);
+    when(financeOperations.periodCloseBlockers(2026, 7)).thenReturn(List.of());
+
+    authenticate(UUID.randomUUID(), "关账申请人");
+    PeriodResponse requested = service().closePeriod(2026, 7, new ClosePeriodRequest(true, "月末差异经确认后强制关账"));
+    assertThat(requested.status()).isEqualTo(AccountingPeriodStatus.OPEN);
+    assertThat(requested.pendingAction()).isEqualTo("FORCE_CLOSE");
+
+    authenticate(UUID.randomUUID(), "财务复核人");
+    PeriodResponse closed = service().closePeriod(2026, 7, new ClosePeriodRequest(true, "复核通过"));
+    assertThat(closed.status()).isEqualTo(AccountingPeriodStatus.CLOSED);
+    assertThat(closed.pendingAction()).isNull();
+  }
+
+  @Test
+  void rejectsOpeningAPeriodWithPendingReview() {
+    AccountingPeriod period = new AccountingPeriod();
+    period.setId(UUID.randomUUID()); period.setFiscalYear(2026); period.setPeriodNo(7);
+    period.setStatus(AccountingPeriodStatus.OPEN); period.setPendingAction("FORCE_CLOSE");
+    when(periods.findByFiscalYearAndPeriodNo(2026, 7)).thenReturn(Optional.of(period));
+
+    assertThatThrownBy(() -> service().openPeriod(new OpenPeriodRequest(2026, 7)))
+        .isInstanceOf(BusinessException.class).hasMessageContaining("待复核");
+  }
+
+  private void authenticate(UUID id, String name) {
+    UserPrincipal principal = org.mockito.Mockito.mock(UserPrincipal.class);
+    when(principal.id()).thenReturn(id); when(principal.displayName()).thenReturn(name);
+    Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
+    when(authentication.getPrincipal()).thenReturn(principal);
+    SecurityContext context = org.mockito.Mockito.mock(SecurityContext.class);
+    when(context.getAuthentication()).thenReturn(authentication);
+    SecurityContextHolder.setContext(context);
   }
 
   private GovernanceService service() {

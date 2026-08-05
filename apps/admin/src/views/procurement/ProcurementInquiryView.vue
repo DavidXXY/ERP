@@ -272,6 +272,10 @@ import { useRouter } from "vue-router";
 import { message, Modal } from "ant-design-vue";
 import { useAuthStore } from "@/stores/auth";
 import * as api from "@/api/procurement";
+import {
+  sourcingMethodLabel,
+  sourcingMethodOptions,
+} from "@/utils/procurement-sourcing";
 
 const auth = useAuthStore();
 const router = useRouter();
@@ -313,11 +317,7 @@ const quoteForm = reactive({
   commercialScore: 100,
   validUntil: "",
 });
-const sourcingOptions = [
-  { label: "竞争性询价", value: "COMPETITIVE" },
-  { label: "单一来源", value: "SINGLE_SOURCE" },
-  { label: "框架协议", value: "FRAMEWORK" },
-];
+const sourcingOptions = sourcingMethodOptions;
 const inquiryColumns = [
   { title: "询价单", dataIndex: "code", width: 190 },
   { title: "主题", dataIndex: "title", width: 260 },
@@ -327,7 +327,12 @@ const inquiryColumns = [
     customRender: ({ record }: any) =>
       `${record.materialCount || 1}种物料 · ${record.requestCount || 1}条申请`,
   },
-  { title: "寻源方式", dataIndex: "sourcingMethod", width: 130 },
+  {
+    title: "寻源方式",
+    dataIndex: "sourcingMethod",
+    width: 130,
+    customRender: ({ text }: { text?: string }) => sourcingMethodLabel(text),
+  },
   { title: "截止日", dataIndex: "deadline", width: 120 },
   {
     title: "报价数",

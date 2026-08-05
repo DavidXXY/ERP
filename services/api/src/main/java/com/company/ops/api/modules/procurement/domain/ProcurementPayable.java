@@ -23,6 +23,9 @@ public class ProcurementPayable extends BaseEntity {
   @Column(name = "order_id", nullable = false)
   private UUID orderId;
 
+  @Column(name = "organization_id")
+  private UUID organizationId;
+
   @Column(name = "receipt_id", nullable = false)
   private UUID receiptId;
 
@@ -64,6 +67,14 @@ public class ProcurementPayable extends BaseEntity {
 
   public void setOrderId(UUID orderId) {
     this.orderId = orderId;
+  }
+
+  public UUID getOrganizationId() {
+    return organizationId;
+  }
+
+  public void setOrganizationId(UUID organizationId) {
+    this.organizationId = organizationId;
   }
 
   public UUID getReceiptId() {

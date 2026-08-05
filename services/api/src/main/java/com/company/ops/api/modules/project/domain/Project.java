@@ -37,6 +37,12 @@ public class Project extends BaseEntity {
   @Column(name = "manager_user_id")
   private UUID managerUserId;
 
+  @Column(name = "sales_owner_user_id")
+  private UUID salesOwnerUserId;
+
+  @Column(name = "sales_organization_id")
+  private UUID salesOrganizationId;
+
   @Column(name = "manager_assigned_by_user_id")
   private UUID managerAssignedByUserId;
 
@@ -157,6 +163,22 @@ public class Project extends BaseEntity {
 
   public void setManagerUserId(UUID managerUserId) {
     this.managerUserId = managerUserId;
+  }
+
+  public UUID getSalesOwnerUserId() {
+    return salesOwnerUserId;
+  }
+
+  public void setSalesOwnerUserId(UUID salesOwnerUserId) {
+    this.salesOwnerUserId = salesOwnerUserId;
+  }
+
+  public UUID getSalesOrganizationId() {
+    return salesOrganizationId;
+  }
+
+  public void setSalesOrganizationId(UUID salesOrganizationId) {
+    this.salesOrganizationId = salesOrganizationId;
   }
 
   public UUID getManagerAssignedByUserId() { return managerAssignedByUserId; }

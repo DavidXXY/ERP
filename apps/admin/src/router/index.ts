@@ -530,6 +530,12 @@ const rootRoutes: RouteRecordRaw[] = [
     meta: { title: "\u8d44\u91d1\u6982\u89c8", permission: "finance:view" },
   },
   {
+    path: "finance/contribution",
+    name: "finance-contribution",
+    component: () => import("@/views/finance/FinanceContributionView.vue"),
+    meta: { title: "经营贡献分析", permission: "finance:view" },
+  },
+  {
     path: "finance/receivables",
     name: "finance-receivables",
     component: () => import("@/views/finance/FinanceReceivableView.vue"),

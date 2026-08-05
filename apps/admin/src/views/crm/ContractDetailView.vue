@@ -406,7 +406,7 @@
               <a-descriptions-item label="商机编号">{{
                 relatedOpportunity.code
               }}</a-descriptions-item>
-              <a-descriptions-item label="阶段">
+              <a-descriptions-item label="阶段" :span="2">
                 <a-tag
                   :color="opportunityStageColor(relatedOpportunity.stage)"
                   >{{ opportunityStageLabel(relatedOpportunity.stage) }}</a-tag
@@ -449,7 +449,7 @@
                 <span v-else>尚未承接项目</span>
               </a-descriptions-item>
               <a-descriptions-item label="项目阶段">{{
-                relatedProject?.stage || "-"
+                projectStageLabel(relatedProject?.stage)
               }}</a-descriptions-item>
               <a-descriptions-item label="项目进度"
                 ><a-progress
@@ -504,7 +504,7 @@
                 title="交付与验收"
                 :description="
                   relatedProject
-                    ? `当前阶段 ${relatedProject.stage}，进度 ${relatedProject.progress}%`
+                    ? `当前阶段 ${projectStageLabel(relatedProject.stage)}，进度 ${relatedProject.progress}%`
                     : '尚未进入项目执行'
                 "
               />
@@ -817,6 +817,7 @@ import {
   quoteStatusLabel,
 } from "./crm-options";
 import BusinessTraceTimeline from "@/components/business/BusinessTraceTimeline.vue";
+import { projectStageLabel } from "@/utils/project-stage";
 import ApprovalProgressFlow, {
   type ApprovalProgressStep,
 } from "@/components/ApprovalProgressFlow.vue";
@@ -1140,7 +1141,9 @@ const closureSteps = computed(() => [
     key: "opportunity",
     label: "商机",
     title: relatedOpportunity.value?.code || "未关联",
-    hint: relatedOpportunity.value?.stage || "建议从商机穿透来源",
+    hint: relatedOpportunity.value
+      ? opportunityStageLabel(relatedOpportunity.value.stage)
+      : "建议从商机穿透来源",
     done: Boolean(relatedOpportunity.value),
     warn: !relatedOpportunity.value,
     route: relatedOpportunity.value
@@ -1173,7 +1176,9 @@ const closureSteps = computed(() => [
     key: "project",
     label: "项目",
     title: relatedProject.value?.code || "未承接",
-    hint: relatedProject.value?.stage || "项目预算、采购、成本入口",
+    hint: relatedProject.value
+      ? projectStageLabel(relatedProject.value.stage)
+      : "项目预算、采购、成本入口",
     done: Boolean(relatedProject.value),
     warn: !relatedProject.value && record.value?.status === "ACTIVE",
     route: relatedProject.value ? "/projects/list" : "",

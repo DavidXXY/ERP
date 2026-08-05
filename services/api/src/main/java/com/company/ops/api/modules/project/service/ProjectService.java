@@ -207,6 +207,8 @@ public class ProjectService {
 
     Project project = new Project();
     project.setCustomerId(request.customerId());
+    project.setSalesOwnerUserId(customer.getOwnerUserId());
+    project.setSalesOrganizationId(dataScopeService.organizationIdForUser(customer.getOwnerUserId()));
     project.setCode(projectCode);
     if (contract != null) {
       project.setContractId(request.contractId());

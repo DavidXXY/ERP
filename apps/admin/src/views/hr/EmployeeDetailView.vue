@@ -346,6 +346,11 @@
                 <template v-else-if="column.key === 'amount'">{{
                   formatMoney(record.contractAmount)
                 }}</template>
+                <template v-else-if="column.key === 'stage'">
+                  <a-tag :color="projectStageColor(record.stage)">
+                    {{ projectStageLabel(record.stage) }}
+                  </a-tag>
+                </template>
                 <template v-else-if="column.key === 'progress'"
                   ><a-progress :percent="record.progress" size="small"
                 /></template>
@@ -558,6 +563,7 @@ import {
 } from "@/api/hr";
 import { listProjects, type Project } from "@/api/project";
 import type { EmployeeContract } from "@/api/qualification";
+import { projectStageColor, projectStageLabel } from "@/utils/project-stage";
 
 const auth = useAuthStore();
 const route = useRoute();
@@ -686,7 +692,7 @@ const projectColumns = [
   { title: "项目", key: "project", width: 260 },
   { title: "客户", dataIndex: "customerName", width: 180 },
   { title: "合同金额（含税，元）", key: "amount", width: 190 },
-  { title: "阶段", dataIndex: "stage", width: 120 },
+  { title: "阶段", key: "stage", width: 120 },
   { title: "进度", key: "progress", width: 180 },
 ];
 const employeeRisks = computed(() => {

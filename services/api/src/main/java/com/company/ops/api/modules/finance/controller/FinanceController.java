@@ -19,7 +19,12 @@ import com.company.ops.api.modules.finance.service.FinanceService;
 import com.company.ops.api.modules.finance.service.FinanceAnalyticsService;
 import com.company.ops.api.modules.finance.dto.FinanceAnalyticsDtos.AdjustTaxInvoiceRequest;
 import com.company.ops.api.modules.finance.dto.FinanceAnalyticsDtos.FinanceAnalyticsResponse;
+import com.company.ops.api.modules.finance.dto.FinanceAnalyticsDtos.FinanceOrganizationNode;
 import com.company.ops.api.modules.finance.dto.FinanceAnalyticsDtos.TaxInvoiceLine;
+import com.company.ops.api.modules.finance.dto.FinanceContributionDtos.ContributionSalesperson;
+import com.company.ops.api.modules.finance.dto.FinanceContributionDtos.FinanceContributionResponse;
+import com.company.ops.api.modules.finance.service.FinanceContributionService;
+import com.company.ops.api.modules.finance.service.FinanceOrganizationScopeService;
 import com.company.ops.api.modules.system.service.ApprovalFlowSecurity;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -46,17 +51,23 @@ public class FinanceController {
   private final CrmOperationsService crmOperationsService;
   private final ApprovalFlowSecurity approvalFlowSecurity;
   private final FinanceAnalyticsService analyticsService;
+  private final FinanceOrganizationScopeService organizationScopeService;
+  private final FinanceContributionService contributionService;
 
   public FinanceController(
       FinanceService financeService,
       CrmOperationsService crmOperationsService,
       ApprovalFlowSecurity approvalFlowSecurity,
-      FinanceAnalyticsService analyticsService
+      FinanceAnalyticsService analyticsService,
+      FinanceOrganizationScopeService organizationScopeService,
+      FinanceContributionService contributionService
   ) {
     this.financeService = financeService;
     this.crmOperationsService = crmOperationsService;
     this.approvalFlowSecurity = approvalFlowSecurity;
     this.analyticsService = analyticsService;
+    this.organizationScopeService = organizationScopeService;
+    this.contributionService = contributionService;
   }
 
   @GetMapping("/overview")
@@ -69,8 +80,37 @@ public class FinanceController {
   @PreAuthorize("hasAuthority('finance:view')")
   public ApiResponse<FinanceAnalyticsResponse> analytics(
       @RequestParam(required = false) LocalDate asOf,
+      @RequestParam(required = false) Integer year,
+      @RequestParam(required = false) UUID organizationId,
+      @RequestParam(defaultValue = "true") boolean includeDescendants) {
+    return ApiResponse.ok(analyticsService.analytics(
+        asOf, year, organizationId, includeDescendants));
+  }
+
+  @GetMapping("/organizations")
+  @PreAuthorize("hasAuthority('finance:view')")
+  public ApiResponse<List<FinanceOrganizationNode>> organizations() {
+    return ApiResponse.ok(organizationScopeService.visibleOrganizations());
+  }
+
+  @GetMapping("/contribution/salespeople")
+  @PreAuthorize("hasAuthority('finance:view')")
+  public ApiResponse<List<ContributionSalesperson>> contributionSalespeople(
+      @RequestParam(required = false) UUID organizationId,
+      @RequestParam(defaultValue = "true") boolean includeDescendants) {
+    return ApiResponse.ok(contributionService.salespeople(organizationId, includeDescendants));
+  }
+
+  @GetMapping("/contribution/analytics")
+  @PreAuthorize("hasAuthority('finance:view')")
+  public ApiResponse<FinanceContributionResponse> contributionAnalytics(
+      @RequestParam(defaultValue = "ORGANIZATION") String subjectType,
+      @RequestParam(required = false) UUID subjectId,
+      @RequestParam(defaultValue = "true") boolean includeDescendants,
+      @RequestParam(required = false) LocalDate asOf,
       @RequestParam(required = false) Integer year) {
-    return ApiResponse.ok(analyticsService.analytics(asOf, year));
+    return ApiResponse.ok(contributionService.analytics(
+        subjectType, subjectId, includeDescendants, asOf, year));
   }
 
   @GetMapping("/tax-ledger")

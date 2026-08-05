@@ -15,6 +15,7 @@ public final class FinanceAnalyticsDtos {
   public record FinanceAnalyticsResponse(
       LocalDate asOf,
       int fiscalYear,
+      FinanceScopeInfo scope,
       List<MonthlyCashFlow> monthlyCashFlow,
       List<ForecastBucket> forecast,
       List<AgingBucket> aging,
@@ -22,6 +23,13 @@ public final class FinanceAnalyticsDtos {
       TaxSummary tax,
       CashPlanSummary cashPlan,
       List<FinanceRisk> risks) {}
+
+  public record FinanceScopeInfo(UUID organizationId, String organizationName,
+      String organizationPath, boolean includeDescendants, int organizationCount,
+      boolean unrestricted, boolean unallocatedExcluded) {}
+
+  public record FinanceOrganizationNode(UUID id, String name, String type,
+      String fullPath, List<FinanceOrganizationNode> children) {}
 
   public record MonthlyCashFlow(int month, BigDecimal receipt, BigDecimal payment, BigDecimal net) {}
   public record ForecastBucket(String key, String label, int horizonDays,

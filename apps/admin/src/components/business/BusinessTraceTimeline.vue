@@ -243,6 +243,11 @@ import {
   type ProjectDetail,
   type ProjectProfitability,
 } from "@/api/project";
+import {
+  contractStatusLabel,
+  opportunityStageLabel,
+} from "@/views/crm/crm-options";
+import { projectStageLabel } from "@/utils/project-stage";
 
 type TraceEvent = {
   key: string;
@@ -407,7 +412,9 @@ const steps = computed<TraceStep[]>(() => [
     count: relatedOpportunity.value ? 1 : 0,
     amount: relatedOpportunity.value?.expectedAmount,
     value: relatedOpportunity.value?.code || "-",
-    hint: relatedOpportunity.value?.stage || "未关联商机",
+    hint: relatedOpportunity.value
+      ? opportunityStageLabel(relatedOpportunity.value.stage)
+      : "未关联商机",
   },
   {
     key: "quote",
@@ -426,10 +433,9 @@ const steps = computed<TraceStep[]>(() => [
     amount: activeContract.value?.amount || activeProject.value?.contractAmount,
     value:
       activeContract.value?.code || activeProject.value?.contractCode || "-",
-    hint:
-      activeContract.value?.status ||
-      activeProject.value?.contractStatus ||
-      "合同信息",
+    hint: activeContract.value
+      ? contractStatusLabel(activeContract.value.status)
+      : activeProject.value?.contractStatus || "合同信息",
   },
   {
     key: "project",
@@ -437,7 +443,9 @@ const steps = computed<TraceStep[]>(() => [
     count: activeProject.value ? 1 : 0,
     amount: activeProject.value?.actualCost,
     value: activeProject.value?.code || "-",
-    hint: activeProject.value?.stage || "未转项目",
+    hint: activeProject.value
+      ? projectStageLabel(activeProject.value.stage)
+      : "未转项目",
   },
   {
     key: "purchase",

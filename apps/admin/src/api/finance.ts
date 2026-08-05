@@ -45,6 +45,7 @@ export type FinanceReconciliationItem = {
 export type FinanceAnalytics = {
   asOf: string;
   fiscalYear: number;
+  scope: FinanceScope;
   monthlyCashFlow: MonthlyCashFlow[];
   forecast: FinanceForecastBucket[];
   aging: FinanceAgingBucket[];
@@ -85,6 +86,89 @@ export type FinanceAnalytics = {
     amount: number;
     count: number;
   }>;
+};
+
+export type FinanceScope = {
+  organizationId?: string;
+  organizationName: string;
+  organizationPath: string;
+  includeDescendants: boolean;
+  organizationCount: number;
+  unrestricted: boolean;
+  unallocatedExcluded: boolean;
+};
+
+export type FinanceOrganizationNode = {
+  id: string;
+  name: string;
+  type: string;
+  fullPath: string;
+  children: FinanceOrganizationNode[];
+};
+
+export type ContributionSalesperson = {
+  id: string;
+  displayName: string;
+  organizationId: string;
+  organizationName: string;
+  organizationPath: string;
+  enabled: boolean;
+};
+
+export type FinanceContribution = {
+  asOf: string;
+  fiscalYear: number;
+  scope: {
+    subjectType: "ORGANIZATION" | "USER";
+    subjectId?: string;
+    subjectName: string;
+    subjectPath: string;
+    includeDescendants: boolean;
+    organizationCount: number;
+    attributionBasis: string;
+  };
+  summary: {
+    contractAmount: number;
+    actualCost: number;
+    grossProfit: number;
+    grossMarginRate: number;
+    receivedAmount: number;
+    paidAmount: number;
+    netCashFlow: number;
+    receivableOutstanding: number;
+    payableOutstanding: number;
+    collectionRate: number;
+    projectCount: number;
+  };
+  monthlyCashFlow: Array<{
+    month: number;
+    receipt: number;
+    payment: number;
+    netCash: number;
+  }>;
+  projects: Array<{
+    projectId: string;
+    projectCode: string;
+    projectName: string;
+    customerName?: string;
+    stage: string;
+    salesOwnerName?: string;
+    contractAmount: number;
+    actualCost: number;
+    grossProfit: number;
+    grossMarginRate: number;
+    receivedAmount: number;
+    paidAmount: number;
+    netCashFlow: number;
+    receivableOutstanding: number;
+    payableOutstanding: number;
+  }>;
+  dataQuality: {
+    unattributedProjectCount: number;
+    unattributedReceivableCount: number;
+    unlinkedReceivableCount: number;
+    note: string;
+  };
 };
 
 export type TaxInvoiceLine = {
@@ -207,10 +291,47 @@ export function getFinanceOverview() {
   return request<FinanceOverview>({ method: "GET", url: "/finance/overview" });
 }
 
-export function getFinanceAnalytics(params?: { asOf?: string; year?: number }) {
+export function getFinanceAnalytics(params?: {
+  asOf?: string;
+  year?: number;
+  organizationId?: string;
+  includeDescendants?: boolean;
+}) {
   return request<FinanceAnalytics>({
     method: "GET",
     url: "/finance/analytics",
+    params,
+  });
+}
+
+export function listFinanceOrganizations() {
+  return request<FinanceOrganizationNode[]>({
+    method: "GET",
+    url: "/finance/organizations",
+  });
+}
+
+export function listContributionSalespeople(params?: {
+  organizationId?: string;
+  includeDescendants?: boolean;
+}) {
+  return request<ContributionSalesperson[]>({
+    method: "GET",
+    url: "/finance/contribution/salespeople",
+    params,
+  });
+}
+
+export function getFinanceContribution(params: {
+  subjectType: "ORGANIZATION" | "USER";
+  subjectId?: string;
+  includeDescendants?: boolean;
+  asOf?: string;
+  year?: number;
+}) {
+  return request<FinanceContribution>({
+    method: "GET",
+    url: "/finance/contribution/analytics",
     params,
   });
 }

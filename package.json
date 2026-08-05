@@ -35,6 +35,7 @@
     "infra:down": "docker compose -f infra/docker-compose.yml down",
     "tools:install": "bash scripts/install-local-tools.sh",
     "data:backup": "bash scripts/backup-data.sh",
+    "data:seed-demo": "bash scripts/seed-demo-data.sh",
     "test-bot": "node scripts/test-bot.js",
     "test-bot:fix": "node scripts/test-bot.js --fix",
     "preview": "npm run admin:preview",

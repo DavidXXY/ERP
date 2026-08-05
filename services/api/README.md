@@ -55,7 +55,15 @@ http://localhost:8080/api-docs
 
 ## 数据库迁移
 
-生产使用 PostgreSQL 16 和 Flyway。新数据库从 `B77__fresh_install_baseline.sql` 建立基线，再执行 V78 之后的增量迁移；当前增量版本为 V87。不要手工修改数据库结构或已执行迁移。
+生产使用 PostgreSQL 16 和 Flyway。新数据库从 `B77__fresh_install_baseline.sql` 建立基线，再执行 V78 之后的增量迁移；当前增量版本为 V100。不要手工修改数据库结构或已执行迁移。
+
+本地开发库可重复执行以下命令补充业务演示数据：
+
+```bash
+npm run data:seed-demo
+```
+
+演示数据使用 `DEMO-` 业务编码并通过 UPSERT 写入，覆盖销售归属、客户合同、项目成本、应收回款、采购到货、应付和实际付款。默认仅允许连接本机 PostgreSQL。
 
 ## 验证
 

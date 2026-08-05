@@ -174,6 +174,11 @@
               <template v-else-if="column.key === 'amount'">{{
                 money(record.expectedAmount)
               }}</template>
+              <template v-else-if="column.key === 'stage'">
+                <a-tag :color="opportunityStageColor(record.stage)">
+                  {{ opportunityStageLabel(record.stage) }}
+                </a-tag>
+              </template>
               <template v-else-if="column.key === 'probability'"
                 >{{ record.probability }}%</template
               >
@@ -297,6 +302,7 @@ import {
   type CustomerLevel,
   type RiskStatus,
 } from "@/api/crm";
+import { opportunityStageColor, opportunityStageLabel } from "./crm-options";
 
 const route = useRoute();
 const router = useRouter();
@@ -356,7 +362,7 @@ const siteColumns = [
 ];
 const opportunityColumns = [
   { title: "商机", key: "code", width: 280 },
-  { title: "阶段", dataIndex: "stage", width: 120 },
+  { title: "阶段", key: "stage", width: 120 },
   { title: "预计金额（含税，元）", key: "amount", width: 180 },
   { title: "成功率", key: "probability", width: 90 },
   { title: "下一步", dataIndex: "nextAction", width: 200 },

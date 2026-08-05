@@ -14,6 +14,7 @@ import com.company.ops.api.modules.crm.repository.ReceivableReceiptRepository;
 import com.company.ops.api.modules.crm.repository.ReceivableRepository;
 import com.company.ops.api.modules.crm.repository.ServiceContractRepository;
 import com.company.ops.api.modules.finance.domain.PaymentApplicationStatus;
+import com.company.ops.api.modules.finance.domain.PaymentApplication;
 import com.company.ops.api.modules.finance.domain.PaymentRecord;
 import com.company.ops.api.modules.finance.repository.PaymentApplicationRepository;
 import com.company.ops.api.modules.finance.repository.PaymentRecordRepository;
@@ -36,6 +37,7 @@ import com.company.ops.api.modules.procurement.repository.ProcurementPayableRepo
 import com.company.ops.api.modules.procurement.repository.SupplierInvoiceRepository;
 import com.company.ops.api.modules.procurement.repository.SupplierRepository;
 import com.company.ops.api.modules.system.security.UserPrincipal;
+import com.company.ops.api.modules.finance.service.FinanceOrganizationScopeService.Scope;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
@@ -75,6 +77,7 @@ public class FinanceAnalyticsService {
   private final BusinessControlRecordRepository controls;
   private final LedgerService ledgerService;
   private final TaxFilingGuard taxFilingGuard;
+  private final FinanceOrganizationScopeService organizationScopeService;
 
   public FinanceAnalyticsService(
       ReceivableRepository receivables,
@@ -90,7 +93,8 @@ public class FinanceAnalyticsService {
       BankStatementLineRepository bankLines,
       BusinessControlRecordRepository controls,
       LedgerService ledgerService,
-      TaxFilingGuard taxFilingGuard) {
+      TaxFilingGuard taxFilingGuard,
+      FinanceOrganizationScopeService organizationScopeService) {
     this.receivables = receivables;
     this.receipts = receipts;
     this.contracts = contracts;
@@ -105,22 +109,63 @@ public class FinanceAnalyticsService {
     this.controls = controls;
     this.ledgerService = ledgerService;
     this.taxFilingGuard = taxFilingGuard;
+    this.organizationScopeService = organizationScopeService;
   }
 
   @Transactional(readOnly = true)
-  public FinanceAnalyticsResponse analytics(LocalDate requestedAsOf, Integer requestedYear) {
+  public FinanceAnalyticsResponse analytics(LocalDate requestedAsOf, Integer requestedYear,
+      UUID organizationId, boolean includeDescendants) {
     LocalDate asOf = requestedAsOf == null ? LocalDate.now() : requestedAsOf;
     int year = requestedYear == null ? asOf.getYear() : requestedYear;
     if (year < 2000 || year > 2200) throw new BusinessException("财务年度必须在 2000 到 2200 之间");
 
-    List<Receivable> allReceivables = receivables.findAll();
-    List<ProcurementPayable> allPayables = payables.findAll();
-    List<ReceivableReceipt> allReceipts = receipts.findAll();
-    List<PaymentRecord> allPayments = payments.findAll();
-    List<AccountingVoucher> allVouchers = vouchers.findAll();
-    List<BankStatementLine> allBankLines = bankLines.findAll();
-    List<SupplierInvoice> allSupplierInvoices = supplierInvoices.findAll();
-    List<BusinessControlRecord> allControls = controls.findAll();
+    Scope scope = organizationScopeService.resolve(organizationId, includeDescendants);
+    List<Receivable> allReceivables = receivables.findAll().stream()
+        .filter(item -> scope.includes(item.getOrganizationId())).toList();
+    Set<UUID> receivableIds = allReceivables.stream().map(Receivable::getId)
+        .filter(java.util.Objects::nonNull).collect(Collectors.toUnmodifiableSet());
+    List<ProcurementPayable> allPayables = payables.findAll().stream()
+        .filter(item -> scope.includes(item.getOrganizationId())).toList();
+    Set<UUID> payableIds = allPayables.stream().map(ProcurementPayable::getId)
+        .filter(java.util.Objects::nonNull).collect(Collectors.toUnmodifiableSet());
+    Set<UUID> orderIds = allPayables.stream().map(ProcurementPayable::getOrderId)
+        .filter(java.util.Objects::nonNull).collect(Collectors.toUnmodifiableSet());
+    List<ReceivableReceipt> allReceipts = receipts.findAll().stream()
+        .filter(item -> receivableIds.contains(item.getReceivableId())).toList();
+    List<PaymentRecord> allPayments = payments.findAll().stream()
+        .filter(item -> payableIds.contains(item.getPayableId())).toList();
+    List<PaymentApplication> allApplications = applications.findAll().stream()
+        .filter(item -> payableIds.contains(item.getPayableId())).toList();
+    List<SupplierInvoice> allSupplierInvoices = supplierInvoices.findAll().stream()
+        .filter(item -> scope.unrestricted()
+            || (item.getPayableId() != null && payableIds.contains(item.getPayableId()))
+            || (item.getOrderId() != null && orderIds.contains(item.getOrderId())))
+        .toList();
+
+    Set<String> receivableCodes = allReceivables.stream().map(Receivable::getCode).collect(Collectors.toSet());
+    Set<String> receiptNumbers = allReceipts.stream().map(ReceivableReceipt::getReferenceNo).collect(Collectors.toSet());
+    Set<String> paymentCodes = allPayments.stream().map(PaymentRecord::getCode).collect(Collectors.toSet());
+    Set<String> invoiceCodes = allSupplierInvoices.stream().map(SupplierInvoice::getCode).collect(Collectors.toSet());
+    List<AccountingVoucher> allVouchers = vouchers.findAll().stream()
+        .filter(item -> scope.unrestricted()
+            || ("INVOICE".equals(item.getBizType()) && receivableCodes.contains(item.getBizNo()))
+            || ("RECEIPT".equals(item.getBizType()) && receiptNumbers.contains(item.getBizNo()))
+            || ("PAYMENT".equals(item.getBizType()) && paymentCodes.contains(item.getBizNo()))
+            || ("SUPPLIER_INVOICE".equals(item.getBizType()) && invoiceCodes.contains(item.getBizNo())))
+        .toList();
+    Set<UUID> receiptIds = allReceipts.stream().map(ReceivableReceipt::getId)
+        .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
+    Set<UUID> paymentIds = allPayments.stream().map(PaymentRecord::getId)
+        .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
+    List<BankStatementLine> allBankLines = bankLines.findAll().stream()
+        .filter(item -> scope.unrestricted()
+            || ("RECEIPT".equals(item.getMatchedBizType()) && receiptIds.contains(item.getMatchedBizId()))
+            || ("PAYMENT".equals(item.getMatchedBizType()) && paymentIds.contains(item.getMatchedBizId())))
+        .toList();
+    Set<String> ownerNames = organizationScopeService.ownerNames(scope);
+    List<BusinessControlRecord> allControls = controls.findAll().stream()
+        .filter(item -> scope.unrestricted() || ownerNames.contains(item.getOwner()))
+        .toList();
 
     List<MonthlyCashFlow> monthly = monthlyCashFlow(year, asOf, allReceipts, allPayments);
     List<ForecastBucket> forecast = List.of(
@@ -136,9 +181,9 @@ public class FinanceAnalyticsService {
         asOf, allReceipts, allPayments, allVouchers, allBankLines);
     TaxSummary tax = taxSummary(asOf, allReceivables, allSupplierInvoices);
     CashPlanSummary cashPlan = cashPlan(allControls);
-    return new FinanceAnalyticsResponse(asOf, year, monthly, forecast, aging,
+    return new FinanceAnalyticsResponse(asOf, year, scope.info(), monthly, forecast, aging,
         reconciliation, tax, cashPlan, risks(asOf, allReceivables, allPayables,
-            allBankLines, allSupplierInvoices, cashPlan));
+            allBankLines, allSupplierInvoices, allApplications, cashPlan));
   }
 
   @Transactional(readOnly = true)
@@ -297,7 +342,8 @@ public class FinanceAnalyticsService {
 
   private List<FinanceRisk> risks(LocalDate asOf, List<Receivable> allReceivables,
       List<ProcurementPayable> allPayables, List<BankStatementLine> allBankLines,
-      List<SupplierInvoice> allSupplierInvoices, CashPlanSummary plan) {
+      List<SupplierInvoice> allSupplierInvoices, List<PaymentApplication> allApplications,
+      CashPlanSummary plan) {
     List<FinanceRisk> result = new ArrayList<>();
     List<Receivable> overdueReceivables = allReceivables.stream().filter(this::open)
         .filter(item -> item.getDueDate().isBefore(asOf)).toList();
@@ -319,7 +365,8 @@ public class FinanceAnalyticsService {
     addRisk(result, "TAX_EXCEPTION", "MEDIUM", "TAX", "进项发票存在异常",
         "完成三单匹配、审核和验真", taxExceptions.stream().map(SupplierInvoice::getAmount)
             .reduce(BigDecimal.ZERO, BigDecimal::add), taxExceptions.size());
-    long pending = applications.countByStatus(PaymentApplicationStatus.PENDING_APPROVAL);
+    long pending = allApplications.stream()
+        .filter(item -> item.getStatus() == PaymentApplicationStatus.PENDING_APPROVAL).count();
     addRisk(result, "PENDING_PAYMENT", "MEDIUM", "PAYMENT", "付款申请待审批",
         "避免到期付款因审批积压延误", BigDecimal.ZERO, pending);
     if (plan.variance().signum() > 0) addRisk(result, "CASH_PLAN_GAP", "HIGH", "CASH_PLAN",

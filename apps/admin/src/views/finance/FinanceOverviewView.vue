@@ -23,6 +23,41 @@
       </a-space>
     </header>
 
+    <section class="scope-bar" aria-label="财务组织范围">
+      <div class="scope-selector">
+        <span class="scope-label">组织范围</span>
+        <a-tree-select
+          v-model:value="selectedOrganizationId"
+          :tree-data="organizationOptions"
+          :loading="organizationsLoading"
+          allow-clear
+          show-search
+          tree-default-expand-all
+          tree-node-filter-prop="title"
+          placeholder="全部授权组织"
+          class="organization-select"
+          @change="handleScopeChange"
+        />
+        <label class="descendants-control">
+          <a-switch
+            v-model:checked="includeDescendants"
+            size="small"
+            :disabled="!selectedOrganizationId"
+            @change="handleScopeChange"
+          />
+          <span>含下级</span>
+        </label>
+      </div>
+      <div class="scope-summary">
+        <strong>{{ analytics.scope.organizationName }}</strong>
+        <span>{{ analytics.scope.organizationPath }}</span>
+        <a-tag>{{ analytics.scope.organizationCount }} 个组织</a-tag>
+        <small v-if="analytics.scope.unallocatedExcluded">
+          未分配组织的数据不计入当前口径
+        </small>
+      </div>
+    </section>
+
     <a-alert
       v-if="errorMessage"
       type="warning"
@@ -279,8 +314,10 @@ import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
 import { useRouter } from "vue-router";
 import {
   getFinanceAnalytics,
+  listFinanceOrganizations,
   type FinanceAgingBucket,
   type FinanceAnalytics,
+  type FinanceOrganizationNode,
 } from "@/api/finance";
 import { listAccountingPeriods, type AccountingPeriod } from "@/api/governance";
 import { useAuthStore } from "@/stores/auth";
@@ -291,11 +328,18 @@ const loading = ref(false);
 const errorMessage = ref("");
 const asOf = ref(today());
 const selectedYear = ref(new Date().getFullYear());
+const selectedOrganizationId = ref<string>();
+const includeDescendants = ref(true);
+const organizations = ref<FinanceOrganizationNode[]>([]);
+const organizationsLoading = ref(false);
 const periods = ref<AccountingPeriod[]>([]);
 const simpleImage = Empty.PRESENTED_IMAGE_SIMPLE;
 const analytics = reactive<FinanceAnalytics>(emptyAnalytics());
 const availableYears = computed(() =>
   Array.from({ length: 5 }, (_, index) => new Date().getFullYear() - index),
+);
+const organizationOptions = computed(() =>
+  organizations.value.map(toOrganizationOption),
 );
 const currentPeriod = computed(() =>
   periods.value.find(
@@ -375,13 +419,31 @@ const agingColumns = [
   { title: "应付（含税）", key: "payable" },
 ];
 
-onMounted(loadData);
+onMounted(async () => {
+  await Promise.all([loadOrganizations(), loadData()]);
+});
+async function loadOrganizations() {
+  organizationsLoading.value = true;
+  try {
+    organizations.value = await listFinanceOrganizations();
+  } catch (error) {
+    errorMessage.value =
+      error instanceof Error ? error.message : "组织架构加载失败";
+  } finally {
+    organizationsLoading.value = false;
+  }
+}
 async function loadData() {
   loading.value = true;
   errorMessage.value = "";
   try {
     const [data, periodData] = await Promise.all([
-      getFinanceAnalytics({ asOf: asOf.value, year: selectedYear.value }),
+      getFinanceAnalytics({
+        asOf: asOf.value,
+        year: selectedYear.value,
+        organizationId: selectedOrganizationId.value,
+        includeDescendants: includeDescendants.value,
+      }),
       auth.can("governance:view")
         ? listAccountingPeriods()
         : Promise.resolve([]),
@@ -395,10 +457,38 @@ async function loadData() {
     loading.value = false;
   }
 }
+function handleScopeChange() {
+  if (!selectedOrganizationId.value) includeDescendants.value = true;
+  void loadData();
+}
+type OrganizationOption = {
+  value: string;
+  title: string;
+  label: string;
+  children: OrganizationOption[];
+};
+function toOrganizationOption(
+  node: FinanceOrganizationNode,
+): OrganizationOption {
+  return {
+    value: node.id,
+    title: node.name,
+    label: node.name,
+    children: node.children.map(toOrganizationOption),
+  };
+}
 function emptyAnalytics(): FinanceAnalytics {
   return {
     asOf: today(),
     fiscalYear: new Date().getFullYear(),
+    scope: {
+      organizationName: "全部授权组织",
+      organizationPath: "正在确认角色数据范围",
+      includeDescendants: true,
+      organizationCount: 0,
+      unrestricted: false,
+      unallocatedExcluded: true,
+    },
     monthlyCashFlow: [],
     forecast: [],
     aging: [],
@@ -510,6 +600,62 @@ function pad(value: number) {
   margin: 0;
   color: #64748b;
   font-size: 13px;
+}
+.scope-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  min-height: 58px;
+  padding: 10px 14px;
+  border: 1px solid #d9dee7;
+  border-left: 4px solid #1677ff;
+  background: #fff;
+}
+.scope-selector,
+.scope-summary,
+.descendants-control {
+  display: flex;
+  align-items: center;
+}
+.scope-selector {
+  flex: 0 0 auto;
+  gap: 10px;
+}
+.scope-label {
+  color: #475569;
+  font-size: 13px;
+  font-weight: 600;
+}
+.organization-select {
+  width: 260px;
+}
+.descendants-control {
+  gap: 7px;
+  color: #475569;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.scope-summary {
+  justify-content: flex-end;
+  gap: 9px;
+  min-width: 0;
+  color: #64748b;
+  font-size: 12px;
+}
+.scope-summary strong {
+  color: #1f2937;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.scope-summary > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.scope-summary small {
+  color: #b45309;
+  white-space: nowrap;
 }
 .eyebrow {
   color: #64748b;
@@ -759,6 +905,14 @@ function pad(value: number) {
     align-items: flex-start;
     flex-direction: column;
   }
+  .scope-bar,
+  .scope-summary {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .scope-summary {
+    gap: 4px;
+  }
   .exception-strip,
   .metric-band {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -775,6 +929,18 @@ function pad(value: number) {
   }
 }
 @media (max-width: 560px) {
+  .scope-selector {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    width: 100%;
+  }
+  .scope-label {
+    width: 100%;
+  }
+  .organization-select {
+    flex: 1 1 210px;
+    width: auto;
+  }
   .exception-strip,
   .metric-band,
   .reconciliation-grid {

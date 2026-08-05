@@ -67,6 +67,52 @@ public class DataScopeService {
   }
 
   @Transactional(readOnly = true)
+  public UUID currentOrganizationId() {
+    return organizationIdForUser(currentUserId());
+  }
+
+  @Transactional(readOnly = true)
+  public UUID organizationIdForUser(UUID userId) {
+    if (userId == null) return null;
+    SystemUser user = userRepository.findById(userId).orElse(null);
+    return user == null || user.getOrganization() == null ? null : user.getOrganization().getId();
+  }
+
+  @Transactional(readOnly = true)
+  public Set<UUID> visibleOrganizationIds() {
+    UserPrincipal principal = principal();
+    if (principal == null) return Set.of();
+    if (principal.dataScopes().contains("ALL")) {
+      return organizationRepository.findByTenantIdOrderBySortOrderAsc(TenantContext.currentTenant())
+          .stream().map(SystemOrganization::getId).collect(Collectors.toUnmodifiableSet());
+    }
+    Set<UUID> organizationIds = new HashSet<>();
+    SystemUser user = userRepository.findById(principal.id()).orElse(null);
+    if (user != null && user.getOrganization() != null) {
+      UUID current = user.getOrganization().getId();
+      if (principal.dataScopes().contains("DEPT") || principal.dataScopes().contains("DEPARTMENT")) {
+        organizationIds.add(current);
+      }
+      if (principal.dataScopes().contains("DEPT_AND_SUB")) {
+        organizationIds.addAll(organizationAndDescendantIds(current));
+      }
+    }
+    if (principal.dataScopes().contains("CUSTOM")) {
+      organizationIds.addAll(principal.dataScopeOrganizationIds());
+    }
+    return Set.copyOf(organizationIds);
+  }
+
+  @Transactional(readOnly = true)
+  public Set<UUID> organizationAndDescendantIdsVisibleToCurrentUser(UUID rootId) {
+    if (!canViewOrganization(rootId)) throw new BusinessException("无权查看所选组织的财务数据");
+    Set<UUID> permitted = visibleOrganizationIds();
+    return organizationAndDescendantIds(rootId).stream()
+        .filter(permitted::contains)
+        .collect(Collectors.toUnmodifiableSet());
+  }
+
+  @Transactional(readOnly = true)
   public boolean canViewAssignee(UUID assigneeId, boolean includeUnassigned) {
     UserPrincipal principal = principal();
     if (principal == null) return false;

@@ -1097,6 +1097,10 @@ public class CrmOperationsService {
       Receivable receivable = new Receivable();
       receivable.setCustomerId(quote.getCustomerId());
       receivable.setContractId(contract.getId());
+      Customer customer = customerRepository.findById(quote.getCustomerId()).orElse(null);
+      receivable.setOrganizationId(customer == null ? null
+          : dataScopeService.organizationIdForUser(customer.getOwnerUserId()));
+      receivable.setSalesOwnerUserId(customer == null ? null : customer.getOwnerUserId());
       receivable.setCode(hasText(plan.receivableCode()) ? plan.receivableCode() : codeGenerator.generate("RECEIVABLE"));
       receivable.setSourceNo(contract.getCode());
       receivable.setAmount(defaultAmount(plan.amount()));

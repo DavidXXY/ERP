@@ -17,6 +17,7 @@ import com.company.ops.api.modules.procurement.repository.*;
 import com.company.ops.api.modules.project.domain.Project;
 import com.company.ops.api.modules.project.repository.ProjectRepository;
 import com.company.ops.api.modules.system.security.UserPrincipal;
+import com.company.ops.api.modules.system.security.DataScopeService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
@@ -55,6 +56,7 @@ public class ProcurementControlService {
   private final ProjectRepository projects;
   private final ProcurementArrivalService arrivals;
   private final LedgerService ledgerService;
+  private final DataScopeService dataScopeService;
 
   public ProcurementControlService(
       ProcurementInquiryRepository inquiries,
@@ -74,7 +76,8 @@ public class ProcurementControlService {
       PurchaseRequestApprovalRecordRepository requestApprovals,
       ProjectRepository projects,
       ProcurementArrivalService arrivals,
-      LedgerService ledgerService
+      LedgerService ledgerService,
+      DataScopeService dataScopeService
   ) {
     this.inquiries = inquiries;
     this.inquiryRequests = inquiryRequests;
@@ -94,6 +97,7 @@ public class ProcurementControlService {
     this.projects = projects;
     this.arrivals = arrivals;
     this.ledgerService = ledgerService;
+    this.dataScopeService = dataScopeService;
   }
 
   @Transactional(readOnly = true)
@@ -613,6 +617,15 @@ public class ProcurementControlService {
     payable.setCode("YF-" + receipt.getCode());
     payable.setSupplierId(order.getSupplierId());
     payable.setOrderId(order.getId());
+    UUID organizationId = order.getDepartmentId();
+    if (organizationId == null && order.getProjectId() != null) {
+      organizationId = projects.findById(order.getProjectId())
+          .map(Project::getManagerUserId)
+          .map(dataScopeService::organizationIdForUser)
+          .orElse(null);
+    }
+    payable.setOrganizationId(organizationId == null
+        ? dataScopeService.currentOrganizationId() : organizationId);
     payable.setReceiptId(receipt.getId());
     payable.setAmount(amount);
     payable.setTaxRate(order.getTaxRate());

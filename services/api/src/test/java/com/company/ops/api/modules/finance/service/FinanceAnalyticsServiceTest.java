@@ -2,6 +2,8 @@ package com.company.ops.api.modules.finance.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -14,6 +16,8 @@ import com.company.ops.api.modules.crm.repository.ReceivableRepository;
 import com.company.ops.api.modules.crm.repository.ServiceContractRepository;
 import com.company.ops.api.modules.finance.dto.FinanceAnalyticsDtos.AdjustTaxInvoiceRequest;
 import com.company.ops.api.modules.finance.dto.FinanceAnalyticsDtos.FinanceAnalyticsResponse;
+import com.company.ops.api.modules.finance.dto.FinanceAnalyticsDtos.FinanceScopeInfo;
+import com.company.ops.api.modules.finance.service.FinanceOrganizationScopeService.Scope;
 import com.company.ops.api.modules.finance.repository.PaymentApplicationRepository;
 import com.company.ops.api.modules.finance.repository.PaymentRecordRepository;
 import com.company.ops.api.modules.governance.repository.BankStatementLineRepository;
@@ -60,12 +64,14 @@ class FinanceAnalyticsServiceTest {
   @Mock private BusinessControlRecordRepository controls;
   @Mock private LedgerService ledgerService;
   @Mock private TaxFilingGuard taxFilingGuard;
+  @Mock private FinanceOrganizationScopeService organizationScopeService;
   private FinanceAnalyticsService service;
 
   @BeforeEach
   void setUp() {
     service = new FinanceAnalyticsService(receivables, receipts, contracts, customers, payables,
-        payments, applications, supplierInvoices, suppliers, vouchers, bankLines, controls, ledgerService, taxFilingGuard);
+        payments, applications, supplierInvoices, suppliers, vouchers, bankLines, controls,
+        ledgerService, taxFilingGuard, organizationScopeService);
     when(receivables.findAll()).thenReturn(List.of());
     when(payables.findAll()).thenReturn(List.of());
     when(receipts.findAll()).thenReturn(List.of());
@@ -74,6 +80,11 @@ class FinanceAnalyticsServiceTest {
     when(bankLines.findAll()).thenReturn(List.of());
     when(supplierInvoices.findAll()).thenReturn(List.of());
     when(controls.findAll()).thenReturn(List.of());
+    when(applications.findAll()).thenReturn(List.of());
+    when(organizationScopeService.resolve(any(), anyBoolean())).thenReturn(new Scope(
+        java.util.Set.of(), true,
+        new FinanceScopeInfo(null, "全公司", "全部组织及未分摊数据", true, 0, true, false)));
+    when(organizationScopeService.ownerNames(any())).thenReturn(java.util.Set.of());
   }
 
   @AfterEach
@@ -103,7 +114,7 @@ class FinanceAnalyticsServiceTest {
     input.setVerificationStatus("VERIFIED");
     when(supplierInvoices.findAll()).thenReturn(List.of(input));
 
-    FinanceAnalyticsResponse result = service.analytics(asOf, 2026);
+    FinanceAnalyticsResponse result = service.analytics(asOf, 2026, null, true);
 
     assertThat(result.aging()).filteredOn(item -> item.key().equals("CURRENT"))
         .singleElement().satisfies(item -> assertThat(item.receivable()).isEqualByComparingTo("113"));
@@ -114,6 +125,40 @@ class FinanceAnalyticsServiceTest {
     assertThat(result.tax().outputTax()).isEqualByComparingTo("13");
     assertThat(result.tax().inputTax()).isEqualByComparingTo("6");
     assertThat(result.tax().netTaxPayable()).isEqualByComparingTo("7");
+  }
+
+  @Test
+  void limitsAnalyticsToTheSelectedOrganization() {
+    LocalDate asOf = LocalDate.of(2026, 8, 4);
+    UUID selectedOrganizationId = UUID.randomUUID();
+    UUID otherOrganizationId = UUID.randomUUID();
+    Receivable selected = receivable("AR-DEPT-A", asOf.minusDays(5), "120", null);
+    selected.setId(UUID.randomUUID());
+    selected.setOrganizationId(selectedOrganizationId);
+    Receivable other = receivable("AR-DEPT-B", asOf.minusDays(5), "900", null);
+    other.setId(UUID.randomUUID());
+    other.setOrganizationId(otherOrganizationId);
+    when(receivables.findAll()).thenReturn(List.of(selected, other));
+
+    ProcurementPayable selectedPayable = payable(asOf.minusDays(5), "30", selectedOrganizationId);
+    ProcurementPayable otherPayable = payable(asOf.minusDays(5), "700", otherOrganizationId);
+    when(payables.findAll()).thenReturn(List.of(selectedPayable, otherPayable));
+    Scope selectedScope = new Scope(java.util.Set.of(selectedOrganizationId), false,
+        new FinanceScopeInfo(selectedOrganizationId, "销售一部", "总部 / 销售一部",
+            false, 1, false, true));
+    when(organizationScopeService.resolve(eq(selectedOrganizationId), eq(false)))
+        .thenReturn(selectedScope);
+
+    FinanceAnalyticsResponse result = service.analytics(asOf, 2026, selectedOrganizationId, false);
+
+    assertThat(result.aging()).filteredOn(item -> item.key().equals("D1_30"))
+        .singleElement().satisfies(item -> {
+          assertThat(item.receivable()).isEqualByComparingTo("120");
+          assertThat(item.payable()).isEqualByComparingTo("30");
+          assertThat(item.receivableCount()).isEqualTo(1);
+          assertThat(item.payableCount()).isEqualTo(1);
+        });
+    assertThat(result.scope().organizationId()).isEqualTo(selectedOrganizationId);
   }
 
   @Test
@@ -138,6 +183,17 @@ class FinanceAnalyticsServiceTest {
     item.setCode(code); item.setCustomerId(UUID.randomUUID()); item.setContractId(contractId);
     item.setAmount(new BigDecimal(amount)); item.setSettledAmount(BigDecimal.ZERO);
     item.setDueDate(dueDate); item.setStatus(ReceivableStatus.PAYMENT_PENDING);
+    return item;
+  }
+
+  private ProcurementPayable payable(LocalDate dueDate, String amount, UUID organizationId) {
+    ProcurementPayable item = new ProcurementPayable();
+    item.setId(UUID.randomUUID());
+    item.setAmount(new BigDecimal(amount));
+    item.setPaidAmount(BigDecimal.ZERO);
+    item.setDueDate(dueDate);
+    item.setStatus(PayableStatus.PENDING);
+    item.setOrganizationId(organizationId);
     return item;
   }
 

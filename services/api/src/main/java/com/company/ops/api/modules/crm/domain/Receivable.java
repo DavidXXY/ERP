@@ -21,6 +21,12 @@ public class Receivable extends BaseEntity {
   @Column(name = "contract_id")
   private UUID contractId;
 
+  @Column(name = "organization_id")
+  private UUID organizationId;
+
+  @Column(name = "sales_owner_user_id")
+  private UUID salesOwnerUserId;
+
   @Column(nullable = false, length = 64)
   private String code;
 
@@ -97,6 +103,22 @@ public class Receivable extends BaseEntity {
 
   public void setContractId(UUID contractId) {
     this.contractId = contractId;
+  }
+
+  public UUID getOrganizationId() {
+    return organizationId;
+  }
+
+  public void setOrganizationId(UUID organizationId) {
+    this.organizationId = organizationId;
+  }
+
+  public UUID getSalesOwnerUserId() {
+    return salesOwnerUserId;
+  }
+
+  public void setSalesOwnerUserId(UUID salesOwnerUserId) {
+    this.salesOwnerUserId = salesOwnerUserId;
   }
 
   public String getCode() {

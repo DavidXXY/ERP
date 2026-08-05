@@ -215,6 +215,11 @@
             >资金概览</a-menu-item
           >
           <a-menu-item
+            v-if="auth.can('finance:view')"
+            key="/finance/contribution"
+            >经营贡献</a-menu-item
+          >
+          <a-menu-item
             v-if="auth.can('finance:receivable:view')"
             key="/finance/receivables"
             >应收管理</a-menu-item

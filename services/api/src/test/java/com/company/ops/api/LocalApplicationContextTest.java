@@ -91,7 +91,7 @@ class LocalApplicationContextTest {
         "select max(cast(version as integer)) from flyway_schema_history where success = true",
         Integer.class
     );
-    assertThat(version).isEqualTo(98);
+    assertThat(version).isEqualTo(100);
     assertThat(jdbc.queryForObject("select count(*) from shedlock", Integer.class)).isZero();
     assertThat(jdbc.queryForObject(
         "select count(*) from sys_permissions where code = 'system:health:view'", Integer.class))

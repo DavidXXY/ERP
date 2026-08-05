@@ -60,6 +60,10 @@ export type Project = {
   contractCode?: string;
   contractProjectName?: string;
   contractStatus?: string;
+  parentProjectId?: string;
+  parentProjectCode?: string;
+  parentProjectName?: string;
+  childProjectCount: number;
   contractAmount: number;
   plannedStartDate?: string;
   plannedEndDate?: string;
@@ -99,6 +103,7 @@ export type CreateProjectPayload = {
   budgetItems: ProjectBudgetInput[];
   warrantyEndDate?: string;
   contractId?: string;
+  parentProjectId?: string;
 };
 
 export type ProjectBudgetItem = ProjectBudgetInput & {
@@ -282,11 +287,32 @@ export function processProjectApproval(
 
 export function assignProjectManager(
   id: string,
-  payload: { managerUserId: string; comment?: string },
+  payload: {
+    managerUserId: string;
+    comment?: string;
+    syncChildProjects?: boolean;
+  },
 ) {
   return request<ProjectDetail>({
     method: "POST",
     url: `/projects/${id}/manager`,
+    data: payload,
+  });
+}
+
+export function prepareChildProject(
+  id: string,
+  payload: {
+    siteAddress: string;
+    plannedStartDate: string;
+    plannedEndDate: string;
+    warrantyEndDate?: string;
+    budgetItems: ProjectBudgetInput[];
+  },
+) {
+  return request<ProjectDetail>({
+    method: "PUT",
+    url: `/projects/${id}/preparation`,
     data: payload,
   });
 }

@@ -26,6 +26,18 @@
               show-search
               option-filter-prop="label" /></a-form-item
         ></a-col>
+        <a-col :xs="24" :md="12">
+          <a-form-item label="父项目（创建子项目时选择）">
+            <a-select
+              v-model:value="createForm.parentProjectId"
+              :options="parentProjectOptions"
+              allow-clear
+              show-search
+              option-filter-prop="label"
+              placeholder="不选择则创建一级项目"
+            />
+          </a-form-item>
+        </a-col>
         <a-col :xs="24" :md="6"
           ><a-form-item label="项目类型" name="projectType"
             ><a-select
@@ -137,6 +149,17 @@
               v-model:value="approvalForm.comment"
               :rows="3" /></a-form-item
         ></a-col>
+        <a-col
+          v-if="
+            !activeProject?.parentProjectId &&
+            Number(activeProject?.childProjectCount || 0) > 0
+          "
+          :span="24"
+        >
+          <a-checkbox v-model:checked="approvalForm.syncChildProjects">
+            同步更新全部未结束子项目的项目经理
+          </a-checkbox>
+        </a-col>
       </a-row>
     </a-form>
   </a-modal>
@@ -298,6 +321,9 @@ const props: any = defineProps([
   "costOpen",
   "saving",
   "customerOptions",
+  "parentProjectOptions",
+  "defaultParentProjectId",
+  "defaultCustomerId",
   "categoryOptions",
   "projectTypeOptions",
   "sourceOptions",
@@ -314,6 +340,7 @@ const costFormRef = ref();
 
 const createForm = reactive({
   customerId: "",
+  parentProjectId: undefined as string | undefined,
   code: "",
   name: "",
   projectType: "RENOVATION",
@@ -330,6 +357,7 @@ const createForm = reactive({
 const approvalForm = reactive({
   managerUserId: "",
   comment: "",
+  syncChildProjects: true,
 });
 const stageForm = reactive({
   comment: "",
@@ -392,6 +420,17 @@ const costBudgetUsageAfter = computed(() => {
 const costBudgetOverrun = computed(() => projectedBudgetVariance.value < 0);
 
 watch(
+  () => props.createOpen,
+  (open) => {
+    if (open) {
+      createForm.parentProjectId = props.defaultParentProjectId || undefined;
+      if (props.defaultCustomerId)
+        createForm.customerId = props.defaultCustomerId;
+    }
+  },
+);
+
+watch(
   () => props.approvalOpen,
   (open) => {
     if (!open) return;
@@ -399,6 +438,7 @@ watch(
       props.activeProject?.managerUserId || "",
     );
     approvalForm.comment = "";
+    approvalForm.syncChildProjects = true;
   },
 );
 
@@ -438,6 +478,7 @@ async function handleCreate() {
   try {
     await createProject({
       customerId: createForm.customerId,
+      parentProjectId: createForm.parentProjectId,
       code: createForm.code,
       name: createForm.name,
       projectType: createForm.projectType as any,
@@ -467,6 +508,7 @@ async function handleApproval() {
     await assignProjectManager(props.activeProject.id, {
       managerUserId: approvalForm.managerUserId,
       comment: approvalForm.comment || undefined,
+      syncChildProjects: approvalForm.syncChildProjects,
     });
     emit("updated");
     emit("update:approvalOpen", false);

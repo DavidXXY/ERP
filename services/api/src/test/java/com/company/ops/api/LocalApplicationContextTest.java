@@ -98,8 +98,16 @@ class LocalApplicationContextTest {
         "select max(cast(version as integer)) from flyway_schema_history where success = true",
         Integer.class
     );
-    assertThat(version).isEqualTo(100);
-    assertThat(jdbc.queryForObject("select count(*) from shedlock", Integer.class)).isZero();
+    assertThat(version).isEqualTo(104);
+    assertThat(jdbc.queryForObject(
+        "select count(*) from information_schema.columns where lower(table_name) = 'crm_service_contracts' and lower(column_name) in ('contract_kind', 'parent_contract_id')",
+        Integer.class)).isEqualTo(2);
+    assertThat(jdbc.queryForObject(
+        "select count(*) from information_schema.columns where lower(table_name) = 'project_projects' and lower(column_name) = 'parent_project_id'",
+        Integer.class)).isEqualTo(1);
+    assertThat(jdbc.queryForObject(
+        "select count(*) from information_schema.tables where lower(table_name) = 'shedlock'", Integer.class))
+        .isEqualTo(1);
     assertThat(jdbc.queryForObject(
         "select count(*) from sys_permissions where code = 'system:health:view'", Integer.class))
         .isEqualTo(1);

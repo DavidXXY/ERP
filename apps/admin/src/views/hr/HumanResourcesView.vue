@@ -92,7 +92,7 @@
       display-mode="certificates"
       @data-changed="loadMetrics"
     />
-    <QualificationCenterView v-else display-mode="dashboard" />
+    <WorkforceView v-else />
   </div>
 </template>
 
@@ -180,6 +180,9 @@ const route = useRoute();
 const router = useRouter();
 const QualificationCenterView = defineAsyncComponent(
   () => import("@/views/qualification/QualificationCenterView.vue"),
+);
+const WorkforceView = defineAsyncComponent(
+  () => import("@/views/hr/WorkforceView.vue"),
 );
 
 const canViewEmployees = computed(() =>

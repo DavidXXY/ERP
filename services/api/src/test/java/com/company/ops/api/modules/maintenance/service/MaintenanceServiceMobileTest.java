@@ -18,6 +18,10 @@ import com.company.ops.api.modules.maintenance.domain.WorkOrderStatus;
 import com.company.ops.api.modules.maintenance.domain.WorkOrderType;
 import com.company.ops.api.modules.maintenance.dto.MaintenanceDtos.MobileOperationRequest;
 import com.company.ops.api.modules.maintenance.repository.EquipmentAssetRepository;
+import com.company.ops.api.modules.maintenance.repository.EmployeeCertificateRepository;
+import com.company.ops.api.modules.maintenance.repository.FieldAttendanceRepository;
+import com.company.ops.api.modules.maintenance.repository.FieldScheduleRepository;
+import com.company.ops.api.modules.maintenance.repository.MaintenancePlanRepository;
 import com.company.ops.api.modules.maintenance.repository.WorkOrderAttachmentRepository;
 import com.company.ops.api.modules.maintenance.repository.WorkOrderMaterialRepository;
 import com.company.ops.api.modules.maintenance.repository.WorkOrderMobileOperationRepository;
@@ -50,7 +54,9 @@ class MaintenanceServiceMobileTest {
     when(deletion.isHidden("WORK_ORDER", order.getId())).thenReturn(false);
     when(operations.existsByOperationId("accept-1")).thenReturn(false);
     MaintenanceService service = new MaintenanceService(
-        orders, mock(EquipmentAssetRepository.class), logs, attachments, materials, operations,
+        orders, mock(EquipmentAssetRepository.class), mock(MaintenancePlanRepository.class),
+        mock(EmployeeCertificateRepository.class), mock(FieldScheduleRepository.class),
+        mock(FieldAttendanceRepository.class), logs, attachments, materials, operations,
         mock(CustomerRepository.class), mock(ServiceContractRepository.class), mock(CodeGenerator.class),
         deletion, mock(FileStorageService.class), mock(SystemUserRepository.class)
     );

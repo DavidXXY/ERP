@@ -44,8 +44,9 @@ class PostgresBaselineMigrationTest {
             + "'biz_accounting_periods','biz_bank_statement_lines','biz_control_records',"
             + "'biz_governance_action_logs','fin_period_end_jobs','fin_partner_reconciliations',"
             + "'fin_cash_forecast_scenarios','fin_tax_filings','fin_consolidation_runs',"
-            + "'fin_report_snapshots','fin_voucher_generation_requests')",
-        Integer.class)).isEqualTo(20);
+            + "'fin_report_snapshots','fin_voucher_generation_requests',"
+            + "'notification_channel_preferences','notification_deliveries')",
+        Integer.class)).isEqualTo(22);
     assertThat(jdbc.queryForObject(
         "select count(*) from pg_indexes where schemaname='public' "
             + "and indexname='uk_proc_receipt_client_request'",

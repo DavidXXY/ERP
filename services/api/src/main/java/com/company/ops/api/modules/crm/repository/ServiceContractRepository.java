@@ -10,6 +10,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.jpa.repository.Lock;
+import jakarta.persistence.LockModeType;
 
 public interface ServiceContractRepository extends JpaRepository<ServiceContract, UUID> {
 
@@ -27,6 +30,12 @@ public interface ServiceContractRepository extends JpaRepository<ServiceContract
   boolean existsByQuoteId(UUID quoteId);
 
   Optional<ServiceContract> findByQuoteId(UUID quoteId);
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query("select c from ServiceContract c where c.id = :id")
+  Optional<ServiceContract> findByIdForUpdate(@Param("id") UUID id);
+  List<ServiceContract> findByParentContractIdOrderByStartDateDesc(UUID parentContractId);
+  Page<ServiceContract> findByParentContractIdOrderByStartDateDesc(UUID parentContractId, Pageable pageable);
+  boolean existsByParentContractId(UUID parentContractId);
   List<ServiceContract> findByCodeContainingIgnoreCaseOrProjectNameContainingIgnoreCase(String code,String name,Pageable pageable);
 
   @Query("SELECT COUNT(c) FROM ServiceContract c WHERE c.endDate <= :deadline AND c.status <> 'CLOSED'")

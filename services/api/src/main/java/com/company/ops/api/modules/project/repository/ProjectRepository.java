@@ -30,6 +30,9 @@ public interface ProjectRepository extends JpaRepository<Project, UUID>, JpaSpec
   @Query("select p from Project p where p.id = :id")
   Optional<Project> findByIdForUpdate(@Param("id") UUID id);
   boolean existsByContractId(UUID contractId);
+  boolean existsByParentProjectId(UUID parentProjectId);
+  long countByParentProjectId(UUID parentProjectId);
+  List<Project> findByParentProjectId(UUID parentProjectId);
   @Query(value = "select * from project_projects where contract_id = :contractId order by created_at desc limit 1", nativeQuery = true)
   Optional<Project> findLatestByContractId(@Param("contractId") UUID contractId);
   List<Project> findByContractIdIn(java.util.Collection<UUID> contractIds);

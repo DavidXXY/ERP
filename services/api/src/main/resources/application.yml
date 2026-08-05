@@ -97,3 +97,8 @@ ops:
     enabled: ${WECHAT_ENABLED:false}
     app-id: ${WECHAT_APP_ID:}
     app-secret: ${WECHAT_APP_SECRET:}
+  notifications:
+    webhook-url: ${NOTIFICATION_WEBHOOK_URL:}
+    dispatch-interval-ms: ${NOTIFICATION_DISPATCH_INTERVAL_MS:60000}
+  maintenance:
+    plan-generation-cron: ${MAINTENANCE_PLAN_GENERATION_CRON:0 5 1 * * *}

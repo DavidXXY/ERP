@@ -165,6 +165,8 @@ function relatedRoute(item: NotificationRecord) {
   if (type.includes("EQUIPMENT")) return "/maintenance/equipment";
   if (type.includes("CERTIFICATE")) return "/maintenance/certificates";
   if (type.includes("CONTRACT")) return "/crm/contracts";
+  if (type.includes("PROJECT"))
+    return item.relatedId ? `/projects/${item.relatedId}` : "/projects/list";
   if (type.includes("RECEIVABLE")) return "/finance/receivables";
   if (type.includes("PART") || type.includes("INVENTORY"))
     return "/inventory/parts";
@@ -186,6 +188,7 @@ function typeLabel(type?: string) {
         EQUIPMENT: "设备",
         CERTIFICATE: "证书",
         CONTRACT: "合同",
+        PROJECT: "项目",
         FINANCE: "财务",
         INVENTORY: "库存",
         OUTSOURCE: "外包",

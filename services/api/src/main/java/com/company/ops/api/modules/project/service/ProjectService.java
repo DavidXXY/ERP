@@ -5,9 +5,13 @@ import com.company.ops.api.common.exception.BusinessException;
 import com.company.ops.api.common.service.CodeGenerator;
 import com.company.ops.api.modules.crm.domain.Customer;
 import com.company.ops.api.modules.crm.domain.ServiceContract;
+import com.company.ops.api.modules.crm.domain.ContractKind;
 import com.company.ops.api.modules.crm.domain.ContractStatus;
 import com.company.ops.api.modules.crm.repository.CustomerRepository;
+import com.company.ops.api.modules.crm.repository.ReceivableRepository;
 import com.company.ops.api.modules.crm.repository.ServiceContractRepository;
+import com.company.ops.api.modules.office.domain.SystemNotification;
+import com.company.ops.api.modules.office.repository.SystemNotificationRepository;
 import com.company.ops.api.modules.project.domain.Project;
 import com.company.ops.api.modules.project.domain.ProjectApprovalStatus;
 import com.company.ops.api.modules.project.domain.ProjectBudgetItem;
@@ -22,6 +26,7 @@ import com.company.ops.api.modules.project.dto.ChangeProjectExecutionStatusReque
 import com.company.ops.api.modules.project.dto.CreateProjectCostRequest;
 import com.company.ops.api.modules.project.dto.CreateProjectRequest;
 import com.company.ops.api.modules.project.dto.ProcessProjectApprovalRequest;
+import com.company.ops.api.modules.project.dto.PrepareChildProjectRequest;
 import com.company.ops.api.modules.project.dto.ProjectBudgetItemRequest;
 import com.company.ops.api.modules.project.dto.ProjectBudgetItemResponse;
 import com.company.ops.api.modules.project.dto.ProjectCostEntryResponse;
@@ -48,6 +53,7 @@ import java.time.OffsetDateTime;
 import java.util.EnumMap;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Locale;
@@ -71,14 +77,17 @@ public class ProjectService {
   private final CustomerRepository customerRepository;
   private final DataScopeService dataScopeService;
   private final ServiceContractRepository contractRepository;
+  private final ReceivableRepository receivableRepository;
   private final DeleteGovernanceService deleteGovernanceService;
   private final SystemUserRepository userRepository;
+  private final SystemNotificationRepository notificationRepository;
   private final CodeGenerator codeGenerator;
   @PersistenceContext
   private EntityManager entityManager;
 
   public ProjectService(
       ServiceContractRepository contractRepository,
+      ReceivableRepository receivableRepository,
       ProjectRepository projectRepository,
       ProjectBudgetItemRepository budgetRepository,
       ProjectCostEntryRepository costRepository,
@@ -88,6 +97,7 @@ public class ProjectService {
       DataScopeService dataScopeService,
       DeleteGovernanceService deleteGovernanceService,
       SystemUserRepository userRepository,
+      SystemNotificationRepository notificationRepository,
       CodeGenerator codeGenerator
   ) {
     this.projectRepository = projectRepository;
@@ -98,8 +108,10 @@ public class ProjectService {
     this.customerRepository = customerRepository;
     this.dataScopeService = dataScopeService;
     this.contractRepository = contractRepository;
+    this.receivableRepository = receivableRepository;
     this.deleteGovernanceService = deleteGovernanceService;
     this.userRepository = userRepository;
+    this.notificationRepository = notificationRepository;
     this.codeGenerator = codeGenerator;
   }
 
@@ -199,6 +211,11 @@ public class ProjectService {
           .orElseThrow(() -> new BusinessException("关联合同不存在"));
       validateContractForProject(contract, request);
     }
+    Project parentProject = null;
+    if (request.parentProjectId() != null) {
+      parentProject = requireVisibleProject(request.parentProjectId());
+      validateParentProject(parentProject, request);
+    }
     SystemUser manager = request.managerUserId() == null ? null : requireProjectManager(request.managerUserId());
     String projectCode = resolveProjectCode(request.code(), contract);
     if (projectRepository.existsByCode(projectCode)) {
@@ -210,6 +227,7 @@ public class ProjectService {
     project.setSalesOwnerUserId(customer.getOwnerUserId());
     project.setSalesOrganizationId(dataScopeService.organizationIdForUser(customer.getOwnerUserId()));
     project.setCode(projectCode);
+    project.setParentProjectId(parentProject == null ? null : parentProject.getId());
     if (contract != null) {
       project.setContractId(request.contractId());
     }
@@ -243,12 +261,101 @@ public class ProjectService {
   }
 
   @Transactional
+  public Project createChildProjectFromOrder(
+      ServiceContract order, Project parentProject, BigDecimal frameworkAmount
+  ) {
+    Project existing = projectRepository.findLatestByContractId(order.getId()).orElse(null);
+    if (existing != null) return existing;
+    if (order.getContractKind() != ContractKind.CHILD_ORDER || order.getParentContractId() == null) {
+      throw new BusinessException("只有框架子订单可以自动生成子项目");
+    }
+    if (!order.getParentContractId().equals(parentProject.getContractId())) {
+      throw new BusinessException("子订单与框架项目不匹配");
+    }
+    if (!order.getCustomerId().equals(parentProject.getCustomerId())) {
+      throw new BusinessException("框架项目与子项目客户不一致");
+    }
+    if (parentProject.getParentProjectId() != null) {
+      throw new BusinessException("框架订单必须关联一级项目");
+    }
+    if (parentProject.getExecutionStatus() == ProjectExecutionStatus.CANCELLED
+        || parentProject.getExecutionStatus() == ProjectExecutionStatus.CLOSED) {
+      throw new BusinessException("已取消或已关闭的框架项目不能生成子项目");
+    }
+
+    Customer customer = customerRepository.findById(order.getCustomerId())
+        .orElseThrow(() -> new BusinessException("客户不存在"));
+    String projectCode = resolveProjectCode(null, order);
+    if (projectRepository.existsByCode(projectCode)) {
+      throw new BusinessException("子项目编码已存在");
+    }
+
+    Project child = new Project();
+    child.setCustomerId(order.getCustomerId());
+    child.setContractId(order.getId());
+    child.setParentProjectId(parentProject.getId());
+    child.setSalesOwnerUserId(customer.getOwnerUserId());
+    child.setSalesOrganizationId(dataScopeService.organizationIdForUser(customer.getOwnerUserId()));
+    child.setCode(projectCode);
+    child.setName(order.getProjectName());
+    child.setProjectType(parentProject.getProjectType());
+    child.setManagerUserId(parentProject.getManagerUserId());
+    child.setManagerName(parentProject.getManagerUserId() == null
+        ? "待项目管理部门分配" : parentProject.getManagerName());
+    if (parentProject.getManagerUserId() != null) {
+      child.setManagerAssignedByName("系统自动继承");
+      child.setManagerAssignedAt(OffsetDateTime.now());
+      child.setManagerAssignmentComment("继承框架项目 " + parentProject.getCode() + " 的项目经理");
+    }
+    child.setSiteAddress(parentProject.getSiteAddress());
+    child.setContractAmount(amount(order.getAmount()));
+    child.setPlannedStartDate(order.getStartDate());
+    child.setPlannedEndDate(order.getEndDate());
+    child.setStage(ProjectStage.ENTRY);
+    child.setExecutionStatus(ProjectExecutionStatus.ACTIVE);
+    child.setApprovalStatus(ProjectApprovalStatus.PENDING);
+    child.setBudgetAmount(BigDecimal.ZERO);
+    child.setActualCost(BigDecimal.ZERO);
+    child.setProgress(0);
+    Project saved = projectRepository.save(child);
+
+    parentProject.setContractAmount(amount(frameworkAmount));
+    projectRepository.save(parentProject);
+    notifyChildProjectCreated(saved, parentProject, order);
+    return saved;
+  }
+
+  @Transactional
+  public void synchronizeProjectFromContract(ServiceContract contract, BigDecimal hierarchyAmount) {
+    Project linked = projectRepository.findLatestByContractId(contract.getId()).orElse(null);
+    if (linked == null) return;
+    linked.setName(contract.getProjectName());
+    linked.setContractAmount(contract.getContractKind() == ContractKind.FRAMEWORK
+        ? amount(hierarchyAmount) : amount(contract.getAmount()));
+    linked.setPlannedStartDate(contract.getStartDate());
+    linked.setPlannedEndDate(contract.getEndDate());
+    projectRepository.save(linked);
+
+    if (contract.getContractKind() == ContractKind.CHILD_ORDER && linked.getParentProjectId() != null) {
+      Project parent = projectRepository.findByIdForUpdate(linked.getParentProjectId())
+          .orElseThrow(() -> new BusinessException("框架项目不存在"));
+      parent.setContractAmount(amount(hierarchyAmount));
+      projectRepository.save(parent);
+    }
+  }
+
+  @Transactional
   public ProjectDetailResponse assignManager(UUID id, AssignProjectManagerRequest request) {
     Project project = requireVisibleProject(id);
-    if (project.getApprovalStatus() != ProjectApprovalStatus.APPROVED) {
-      throw new BusinessException("立项审批通过后才能分配项目经理");
+    if (project.getApprovalStatus() == ProjectApprovalStatus.REJECTED) {
+      throw new BusinessException("已驳回项目请先完善资料并重新提交");
+    }
+    if (project.getExecutionStatus() == ProjectExecutionStatus.CANCELLED
+        || project.getExecutionStatus() == ProjectExecutionStatus.CLOSED) {
+      throw new BusinessException("已取消或已结项的项目不能变更项目经理");
     }
     SystemUser manager = requireProjectManager(request.managerUserId());
+    UUID previousManagerId = project.getManagerUserId();
     project.setManagerUserId(manager.getId());
     project.setManagerName(manager.getDisplayName());
     UserPrincipal principal = dataScopeService.currentPrincipal();
@@ -256,7 +363,74 @@ public class ProjectService {
     project.setManagerAssignedByName(principal == null ? "system" : principal.displayName());
     project.setManagerAssignedAt(OffsetDateTime.now());
     project.setManagerAssignmentComment(request.comment());
-    return toDetail(projectRepository.save(project));
+    Project saved = projectRepository.save(project);
+    notifyManagerChanged(saved, previousManagerId, manager);
+
+    if (project.getParentProjectId() == null && Boolean.TRUE.equals(request.syncChildProjects())) {
+      for (Project child : projectRepository.findByParentProjectId(project.getId())) {
+        if (child.getExecutionStatus() == ProjectExecutionStatus.CANCELLED
+            || child.getExecutionStatus() == ProjectExecutionStatus.CLOSED) continue;
+        UUID childPreviousManagerId = child.getManagerUserId();
+        child.setManagerUserId(manager.getId());
+        child.setManagerName(manager.getDisplayName());
+        child.setManagerAssignedByUserId(principal == null ? null : principal.id());
+        child.setManagerAssignedByName(principal == null ? "system" : principal.displayName());
+        child.setManagerAssignedAt(OffsetDateTime.now());
+        child.setManagerAssignmentComment("随框架项目 " + project.getCode() + " 同步负责人");
+        notifyManagerChanged(projectRepository.save(child), childPreviousManagerId, manager);
+      }
+    }
+    return toDetail(saved);
+  }
+
+  @Transactional
+  public ProjectDetailResponse prepareChildProject(UUID id, PrepareChildProjectRequest request) {
+    Project project = requireVisibleProject(id);
+    if (project.getParentProjectId() == null) {
+      throw new BusinessException("只有框架子项目需要完善立项资料");
+    }
+    if (project.getApprovalStatus() == ProjectApprovalStatus.APPROVED) {
+      throw new BusinessException("已审批项目不能通过立项准备修改");
+    }
+    if (request.plannedEndDate().isBefore(request.plannedStartDate())) {
+      throw new BusinessException("计划结束日期不能早于开始日期");
+    }
+    ServiceContract contract = project.getContractId() == null ? null
+        : contractRepository.findById(project.getContractId()).orElse(null);
+    if (contract != null && (request.plannedStartDate().isBefore(contract.getStartDate())
+        || request.plannedEndDate().isAfter(contract.getEndDate()))) {
+      throw new BusinessException("子项目计划周期必须在子订单有效期内");
+    }
+    validateBudgetItems(request.budgetItems());
+    BigDecimal budgetAmount = request.budgetItems().stream()
+        .map(ProjectBudgetItemRequest::plannedAmount)
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
+    if (budgetAmount.compareTo(BigDecimal.ZERO) <= 0) {
+      throw new BusinessException("子项目至少需要一项有效预算");
+    }
+
+    project.setSiteAddress(request.siteAddress().trim());
+    project.setPlannedStartDate(request.plannedStartDate());
+    project.setPlannedEndDate(request.plannedEndDate());
+    project.setWarrantyEndDate(request.warrantyEndDate());
+    project.setBudgetAmount(budgetAmount);
+    project.setApprovalStatus(ProjectApprovalStatus.PENDING);
+    project.setApprovalComment(null);
+    project.setApproverName(null);
+    project.setApproverUserId(null);
+    project.setApprovedAt(null);
+    projectRepository.save(project);
+
+    budgetRepository.deleteByProjectId(project.getId());
+    budgetRepository.saveAll(request.budgetItems().stream().map(item -> {
+      ProjectBudgetItem entity = new ProjectBudgetItem();
+      entity.setProjectId(project.getId());
+      entity.setCategory(item.category());
+      entity.setPlannedAmount(item.plannedAmount());
+      entity.setRemark(item.remark());
+      return entity;
+    }).toList());
+    return toDetail(project);
   }
 
   @Transactional
@@ -267,6 +441,15 @@ public class ProjectService {
     }
     if (request.decision() == ProjectApprovalStatus.PENDING) {
       throw new BusinessException("请选择通过或驳回");
+    }
+    if (request.decision() == ProjectApprovalStatus.APPROVED && project.getParentProjectId() != null) {
+      if (project.getManagerUserId() == null) throw new BusinessException("请先分配项目经理");
+      if (amount(project.getBudgetAmount()).compareTo(BigDecimal.ZERO) <= 0) {
+        throw new BusinessException("请先完善子项目预算");
+      }
+      if (project.getSiteAddress() == null || project.getSiteAddress().isBlank()) {
+        throw new BusinessException("请先完善子项目现场地址");
+      }
     }
     project.setApprovalStatus(request.decision());
     project.setApprovalComment(request.comment());
@@ -293,6 +476,7 @@ public class ProjectService {
       throw new BusinessException("进入质保阶段前必须填写质保截止日期");
     }
     if (request.targetStage() == ProjectStage.CLOSED) {
+      validateFrameworkHierarchyClosed(project);
       validateCloseout(project);
       project.setExecutionStatus(ProjectExecutionStatus.CLOSED);
       project.setStatusComment(request.comment());
@@ -343,6 +527,9 @@ public class ProjectService {
     if (!allowed) {
       throw new BusinessException("不允许从" + current.name() + "变更为" + target.name());
     }
+    if (target == ProjectExecutionStatus.CANCELLED) {
+      validateFrameworkHierarchyClosed(project);
+    }
     project.setExecutionStatus(target);
     project.setStatusComment(request.comment());
     project.setStatusChangedAt(OffsetDateTime.now());
@@ -352,6 +539,9 @@ public class ProjectService {
   @Transactional
   public void deleteProject(UUID id) {
     Project project = requireManageableProject(id);
+    if (projectRepository.existsByParentProjectId(id)) {
+      throw new BusinessException("框架项目仍有关联子项目，不能删除");
+    }
     deleteGovernanceService.requestSoftDelete("PROJECT", id, project.getCode() + " · " + project.getName());
   }
 
@@ -421,6 +611,8 @@ public class ProjectService {
   private ProjectResponse toResponse(Project project, String customerName, ServiceContract contract) {
     BigDecimal actualCost = amount(project.getActualCost());
     BigDecimal budgetAmount = amount(project.getBudgetAmount());
+    Project parent = project.getParentProjectId() == null ? null
+        : projectRepository.findById(project.getParentProjectId()).orElse(null);
     return new ProjectResponse(
         project.getId(),
         project.getCustomerId(),
@@ -429,6 +621,10 @@ public class ProjectService {
         contract == null ? null : contract.getCode(),
         contract == null ? null : contract.getProjectName(),
         contract == null ? null : contract.getStatus(),
+        project.getParentProjectId(),
+        parent == null ? null : parent.getCode(),
+        parent == null ? null : parent.getName(),
+        Math.toIntExact(projectRepository.countByParentProjectId(project.getId())),
         project.getCode(),
         project.getName(),
         project.getProjectType(),
@@ -640,11 +836,119 @@ public class ProjectService {
     if (contract.getStatus() != ContractStatus.ACTIVE) {
       throw new BusinessException("只有生效中的合同可以创建项目");
     }
+    ContractKind kind = contract.getContractKind() == null ? ContractKind.STANDARD : contract.getContractKind();
+    if (kind == ContractKind.FRAMEWORK && request.parentProjectId() != null) {
+      throw new BusinessException("框架订单只能创建一级项目");
+    }
+    if (kind == ContractKind.CHILD_ORDER && request.parentProjectId() == null) {
+      throw new BusinessException("框架子订单必须关联框架项目创建子项目");
+    }
     if (projectRepository.existsByContractId(contract.getId())) {
       throw new BusinessException("该合同已关联项目，不能重复创建");
     }
-    if (amount(contract.getAmount()).compareTo(amount(request.contractAmount())) != 0) {
+    if (kind != ContractKind.FRAMEWORK
+        && amount(contract.getAmount()).compareTo(amount(request.contractAmount())) != 0) {
       throw new BusinessException("项目合同金额必须与关联合同金额一致");
+    }
+  }
+
+  private void notifyChildProjectCreated(Project child, Project parent, ServiceContract order) {
+    Set<UUID> recipients = new LinkedHashSet<>();
+    if (parent.getManagerUserId() != null) {
+      recipients.add(parent.getManagerUserId());
+    } else {
+      userRepository.findEnabledByRoleCode("PROJECT_MANAGER").stream()
+          .map(SystemUser::getId)
+          .filter(java.util.Objects::nonNull)
+          .forEach(recipients::add);
+    }
+    for (UUID userId : recipients) {
+      String dedupKey = "FRAMEWORK_CHILD_PROJECT:" + child.getId() + ":" + userId;
+      if (notificationRepository.existsByDedupKey(dedupKey)) continue;
+      SystemNotification notification = new SystemNotification();
+      notification.setType("PROJECT");
+      notification.setTitle("框架子项目已创建");
+      notification.setContent(parent.getCode() + " / " + child.getCode()
+          + " · " + child.getName() + " · 子订单 " + order.getCode()
+          + " · 请完善立项资料并推进审批");
+      notification.setTargetUserId(userId);
+      notification.setRelatedType("PROJECT");
+      notification.setRelatedId(child.getId());
+      notification.setDedupKey(dedupKey);
+      notification.setRead(false);
+      notificationRepository.save(notification);
+    }
+  }
+
+  private void notifyManagerChanged(Project project, UUID previousManagerId, SystemUser manager) {
+    String eventKey = project.getManagerAssignedAt() == null
+        ? Long.toString(System.currentTimeMillis())
+        : Long.toString(project.getManagerAssignedAt().toInstant().toEpochMilli());
+    saveTargetedProjectNotification(
+        project,
+        manager.getId(),
+        "项目负责人已分配",
+        project.getCode() + " · " + project.getName() + " 已分配给您",
+        "PROJECT_MANAGER_ASSIGNED:" + project.getId() + ":" + manager.getId() + ":" + eventKey);
+    if (previousManagerId != null && !previousManagerId.equals(manager.getId())) {
+      saveTargetedProjectNotification(
+          project,
+          previousManagerId,
+          "项目负责人已变更",
+          project.getCode() + " · " + project.getName() + " 已转交给 " + manager.getDisplayName(),
+          "PROJECT_MANAGER_REMOVED:" + project.getId() + ":" + previousManagerId + ":" + eventKey);
+    }
+  }
+
+  private void saveTargetedProjectNotification(
+      Project project, UUID userId, String title, String content, String dedupKey
+  ) {
+    if (notificationRepository.existsByDedupKey(dedupKey)) return;
+    SystemNotification notification = new SystemNotification();
+    notification.setType("PROJECT");
+    notification.setTitle(title);
+    notification.setContent(content);
+    notification.setTargetUserId(userId);
+    notification.setRelatedType("PROJECT");
+    notification.setRelatedId(project.getId());
+    notification.setDedupKey(dedupKey);
+    notification.setRead(false);
+    notificationRepository.save(notification);
+  }
+
+  private void validateParentProject(Project parent, CreateProjectRequest request) {
+    if (!parent.getCustomerId().equals(request.customerId())) {
+      throw new BusinessException("父项目与子项目客户不一致");
+    }
+    if (parent.getParentProjectId() != null) {
+      throw new BusinessException("暂不支持三级项目，子项目下不能继续创建项目");
+    }
+    if (parent.getExecutionStatus() == ProjectExecutionStatus.CANCELLED
+        || parent.getExecutionStatus() == ProjectExecutionStatus.CLOSED) {
+      throw new BusinessException("已取消或已关闭的项目不能新增子项目");
+    }
+  }
+
+  private void validateFrameworkHierarchyClosed(Project project) {
+    if (project.getParentProjectId() != null) return;
+    List<Project> children = projectRepository.findByParentProjectId(project.getId());
+    if (children.isEmpty()) return;
+    boolean hasOpenChild = children.stream().anyMatch(child ->
+        child.getExecutionStatus() != ProjectExecutionStatus.CLOSED
+            && child.getExecutionStatus() != ProjectExecutionStatus.CANCELLED);
+    if (hasOpenChild) {
+      throw new BusinessException("仍有未结项或未取消的子项目，框架项目不能关闭或取消");
+    }
+    if (project.getContractId() == null) return;
+    List<UUID> childContractIds = contractRepository
+        .findByParentContractIdOrderByStartDateDesc(project.getContractId()).stream()
+        .map(ServiceContract::getId)
+        .toList();
+    if (childContractIds.isEmpty()) return;
+    boolean hasOutstanding = receivableRepository.findByContractIdIn(childContractIds).stream()
+        .anyMatch(item -> amount(item.getAmount()).compareTo(amount(item.getSettledAmount())) > 0);
+    if (hasOutstanding) {
+      throw new BusinessException("仍有子订单应收未结清，框架项目不能关闭或取消");
     }
   }
 

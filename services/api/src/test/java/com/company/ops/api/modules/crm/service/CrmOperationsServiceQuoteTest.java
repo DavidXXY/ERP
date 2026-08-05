@@ -3,6 +3,7 @@ package com.company.ops.api.modules.crm.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -11,6 +12,8 @@ import com.company.ops.api.common.exception.BusinessException;
 import com.company.ops.api.common.delete.DeleteGovernanceService;
 import com.company.ops.api.common.service.CodeGenerator;
 import com.company.ops.api.modules.crm.domain.ApprovalDecision;
+import com.company.ops.api.modules.crm.domain.ContractKind;
+import com.company.ops.api.modules.crm.domain.ContractStatus;
 import com.company.ops.api.modules.crm.domain.Customer;
 import com.company.ops.api.modules.crm.domain.QuoteCustomerDecision;
 import com.company.ops.api.modules.crm.domain.QuoteCostRequest;
@@ -23,8 +26,11 @@ import com.company.ops.api.modules.crm.domain.ReceivableReceipt;
 import com.company.ops.api.modules.crm.domain.ReceivableStatus;
 import com.company.ops.api.modules.crm.domain.ServiceContract;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ProcessQuoteApprovalRequest;
+import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.CreateChildOrderRequest;
+import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ReceivablePlanRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.RecordReceiptRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.UpdateQuoteRequest;
+import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.UpdateContractRequest;
 import com.company.ops.api.modules.crm.repository.CustomerRepository;
 import com.company.ops.api.modules.crm.repository.CrmAttachmentRepository;
 import com.company.ops.api.modules.crm.repository.FollowUpRepository;
@@ -37,11 +43,13 @@ import com.company.ops.api.modules.crm.repository.ReceivableReceiptRepository;
 import com.company.ops.api.modules.crm.repository.ReceivableRepository;
 import com.company.ops.api.modules.crm.repository.ServiceContractRepository;
 import com.company.ops.api.modules.ledger.service.LedgerService;
+import com.company.ops.api.modules.project.domain.Project;
 import com.company.ops.api.modules.project.repository.ProjectRepository;
 import com.company.ops.api.modules.project.service.ProjectService;
 import com.company.ops.api.modules.system.security.DataScopeService;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -301,6 +309,121 @@ class CrmOperationsServiceQuoteTest {
     verify(receiptRepository).saveAndFlush(receiptCaptor.capture());
     assertThat(receiptCaptor.getValue().getReferenceNo()).isEqualTo("BANK-003");
     assertThat(receiptCaptor.getValue().getRecorderName()).isEqualTo("真实登记人");
+  }
+
+  @Test
+  void frameworkChildOrderCreatesReceivableAgainstChildOrder() {
+    UUID frameworkId = UUID.randomUUID();
+    ServiceContract framework = framework(frameworkId, new BigDecimal("500000"));
+    Project parentProject = new Project();
+    parentProject.setId(UUID.randomUUID());
+    parentProject.setContractId(frameworkId);
+    when(contractRepository.findByIdForUpdate(frameworkId)).thenReturn(Optional.of(framework));
+    when(contractRepository.findByParentContractIdOrderByStartDateDesc(frameworkId)).thenReturn(List.of());
+    when(codeGenerator.generate("CONTRACT")).thenReturn("HT-ZDD-001");
+    when(contractRepository.save(any(ServiceContract.class))).thenAnswer(invocation -> {
+      ServiceContract saved = invocation.getArgument(0);
+      saved.setId(UUID.randomUUID());
+      return saved;
+    });
+    when(receivableRepository.save(any(Receivable.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    when(projectRepository.findLatestByContractId(frameworkId)).thenReturn(Optional.of(parentProject));
+
+    var response = crmOperationsService.createChildOrder(frameworkId, new CreateChildOrderRequest(
+        null, "一期维保订单", "维保订单", new BigDecimal("120000"), new BigDecimal("6"),
+        LocalDate.of(2026, 8, 1), LocalDate.of(2026, 10, 31), "每月",
+        List.of(new ReceivablePlanRequest(null, new BigDecimal("120000"), LocalDate.of(2026, 11, 10)))
+    ));
+
+    assertThat(response.contractKind()).isEqualTo(ContractKind.CHILD_ORDER);
+    assertThat(response.parentContractId()).isEqualTo(frameworkId);
+    ArgumentCaptor<Receivable> captor = ArgumentCaptor.forClass(Receivable.class);
+    verify(receivableRepository).save(captor.capture());
+    assertThat(captor.getValue().getContractId()).isEqualTo(response.id());
+    assertThat(captor.getValue().getAmount()).isEqualByComparingTo("120000");
+    verify(projectService).createChildProjectFromOrder(
+        any(ServiceContract.class), org.mockito.ArgumentMatchers.eq(parentProject),
+        org.mockito.ArgumentMatchers.eq(new BigDecimal("120000")));
+  }
+
+  @Test
+  void frameworkChildOrdersCannotExceedSpecifiedTotal() {
+    UUID frameworkId = UUID.randomUUID();
+    ServiceContract framework = framework(frameworkId, new BigDecimal("100000"));
+    ServiceContract existing = new ServiceContract();
+    existing.setAmount(new BigDecimal("80000"));
+    when(contractRepository.findByIdForUpdate(frameworkId)).thenReturn(Optional.of(framework));
+    when(contractRepository.findByParentContractIdOrderByStartDateDesc(frameworkId)).thenReturn(List.of(existing));
+
+    assertThatThrownBy(() -> crmOperationsService.createChildOrder(frameworkId, new CreateChildOrderRequest(
+        null, "超额订单", "维保订单", new BigDecimal("30000"), null,
+        LocalDate.of(2026, 8, 1), LocalDate.of(2026, 10, 31), null,
+        List.of(new ReceivablePlanRequest(null, new BigDecimal("30000"), LocalDate.of(2026, 11, 10)))
+    ))).isInstanceOf(BusinessException.class)
+        .hasMessage("子订单累计金额不能超过框架订单总金额");
+
+    verify(contractRepository, never()).save(any(ServiceContract.class));
+    verify(receivableRepository, never()).save(any(Receivable.class));
+  }
+
+  @Test
+  void childOrderAmountChangeRebalancesReceivableAndSynchronizesProjects() {
+    UUID frameworkId = UUID.randomUUID();
+    UUID orderId = UUID.randomUUID();
+    ServiceContract framework = framework(frameworkId, new BigDecimal("500000"));
+    ServiceContract order = new ServiceContract();
+    order.setId(orderId);
+    order.setParentContractId(frameworkId);
+    order.setContractKind(ContractKind.CHILD_ORDER);
+    order.setCustomerId(customerId);
+    order.setCode("HT-ZDD-CHANGE");
+    order.setProjectName("变更前子订单");
+    order.setContractType("维保订单");
+    order.setAmount(new BigDecimal("120000"));
+    order.setTaxRate(new BigDecimal("6"));
+    order.setStartDate(LocalDate.of(2026, 8, 1));
+    order.setEndDate(LocalDate.of(2026, 10, 31));
+    order.setStatus(ContractStatus.ACTIVE);
+    Receivable receivable = new Receivable();
+    receivable.setContractId(orderId);
+    receivable.setAmount(new BigDecimal("120000"));
+    receivable.setSettledAmount(new BigDecimal("20000"));
+    receivable.setDueDate(LocalDate.of(2026, 11, 10));
+    receivable.setStatus(ReceivableStatus.PAYMENT_PENDING);
+
+    when(contractRepository.findByIdForUpdate(orderId)).thenReturn(Optional.of(order));
+    when(contractRepository.findByIdForUpdate(frameworkId)).thenReturn(Optional.of(framework));
+    when(contractRepository.findByParentContractIdOrderByStartDateDesc(frameworkId))
+        .thenReturn(List.of(order));
+    when(receivableRepository.findByContractIdOrderByDueDateDesc(orderId))
+        .thenReturn(List.of(receivable));
+    when(contractRepository.save(any(ServiceContract.class)))
+        .thenAnswer(invocation -> invocation.getArgument(0));
+    when(contractRepository.findById(frameworkId)).thenReturn(Optional.of(framework));
+    when(projectRepository.findLatestByContractId(orderId)).thenReturn(Optional.empty());
+
+    crmOperationsService.updateContract(orderId, new UpdateContractRequest(
+        "变更后子订单", null, new BigDecimal("90000"), null, null, null, null));
+
+    assertThat(order.getProjectName()).isEqualTo("变更后子订单");
+    assertThat(receivable.getAmount()).isEqualByComparingTo("90000");
+    verify(receivableRepository).saveAll(List.of(receivable));
+    verify(projectService).synchronizeProjectFromContract(eq(order), eq(new BigDecimal("90000")));
+  }
+
+  private ServiceContract framework(UUID id, BigDecimal amount) {
+    ServiceContract framework = new ServiceContract();
+    framework.setId(id);
+    framework.setCustomerId(customerId);
+    framework.setCode("HT-KJ-001");
+    framework.setProjectName("年度框架订单");
+    framework.setContractType("框架订单");
+    framework.setContractKind(ContractKind.FRAMEWORK);
+    framework.setAmount(amount);
+    framework.setStatus(ContractStatus.ACTIVE);
+    framework.setStartDate(LocalDate.of(2026, 1, 1));
+    framework.setEndDate(LocalDate.of(2026, 12, 31));
+    return framework;
   }
 
   private QuotePlan quote(UUID id, QuoteStatus status, int versionNo) {

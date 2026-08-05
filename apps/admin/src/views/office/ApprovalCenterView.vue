@@ -1008,7 +1008,7 @@ const mergedList = computed(() => {
       endDate: c.endDate,
       serviceCycle: c.serviceCycle,
       _slaLevel: slaLevel(c.startDate, true),
-      _riskLevel: approvalRiskLevel(c.amount, c.startDate, true),
+      _riskLevel: approvalRiskLevel(Number(c.amount || 0), c.startDate, true),
     });
   });
   // Contract changes

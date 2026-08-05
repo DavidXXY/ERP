@@ -10,7 +10,10 @@
 
       <a-row :gutter="[16, 16]" class="metric-row">
         <a-col :xs="12" :lg="4"
-          ><a-statistic title="合同总数" :value="contracts.length" suffix="份"
+          ><a-statistic
+            title="合同总数"
+            :value="topLevelContracts.length"
+            suffix="份"
         /></a-col>
         <a-col :xs="12" :lg="4"
           ><a-statistic
@@ -44,6 +47,13 @@
           allow-clear
           placeholder="全部状态"
           :options="statusOptions"
+          style="width: 150px"
+        />
+        <a-select
+          v-model:value="kindFilter"
+          allow-clear
+          placeholder="全部订单类型"
+          :options="kindOptions"
           style="width: 150px"
         />
         <a-select
@@ -109,7 +119,15 @@
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'contract'">
               <strong>{{ record.code }}</strong>
+              <a-tag style="margin-left: 8px">{{
+                contractKindLabel(record.contractKind)
+              }}</a-tag>
               <span class="table-subtitle">{{ record.customerName }}</span>
+              <span
+                v-if="record.contractKind === 'FRAMEWORK'"
+                class="table-subtitle"
+                >包含 {{ childOrderCount(record) }} 个子订单</span
+              >
             </template>
             <template v-else-if="column.key === 'project'">
               <span>{{ record.projectName }}</span>
@@ -126,16 +144,19 @@
               <span>{{ record.salesOwnerName || "未关联销售" }}</span>
             </template>
             <template v-else-if="column.key === 'amount'"
-              ><strong>{{ formatMoney(record.amount) }}</strong
+              ><strong>{{ formatMoney(contractDisplayAmount(record)) }}</strong
               ><span class="table-subtitle"
-                >未税
-                {{
-                  formatMoney(
-                    record.netAmount ??
-                      calcNetAmount(record.amount, record.taxRate),
-                  )
-                }}
-                · 税率 {{ formatTaxRate(record.taxRate) }}</span
+                >未税 {{ formatMoney(contractDisplayNetAmount(record)) }}
+                <template v-if="record.contractKind === 'FRAMEWORK'">
+                  · 由 {{ childOrderCount(record) }} 个子订单组成
+                </template>
+                <template v-else>
+                  · 税率 {{ formatTaxRate(record.taxRate) }}
+                </template></span
+              ><span
+                v-if="record.contractKind === 'FRAMEWORK'"
+                class="table-subtitle"
+                >框架上限 {{ frameworkLimitLabel(record) }}</span
               ></template
             >
             <template v-else-if="column.key === 'invoiced'"
@@ -204,7 +225,7 @@
           </div>
           <div class="mobile-card-body">
             <span>{{ record.projectName || record.customerName }}</span
-            ><strong>{{ formatMoney(record.amount) }}</strong>
+            ><strong>{{ formatMoney(contractDisplayAmount(record)) }}</strong>
           </div>
           <div class="mobile-card-tags">
             已开票 {{ formatMoney(contractFinancial(record).invoicedAmount) }} ·
@@ -212,13 +233,14 @@
           </div>
           <div class="mobile-card-tags">
             未税
-            {{
-              formatMoney(
-                record.netAmount ??
-                  calcNetAmount(record.amount, record.taxRate),
-              )
-            }}
-            · 税率 {{ formatTaxRate(record.taxRate) }}
+            {{ formatMoney(contractDisplayNetAmount(record)) }}
+            <template v-if="record.contractKind === 'FRAMEWORK'">
+              · {{ childOrderCount(record) }} 个子订单 · 上限
+              {{ frameworkLimitLabel(record) }}
+            </template>
+            <template v-else>
+              · 税率 {{ formatTaxRate(record.taxRate) }}</template
+            >
           </div>
           <div class="mobile-card-footer">
             <span
@@ -263,6 +285,7 @@ const receivables = ref<Receivable[]>([]);
 const loading = ref(false);
 const keyword = ref("");
 const statusFilter = ref<ContractStatus>();
+const kindFilter = ref<ServiceContract["contractKind"]>();
 const salesFilter = ref<string>();
 const users = ref<UserResponse[]>([]);
 const dateFilterMode = ref<"RANGE" | "MONTH" | "YEAR">("RANGE");
@@ -284,6 +307,10 @@ const statusOptions = [
   { label: "履约风险", value: "OVERDUE_RISK" },
   { label: "已关闭", value: "CLOSED" },
 ];
+const kindOptions = [
+  { label: "普通合同", value: "STANDARD" },
+  { label: "框架订单", value: "FRAMEWORK" },
+];
 const columns = [
   { title: "合同 / 客户", key: "contract", width: 230 },
   { title: "项目", key: "project", width: 280 },
@@ -295,13 +322,17 @@ const columns = [
   { title: "状态", key: "status", width: 110 },
   { title: "操作", key: "action", width: 210 },
 ];
+const topLevelContracts = computed(() =>
+  contracts.value.filter((item) => item.contractKind !== "CHILD_ORDER"),
+);
 const filteredContracts = computed(() => {
   const term = keyword.value.trim().toLowerCase();
-  return contracts.value.filter((item) => {
+  return topLevelContracts.value.filter((item) => {
     const text =
       `${item.code} ${item.projectName} ${item.customerName} ${item.salesOwnerName || ""}`.toLowerCase();
     return (
       (!statusFilter.value || item.status === statusFilter.value) &&
+      (!kindFilter.value || item.contractKind === kindFilter.value) &&
       (!salesFilter.value || item.salesOwnerName === salesFilter.value) &&
       matchesContractDate(item) &&
       (!term || text.includes(term))
@@ -322,26 +353,30 @@ const salesOptions = computed(() => {
     .map((name) => ({ label: name, value: name }));
 });
 const totalAmount = computed(() =>
-  contracts.value.reduce((sum, item) => sum + Number(item.amount || 0), 0),
+  topLevelContracts.value.reduce(
+    (sum, item) => sum + contractDisplayAmount(item),
+    0,
+  ),
 );
 const totalInvoicedAmount = computed(() =>
-  contracts.value.reduce(
+  topLevelContracts.value.reduce(
     (sum, item) => sum + contractFinancial(item).invoicedAmount,
     0,
   ),
 );
 const totalReceivedAmount = computed(() =>
-  contracts.value.reduce(
+  topLevelContracts.value.reduce(
     (sum, item) => sum + contractFinancial(item).receivedAmount,
     0,
   ),
 );
 const activeCount = computed(
-  () => contracts.value.filter((item) => item.status === "ACTIVE").length,
+  () =>
+    topLevelContracts.value.filter((item) => item.status === "ACTIVE").length,
 );
 const riskCount = computed(
   () =>
-    contracts.value.filter(
+    topLevelContracts.value.filter(
       (item) =>
         item.status === "RENEWAL_PENDING" || item.status === "OVERDUE_RISK",
     ).length,
@@ -374,7 +409,11 @@ function handleExportCsv() {
   ];
   const rows = filteredContracts.value.map((r) => {
     const financial = contractFinancial(r);
-    const base = contractRowToCsv(r);
+    const base = contractRowToCsv({
+      ...r,
+      amount: contractDisplayAmount(r),
+      netAmount: contractDisplayNetAmount(r),
+    });
     return [
       ...base.slice(0, 6),
       String(financial.invoicedAmount),
@@ -505,11 +544,61 @@ function calcNetAmount(amount?: number, taxRate?: number) {
   return divisor > 0 ? Number(amount || 0) / divisor : Number(amount || 0);
 }
 
+function contractKindLabel(kind?: ServiceContract["contractKind"]) {
+  return { STANDARD: "普通合同", FRAMEWORK: "框架订单", CHILD_ORDER: "子订单" }[
+    kind || "STANDARD"
+  ];
+}
+
+function childOrdersFor(record: ServiceContract) {
+  return contracts.value.filter((item) => item.parentContractId === record.id);
+}
+
+function childOrderCount(record: ServiceContract) {
+  return record.childOrderCount ?? childOrdersFor(record).length;
+}
+
+function contractDisplayAmount(record: ServiceContract) {
+  if (record.contractKind !== "FRAMEWORK") return Number(record.amount || 0);
+  return Number(
+    record.childOrderAmount ??
+      childOrdersFor(record).reduce(
+        (sum, item) => sum + Number(item.amount || 0),
+        0,
+      ),
+  );
+}
+
+function contractDisplayNetAmount(record: ServiceContract) {
+  if (record.contractKind !== "FRAMEWORK") {
+    return Number(
+      record.netAmount ?? calcNetAmount(record.amount, record.taxRate),
+    );
+  }
+  return childOrdersFor(record).reduce(
+    (sum, item) =>
+      sum + Number(item.netAmount ?? calcNetAmount(item.amount, item.taxRate)),
+    0,
+  );
+}
+
+function frameworkLimitLabel(record: ServiceContract) {
+  return record.amount == null ? "不设上限" : formatMoney(record.amount);
+}
+
 function contractFinancial(record: ServiceContract) {
+  const contractIds =
+    record.contractKind === "FRAMEWORK"
+      ? new Set(
+          contracts.value
+            .filter((item) => item.parentContractId === record.id)
+            .map((item) => item.id),
+        )
+      : new Set([record.id]);
   return receivables.value
     .filter(
       (item) =>
-        item.contractId === record.id ||
+        (!!item.contractId && contractIds.has(item.contractId)) ||
         item.contractCode === record.code ||
         item.sourceNo === record.code,
     )

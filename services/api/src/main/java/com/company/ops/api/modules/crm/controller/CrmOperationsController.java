@@ -7,6 +7,7 @@ import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ApplyInvoiceRequest
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ContractResponse;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ConvertQuoteRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.CreateFollowUpRequest;
+import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.CreateChildOrderRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.CreateOpportunityRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.CreateQuoteRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.CustomerProfileResponse;
@@ -364,6 +365,27 @@ public class CrmOperationsController {
       @Valid @RequestBody UpdateContractRequest request
   ) {
     return ApiResponse.ok(crmOperationsService.updateContract(id, request));
+  }
+
+  @PostMapping("/contracts/{id}/orders")
+  @ResponseStatus(HttpStatus.CREATED)
+  @PreAuthorize("hasAuthority('crm:contract:create')")
+  public ApiResponse<ContractResponse> createChildOrder(
+      @PathVariable UUID id,
+      @Valid @RequestBody CreateChildOrderRequest request
+  ) {
+    return ApiResponse.ok(crmOperationsService.createChildOrder(id, request));
+  }
+
+  @GetMapping("/contracts/{id}/orders")
+  @PreAuthorize("hasAuthority('crm:contract:view')")
+  public ApiResponse<PageResponse<ContractResponse>> listChildOrders(
+      @PathVariable UUID id,
+      @org.springframework.data.web.PageableDefault(size = 20, sort = "startDate",
+          direction = org.springframework.data.domain.Sort.Direction.DESC)
+      org.springframework.data.domain.Pageable pageable
+  ) {
+    return ApiResponse.ok(PageResponse.from(crmOperationsService.listChildOrders(id, pageable)));
   }
 
 

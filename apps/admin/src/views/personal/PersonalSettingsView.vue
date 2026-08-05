@@ -276,6 +276,77 @@
             </section>
           </a-tab-pane>
 
+          <a-tab-pane key="notifications" tab="消息通知">
+            <section class="settings-surface">
+              <div class="section-heading">
+                <div>
+                  <strong>通知通道</strong><span>重要业务消息可主动送达</span>
+                </div>
+              </div>
+              <a-list bordered>
+                <a-list-item>
+                  <a-list-item-meta
+                    title="浏览器桌面通知"
+                    description="登录管理端期间，未读消息增加时显示系统通知"
+                  />
+                  <a-switch
+                    :checked="browserNotifications"
+                    @change="toggleBrowserNotifications"
+                  />
+                </a-list-item>
+                <a-list-item>
+                  <a-list-item-meta
+                    title="企业 Webhook"
+                    :description="
+                      webhookPreference.available
+                        ? '向部署环境配置的企业协同机器人推送消息'
+                        : '管理员尚未配置 NOTIFICATION_WEBHOOK_URL'
+                    "
+                  />
+                  <a-switch
+                    :checked="webhookPreference.enabled"
+                    :disabled="!webhookPreference.available"
+                    :loading="notificationSaving"
+                    @change="toggleWebhook"
+                  />
+                </a-list-item>
+              </a-list>
+              <div class="section-heading delivery-heading">
+                <div><strong>最近投递</strong><span>最多显示 50 条</span></div>
+                <a-button size="small" @click="loadNotificationSettings"
+                  >刷新</a-button
+                >
+              </div>
+              <a-table
+                :columns="deliveryColumns"
+                :data-source="deliveries"
+                row-key="id"
+                size="small"
+                :pagination="{ pageSize: 8 }"
+              >
+                <template #bodyCell="{ column, record }">
+                  <template v-if="column.key === 'status'"
+                    ><a-tag
+                      :color="
+                        record.status === 'DELIVERED'
+                          ? 'green'
+                          : record.status === 'FAILED'
+                            ? 'red'
+                            : 'blue'
+                      "
+                      >{{ deliveryStatusLabel(record.status) }}</a-tag
+                    ></template
+                  >
+                  <template v-else-if="column.key === 'time'">{{
+                    formatNotificationTime(
+                      record.deliveredAt || record.lastAttemptAt,
+                    )
+                  }}</template>
+                </template>
+              </a-table>
+            </section>
+          </a-tab-pane>
+
           <a-tab-pane key="security" tab="账号安全">
             <section class="settings-surface security-surface">
               <div class="security-grid">
@@ -552,6 +623,12 @@ import {
   type MfaSetup,
 } from "@/api/personal";
 import { useAuthStore } from "@/stores/auth";
+import {
+  listNotificationChannelPreferences,
+  listNotificationDeliveries,
+  updateNotificationChannelPreference,
+  type NotificationDelivery,
+} from "@/api/office";
 
 const auth = useAuthStore();
 const loading = ref(false);
@@ -559,6 +636,12 @@ const saving = ref(false);
 const uploading = ref(false);
 const mfaSaving = ref(false);
 const activeTab = ref("profile");
+const browserNotifications = ref(
+  localStorage.getItem("ops_erp_browser_notifications") === "enabled",
+);
+const webhookPreference = reactive({ enabled: false, available: false });
+const deliveries = ref<NotificationDelivery[]>([]);
+const notificationSaving = ref(false);
 const overview = ref<PersonalOverview>();
 const profileFormRef = ref<FormInstance>();
 const passwordFormRef = ref<FormInstance>();
@@ -613,10 +696,84 @@ const contractColumns = [
   { title: "状态", key: "status", width: 100 },
   { title: "附件", key: "attachments", width: 110 },
 ];
+const deliveryColumns = [
+  { title: "通道", dataIndex: "channel", width: 110 },
+  { title: "状态", key: "status", width: 100 },
+  { title: "尝试次数", dataIndex: "attemptCount", width: 100 },
+  { title: "最近投递", key: "time", width: 180 },
+  { title: "失败原因", dataIndex: "lastError" },
+];
 
 onMounted(() => {
-  void Promise.all([loadOverview(), loadMfaStatus()]);
+  void Promise.all([
+    loadOverview(),
+    loadMfaStatus(),
+    loadNotificationSettings(),
+  ]);
 });
+
+async function loadNotificationSettings() {
+  try {
+    const [preferences, history] = await Promise.all([
+      listNotificationChannelPreferences(),
+      listNotificationDeliveries(),
+    ]);
+    const webhook = preferences.find((item) => item.channel === "WEBHOOK");
+    Object.assign(
+      webhookPreference,
+      webhook || { enabled: false, available: false },
+    );
+    deliveries.value = history;
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "加载通知设置失败");
+  }
+}
+
+async function toggleBrowserNotifications(enabled: boolean) {
+  if (enabled) {
+    if (!("Notification" in window)) {
+      message.warning("当前浏览器不支持桌面通知");
+      return;
+    }
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") {
+      message.warning("浏览器未授予通知权限");
+      return;
+    }
+    localStorage.setItem("ops_erp_browser_notifications", "enabled");
+  } else localStorage.removeItem("ops_erp_browser_notifications");
+  browserNotifications.value = enabled;
+}
+
+async function toggleWebhook(enabled: boolean) {
+  notificationSaving.value = true;
+  try {
+    Object.assign(
+      webhookPreference,
+      await updateNotificationChannelPreference("WEBHOOK", enabled),
+    );
+    message.success(enabled ? "Webhook 通知已启用" : "Webhook 通知已关闭");
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "通知设置保存失败");
+  } finally {
+    notificationSaving.value = false;
+  }
+}
+function deliveryStatusLabel(status: string) {
+  return (
+    (
+      { DELIVERED: "已送达", FAILED: "失败", SENDING: "投递中" } as Record<
+        string,
+        string
+      >
+    )[status] || status
+  );
+}
+function formatNotificationTime(value?: string) {
+  return value
+    ? new Date(value).toLocaleString("zh-CN", { hour12: false })
+    : "-";
+}
 
 async function loadMfaStatus() {
   try {

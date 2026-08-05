@@ -226,6 +226,162 @@
           </a-table>
         </a-tab-pane>
 
+        <a-tab-pane key="registers" tab="专项业务台账">
+          <div class="register-toolbar">
+            <a-segmented
+              v-model:value="registerDomain"
+              :options="registerDomainOptions"
+            />
+            <a-button
+              v-if="canManage"
+              type="primary"
+              @click="openRegisterControl"
+              >新增{{ registerTitle }}</a-button
+            >
+          </div>
+          <a-row :gutter="12" class="register-metrics">
+            <a-col :xs="12" :md="6"
+              ><a-statistic title="台账总数" :value="registerControls.length"
+            /></a-col>
+            <a-col :xs="12" :md="6"
+              ><a-statistic title="执行/阻塞" :value="registerActiveCount"
+            /></a-col>
+            <a-col :xs="12" :md="6"
+              ><a-statistic
+                title="计划金额（税价随来源单据，元）"
+                :value="registerBudget"
+                :formatter="moneyFormatter"
+            /></a-col>
+            <a-col :xs="12" :md="6"
+              ><a-statistic
+                title="预测偏差"
+                :value="registerVariance"
+                :formatter="moneyFormatter"
+                :value-style="dangerStyle(registerVariance)"
+            /></a-col>
+          </a-row>
+          <a-table
+            :columns="registerColumns"
+            :data-source="registerControls"
+            row-key="id"
+            :pagination="{ pageSize: 10 }"
+            :scroll="{ x: 1120 }"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'business'"
+                ><strong>{{ record.name }}</strong
+                ><span class="table-subtitle"
+                  >{{ record.businessNo || record.controlCode }} ·
+                  {{ record.typeLabel }}</span
+                ></template
+              >
+              <template v-else-if="column.key === 'status'"
+                ><a-tag :color="statusColor(record.status)">{{
+                  statusLabel(record.status)
+                }}</a-tag></template
+              >
+              <template v-else-if="column.key === 'amount'"
+                >{{
+                  formatMoney(
+                    record.forecastAmount || record.actualAmount || 0,
+                  )
+                }}<span class="table-subtitle"
+                  >基准 {{ formatMoney(record.budgetAmount || 0) }}</span
+                ></template
+              >
+              <template v-else-if="column.key === 'progress'"
+                ><a-progress
+                  :percent="Number(record.progressPercent || 0)"
+                  size="small"
+              /></template>
+              <template v-else-if="column.key === 'action'"
+                ><a-button
+                  type="link"
+                  size="small"
+                  @click="openControlModal(record)"
+                  >查看/维护</a-button
+                ></template
+              >
+            </template>
+          </a-table>
+        </a-tab-pane>
+
+        <a-tab-pane key="forecast" tab="预测决策">
+          <a-alert
+            type="info"
+            show-icon
+            message="滚动预测以当前有效版本为准，偏差 = 预测金额 - 预算/基准金额。"
+            class="forecast-note"
+          />
+          <div class="forecast-kpis">
+            <div>
+              <span>预测事项</span
+              ><strong>{{ forecastControls.length }}</strong>
+            </div>
+            <div>
+              <span>预算基准</span
+              ><strong>{{ formatMoney(forecastBudget) }}</strong>
+            </div>
+            <div>
+              <span>最新预测</span
+              ><strong>{{ formatMoney(forecastAmount) }}</strong>
+            </div>
+            <div>
+              <span>总体偏差</span
+              ><strong :class="{ danger: forecastVariance > 0 }">{{
+                formatMoney(forecastVariance)
+              }}</strong>
+            </div>
+          </div>
+          <a-table
+            :columns="forecastColumns"
+            :data-source="forecastControls"
+            row-key="id"
+            :pagination="{ pageSize: 10 }"
+            :scroll="{ x: 1080 }"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'forecast'"
+                ><strong>{{ record.name }}</strong
+                ><span class="table-subtitle"
+                  >{{ record.typeLabel }} ·
+                  {{ record.businessNo || record.controlCode }}</span
+                ></template
+              >
+              <template v-else-if="column.key === 'budget'">{{
+                formatMoney(record.budgetAmount || 0)
+              }}</template>
+              <template v-else-if="column.key === 'actual'">{{
+                formatMoney(record.actualAmount || 0)
+              }}</template>
+              <template v-else-if="column.key === 'forecastAmount'">{{
+                formatMoney(record.forecastAmount || 0)
+              }}</template>
+              <template v-else-if="column.key === 'variance'"
+                ><span
+                  :class="{
+                    'variance-danger': forecastRowVariance(record) > 0,
+                  }"
+                  >{{ formatMoney(forecastRowVariance(record)) }}</span
+                ></template
+              >
+              <template v-else-if="column.key === 'risk'"
+                ><a-tag :color="riskColor(record.riskLevel)">{{
+                  riskLabel(record.riskLevel)
+                }}</a-tag></template
+              >
+              <template v-else-if="column.key === 'action'"
+                ><a-button
+                  type="link"
+                  size="small"
+                  @click="openControlModal(record)"
+                  >更新预测</a-button
+                ></template
+              >
+            </template>
+          </a-table>
+        </a-tab-pane>
+
         <a-tab-pane key="periods" tab="会计期间">
           <div class="tab-command-bar">
             <a-space>
@@ -721,6 +877,80 @@ const reconcileForm = reactive({
 const historyDrawerOpen = ref(false);
 const historyTitle = ref("");
 const historyActions = ref<GovernanceAction[]>([]);
+const registerDomain = ref<"CONTRACT" | "PROJECT" | "ASSET">("CONTRACT");
+const registerDomainOptions = [
+  { label: "合同履约", value: "CONTRACT" },
+  { label: "项目 WBS / EAC", value: "PROJECT" },
+  { label: "固定资产", value: "ASSET" },
+];
+const registerTypes: Record<string, string[]> = {
+  CONTRACT: [
+    "CONTRACT_MILESTONE",
+    "REVENUE_OBLIGATION",
+    "CONTRACT_CHANGE",
+    "WARRANTY_RENEWAL",
+  ],
+  PROJECT: [
+    "PROJECT_WBS",
+    "PROJECT_FORECAST",
+    "PROJECT_CLOSEOUT",
+    "RESOURCE_CAPACITY",
+  ],
+  ASSET: ["FIXED_ASSET"],
+};
+const registerTitle = computed(
+  () =>
+    ({ CONTRACT: "合同履约项", PROJECT: "项目控制项", ASSET: "固定资产" })[
+      registerDomain.value
+    ],
+);
+const registerControls = computed(() =>
+  controls.value.filter((item) =>
+    registerTypes[registerDomain.value].includes(item.controlType),
+  ),
+);
+const registerActiveCount = computed(
+  () =>
+    registerControls.value.filter((item) =>
+      ["ACTIVE", "BLOCKED"].includes(item.status),
+    ).length,
+);
+const registerBudget = computed(() =>
+  registerControls.value.reduce(
+    (sum, item) => sum + Number(item.budgetAmount || 0),
+    0,
+  ),
+);
+const registerVariance = computed(() =>
+  registerControls.value.reduce(
+    (sum, item) =>
+      sum + Number(item.forecastAmount || 0) - Number(item.budgetAmount || 0),
+    0,
+  ),
+);
+const forecastTypes = [
+  "CASH_FORECAST",
+  "PROJECT_FORECAST",
+  "BUSINESS_FORECAST",
+];
+const forecastControls = computed(() =>
+  controls.value.filter((item) => forecastTypes.includes(item.controlType)),
+);
+const forecastBudget = computed(() =>
+  forecastControls.value.reduce(
+    (sum, item) => sum + Number(item.budgetAmount || 0),
+    0,
+  ),
+);
+const forecastAmount = computed(() =>
+  forecastControls.value.reduce(
+    (sum, item) => sum + Number(item.forecastAmount || 0),
+    0,
+  ),
+);
+const forecastVariance = computed(
+  () => forecastAmount.value - forecastBudget.value,
+);
 
 const typeOptions = computed(() =>
   controlTypes.value.map((item) => ({
@@ -821,6 +1051,25 @@ const bankColumns = [
   { title: "匹配业务", key: "match", width: 180 },
   { title: "操作", key: "action", width: 160, fixed: "right" },
 ];
+const registerColumns = [
+  { title: "业务事项", key: "business", width: 300 },
+  { title: "负责人", dataIndex: "owner", width: 120 },
+  { title: "计划完成", dataIndex: "plannedEnd", width: 120 },
+  { title: "状态", key: "status", width: 100 },
+  { title: "预测/基准", key: "amount", width: 210 },
+  { title: "执行进度", key: "progress", width: 170 },
+  { title: "操作", key: "action", fixed: "right", width: 110 },
+];
+const forecastColumns = [
+  { title: "预测事项", key: "forecast", width: 280 },
+  { title: "负责人", dataIndex: "owner", width: 110 },
+  { title: "预算基准", key: "budget", width: 140 },
+  { title: "实际发生", key: "actual", width: 140 },
+  { title: "最新预测", key: "forecastAmount", width: 140 },
+  { title: "预测偏差", key: "variance", width: 140 },
+  { title: "风险", key: "risk", width: 90 },
+  { title: "操作", key: "action", fixed: "right", width: 100 },
+];
 
 async function loadAll() {
   loading.value = true;
@@ -900,6 +1149,13 @@ function openControlModal(record?: ControlRecord) {
       : {},
   );
   controlModalOpen.value = true;
+}
+function openRegisterControl() {
+  openControlModal();
+  controlForm.controlType = registerTypes[registerDomain.value][0];
+}
+function forecastRowVariance(record: ControlRecord) {
+  return Number(record.forecastAmount || 0) - Number(record.budgetAmount || 0);
 }
 async function saveControl() {
   if (
@@ -1351,6 +1607,43 @@ onMounted(loadAll);
   justify-content: flex-end;
   margin-bottom: 16px;
 }
+.register-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.register-metrics {
+  margin-bottom: 16px;
+}
+.forecast-note {
+  margin-bottom: 14px;
+}
+.forecast-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.forecast-kpis > div {
+  padding: 14px 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+}
+.forecast-kpis span {
+  display: block;
+  color: #64748b;
+  font-size: 12px;
+}
+.forecast-kpis strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 20px;
+}
+.forecast-kpis .danger,
+.variance-danger {
+  color: #cf1322;
+}
 .modal-form-gap {
   margin-top: 16px;
 }
@@ -1374,6 +1667,13 @@ onMounted(loadAll);
   }
   .tab-command-bar {
     justify-content: flex-start;
+  }
+  .register-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .forecast-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 </style>

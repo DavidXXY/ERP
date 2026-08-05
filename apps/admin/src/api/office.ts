@@ -644,3 +644,38 @@ export function listAuditLogs(
 export function getUnreadNotificationCount() {
   return request<number>({ method: "GET", url: "/office/notifications/count" });
 }
+
+export type NotificationChannelPreference = {
+  channel: "WEBHOOK";
+  enabled: boolean;
+  available: boolean;
+};
+export type NotificationDelivery = {
+  id: string;
+  notificationId: string;
+  channel: "WEBHOOK";
+  status: "SENDING" | "DELIVERED" | "FAILED";
+  attemptCount: number;
+  lastAttemptAt?: string;
+  deliveredAt?: string;
+  lastError?: string;
+};
+export const listNotificationChannelPreferences = () =>
+  request<NotificationChannelPreference[]>({
+    method: "GET",
+    url: "/office/notification-channels/preferences",
+  });
+export const updateNotificationChannelPreference = (
+  channel: "WEBHOOK",
+  enabled: boolean,
+) =>
+  request<NotificationChannelPreference>({
+    method: "PUT",
+    url: "/office/notification-channels/preferences",
+    data: { channel, enabled },
+  });
+export const listNotificationDeliveries = () =>
+  request<NotificationDelivery[]>({
+    method: "GET",
+    url: "/office/notification-channels/deliveries",
+  });

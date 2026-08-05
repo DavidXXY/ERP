@@ -332,6 +332,8 @@ export type ConvertQuotePayload = {
   endDate?: string;
   serviceCycle?: string;
   receivables: ReceivableItem[];
+  contractKind?: "STANDARD" | "FRAMEWORK";
+  frameworkAmountSpecified?: boolean;
 };
 
 export type QuoteRevision = {
@@ -390,7 +392,7 @@ export type ServiceContract = {
   code?: string;
   projectName: string;
   contractType: string;
-  amount: number;
+  amount?: number;
   taxRate?: number;
   netAmount?: number;
   startDate: string;
@@ -403,6 +405,24 @@ export type ServiceContract = {
   projectStage?: string;
   projectApprovalStatus?: string;
   projectManagerName?: string;
+  contractKind: "STANDARD" | "FRAMEWORK" | "CHILD_ORDER";
+  parentContractId?: string;
+  parentContractCode?: string;
+  childOrderCount: number;
+  childOrderAmount: number;
+  childOrderNetAmount: number;
+};
+
+export type CreateChildOrderPayload = {
+  code?: string;
+  projectName: string;
+  contractType: string;
+  amount: number;
+  taxRate?: number;
+  startDate: string;
+  endDate: string;
+  serviceCycle?: string;
+  receivables: ReceivableItem[];
 };
 
 export type Receivable = {
@@ -694,6 +714,25 @@ export function getContract(id: string) {
   });
 }
 
+export function createChildOrder(id: string, payload: CreateChildOrderPayload) {
+  return request<ServiceContract>({
+    method: "POST",
+    url: `/crm/contracts/${id}/orders`,
+    data: payload,
+  });
+}
+
+export function listChildOrders(
+  id: string,
+  params?: { page?: number; size?: number },
+) {
+  return request<PageResponse<ServiceContract>>({
+    method: "GET",
+    url: `/crm/contracts/${id}/orders`,
+    params,
+  });
+}
+
 export function approveContract(id: string, payload: ApprovalActionPayload) {
   return request<ServiceContract>({
     method: "POST",
@@ -746,6 +785,17 @@ export function listReceivablesByContract(
     url: "/crm/receivables",
     params: { contractId, page, size },
   });
+}
+
+export function listAllReceivablesByContract(contractId: string) {
+  return requestAllPages<Receivable>(
+    {
+      method: "GET",
+      url: "/crm/receivables",
+      params: { contractId },
+    },
+    200,
+  );
 }
 
 export function getQuote(id: string) {

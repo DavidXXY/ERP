@@ -6,6 +6,16 @@
           <a-button @click="goBack">返回列表</a-button>
           <a-button @click="loadData">刷新</a-button>
           <a-button @click="printPage">打印</a-button>
+          <a-button
+            v-if="
+              record?.contractKind === 'FRAMEWORK' &&
+              record.status === 'ACTIVE' &&
+              auth.can('crm:contract:create')
+            "
+            type="primary"
+            @click="openChildOrder"
+            >创建子订单</a-button
+          >
           <a-button type="primary" @click="openEdit">合同变更</a-button>
           <a-button
             v-if="canApproveContract"
@@ -60,8 +70,20 @@
             <a-descriptions-item label="合同类型">{{
               record.contractType
             }}</a-descriptions-item>
+            <a-descriptions-item label="订单层级">
+              {{ contractKindLabel(record.contractKind) }}
+              <span v-if="record.parentContractCode">
+                · {{ record.parentContractCode }}</span
+              >
+            </a-descriptions-item>
             <a-descriptions-item label="合同金额（含税，元）">
-              <strong>{{ formatMoney(record.amount) }}</strong>
+              <strong>{{ formatMoney(contractDisplayAmount) }}</strong>
+            </a-descriptions-item>
+            <a-descriptions-item
+              v-if="record.contractKind === 'FRAMEWORK'"
+              label="框架金额上限（含税，元）"
+            >
+              <strong>{{ frameworkLimitLabel }}</strong>
             </a-descriptions-item>
             <a-descriptions-item label="已开票金额（含税，元）">
               <strong>{{ formatMoney(invoicedTotal) }}</strong>
@@ -70,15 +92,12 @@
               <strong>{{ formatMoney(receivedTotal) }}</strong>
             </a-descriptions-item>
             <a-descriptions-item label="未税金额（元）">
-              <strong>{{
-                formatMoney(
-                  record.netAmount ??
-                    calcNetAmount(record.amount, record.taxRate),
-                )
-              }}</strong>
+              <strong>{{ formatMoney(contractDisplayNetAmount) }}</strong>
             </a-descriptions-item>
             <a-descriptions-item label="税率">{{
-              formatTaxRate(record.taxRate)
+              record.contractKind === "FRAMEWORK"
+                ? "按子订单税率"
+                : formatTaxRate(record.taxRate)
             }}</a-descriptions-item>
             <a-descriptions-item label="服务频次">{{
               record.serviceCycle || "未设置"
@@ -87,6 +106,28 @@
               record.quoteId || "未关联"
             }}</a-descriptions-item>
           </a-descriptions>
+
+          <div
+            v-if="record.contractKind === 'FRAMEWORK'"
+            style="margin-top: 16px"
+          >
+            <a-alert
+              type="info"
+              show-icon
+              :message="`框架订单按子订单结算 · 已创建 ${record.childOrderCount || 0} 个子订单`"
+              :description="`当前合同金额 ${formatMoney(contractDisplayAmount)} · 框架金额上限 ${frameworkLimitLabel}`"
+            />
+            <a-table
+              :data-source="childOrders"
+              :columns="childOrderColumns"
+              row-key="id"
+              :pagination="childOrderPagination"
+              size="small"
+              style="margin-top: 12px"
+              :custom-row="childOrderRow"
+              @change="handleChildOrderTableChange"
+            />
+          </div>
 
           <a-card title="合同周期" style="margin-top: 16px">
             <a-row :gutter="16">
@@ -716,6 +757,81 @@
     </a-modal>
 
     <a-modal
+      v-model:open="childOrderOpen"
+      title="创建框架子订单"
+      width="760px"
+      :confirm-loading="saving"
+      @ok="handleCreateChildOrder"
+    >
+      <a-alert
+        type="info"
+        show-icon
+        message="子订单将独立生成应收计划，开票和回款均按该子订单结算。"
+        class="section-alert"
+      />
+      <a-form layout="vertical">
+        <a-row :gutter="16">
+          <a-col :xs="24" :md="12"
+            ><a-form-item label="子订单编号"
+              ><a-input
+                v-model:value="childOrderForm.code"
+                placeholder="留空自动生成" /></a-form-item
+          ></a-col>
+          <a-col :xs="24" :md="12"
+            ><a-form-item label="子订单名称" required
+              ><a-input
+                v-model:value="childOrderForm.projectName" /></a-form-item
+          ></a-col>
+          <a-col :xs="24" :md="12"
+            ><a-form-item label="订单类型" required
+              ><a-input
+                v-model:value="childOrderForm.contractType" /></a-form-item
+          ></a-col>
+          <a-col :xs="24" :md="12"
+            ><a-form-item label="订单金额（含税，元）" required
+              ><a-input-number
+                v-model:value="childOrderForm.amount"
+                :min="0.01"
+                :precision="2"
+                class="full-input" /></a-form-item
+          ></a-col>
+          <a-col :xs="24" :md="8"
+            ><a-form-item label="税率(%)"
+              ><a-input-number
+                v-model:value="childOrderForm.taxRate"
+                :min="0"
+                :max="100"
+                :precision="2"
+                class="full-input" /></a-form-item
+          ></a-col>
+          <a-col :xs="24" :md="8"
+            ><a-form-item label="开始日期" required
+              ><a-input
+                v-model:value="childOrderForm.startDate"
+                type="date" /></a-form-item
+          ></a-col>
+          <a-col :xs="24" :md="8"
+            ><a-form-item label="结束日期" required
+              ><a-input
+                v-model:value="childOrderForm.endDate"
+                type="date" /></a-form-item
+          ></a-col>
+          <a-col :xs="24" :md="12"
+            ><a-form-item label="应收日期" required
+              ><a-input
+                v-model:value="childOrderForm.dueDate"
+                type="date" /></a-form-item
+          ></a-col>
+          <a-col :xs="24" :md="12"
+            ><a-form-item label="服务频次"
+              ><a-input
+                v-model:value="childOrderForm.serviceCycle" /></a-form-item
+          ></a-col>
+        </a-row>
+      </a-form>
+    </a-modal>
+
+    <a-modal
       v-model:open="editOpen"
       title="合同变更"
       :confirm-loading="saving"
@@ -785,6 +901,8 @@ const auth = useAuthStore();
 import { listProjects, type Project } from "@/api/project";
 import {
   getContract,
+  listChildOrders,
+  createChildOrder,
   getOpportunity,
   getQuote,
   uploadAttachment,
@@ -796,7 +914,7 @@ import {
   approveContractChange,
   rejectContractChange,
   listContractChanges,
-  listReceivables,
+  listAllReceivablesByContract,
   applyReceivableInvoice,
   approveContract,
   submitSignedDocumentApproval,
@@ -829,12 +947,42 @@ const relatedQuote = ref<QuotePlan | null>(null);
 const relatedOpportunity = ref<Opportunity | null>(null);
 const relatedProject = ref<Project | null>(null);
 const contractReceivables = ref<Receivable[]>([]);
+const childOrders = ref<ServiceContract[]>([]);
+const childOrderPage = reactive({ number: 0, size: 10, total: 0 });
 const loading = ref(true);
 const saving = ref(false);
 const editOpen = ref(false);
+const childOrderOpen = ref(false);
 const invoiceRequestOpen = ref(false);
 const selectedReceivable = ref<Receivable | null>(null);
 const invoiceRequestForm = reactive({ remark: "" });
+const childOrderForm = reactive({
+  code: "",
+  projectName: "",
+  contractType: "",
+  amount: 0.01,
+  taxRate: 13,
+  startDate: "",
+  endDate: "",
+  dueDate: "",
+  serviceCycle: "",
+});
+const childOrderColumns = [
+  { title: "子订单", dataIndex: "code" },
+  { title: "名称", dataIndex: "projectName" },
+  {
+    title: "金额（含税，元）",
+    dataIndex: "amount",
+    customRender: ({ text }: { text: number }) => formatMoney(text),
+  },
+  { title: "开始日期", dataIndex: "startDate" },
+  {
+    title: "状态",
+    dataIndex: "status",
+    customRender: ({ text }: { text: ServiceContract["status"] }) =>
+      contractStatusLabel(text),
+  },
+];
 const contractTabKey = ref(
   route.query.tab === "signed" ? "signed" : "approval",
 );
@@ -867,6 +1015,31 @@ const contractDaysLeft = computed(() => {
     (new Date(record.value.endDate).getTime() - Date.now()) / 86400000,
   );
 });
+const contractDisplayAmount = computed(() => {
+  if (record.value?.contractKind !== "FRAMEWORK") {
+    return Number(record.value?.amount || 0);
+  }
+  return Number(record.value.childOrderAmount || 0);
+});
+const contractDisplayNetAmount = computed(() => {
+  if (record.value?.contractKind !== "FRAMEWORK") {
+    return Number(
+      record.value?.netAmount ??
+        calcNetAmount(record.value?.amount, record.value?.taxRate),
+    );
+  }
+  return Number(record.value.childOrderNetAmount || 0);
+});
+const frameworkLimitLabel = computed(() =>
+  record.value?.amount == null ? "不设上限" : formatMoney(record.value.amount),
+);
+const childOrderPagination = computed(() => ({
+  current: childOrderPage.number + 1,
+  pageSize: childOrderPage.size,
+  total: childOrderPage.total,
+  showSizeChanger: true,
+  showTotal: (total: number) => `共 ${total} 个子订单`,
+}));
 const fulfillmentStep = computed(() => {
   if (record.value?.status === "PENDING_APPROVAL") return 0;
   if (!relatedProject.value) return 1;
@@ -888,6 +1061,12 @@ async function loadData() {
   loading.value = true;
   try {
     record.value = await getContract(id);
+    if (record.value.contractKind === "FRAMEWORK") {
+      await loadChildOrderPage(0, childOrderPage.size);
+    } else {
+      childOrders.value = [];
+      childOrderPage.total = 0;
+    }
     // Load related quote
     if (record.value?.quoteId) {
       try {
@@ -914,12 +1093,29 @@ async function loadData() {
   }
 }
 
+async function loadChildOrderPage(page: number, size: number) {
+  const result = await listChildOrders(id, { page, size });
+  childOrders.value = result.content;
+  childOrderPage.number = result.number;
+  childOrderPage.size = result.size;
+  childOrderPage.total = result.totalElements;
+}
+
+function handleChildOrderTableChange(pagination: {
+  current?: number;
+  pageSize?: number;
+}) {
+  const size = pagination.pageSize || childOrderPage.size;
+  const page = size === childOrderPage.size ? (pagination.current || 1) - 1 : 0;
+  void loadChildOrderPage(page, size);
+}
+
 async function loadClosureData() {
   if (!record.value) return;
   const current = record.value;
   const [projectsResult, receivablesResult] = await Promise.allSettled([
     listProjects({ page: 0, size: 200 }),
-    listReceivables(),
+    listAllReceivablesByContract(current.id),
   ]);
   if (projectsResult.status === "fulfilled") {
     relatedProject.value =
@@ -931,12 +1127,7 @@ async function loadClosureData() {
     relatedProject.value = projectSummaryFromContract(current);
   }
   if (receivablesResult.status === "fulfilled") {
-    contractReceivables.value = receivablesResult.value.filter(
-      (item) =>
-        item.contractId === current.id ||
-        item.contractCode === current.code ||
-        item.sourceNo === current.code,
-    );
+    contractReceivables.value = receivablesResult.value;
   }
 }
 
@@ -952,7 +1143,7 @@ function projectSummaryFromContract(contract: ServiceContract): Project | null {
     code: contract.projectCode || "已承接项目",
     name: contract.projectName,
     managerName: contract.projectManagerName || "待项目管理部门分配",
-    contractAmount: contract.amount,
+    contractAmount: contract.amount || 0,
     plannedStartDate: contract.startDate,
     plannedEndDate: contract.endDate,
     stage: contract.projectStage || "ENTRY",
@@ -961,6 +1152,68 @@ function projectSummaryFromContract(contract: ServiceContract): Project | null {
     actualCost: 0,
     progress: 0,
   } as Project;
+}
+
+function contractKindLabel(kind?: ServiceContract["contractKind"]) {
+  return { STANDARD: "普通合同", FRAMEWORK: "框架订单", CHILD_ORDER: "子订单" }[
+    kind || "STANDARD"
+  ];
+}
+
+function childOrderRow(item: ServiceContract) {
+  return { onClick: () => router.push(`/crm/contracts/${item.id}`) };
+}
+
+function openChildOrder() {
+  if (!record.value) return;
+  Object.assign(childOrderForm, {
+    code: "",
+    projectName: "",
+    contractType: record.value.contractType,
+    amount: 0.01,
+    taxRate: record.value.taxRate ?? 13,
+    startDate: record.value.startDate,
+    endDate: record.value.endDate,
+    dueDate: record.value.endDate,
+    serviceCycle: record.value.serviceCycle || "",
+  });
+  childOrderOpen.value = true;
+}
+
+async function handleCreateChildOrder() {
+  if (
+    !childOrderForm.projectName.trim() ||
+    !childOrderForm.contractType.trim() ||
+    !childOrderForm.startDate ||
+    !childOrderForm.endDate ||
+    !childOrderForm.dueDate
+  ) {
+    message.error("请完整填写子订单必填信息");
+    return;
+  }
+  saving.value = true;
+  try {
+    await createChildOrder(id, {
+      code: childOrderForm.code || undefined,
+      projectName: childOrderForm.projectName,
+      contractType: childOrderForm.contractType,
+      amount: childOrderForm.amount,
+      taxRate: childOrderForm.taxRate,
+      startDate: childOrderForm.startDate,
+      endDate: childOrderForm.endDate,
+      serviceCycle: childOrderForm.serviceCycle || undefined,
+      receivables: [
+        { amount: childOrderForm.amount, dueDate: childOrderForm.dueDate },
+      ],
+    });
+    childOrderOpen.value = false;
+    message.success("子订单及子项目已创建，项目经理已收到提醒");
+    await loadData();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "子订单创建失败");
+  } finally {
+    saving.value = false;
+  }
 }
 
 function canApplyInvoice(item: Receivable) {

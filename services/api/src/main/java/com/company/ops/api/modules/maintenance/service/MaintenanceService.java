@@ -8,6 +8,10 @@ import com.company.ops.api.modules.crm.domain.Customer;
 import com.company.ops.api.modules.crm.repository.CustomerRepository;
 import com.company.ops.api.modules.crm.repository.ServiceContractRepository;
 import com.company.ops.api.modules.maintenance.domain.EquipmentAsset;
+import com.company.ops.api.modules.maintenance.domain.EmployeeCertificate;
+import com.company.ops.api.modules.maintenance.domain.FieldAttendance;
+import com.company.ops.api.modules.maintenance.domain.FieldSchedule;
+import com.company.ops.api.modules.maintenance.domain.MaintenancePlan;
 import com.company.ops.api.modules.maintenance.domain.WorkOrder;
 import com.company.ops.api.modules.maintenance.domain.WorkOrderAttachment;
 import com.company.ops.api.modules.maintenance.domain.WorkOrderAttachmentCategory;
@@ -16,8 +20,13 @@ import com.company.ops.api.modules.maintenance.domain.WorkOrderMobileOperation;
 import com.company.ops.api.modules.maintenance.domain.WorkOrderStatusLog;
 import com.company.ops.api.modules.maintenance.domain.WorkOrderPriority;
 import com.company.ops.api.modules.maintenance.domain.WorkOrderStatus;
+import com.company.ops.api.modules.maintenance.domain.WorkOrderType;
 import com.company.ops.api.modules.maintenance.dto.MaintenanceDtos.*;
 import com.company.ops.api.modules.maintenance.repository.EquipmentAssetRepository;
+import com.company.ops.api.modules.maintenance.repository.EmployeeCertificateRepository;
+import com.company.ops.api.modules.maintenance.repository.FieldAttendanceRepository;
+import com.company.ops.api.modules.maintenance.repository.FieldScheduleRepository;
+import com.company.ops.api.modules.maintenance.repository.MaintenancePlanRepository;
 import com.company.ops.api.modules.maintenance.repository.WorkOrderRepository;
 import com.company.ops.api.modules.maintenance.repository.WorkOrderAttachmentRepository;
 import com.company.ops.api.modules.maintenance.repository.WorkOrderMaterialRepository;
@@ -27,6 +36,7 @@ import com.company.ops.api.modules.system.security.UserPrincipal;
 import com.company.ops.api.modules.system.repository.SystemUserRepository;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.time.LocalDate;
 import java.util.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,6 +59,10 @@ public class MaintenanceService {
 
   private final WorkOrderRepository workOrderRepository;
   private final EquipmentAssetRepository equipmentRepository;
+  private final MaintenancePlanRepository planRepository;
+  private final EmployeeCertificateRepository certificateRepository;
+  private final FieldScheduleRepository scheduleRepository;
+  private final FieldAttendanceRepository attendanceRepository;
   private final WorkOrderStatusLogRepository statusLogRepository;
   private final WorkOrderAttachmentRepository attachmentRepository;
   private final WorkOrderMaterialRepository materialRepository;
@@ -63,6 +77,10 @@ public class MaintenanceService {
   public MaintenanceService(
       WorkOrderRepository workOrderRepository,
       EquipmentAssetRepository equipmentRepository,
+      MaintenancePlanRepository planRepository,
+      EmployeeCertificateRepository certificateRepository,
+      FieldScheduleRepository scheduleRepository,
+      FieldAttendanceRepository attendanceRepository,
       WorkOrderStatusLogRepository statusLogRepository,
       WorkOrderAttachmentRepository attachmentRepository,
       WorkOrderMaterialRepository materialRepository,
@@ -75,6 +93,10 @@ public class MaintenanceService {
       SystemUserRepository userRepository) {
     this.workOrderRepository = workOrderRepository;
     this.equipmentRepository = equipmentRepository;
+    this.planRepository = planRepository;
+    this.certificateRepository = certificateRepository;
+    this.scheduleRepository = scheduleRepository;
+    this.attendanceRepository = attendanceRepository;
     this.statusLogRepository = statusLogRepository;
     this.attachmentRepository = attachmentRepository;
     this.materialRepository = materialRepository;
@@ -177,6 +199,7 @@ public class MaintenanceService {
     order.setStartedAt(OffsetDateTime.now());
     order.setStatus(WorkOrderStatus.IN_PROGRESS);
     workOrderRepository.save(order);
+    recordAttendance(order, request.checkInAt(), request.checkInLocation().trim());
     addStatusLog(order, from, "现场签到：" + request.checkInLocation().trim(), principal.displayName());
     recordOperation(order, request.operationId(), "CHECK_IN", principal);
     return toResponse(order);
@@ -205,6 +228,7 @@ public class MaintenanceService {
     order.setCompletedAt(OffsetDateTime.now());
     order.setStatus(WorkOrderStatus.COMPLETED);
     workOrderRepository.save(order);
+    recordCheckOut(order);
     replaceMaterials(order, request.materials());
     addStatusLog(order, from, "移动端提交完工", principal.displayName());
     recordOperation(order, request.operationId(), "COMPLETE", principal);
@@ -273,6 +297,7 @@ public class MaintenanceService {
   @Transactional
   public WorkOrderResponse assign(UUID id, AssignWorkOrderRequest r) {
     WorkOrder o = getOrder(id);
+    validateCertificate(o, r.assigneeId());
     WorkOrderStatus from = o.getStatus();
     o.setAssigneeId(r.assigneeId());
     o.setEngineerName(r.assigneeName());
@@ -292,6 +317,7 @@ public class MaintenanceService {
     o.setStartedAt(OffsetDateTime.now());
     o.setStatus(WorkOrderStatus.IN_PROGRESS);
     WorkOrder saved = workOrderRepository.save(o);
+    recordAttendance(saved, r.checkInAt(), r.checkInLocation());
     addStatusLog(saved, from, "现场签到", currentOperator());
     return toResponse(saved);
   }
@@ -312,6 +338,7 @@ public class MaintenanceService {
     o.setCompletedAt(OffsetDateTime.now());
     o.setStatus(WorkOrderStatus.COMPLETED);
     WorkOrder saved = workOrderRepository.save(o);
+    recordCheckOut(saved);
     addStatusLog(saved, from, "提交完工", currentOperator());
     return toResponse(saved);
   }
@@ -342,17 +369,250 @@ public class MaintenanceService {
         .map(this::toEquipResponse).toList();
   }
 
-  // -- Stubs --
-  public List<PlanResponse> listPlans() { return List.of(); }
-  public List<CertificateResponse> listCertificates() { return List.of(); }
-  public List<ScheduleResponse> listSchedules() { return List.of(); }
-  public List<AttendanceResponse> listAttendance() { return List.of(); }
+  @Transactional
+  public EquipmentResponse createEquipment(CreateEquipmentRequest r) {
+    String code = trimToNull(r.code());
+    if (code == null) code = codeGenerator.generate("EQUIPMENT");
+    if (equipmentRepository.existsByCode(code)) throw new BusinessException("设备编码已存在");
+    EquipmentAsset asset = new EquipmentAsset();
+    applyEquipment(asset, r, code);
+    return toEquipResponse(equipmentRepository.save(asset));
+  }
+
+  @Transactional
+  public EquipmentResponse updateEquipment(UUID id, CreateEquipmentRequest r) {
+    EquipmentAsset asset = equipmentRepository.findById(id)
+        .orElseThrow(() -> new BusinessException("设备不存在"));
+    String code = trimToNull(r.code());
+    if (code == null) code = asset.getCode();
+    if (!code.equals(asset.getCode()) && equipmentRepository.existsByCode(code)) {
+      throw new BusinessException("设备编码已存在");
+    }
+    applyEquipment(asset, r, code);
+    return toEquipResponse(equipmentRepository.save(asset));
+  }
+
+  @Transactional(readOnly = true)
+  public List<PlanResponse> listPlans() {
+    return planRepository.findAllByOrderByNextDueDateAsc().stream().map(this::toPlanResponse).toList();
+  }
+
+  @Transactional
+  public PlanResponse createPlan(CreatePlanRequest r) {
+    EquipmentAsset asset = requireEquipment(r.assetId());
+    MaintenancePlan plan = new MaintenancePlan();
+    plan.setCode(codeGenerator.generate("MAINTENANCE_PLAN"));
+    applyPlan(plan, r, asset);
+    return toPlanResponse(planRepository.save(plan));
+  }
+
+  @Transactional
+  public PlanResponse updatePlan(UUID id, CreatePlanRequest r) {
+    MaintenancePlan plan = planRepository.findById(id)
+        .orElseThrow(() -> new BusinessException("维护计划不存在"));
+    applyPlan(plan, r, requireEquipment(r.assetId()));
+    return toPlanResponse(planRepository.save(plan));
+  }
+
+  @Transactional
+  public PlanResponse setPlanEnabled(UUID id, boolean enabled) {
+    MaintenancePlan plan = planRepository.findById(id)
+        .orElseThrow(() -> new BusinessException("维护计划不存在"));
+    plan.setEnabled(enabled);
+    return toPlanResponse(planRepository.save(plan));
+  }
+
+  @Transactional
+  public GeneratePlanResponse generatePlans(UUID planId) {
+    List<MaintenancePlan> plans = planId == null
+        ? planRepository.findByEnabledTrueAndAutoGenerateTrueAndNextDueDateLessThanEqualOrderByNextDueDateAsc(LocalDate.now())
+        : List.of(planRepository.findById(planId).orElseThrow(() -> new BusinessException("维护计划不存在")));
+    int generated = 0;
+    for (MaintenancePlan plan : plans) {
+      if (!plan.isEnabled()) continue;
+      generateWorkOrder(plan);
+      generated++;
+    }
+    return new GeneratePlanResponse(generated);
+  }
+
+  @Transactional(readOnly = true)
+  public List<CertificateResponse> listCertificates() {
+    return certificateRepository.findAllByOrderByExpiryDateAsc().stream().map(this::toCertificateResponse).toList();
+  }
+
+  @Transactional
+  public CertificateResponse createCertificate(CreateCertificateRequest r) {
+    if (!userRepository.existsById(r.userId())) throw new BusinessException("员工不存在");
+    if (certificateRepository.existsByCertificateNo(r.certificateNo().trim())) throw new BusinessException("证书编号已存在");
+    if (r.issueDate() != null && r.expiryDate().isBefore(r.issueDate())) throw new BusinessException("证书到期日不能早于签发日");
+    EmployeeCertificate item = new EmployeeCertificate();
+    item.setUserId(r.userId());
+    item.setCertificateType(r.certificateType().trim());
+    item.setCertificateNo(r.certificateNo().trim());
+    item.setIssueDate(r.issueDate());
+    item.setExpiryDate(r.expiryDate());
+    item.setIssuingAuthority(trimToNull(r.issuingAuthority()));
+    item.setRemark(trimToNull(r.remark()));
+    return toCertificateResponse(certificateRepository.save(item));
+  }
+
+  @Transactional
+  public void deleteCertificate(UUID id) {
+    if (!certificateRepository.existsById(id)) throw new BusinessException("证书不存在");
+    certificateRepository.deleteById(id);
+  }
+
+  @Transactional(readOnly = true)
+  public List<ScheduleResponse> listSchedules() {
+    return scheduleRepository.findByWorkOrderIdIsNotNullOrderByScheduledAtDesc().stream()
+        .map(item -> workOrderRepository.findById(item.getWorkOrderId())
+            .map(order -> toScheduleResponse(item, order)).orElse(null))
+        .filter(Objects::nonNull)
+        .toList();
+  }
+
+  @Transactional
+  public ScheduleResponse createSchedule(CreateScheduleRequest r) {
+    WorkOrder order = getOrder(r.orderId());
+    var user = userRepository.findById(r.engineerId()).orElseThrow(() -> new BusinessException("员工不存在"));
+    validateCertificate(order, r.engineerId());
+    WorkOrderStatus from = order.getStatus();
+    order.setAssigneeId(user.getId());
+    order.setEngineerName(user.getDisplayName());
+    order.setPlannedDate(r.scheduledAt().toLocalDate());
+    order.setAssignmentAcceptedAt(null);
+    if (order.getStatus() == WorkOrderStatus.CREATED) order.setStatus(WorkOrderStatus.ASSIGNED);
+    WorkOrder saved = workOrderRepository.save(order);
+    FieldSchedule schedule = scheduleRepository.findFirstByWorkOrderIdOrderByScheduledAtDesc(order.getId())
+        .orElseGet(FieldSchedule::new);
+    schedule.setUserId(user.getId());
+    schedule.setWorkOrderId(order.getId());
+    schedule.setWorkDate(r.scheduledAt().toLocalDate());
+    schedule.setScheduledAt(r.scheduledAt());
+    schedule.setShiftName("现场服务");
+    schedule.setSiteName(order.getSiteAddress());
+    schedule.setStatus("SCHEDULED");
+    schedule = scheduleRepository.save(schedule);
+    addStatusLog(saved, from, "排班至 " + r.scheduledAt() + "，负责人 " + user.getDisplayName(), currentOperator());
+    return toScheduleResponse(schedule, saved);
+  }
+
+  @Transactional(readOnly = true)
+  public List<AttendanceResponse> listAttendance() {
+    return attendanceRepository.findAllByOrderByCheckInAtDesc().stream()
+        .map(item -> workOrderRepository.findById(item.getWorkOrderId())
+            .map(order -> new AttendanceResponse(item.getId(), order.getId(), order.getCode(), item.getUserId(),
+                userRepository.findById(item.getUserId()).map(user -> user.getDisplayName()).orElse(order.getEngineerName()),
+                item.getCheckInAt(), item.getCheckInLocation(), item.getCheckOutAt()))
+            .orElse(null))
+        .filter(Objects::nonNull)
+        .toList();
+  }
 
   // ── internal ──
 
   private WorkOrder getOrder(UUID id) {
     return workOrderRepository.findById(id)
         .orElseThrow(() -> new NoSuchElementException("工单不存在"));
+  }
+
+  private EquipmentAsset requireEquipment(UUID id) {
+    return equipmentRepository.findById(id).orElseThrow(() -> new BusinessException("设备不存在"));
+  }
+
+  private void applyEquipment(EquipmentAsset asset, CreateEquipmentRequest r, String code) {
+    if (!customerRepository.existsById(r.customerId())) throw new BusinessException("客户不存在");
+    asset.setCustomerId(r.customerId());
+    asset.setContractId(r.contractId());
+    asset.setCode(code);
+    asset.setName(r.name().trim());
+    asset.setCategory(r.category().trim());
+    asset.setModel(trimToNull(r.model()));
+    asset.setSerialNo(trimToNull(r.serialNo()));
+    asset.setSiteAddress(r.siteAddress().trim());
+    asset.setInstalledDate(r.installedDate());
+    asset.setWarrantyEndDate(r.warrantyEndDate());
+    asset.setMaintenanceCycleDays(r.maintenanceCycleDays() == null ? 90 : r.maintenanceCycleDays());
+    asset.setNextMaintenanceDate(r.nextMaintenanceDate());
+    asset.setRequiredCertificate(trimToNull(r.requiredCertificate()));
+    asset.setNotes(trimToNull(r.notes()));
+  }
+
+  private void applyPlan(MaintenancePlan plan, CreatePlanRequest r, EquipmentAsset asset) {
+    plan.setAssetId(asset.getId());
+    plan.setContractId(asset.getContractId());
+    plan.setPlanName(r.name().trim());
+    plan.setDescription(trimToNull(r.description()));
+    plan.setWorkType(r.workType() == null ? WorkOrderType.INSPECTION : r.workType());
+    plan.setPriority(r.priority() == null ? WorkOrderPriority.NORMAL : r.priority());
+    plan.setCycleDays(r.cycleDays());
+    plan.setAutoGenerate(r.autoGenerate() == null || r.autoGenerate());
+    plan.setNextDueDate(r.nextRunDate());
+  }
+
+  private void generateWorkOrder(MaintenancePlan plan) {
+    EquipmentAsset asset = requireEquipment(plan.getAssetId());
+    LocalDate dueDate = plan.getNextDueDate();
+    WorkOrder order = new WorkOrder();
+    order.setCode(codeGenerator.generate("WORK_ORDER"));
+    order.setTitle(plan.getPlanName() + " - " + asset.getName());
+    order.setProblemDescription(plan.getDescription());
+    order.setCustomerId(asset.getCustomerId());
+    order.setContractId(asset.getContractId());
+    order.setEquipmentId(asset.getId());
+    order.setEquipmentName(asset.getName());
+    order.setMaintenancePlanId(plan.getId());
+    order.setSource(com.company.ops.api.modules.maintenance.domain.WorkOrderSource.MAINTENANCE_PLAN);
+    order.setWorkType(plan.getWorkType());
+    order.setPriority(plan.getPriority());
+    order.setStatus(WorkOrderStatus.CREATED);
+    order.setPlannedDate(dueDate);
+    order.setSiteAddress(asset.getSiteAddress());
+    order.setRequiredCertificate(asset.getRequiredCertificate());
+    workOrderRepository.save(order);
+    plan.setLastGeneratedDate(LocalDate.now());
+    plan.setNextDueDate(dueDate.plusDays(plan.getCycleDays()));
+    planRepository.save(plan);
+    asset.setNextMaintenanceDate(plan.getNextDueDate());
+    equipmentRepository.save(asset);
+  }
+
+  private void validateCertificate(WorkOrder order, UUID userId) {
+    if (userId == null) throw new BusinessException("请选择负责人");
+    String required = trimToNull(order.getRequiredCertificate());
+    if (required == null && order.getEquipmentId() != null) {
+      required = equipmentRepository.findById(order.getEquipmentId()).map(EquipmentAsset::getRequiredCertificate).orElse(null);
+      order.setRequiredCertificate(required);
+    }
+    if (required == null || required.isBlank()) return;
+    LocalDate validOn = order.getPlannedDate() == null ? LocalDate.now() : order.getPlannedDate();
+    String requiredType = required;
+    boolean valid = certificateRepository.findByUserIdOrderByExpiryDateAsc(userId).stream()
+        .anyMatch(c -> c.getCertificateType().equalsIgnoreCase(requiredType)
+            && !c.getExpiryDate().isBefore(validOn));
+    if (!valid) throw new BusinessException("该员工缺少有效的“" + required + "”证书");
+  }
+
+  private void recordAttendance(WorkOrder order, OffsetDateTime checkInAt, String location) {
+    if (order.getAssigneeId() == null) return;
+    FieldAttendance attendance = attendanceRepository.findFirstByWorkOrderIdOrderByCheckInAtDesc(order.getId())
+        .orElseGet(FieldAttendance::new);
+    attendance.setUserId(order.getAssigneeId());
+    attendance.setWorkOrderId(order.getId());
+    attendance.setCheckInAt(checkInAt == null ? OffsetDateTime.now() : checkInAt);
+    attendance.setCheckInLocation(location == null || location.isBlank() ? order.getSiteAddress() : location.trim());
+    attendance.setCheckOutAt(null);
+    attendance.setCheckOutLocation(null);
+    attendanceRepository.save(attendance);
+  }
+
+  private void recordCheckOut(WorkOrder order) {
+    attendanceRepository.findFirstByWorkOrderIdOrderByCheckInAtDesc(order.getId()).ifPresent(attendance -> {
+      attendance.setCheckOutAt(order.getCompletedAt() == null ? OffsetDateTime.now() : order.getCompletedAt());
+      attendance.setCheckOutLocation(order.getCheckInLocation());
+      attendanceRepository.save(attendance);
+    });
   }
 
   private WorkOrder requireMobileOrder(UUID id, UserPrincipal principal) {
@@ -464,6 +724,25 @@ public class MaintenanceService {
         a.getWarrantyEndDate(), a.getMaintenanceCycleDays(),
         a.getLastMaintenanceDate(), a.getNextMaintenanceDate(),
         a.getStatus(), cnt);
+  }
+
+  private PlanResponse toPlanResponse(MaintenancePlan plan) {
+    String assetName = equipmentRepository.findById(plan.getAssetId()).map(EquipmentAsset::getName).orElse("设备已删除");
+    return new PlanResponse(plan.getId(), plan.getCode(), plan.getAssetId(), assetName, plan.getPlanName(),
+        plan.getDescription(), plan.getWorkType(), plan.getPriority(), plan.getCycleDays(), plan.isAutoGenerate(),
+        plan.getNextDueDate(), plan.isEnabled());
+  }
+
+  private CertificateResponse toCertificateResponse(EmployeeCertificate item) {
+    String employeeName = userRepository.findById(item.getUserId()).map(u -> u.getDisplayName()).orElse("员工已停用");
+    return new CertificateResponse(item.getId(), item.getUserId(), employeeName, item.getCertificateType(),
+        item.getCertificateNo(), item.getIssueDate(), item.getExpiryDate(), item.getIssuingAuthority(), item.getRemark(),
+        java.time.temporal.ChronoUnit.DAYS.between(LocalDate.now(), item.getExpiryDate()));
+  }
+
+  private ScheduleResponse toScheduleResponse(FieldSchedule schedule, WorkOrder order) {
+    return new ScheduleResponse(schedule.getId(), order.getId(), order.getCode(), order.getTitle(), order.getEngineerName(),
+        schedule.getScheduledAt(), order.getCheckInAt(), order.getCheckInLocation(), order.getStartedAt(), order.getCompletedAt(), order.getStatus());
   }
 
   private BigDecimal nvl(BigDecimal v) { return v == null ? BigDecimal.ZERO : v; }

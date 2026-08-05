@@ -50,12 +50,19 @@ public final class MaintenanceDtos {
       List<StatusLogResponse> statusLogs) {}
 
   public record CreateWorkOrderRequest(
-      String title, String description, UUID customerId, UUID equipmentId,
-      WorkOrderType workType, WorkOrderPriority priority, WorkOrderSource source) {}
+      @jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Size(max = 180) String title,
+      @jakarta.validation.constraints.Size(max = 1000) String description,
+      UUID customerId, UUID equipmentId,
+      @jakarta.validation.constraints.NotNull WorkOrderType workType,
+      @jakarta.validation.constraints.NotNull WorkOrderPriority priority,
+      @jakarta.validation.constraints.NotNull WorkOrderSource source) {}
 
-  public record AssignWorkOrderRequest(UUID assigneeId, String assigneeName) {}
+  public record AssignWorkOrderRequest(@jakarta.validation.constraints.NotNull UUID assigneeId,
+      @jakarta.validation.constraints.NotBlank String assigneeName) {}
 
-  public record CheckInRequest(OffsetDateTime checkInAt, String checkInLocation) {}
+  public record CheckInRequest(
+      @jakarta.validation.constraints.NotNull OffsetDateTime checkInAt,
+      @jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Size(max = 300) String checkInLocation) {}
 
   public record MobileOperationRequest(
       @jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Size(max = 100) String operationId) {}
@@ -113,9 +120,13 @@ public final class MaintenanceDtos {
       EquipmentStatus status, long orderCount) {}
 
   public record CreateEquipmentRequest(
-      UUID customerId, UUID contractId, String code, String name,
-      String category, String model, String serialNo,
-      String siteAddress, LocalDate installedDate,
+      @jakarta.validation.constraints.NotNull UUID customerId, UUID contractId,
+      @jakarta.validation.constraints.Size(max = 64) String code,
+      @jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Size(max = 160) String name,
+      @jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Size(max = 80) String category,
+      String model, String serialNo,
+      @jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Size(max = 300) String siteAddress,
+      LocalDate installedDate,
       LocalDate warrantyEndDate, Integer maintenanceCycleDays,
       LocalDate nextMaintenanceDate, String requiredCertificate,
       String notes) {}
@@ -126,22 +137,27 @@ public final class MaintenanceDtos {
       String operatorName, String comment, OffsetDateTime createdAt) {}
 
   // -- Plan --
-  public record PlanResponse(UUID id, String name, String description,
+  public record PlanResponse(UUID id, String code, UUID assetId, String assetName, String name, String description,
       WorkOrderType workType, WorkOrderPriority priority,
       Integer cycleDays, Boolean autoGenerate, LocalDate nextRunDate,
       Boolean enabled) {}
-  public record CreatePlanRequest(String name, String description,
+  public record CreatePlanRequest(@jakarta.validation.constraints.NotNull UUID assetId,
+      @jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Size(max = 180) String name,
+      @jakarta.validation.constraints.Size(max = 1000) String description,
       WorkOrderType workType, WorkOrderPriority priority,
-      Integer cycleDays, Boolean autoGenerate) {}
+      @jakarta.validation.constraints.NotNull @jakarta.validation.constraints.Min(1) Integer cycleDays,
+      Boolean autoGenerate, @jakarta.validation.constraints.NotNull LocalDate nextRunDate) {}
   public record GeneratePlanResponse(int generated) {}
   public record GeneratePlanRequest(UUID planId) {}
 
   // -- Certificate --
-  public record CertificateResponse(UUID id, String certificateType, String certificateNo,
+  public record CertificateResponse(UUID id, UUID userId, String employeeName, String certificateType, String certificateNo,
       LocalDate issueDate, LocalDate expiryDate, String issuingAuthority, String remark,
       long daysUntilExpiry) {}
-  public record CreateCertificateRequest(UUID userId, String certificateType,
-      String certificateNo, LocalDate issueDate, LocalDate expiryDate,
+  public record CreateCertificateRequest(@jakarta.validation.constraints.NotNull UUID userId,
+      @jakarta.validation.constraints.NotBlank String certificateType,
+      @jakarta.validation.constraints.NotBlank String certificateNo,
+      LocalDate issueDate, @jakarta.validation.constraints.NotNull LocalDate expiryDate,
       String issuingAuthority, String remark) {}
 
   // -- Schedule --
@@ -149,8 +165,9 @@ public final class MaintenanceDtos {
       String engineerName, OffsetDateTime scheduledAt, OffsetDateTime checkInAt,
       String checkInLocation, OffsetDateTime startedAt, OffsetDateTime completedAt,
       WorkOrderStatus status) {}
-  public record CreateScheduleRequest(UUID orderId, UUID engineerId,
-      OffsetDateTime scheduledAt) {}
+  public record CreateScheduleRequest(@jakarta.validation.constraints.NotNull UUID orderId,
+      @jakarta.validation.constraints.NotNull UUID engineerId,
+      @jakarta.validation.constraints.NotNull OffsetDateTime scheduledAt) {}
 
   // -- Attendance --
   public record AttendanceResponse(UUID id, UUID orderId, String orderCode,

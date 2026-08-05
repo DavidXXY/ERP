@@ -433,6 +433,7 @@ import {
   listProcurementMatching,
   type ProcurementMatching,
 } from "@/api/procurement";
+import { businessStatusLabel } from "@/utils/status-mapper";
 import {
   listProjectProfitability,
   type ProjectProfitability,
@@ -994,7 +995,7 @@ const closureAlerts = computed(() => {
       type: "项目",
       title: projectRisk.projectName,
       desc: projectRisk.riskMessage || "预算、成本或毛利需要复核",
-      value: `${Math.round(Number(projectRisk.grossMarginRate || 0) * 100)}%`,
+      value: `${Number(projectRisk.grossMarginRate || 0).toFixed(1)}%`,
       color: projectRisk.riskLevel === "HIGH" ? "red" : "orange",
       link: "/projects/list",
     });
@@ -1006,7 +1007,7 @@ const closureAlerts = computed(() => {
       type: "采购",
       title: procurementRisk.orderCode || procurementRisk.partName,
       desc: procurementRisk.riskMessage || "订单、到货、应付或付款存在差异",
-      value: procurementRisk.matchStatus,
+      value: businessStatusLabel(procurementRisk.matchStatus),
       color: "orange",
       link: "/procurement/p2p",
     });

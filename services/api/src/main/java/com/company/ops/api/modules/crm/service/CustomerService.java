@@ -487,7 +487,8 @@ public class CustomerService {
         primaryContact,
         signedOrderAmount,
         paidAmount,
-        pendingAmount
+        pendingAmount,
+        signedOrderAmount.subtract(paidAmount).subtract(pendingAmount)
     );
   }
 

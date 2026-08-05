@@ -19,9 +19,21 @@ export type MobileWorkbench = {
   unreadNotifications: number;
   activeWorkOrders: number;
   urgentWorkOrders: number;
+  capabilities: MobileCapabilities;
   offlineOperations?: number;
   todos: MobileTodo[];
   workOrders: WorkOrder[];
+};
+
+export type MobileCapabilities = {
+  approvals: boolean;
+  notifications: boolean;
+  workOrders: boolean;
+  spares: boolean;
+  leaveApplication: boolean;
+  expenseApplication: boolean;
+  travelApplication: boolean;
+  offlineOperations: boolean;
 };
 
 export type MobileTodo = {

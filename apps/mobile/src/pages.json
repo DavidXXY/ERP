@@ -36,7 +36,7 @@
     "list": [
       { "pagePath": "pages/home/index", "text": "工作台" },
       { "pagePath": "pages/approvals/index", "text": "审批" },
-      { "pagePath": "pages/work-orders/index", "text": "工单" },
+      { "pagePath": "pages/applications/index", "text": "申请" },
       { "pagePath": "pages/profile/index", "text": "我的" }
     ]
   }

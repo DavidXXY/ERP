@@ -736,7 +736,7 @@
         }}</a-descriptions-item>
         <a-descriptions-item label="毛利率">{{
           selectedCrmApproval.grossMarginRate != null
-            ? `${(Number(selectedCrmApproval.grossMarginRate) * 100).toFixed(1)}%`
+            ? `${Number(selectedCrmApproval.grossMarginRate).toFixed(1)}%`
             : "-"
         }}</a-descriptions-item>
       </a-descriptions>
@@ -1509,7 +1509,7 @@ function approvalDetailLines(record: any) {
       `客户：${record.customerName || "-"}`,
       `服务范围：${record.desc || "-"}`,
       `付款方式：${record.paymentNodes || "-"}`,
-      `预算（含税，元）/毛利率：${record.budgetAmount != null ? formatMoney(record.budgetAmount) : "-"} / ${record.grossMarginRate != null ? `${(Number(record.grossMarginRate) * 100).toFixed(1)}%` : "-"}`,
+      `预算（含税，元）/毛利率：${record.budgetAmount != null ? formatMoney(record.budgetAmount) : "-"} / ${record.grossMarginRate != null ? `${Number(record.grossMarginRate).toFixed(1)}%` : "-"}`,
     ];
   }
   if (record._source === "contract") {

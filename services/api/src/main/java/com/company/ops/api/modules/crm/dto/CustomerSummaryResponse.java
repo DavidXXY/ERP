@@ -19,6 +19,7 @@ public record CustomerSummaryResponse(
     String primaryContact,
     BigDecimal signedOrderAmount,
     BigDecimal paidAmount,
-    BigDecimal pendingAmount
+    BigDecimal pendingAmount,
+    BigDecimal reconciliationDifference
 ) {
 }

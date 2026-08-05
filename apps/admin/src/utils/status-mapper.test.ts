@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { statusColor, statusLabel } from "./status-mapper";
+import { businessStatusLabel, statusColor, statusLabel } from "./status-mapper";
 
 describe("status mapper", () => {
   it("maps known values and preserves unknown labels", () => {
@@ -10,5 +10,12 @@ describe("status mapper", () => {
   it("uses safe defaults for empty and unknown colors", () => {
     expect(statusColor(undefined, {})).toBe("default");
     expect(statusColor("UNKNOWN", {})).toBe("default");
+  });
+
+  it("localizes business statuses without leaking raw internal codes", () => {
+    expect(businessStatusLabel("INVOICE_PENDING")).toBe("待收票");
+    expect(businessStatusLabel("MISMATCH")).toBe("存在差异");
+    expect(businessStatusLabel("NEW_BACKEND_STATUS")).toBe("状态待配置");
+    expect(businessStatusLabel(undefined)).toBe("-");
   });
 });

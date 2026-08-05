@@ -59,6 +59,7 @@ export type CustomerSummary = {
   signedOrderAmount: number;
   paidAmount: number;
   pendingAmount: number;
+  reconciliationDifference?: number;
 };
 
 export type CustomerDetail = CustomerSummary & {

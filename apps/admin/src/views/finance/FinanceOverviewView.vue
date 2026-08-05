@@ -66,7 +66,12 @@
     />
 
     <section class="exception-strip" aria-label="财务异常状态">
-      <button class="exception-cell" type="button" @click="openGovernance">
+      <button
+        class="exception-cell"
+        type="button"
+        :disabled="!auth.can('governance:view')"
+        @click="openGovernance"
+      >
         <span>当前期间</span>
         <strong :class="periodTone">{{ periodLabel }}</strong>
         <small>{{
@@ -75,7 +80,12 @@
             : "尚未建立期间"
         }}</small>
       </button>
-      <button class="exception-cell" type="button" @click="openGovernance">
+      <button
+        class="exception-cell"
+        type="button"
+        :disabled="!auth.can('governance:view')"
+        @click="openGovernance"
+      >
         <span>银行未完成对账</span>
         <strong
           :class="{ danger: analytics.reconciliation.unmatchedBankLines > 0 }"
@@ -89,7 +99,8 @@
       <button
         class="exception-cell"
         type="button"
-        @click="router.push('/finance/ledger')"
+        :disabled="!canOpenReconciliation"
+        @click="openReconciliation"
       >
         <span>业务与总账差异</span>
         <strong :class="{ danger: reconciliationDifference !== 0 }">
@@ -97,7 +108,12 @@
         </strong>
         <small>{{ reconciliationExceptionCount }} 项待核验</small>
       </button>
-      <button class="exception-cell" type="button" @click="openGovernance">
+      <button
+        class="exception-cell"
+        type="button"
+        :disabled="!auth.can('governance:view')"
+        @click="openGovernance"
+      >
         <span>资金计划偏差</span>
         <strong :class="{ danger: analytics.cashPlan.variance > 0 }">
           {{ signedMoney(analytics.cashPlan.variance) }}
@@ -198,6 +214,7 @@
           :key="item.key"
           type="button"
           class="forecast-row"
+          :disabled="!canOpenForecast(item.horizonDays)"
           @click="openForecast(item.horizonDays)"
         >
           <span
@@ -248,7 +265,10 @@
             <h3>风险事项</h3>
             <p>按严重度和暴露金额排序</p>
           </div>
-          <a-button size="small" @click="router.push('/risk-center')"
+          <a-button
+            v-if="canOpenRiskCenter"
+            size="small"
+            @click="router.push('/risk-center')"
             >风险中心</a-button
           >
         </div>
@@ -258,6 +278,7 @@
             :key="item.key"
             type="button"
             class="risk-row"
+            :disabled="!canOpenRisk(item.category)"
             @click="openRisk(item.category)"
           >
             <a-tag :color="severityColor(item.severity)">{{
@@ -284,9 +305,15 @@
           <p>回款、付款及净现金逐项核对</p>
         </div>
         <a-space
-          ><a-button size="small" @click="router.push('/finance/tax-ledger')"
+          ><a-button
+            v-if="auth.can('finance:tax:view')"
+            size="small"
+            @click="router.push('/finance/tax-ledger')"
             >税务台账</a-button
-          ><a-button size="small" @click="router.push('/finance/ledger')"
+          ><a-button
+            v-if="auth.can('finance:ledger:view')"
+            size="small"
+            @click="router.push('/finance/ledger')"
             >总账报表</a-button
           ></a-space
         >
@@ -370,6 +397,17 @@ const reconciliationExceptionCount = computed(
     analytics.reconciliation.ledger.filter(
       (item) => Number(item.difference) !== 0,
     ).length,
+);
+const canOpenReconciliation = computed(
+  () => auth.can("finance:ledger:view") || auth.can("governance:view"),
+);
+const canOpenRiskCenter = computed(() =>
+  [
+    "risk:view",
+    "dashboard:view",
+    "finance:receivable:view",
+    "finance:payable:view",
+  ].some((permission) => auth.can(permission)),
 );
 const sixtyDayForecast = computed(
   () =>
@@ -526,10 +564,28 @@ function emptyAnalytics(): FinanceAnalytics {
 function openGovernance() {
   if (auth.can("governance:view")) router.push("/governance");
 }
+function openReconciliation() {
+  if (auth.can("finance:ledger:view")) router.push("/finance/ledger");
+  else openGovernance();
+}
+function canOpenForecast(days: number) {
+  return days <= 30
+    ? auth.can("finance:receivable:view")
+    : auth.can("finance:payable:view");
+}
 function openForecast(days: number) {
-  router.push(days <= 30 ? "/finance/receivables" : "/finance/payables");
+  if (canOpenForecast(days)) {
+    router.push(days <= 30 ? "/finance/receivables" : "/finance/payables");
+  }
+}
+function canOpenRisk(category: string) {
+  if (category === "RECEIVABLE") return auth.can("finance:receivable:view");
+  if (category === "PAYABLE") return auth.can("finance:payable:view");
+  if (category === "TAX") return auth.can("finance:tax:view");
+  return auth.can("governance:view");
 }
 function openRisk(category: string) {
+  if (!canOpenRisk(category)) return;
   const route =
     category === "RECEIVABLE"
       ? "/finance/receivables"
@@ -841,6 +897,16 @@ function pad(value: number) {
 }
 .forecast-row:hover {
   background: #f8fafc;
+}
+.exception-cell:disabled,
+.forecast-row:disabled,
+.risk-row:disabled {
+  cursor: default;
+}
+.exception-cell:disabled:hover,
+.forecast-row:disabled:hover,
+.risk-row:disabled:hover {
+  background: inherit;
 }
 .forecast-row > span {
   display: grid;

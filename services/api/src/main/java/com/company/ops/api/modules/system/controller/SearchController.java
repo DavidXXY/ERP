@@ -5,6 +5,8 @@ import com.company.ops.api.modules.system.service.SearchService;
 import com.company.ops.api.modules.system.service.SearchService.SearchResult;
 import java.util.List;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import com.company.ops.api.modules.system.security.UserPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -20,7 +22,10 @@ public class SearchController {
 
   @GetMapping
   @PreAuthorize("isAuthenticated()")
-  public ApiResponse<List<SearchResult>> search(@RequestParam String q) {
-    return ApiResponse.ok(searchService.search(q));
+  public ApiResponse<List<SearchResult>> search(
+      @RequestParam String q,
+      @AuthenticationPrincipal UserPrincipal principal
+  ) {
+    return ApiResponse.ok(searchService.search(q, principal));
   }
 }

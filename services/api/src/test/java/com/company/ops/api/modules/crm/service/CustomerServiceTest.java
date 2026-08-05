@@ -4,12 +4,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 
 import com.company.ops.api.common.exception.BusinessException;
 import com.company.ops.api.common.delete.DeleteGovernanceService;
 import com.company.ops.api.modules.crm.domain.Customer;
 import com.company.ops.api.modules.crm.domain.CustomerLevel;
 import com.company.ops.api.modules.crm.domain.RiskStatus;
+import com.company.ops.api.modules.crm.domain.Receivable;
+import com.company.ops.api.modules.crm.domain.ServiceContract;
 import com.company.ops.api.modules.crm.dto.CreateCustomerRequest;
 import com.company.ops.api.modules.crm.dto.UpdateCustomerRequest;
 import com.company.ops.api.modules.crm.repository.CustomerRepository;
@@ -22,6 +26,7 @@ import com.company.ops.api.modules.system.security.DataScopeService;
 import com.company.ops.api.modules.system.domain.SystemUser;
 import com.company.ops.api.modules.system.repository.SystemUserRepository;
 import java.util.List;
+import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -127,6 +132,35 @@ class CustomerServiceTest {
     assertThatThrownBy(() -> customerService.updateCustomer(customerId, request))
         .isInstanceOf(BusinessException.class)
         .hasMessage("一个客户只能设置一位主要联系人");
+  }
+
+  @Test
+  void listCustomersReportsContractReceivableReconciliationDifference() {
+    UUID customerId = UUID.randomUUID();
+    Customer customer = customer(customerId);
+    ServiceContract contract = new ServiceContract();
+    contract.setCustomerId(customerId);
+    contract.setAmount(new BigDecimal("100.00"));
+    Receivable receivable = new Receivable();
+    receivable.setCustomerId(customerId);
+    receivable.setAmount(new BigDecimal("80.00"));
+    receivable.setSettledAmount(new BigDecimal("30.00"));
+    List<Customer> customers = List.of(customer);
+
+    when(contractRepository.findAll()).thenReturn(List.of(contract));
+    when(receivableRepository.findAll()).thenReturn(List.of(receivable));
+    when(customerRepository.findAllByOrderByCreatedAtDesc()).thenReturn(customers);
+    when(deleteGovernanceService.visible(eq("CUSTOMER"), eq(customers), any())).thenReturn(customers);
+    when(dataScopeService.canViewOwner(customer.getOwnerUserId())).thenReturn(true);
+
+    var result = customerService.listCustomers();
+
+    assertThat(result).singleElement().satisfies(summary -> {
+      assertThat(summary.signedOrderAmount()).isEqualByComparingTo("100.00");
+      assertThat(summary.paidAmount()).isEqualByComparingTo("30.00");
+      assertThat(summary.pendingAmount()).isEqualByComparingTo("50.00");
+      assertThat(summary.reconciliationDifference()).isEqualByComparingTo("20.00");
+    });
   }
 
   private Customer customer(UUID id) {

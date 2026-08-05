@@ -5,7 +5,9 @@ import StateView from "@/components/StateView.vue";
 import WorkOrderCard from "@/components/WorkOrderCard.vue";
 import { listMyWorkOrders } from "@/api/maintenance";
 import type { WorkOrder } from "@/types/domain";
+import { useAuthStore } from "@/stores/auth";
 
+const auth = useAuthStore();
 const records = ref<WorkOrder[]>([]);
 const loading = ref(true);
 const error = ref("");
@@ -18,6 +20,13 @@ const filtered = computed(() => records.value.filter((item) => {
 
 async function load() {
   loading.value = !records.value.length; error.value = "";
+  if (!auth.can("maintenance:view") && !auth.can("maintenance:order:manage")) {
+    records.value = [];
+    error.value = "当前账号未开通现场工单";
+    loading.value = false;
+    uni.stopPullDownRefresh();
+    return;
+  }
   try { records.value = await listMyWorkOrders(); }
   catch (e) { error.value = (e as Error).message; }
   finally { loading.value = false; uni.stopPullDownRefresh(); }

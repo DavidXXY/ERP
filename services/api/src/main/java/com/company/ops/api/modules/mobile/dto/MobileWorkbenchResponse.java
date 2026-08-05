@@ -12,9 +12,21 @@ public record MobileWorkbenchResponse(
     long unreadNotifications,
     long activeWorkOrders,
     long urgentWorkOrders,
+    MobileCapabilities capabilities,
     List<MobileTodo> todos,
     List<WorkOrderResponse> workOrders
 ) {
+  public record MobileCapabilities(
+      boolean approvals,
+      boolean notifications,
+      boolean workOrders,
+      boolean spares,
+      boolean leaveApplication,
+      boolean expenseApplication,
+      boolean travelApplication,
+      boolean offlineOperations
+  ) {}
+
   public record MobileTodo(
       UUID id, String type, String title, String subtitle, String priority,
       BigDecimal amount, OffsetDateTime createdAt, String route

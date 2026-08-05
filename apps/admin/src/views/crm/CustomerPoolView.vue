@@ -14,6 +14,13 @@
             <span
               ><strong>{{ riskCount }}</strong> 家风险客户</span
             >
+            <span
+              :class="{
+                'customer-summary-warning': reconciliationIssueCount > 0,
+              }"
+            >
+              <strong>{{ reconciliationIssueCount }}</strong> 家金额待勾稽
+            </span>
           </div>
         </div>
         <a-space>
@@ -80,7 +87,7 @@
           :pagination="{ pageSize: 10, showSizeChanger: false }"
           :row-key="(record: CustomerSummary) => record.id"
           :custom-row="customerRow"
-          :scroll="{ x: 1210 }"
+          :scroll="{ x: 1000 }"
         >
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'name'">
@@ -110,21 +117,34 @@
                 record.industry
               }}</span></template
             >
-            <template v-else-if="column.key === 'signedAmount'"
-              ><strong class="customer-money">{{
-                formatMoney(record.signedOrderAmount)
-              }}</strong></template
-            >
-            <template v-else-if="column.key === 'paidAmount'"
-              ><strong class="customer-money customer-money--paid">{{
-                formatMoney(record.paidAmount)
-              }}</strong></template
-            >
-            <template v-else-if="column.key === 'pendingAmount'"
-              ><strong class="customer-money customer-money--pending">{{
-                formatMoney(record.pendingAmount)
-              }}</strong></template
-            >
+            <template v-else-if="column.key === 'cashFlow'">
+              <div class="customer-cash-flow">
+                <span
+                  ><small>合同</small
+                  ><strong>{{
+                    formatMoney(record.signedOrderAmount)
+                  }}</strong></span
+                >
+                <span
+                  ><small>已收</small
+                  ><strong class="customer-money--paid">{{
+                    formatMoney(record.paidAmount)
+                  }}</strong></span
+                >
+                <span
+                  ><small>待收</small
+                  ><strong class="customer-money--pending">{{
+                    formatMoney(record.pendingAmount)
+                  }}</strong></span
+                >
+                <a-tag
+                  v-if="hasReconciliationIssue(record)"
+                  color="error"
+                  :title="`合同、已收与待收差额 ${formatMoney(record.reconciliationDifference)}`"
+                  >待勾稽</a-tag
+                >
+              </div>
+            </template>
             <template v-else-if="column.key === 'risk'"
               ><a-tag :color="riskColor(record.riskStatus)">{{
                 riskLabel(record.riskStatus)
@@ -202,6 +222,19 @@
                 ><span>{{ record.industry }}</span>
               </div>
               <div class="customer-mobile-meta">
+                <span
+                  >合同
+                  <strong>{{
+                    formatMoney(record.signedOrderAmount)
+                  }}</strong></span
+                >
+                <span
+                  >待收
+                  <strong>{{ formatMoney(record.pendingAmount) }}</strong></span
+                >
+                <a-tag v-if="hasReconciliationIssue(record)" color="error"
+                  >金额待勾稽</a-tag
+                >
                 <span
                   >联系人 <strong>{{ record.contactCount }}</strong></span
                 ><span
@@ -1021,15 +1054,13 @@ const rules = {
   ownerName: [{ required: true, message: "请输入负责人" }],
 };
 const columns = [
-  { title: "客户", key: "name", width: 300 },
-  { title: "客户编码", dataIndex: "code", width: 150 },
+  { title: "客户", key: "name", width: 220 },
+  { title: "客户编码", dataIndex: "code", width: 130 },
   { title: "负责人", key: "owner", width: 110 },
-  { title: "等级 / 行业", key: "level", width: 120 },
-  { title: "已签订单金额（含税，元）", key: "signedAmount", width: 180 },
-  { title: "累计支付金额（含税，元）", key: "paidAmount", width: 180 },
-  { title: "待付金额（含税，元）", key: "pendingAmount", width: 170 },
+  { title: "等级 / 行业", key: "level", width: 110 },
+  { title: "合同 / 已收 / 待收（含税，元）", key: "cashFlow", width: 250 },
   { title: "风险", key: "risk", width: 90 },
-  { title: "操作", key: "action", width: 80, fixed: "right" },
+  { title: "操作", key: "action", width: 90, fixed: "right" },
 ];
 const opportunityColumns = [
   { title: "商机", key: "opportunity", width: 150 },
@@ -1091,6 +1122,13 @@ const riskCount = computed(
     customers.value.filter((customer) => customer.riskStatus !== "NORMAL")
       .length,
 );
+const reconciliationIssueCount = computed(
+  () => customers.value.filter(hasReconciliationIssue).length,
+);
+
+function hasReconciliationIssue(customer: CustomerSummary) {
+  return Math.abs(Number(customer.reconciliationDifference || 0)) >= 0.01;
+}
 const validContactCount = computed(
   () => formState.contacts.filter((contact) => contact.name.trim()).length,
 );
@@ -1470,6 +1508,35 @@ function uniqueKey() {
   color: #263442;
   font-size: 13px;
 }
+.customer-summary-warning,
+.customer-summary-warning strong {
+  color: #b45309 !important;
+}
+.customer-cash-flow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  align-items: center;
+}
+.customer-cash-flow span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+.customer-cash-flow small {
+  color: #7a8793;
+  font-size: 11px;
+}
+.customer-cash-flow strong {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+}
+.customer-cash-flow :deep(.ant-tag) {
+  grid-column: 1 / -1;
+  width: max-content;
+  margin: 0;
+}
 .customer-filter-bar {
   display: grid;
   grid-template-columns: minmax(260px, 1fr) 160px 160px auto;
@@ -1747,7 +1814,7 @@ function uniqueKey() {
   align-content: end;
   justify-items: start;
 }
-@container customer-directory (max-width: 820px) {
+@container customer-directory (max-width: 1040px) {
   .customer-desktop-table {
     display: none;
   }

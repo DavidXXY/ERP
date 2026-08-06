@@ -51,6 +51,16 @@ export type MaterialCategory = {
   builtIn: boolean;
 };
 
+export type SupplierCategory = {
+  id: string;
+  name: string;
+  description?: string;
+  sortOrder: number;
+  enabled: boolean;
+  builtIn: boolean;
+  supplierCount: number;
+};
+
 export type MaterialDeletionResult = {
   status: "DELETED" | "PENDING_APPROVAL";
   message: string;
@@ -208,7 +218,7 @@ export type PurchaseOrder = {
 export type CreateSupplierPayload = {
   code?: string;
   name: string;
-  category?: string;
+  category: string;
   contactName?: string;
   phone?: string;
   settlementTerms?: string;
@@ -633,6 +643,39 @@ export function updateSupplier(id: string, payload: CreateSupplierPayload) {
   return request<Supplier>({
     method: "PUT",
     url: `/procurement/suppliers/${id}`,
+    data: payload,
+  });
+}
+export function listSupplierCategories() {
+  return request<SupplierCategory[]>({
+    method: "GET",
+    url: "/procurement/supplier-categories",
+  });
+}
+export function createSupplierCategory(payload: {
+  name: string;
+  description?: string;
+  sortOrder?: number;
+  enabled?: boolean;
+}) {
+  return request<SupplierCategory>({
+    method: "POST",
+    url: "/procurement/supplier-categories",
+    data: payload,
+  });
+}
+export function updateSupplierCategory(
+  id: string,
+  payload: {
+    name: string;
+    description?: string;
+    sortOrder?: number;
+    enabled?: boolean;
+  },
+) {
+  return request<SupplierCategory>({
+    method: "PUT",
+    url: `/procurement/supplier-categories/${id}`,
     data: payload,
   });
 }

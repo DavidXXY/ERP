@@ -22,7 +22,7 @@
           <p>{{ mode === "login" ? "继续处理询价与企业资料" : "提交后可先完善资料，审核通过后参与报价" }}</p>
         </div>
 
-        <a-form :model="form" layout="vertical" @finish="submit">
+        <a-form :model="form" :rules="rules" layout="vertical" @finish="submit">
           <template v-if="mode === 'register'">
             <a-form-item label="企业名称" name="companyName" required>
               <a-input v-model:value="form.companyName" autocomplete="organization" />
@@ -34,7 +34,7 @@
               <a-form-item label="联系人" name="contactName" required>
                 <a-input v-model:value="form.contactName" autocomplete="name" />
               </a-form-item>
-              <a-form-item label="联系电话" name="phone">
+              <a-form-item label="联系电话" name="phone" required>
                 <a-input v-model:value="form.phone" autocomplete="tel" />
               </a-form-item>
             </div>
@@ -71,13 +71,27 @@ const mode = ref<"login" | "register">("login");
 const modeOptions = [{ label: "登录", value: "login" }, { label: "注册", value: "register" }];
 const submitting = ref(false);
 const form = reactive({ companyName: "", unifiedSocialCreditCode: "", contactName: "", phone: "", email: "", password: "", registrationCode: "" });
+const rules = {
+  companyName: [{ required: true, message: "请输入企业名称" }],
+  unifiedSocialCreditCode: [{ required: true, message: "请输入统一社会信用代码" }],
+  contactName: [{ required: true, message: "请输入联系人" }],
+  phone: [{ required: true, message: "请输入联系电话" }],
+  email: [
+    { required: true, message: "请输入邮箱" },
+    { type: "email" as const, message: "请输入有效邮箱" },
+  ],
+  password: [
+    { required: true, message: "请输入密码" },
+    { min: 8, message: "密码至少 8 位" },
+  ],
+};
 
 async function submit() {
   if (!form.email || form.password.length < 8) {
     message.warning("请填写有效邮箱，密码至少 8 位");
     return;
   }
-  if (mode.value === "register" && (!form.companyName || !form.unifiedSocialCreditCode || !form.contactName)) {
+  if (mode.value === "register" && (!form.companyName || !form.unifiedSocialCreditCode || !form.contactName || !form.phone)) {
     message.warning("请完整填写企业及联系人信息");
     return;
   }

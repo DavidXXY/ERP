@@ -17,6 +17,7 @@ import com.company.ops.api.modules.procurement.domain.SupplierQuotation;
 import com.company.ops.api.modules.procurement.domain.SupplierRiskStatus;
 import com.company.ops.api.modules.procurement.dto.SupplierPortalDtos.UpdateAccountStatusRequest;
 import com.company.ops.api.modules.procurement.dto.SupplierPortalDtos.OpenAccountRequest;
+import com.company.ops.api.modules.procurement.dto.SupplierPortalDtos.UpdateProfileRequest;
 import com.company.ops.api.modules.procurement.repository.ProcurementInquiryInvitationRepository;
 import com.company.ops.api.modules.procurement.repository.ProcurementInquiryRepository;
 import com.company.ops.api.modules.procurement.repository.ProcurementInquiryRequestRepository;
@@ -180,6 +181,25 @@ class SupplierPortalServiceTest {
         new OpenAccountRequest("buyer@example.com", null, "供应商联系人")))
         .isInstanceOf(BusinessException.class)
         .hasMessageContaining("已经开通门户账号");
+  }
+
+  @Test
+  void supplierProfileUpdateCannotChangeProcurementCategory() {
+    Fixture fixture = fixture();
+    fixture.supplier.setName("原供应商");
+    fixture.supplier.setUnifiedSocialCreditCode("91310000TEST000001");
+    fixture.supplier.setCategory("采购指定分类");
+    when(accounts.findById(fixture.account.getId())).thenReturn(Optional.of(fixture.account));
+    when(suppliers.findById(fixture.supplier.getId())).thenReturn(Optional.of(fixture.supplier));
+    when(suppliers.save(fixture.supplier)).thenReturn(fixture.supplier);
+    when(accounts.save(fixture.account)).thenReturn(fixture.account);
+
+    service.updateProfile(fixture.principal, new UpdateProfileRequest(
+        "原供应商", "供应商自行修改的分类", "联系人", "13800000000", null,
+        "91310000TEST000001", null, null, null, null, null, null, null, null,
+        null));
+
+    assertThat(fixture.supplier.getCategory()).isEqualTo("采购指定分类");
   }
 
   @Test

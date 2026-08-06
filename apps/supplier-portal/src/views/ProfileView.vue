@@ -9,7 +9,9 @@
           <div class="form-grid-2">
             <a-form-item label="企业名称" required><a-input v-model:value="profile.name" /></a-form-item>
             <a-form-item label="统一社会信用代码" required><a-input v-model:value="profile.unifiedSocialCreditCode" /></a-form-item>
-            <a-form-item label="供应商类别"><a-input v-model:value="profile.category" /></a-form-item>
+            <a-form-item label="供应商分类">
+              <a-input :value="profile.category || '由采购方待分配'" disabled />
+            </a-form-item>
             <a-form-item label="法定代表人"><a-input v-model:value="profile.legalRepresentative" /></a-form-item>
             <a-form-item label="注册资本"><a-input v-model:value="profile.registeredCapital" /></a-form-item>
             <a-form-item label="纳税人类型"><a-input v-model:value="profile.taxpayerType" /></a-form-item>
@@ -20,8 +22,8 @@
         <section class="form-section">
           <div class="section-title"><div><h2>联系人与结算</h2><p>银行信息不在门户中明文回显。</p></div></div>
           <div class="form-grid-2">
-            <a-form-item label="联系人"><a-input v-model:value="profile.contactName" /></a-form-item>
-            <a-form-item label="联系电话"><a-input v-model:value="profile.phone" /></a-form-item>
+            <a-form-item label="联系人" required><a-input v-model:value="profile.contactName" /></a-form-item>
+            <a-form-item label="联系电话" required><a-input v-model:value="profile.phone" /></a-form-item>
             <a-form-item label="开户银行"><a-input v-model:value="profile.bankName" :placeholder="profile.admissionStatus === 'APPROVED' ? '已准入后变更请联系采购方' : ''" /></a-form-item>
             <a-form-item label="银行账号"><a-input v-model:value="bankAccount" :placeholder="profile.maskedBankAccount || '请输入银行账号'" /></a-form-item>
           </div>
@@ -54,7 +56,7 @@ const statusColor = computed(() => ({ APPROVED: "green", REJECTED: "red", PENDIN
 onMounted(load);
 async function load() { loading.value = true; try { const session = store.session || await api.getSession(); store.setSession(session); Object.assign(profile, session.supplier); } catch (e) { message.error(e instanceof Error ? e.message : "加载失败"); } finally { loading.value = false; } }
 async function save() {
-  if (!profile.name.trim() || !profile.unifiedSocialCreditCode.trim()) { message.warning("请填写企业名称与统一社会信用代码"); return; }
+  if (!profile.name.trim() || !profile.unifiedSocialCreditCode.trim() || !profile.contactName?.trim() || !profile.phone?.trim()) { message.warning("请填写企业名称、统一社会信用代码、联系人和联系电话"); return; }
   saving.value = true;
   try {
     const updated = await api.updateProfile({ ...profile, bankAccount: bankAccount.value || undefined, maskedBankAccount: undefined });

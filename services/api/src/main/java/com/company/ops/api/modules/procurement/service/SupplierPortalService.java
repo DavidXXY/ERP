@@ -664,9 +664,8 @@ public class SupplierPortalService {
     supplier.setCode(codeGenerator.generate("SUPPLIER"));
     supplier.setName(request.companyName().trim());
     supplier.setUnifiedSocialCreditCode(creditCode);
-    supplier.setCategory(trim(request.category()));
     supplier.setContactName(request.contactName().trim());
-    supplier.setPhone(trim(request.phone()));
+    supplier.setPhone(request.phone().trim());
     supplier.setLicenseValidTo(request.licenseValidTo());
     supplier.setQualificationValidTo(request.qualificationValidTo());
     supplier.setAdmissionStatus("PENDING");
@@ -855,7 +854,7 @@ public class SupplierPortalService {
   private SupplierProfileResponse profile(Supplier supplier, UpdateProfileRequest request) {
     Supplier copy = new Supplier();
     copy.setId(supplier.getId()); copy.setCode(supplier.getCode()); copy.setName(request.name());
-    copy.setCategory(request.category()); copy.setContactName(request.contactName()); copy.setPhone(request.phone());
+    copy.setCategory(supplier.getCategory()); copy.setContactName(request.contactName()); copy.setPhone(request.phone());
     copy.setLegalRepresentative(request.legalRepresentative()); copy.setUnifiedSocialCreditCode(request.unifiedSocialCreditCode());
     copy.setRegisteredCapital(request.registeredCapital()); copy.setRegisteredAddress(request.registeredAddress());
     copy.setBusinessScope(request.businessScope()); copy.setLicenseValidTo(request.licenseValidTo());
@@ -917,8 +916,8 @@ public class SupplierPortalService {
   }
 
   private void applyProfile(Supplier supplier, UpdateProfileRequest request) {
-    supplier.setName(request.name().trim()); supplier.setCategory(trim(request.category()));
-    supplier.setContactName(trim(request.contactName())); supplier.setPhone(trim(request.phone()));
+    supplier.setName(request.name().trim());
+    supplier.setContactName(request.contactName().trim()); supplier.setPhone(request.phone().trim());
     supplier.setLegalRepresentative(trim(request.legalRepresentative()));
     supplier.setUnifiedSocialCreditCode(request.unifiedSocialCreditCode().trim().toUpperCase());
     supplier.setRegisteredCapital(trim(request.registeredCapital())); supplier.setRegisteredAddress(trim(request.registeredAddress()));

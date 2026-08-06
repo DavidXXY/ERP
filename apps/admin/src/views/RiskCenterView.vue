@@ -392,11 +392,21 @@
               <a-radio-button value="CLOSED">关闭</a-radio-button>
             </a-radio-group>
           </a-form-item>
-          <a-form-item label="处理人"
-            ><a-input
+          <a-form-item
+            label="处理人"
+            :required="workflowForm.status !== 'UNCLAIMED'"
+          >
+            <a-select
               v-model:value="workflowForm.owner"
-              placeholder="默认当前用户"
-          /></a-form-item>
+              show-search
+              allow-clear
+              option-filter-prop="label"
+              placeholder="请选择公司人员"
+              :disabled="workflowForm.status === 'UNCLAIMED'"
+              :loading="assigneeLoading"
+              :options="riskAssigneeOptions"
+            />
+          </a-form-item>
           <a-form-item label="处理备注"
             ><a-textarea v-model:value="workflowForm.note" :rows="3"
           /></a-form-item>
@@ -518,6 +528,7 @@ import { listQualificationWarnings } from "@/api/qualification";
 import {
   batchUpdateRiskWorkflow,
   getRiskSummary,
+  listRiskAssignees,
   listRiskItems,
   listRiskWorkflowActions,
   listRiskWorkflows,
@@ -525,6 +536,7 @@ import {
   snapshotRiskToday,
   updateRiskWorkflow,
   type RiskItemResponse,
+  type RiskAssigneeResponse,
   type RiskSummaryResponse,
   type RiskWorkflowActionResponse,
   type RiskWorkflowStatus,
@@ -585,6 +597,8 @@ const activeRisk = ref<RiskItem | null>(null);
 const workflowStore = ref<Record<string, RiskWorkflow>>({});
 const workflowActions = ref<RiskWorkflowActionResponse[]>([]);
 const actionLoading = ref(false);
+const assigneeLoading = ref(false);
+const riskAssignees = ref<RiskAssigneeResponse[]>([]);
 const selectedRowKeys = ref<string[]>([]);
 const batchStatus = ref<WorkflowStatus>("CLAIMED");
 const workflowForm = reactive({
@@ -628,6 +642,21 @@ const workflowOptions = [
   { label: "已忽略", value: "IGNORED" },
   { label: "已关闭", value: "CLOSED" },
 ];
+
+const riskAssigneeOptions = computed(() =>
+  riskAssignees.value.map((user) => ({
+    label: user.organizationName
+      ? `${user.displayName} · ${user.organizationName}`
+      : user.displayName,
+    value: user.displayName,
+  })),
+);
+
+function companyAssigneeName(owner?: string) {
+  return riskAssignees.value.some((user) => user.displayName === owner)
+    ? owner || ""
+    : "";
+}
 
 const moduleOptions = computed(() =>
   Array.from(
@@ -828,7 +857,10 @@ const taskCards = computed(() => {
 
 restoreWorkflow();
 restoreFilters();
-onMounted(loadData);
+onMounted(() => {
+  void loadData();
+  void loadRiskAssigneeOptions();
+});
 watch(
   [
     keyword,
@@ -869,6 +901,25 @@ async function loadData() {
     message.error(error instanceof Error ? error.message : "风险数据加载失败");
   } finally {
     loading.value = false;
+  }
+}
+
+async function loadRiskAssigneeOptions() {
+  assigneeLoading.value = true;
+  try {
+    riskAssignees.value = await listRiskAssignees();
+  } catch (error) {
+    riskAssignees.value = auth.user
+      ? [
+          {
+            id: auth.user.id,
+            displayName: auth.user.displayName,
+          },
+        ]
+      : [];
+    message.error(error instanceof Error ? error.message : "公司人员加载失败");
+  } finally {
+    assigneeLoading.value = false;
   }
 }
 
@@ -1422,9 +1473,9 @@ async function claimTopRisk() {
   Object.assign(workflowForm, {
     status: "CLAIMED" as WorkflowStatus,
     owner:
-      target.workflow.owner ||
+      companyAssigneeName(target.workflow.owner) ||
       auth.user?.displayName ||
-      defaultOwnerLabel(target),
+      "",
     note: "已认领，准备推进闭环处理",
     reason: "",
     rootCause: "",
@@ -1440,9 +1491,7 @@ function openWorkflowWithSuggestion(record: RiskItem & { action: string }) {
     record.workflow.status === "UNCLAIMED" ? "CLAIMED" : "PROCESSING";
   workflowForm.note = record.action;
   workflowForm.owner =
-    record.workflow.owner ||
-    auth.user?.displayName ||
-    defaultOwnerLabel(record);
+    companyAssigneeName(record.workflow.owner) || auth.user?.displayName || "";
 }
 
 function applyWorkflow(item: Omit<RiskItem, "workflow"> | RiskItem): RiskItem {
@@ -1456,7 +1505,7 @@ function openWorkflow(record: RiskItem) {
   activeRisk.value = record;
   Object.assign(workflowForm, {
     status: record.workflow.status,
-    owner: record.workflow.owner || auth.user?.displayName || "",
+    owner: companyAssigneeName(record.workflow.owner),
     note: record.workflow.note || "",
     reason: record.workflow.reason || "",
     rootCause: record.workflow.rootCause || "",
@@ -1471,6 +1520,13 @@ function openWorkflow(record: RiskItem) {
 async function saveWorkflow() {
   if (!activeRisk.value) return;
   if (
+    workflowForm.status !== "UNCLAIMED" &&
+    !companyAssigneeName(workflowForm.owner)
+  ) {
+    message.error("请选择处理人");
+    return;
+  }
+  if (
     workflowForm.status === "CLOSED" &&
     (!workflowForm.rootCause.trim() ||
       !workflowForm.responsibleDepartment.trim() ||
@@ -1484,7 +1540,7 @@ async function saveWorkflow() {
     const saved = await updateRiskWorkflow({
       riskKey: activeRisk.value.key,
       status: workflowForm.status,
-      owner: workflowForm.owner || auth.user?.displayName || "",
+      owner: workflowForm.status === "UNCLAIMED" ? "" : workflowForm.owner,
       note: workflowForm.note,
       reason: workflowForm.reason,
       rootCause:
@@ -1515,7 +1571,7 @@ async function saveWorkflow() {
   } catch {
     next = {
       status: workflowForm.status,
-      owner: workflowForm.owner || auth.user?.displayName || "",
+      owner: workflowForm.status === "UNCLAIMED" ? "" : workflowForm.owner,
       note: workflowForm.note,
       reason: workflowForm.reason,
       updatedAt: new Date().toISOString(),

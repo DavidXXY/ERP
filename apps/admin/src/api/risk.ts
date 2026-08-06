@@ -39,6 +39,12 @@ export type RiskWorkflowActionResponse = {
   createdAt?: string;
 };
 
+export type RiskAssigneeResponse = {
+  id: string;
+  displayName: string;
+  organizationName?: string;
+};
+
 export type RiskItemResponse = {
   key: string;
   module: string;
@@ -168,6 +174,13 @@ export function listRiskWorkflowActions(riskKey: string) {
     method: "GET",
     url: "/risk/workflows/actions",
     params: { riskKey },
+  });
+}
+
+export function listRiskAssignees() {
+  return request<RiskAssigneeResponse[]>({
+    method: "GET",
+    url: "/risk/workflows/assignees",
   });
 }
 

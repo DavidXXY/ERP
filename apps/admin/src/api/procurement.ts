@@ -665,10 +665,12 @@ export function updateSupplierPortalAccountStatus(
   });
 }
 export function resetSupplierPortalPassword(id: string) {
-  return request<{ temporaryPassword: string; account: SupplierPortalAccount }>({
-    method: "POST",
-    url: `/procurement/supplier-portal/accounts/${id}/reset-password`,
-  });
+  return request<{ temporaryPassword: string; account: SupplierPortalAccount }>(
+    {
+      method: "POST",
+      url: `/procurement/supplier-portal/accounts/${id}/reset-password`,
+    },
+  );
 }
 export function listSupplierPortalDocuments(supplierId: string) {
   return request<SupplierPortalDocument[]>({

@@ -46,8 +46,14 @@
           <a-divider orientation="left">供应商报价</a-divider>
           <div v-if="record.invitations?.length" class="invitation-strip">
             <span>已邀请</span>
-            <a-tag v-for="invitation in record.invitations" :key="invitation.id" :color="invitation.status === 'DECLINED' ? 'red' : 'cyan'">
-              {{ invitation.supplierName }} · {{ invitationStatusText(invitation.status) }} · {{ deliveryStatusText(invitation.deliveryStatus) }}
+            <a-tag
+              v-for="invitation in record.invitations"
+              :key="invitation.id"
+              :color="invitation.status === 'DECLINED' ? 'red' : 'cyan'"
+            >
+              {{ invitation.supplierName }} ·
+              {{ invitationStatusText(invitation.status) }} ·
+              {{ deliveryStatusText(invitation.deliveryStatus) }}
             </a-tag>
           </div>
           <a-table
@@ -74,7 +80,11 @@
                   </template>
                 </template>
               </a-table>
-              <a-button size="small" style="margin-top: 8px" @click="openQuoteAttachments(quote)">
+              <a-button
+                size="small"
+                style="margin-top: 8px"
+                @click="openQuoteAttachments(quote)"
+              >
                 查看报价附件
               </a-button>
             </template>
@@ -96,18 +106,37 @@
                 {{ quote.commercialScore }} /
                 <strong>{{ quote.totalScore }}</strong>
                 <a-button
-                  v-if="record.status === 'OPEN' && auth.can('procurement:request:approve')"
+                  v-if="
+                    record.status === 'OPEN' &&
+                    auth.can('procurement:request:approve')
+                  "
                   type="link"
                   size="small"
                   @click="openScore(record, quote)"
-                >评分</a-button>
+                  >评分</a-button
+                >
               </template>
               <template v-else-if="column.key === 'source'">
-                <a-tag :color="quote.submissionSource === 'SUPPLIER_PORTAL' ? 'green' : 'blue'">
-                  {{ quote.submissionSource === "SUPPLIER_PORTAL" ? "供应商自报" : "采购代录" }}
+                <a-tag
+                  :color="
+                    quote.submissionSource === 'SUPPLIER_PORTAL'
+                      ? 'green'
+                      : 'blue'
+                  "
+                >
+                  {{
+                    quote.submissionSource === "SUPPLIER_PORTAL"
+                      ? "供应商自报"
+                      : "采购代录"
+                  }}
                 </a-tag>
-                <span class="table-subtitle">{{ quote.submittedByName || "-" }}</span>
-                <a-tag v-if="quote.submissionSource === 'INTERNAL_ENTRY'" :color="quote.confirmed ? 'green' : 'orange'">
+                <span class="table-subtitle">{{
+                  quote.submittedByName || "-"
+                }}</span>
+                <a-tag
+                  v-if="quote.submissionSource === 'INTERNAL_ENTRY'"
+                  :color="quote.confirmed ? 'green' : 'orange'"
+                >
                   {{ quote.confirmed ? "供应商已确认" : "待供应商确认" }}
                 </a-tag>
               </template>
@@ -139,7 +168,10 @@
             录入供应商报价
           </a-button>
           <a-button
-            v-if="record.status === 'OPEN' && auth.can('procurement:purchase:create')"
+            v-if="
+              record.status === 'OPEN' &&
+              auth.can('procurement:purchase:create')
+            "
             size="small"
             style="margin: 8px 0 0 8px"
             @click="openInvite(record)"
@@ -151,7 +183,8 @@
             size="small"
             style="margin: 8px 0 0 8px"
             @click="openClarifications(record)"
-          >询价澄清</a-button>
+            >询价澄清</a-button
+          >
         </template>
 
         <template #bodyCell="{ column, record }">
@@ -162,11 +195,15 @@
           </template>
           <template v-else-if="column.key === 'action'">
             <a-button
-              v-if="record.status === 'OPEN' && auth.can('procurement:purchase:create')"
+              v-if="
+                record.status === 'OPEN' &&
+                auth.can('procurement:purchase:create')
+              "
               type="link"
               size="small"
               @click.stop="openDeadlineEditor(record)"
-            >调整截止日</a-button>
+              >调整截止日</a-button
+            >
           </template>
         </template>
       </a-table>
@@ -290,54 +327,132 @@
       </a-form>
     </a-modal>
 
-    <a-modal v-model:open="inviteOpen" title="邀请供应商自助报价" @ok="saveInvitations">
+    <a-modal
+      v-model:open="inviteOpen"
+      title="邀请供应商自助报价"
+      @ok="saveInvitations"
+    >
       <a-form layout="vertical">
         <a-form-item label="供应商" required>
-          <a-select v-model:value="invitedSupplierIds" mode="multiple" :options="inviteSupplierOptions" placeholder="选择一个或多个已准入供应商" />
+          <a-select
+            v-model:value="invitedSupplierIds"
+            mode="multiple"
+            :options="inviteSupplierOptions"
+            placeholder="选择一个或多个已准入供应商"
+          />
         </a-form-item>
-        <a-alert type="info" show-icon message="受邀供应商登录独立门户后，可查看该询价并自行提交报价。" />
+        <a-alert
+          type="info"
+          show-icon
+          message="受邀供应商登录独立门户后，可查看该询价并自行提交报价。"
+        />
       </a-form>
     </a-modal>
 
     <a-modal v-model:open="scoreOpen" title="内部报价评分" @ok="saveScore">
       <a-form layout="vertical">
-        <a-alert type="info" show-icon message="评分仅供内部比选，不会向供应商展示。" style="margin-bottom: 16px" />
-        <a-row :gutter="12"><a-col :span="12"><a-form-item label="技术评分"><a-input-number v-model:value="scoreForm.technicalScore" :min="0" :max="100" class="full-input" /></a-form-item></a-col><a-col :span="12"><a-form-item label="商务评分"><a-input-number v-model:value="scoreForm.commercialScore" :min="0" :max="100" class="full-input" /></a-form-item></a-col></a-row>
+        <a-alert
+          type="info"
+          show-icon
+          message="评分仅供内部比选，不会向供应商展示。"
+          style="margin-bottom: 16px"
+        />
+        <a-row :gutter="12"
+          ><a-col :span="12"
+            ><a-form-item label="技术评分"
+              ><a-input-number
+                v-model:value="scoreForm.technicalScore"
+                :min="0"
+                :max="100"
+                class="full-input" /></a-form-item></a-col
+          ><a-col :span="12"
+            ><a-form-item label="商务评分"
+              ><a-input-number
+                v-model:value="scoreForm.commercialScore"
+                :min="0"
+                :max="100"
+                class="full-input" /></a-form-item></a-col
+        ></a-row>
       </a-form>
     </a-modal>
 
-    <a-modal v-model:open="deadlineOpen" title="调整询价截止日期" @ok="saveDeadline">
+    <a-modal
+      v-model:open="deadlineOpen"
+      title="调整询价截止日期"
+      @ok="saveDeadline"
+    >
       <a-form layout="vertical">
-        <a-alert type="warning" show-icon message="调整后供应商门户将立即展示新截止日期，请另行通知已受邀供应商。" style="margin-bottom: 16px" />
+        <a-alert
+          type="warning"
+          show-icon
+          message="调整后供应商门户将立即展示新截止日期，请另行通知已受邀供应商。"
+          style="margin-bottom: 16px"
+        />
         <a-form-item label="新截止日期" required>
           <a-input v-model:value="deadlineValue" type="date" />
         </a-form-item>
       </a-form>
     </a-modal>
 
-    <a-drawer v-model:open="attachmentsOpen" width="min(620px, 100vw)" title="供应商报价附件">
-      <a-list :data-source="quoteAttachments" :loading="attachmentsLoading" row-key="id">
+    <a-drawer
+      v-model:open="attachmentsOpen"
+      width="min(620px, 100vw)"
+      title="供应商报价附件"
+    >
+      <a-list
+        :data-source="quoteAttachments"
+        :loading="attachmentsLoading"
+        row-key="id"
+      >
         <template #renderItem="{ item }">
           <a-list-item>
-            <a-list-item-meta :title="item.fileName" :description="`${formatFileSize(item.sizeBytes)} · SHA-256 ${item.sha256.slice(0, 12)}…`" />
-            <a-button type="link" @click="api.downloadSupplierQuoteAttachment(item)">下载</a-button>
+            <a-list-item-meta
+              :title="item.fileName"
+              :description="`${formatFileSize(item.sizeBytes)} · SHA-256 ${item.sha256.slice(0, 12)}…`"
+            />
+            <a-button
+              type="link"
+              @click="api.downloadSupplierQuoteAttachment(item)"
+              >下载</a-button
+            >
           </a-list-item>
         </template>
         <template #empty><a-empty description="该报价没有附件" /></template>
       </a-list>
     </a-drawer>
 
-    <a-drawer v-model:open="clarificationsOpen" width="min(720px, 100vw)" title="询价澄清记录">
-      <a-list :data-source="clarifications" :loading="clarificationsLoading" row-key="id">
+    <a-drawer
+      v-model:open="clarificationsOpen"
+      width="min(720px, 100vw)"
+      title="询价澄清记录"
+    >
+      <a-list
+        :data-source="clarifications"
+        :loading="clarificationsLoading"
+        row-key="id"
+      >
         <template #renderItem="{ item }">
           <a-list-item>
             <div style="width: 100%">
               <strong>{{ item.supplierName || "供应商" }}</strong>
               <p>{{ item.question }}</p>
-              <a-alert v-if="item.answer" type="success" :message="item.answer" :description="`${item.answeredByName || '采购方'} · ${item.answeredAt || ''}`" />
+              <a-alert
+                v-if="item.answer"
+                type="success"
+                :message="item.answer"
+                :description="`${item.answeredByName || '采购方'} · ${item.answeredAt || ''}`"
+              />
               <a-space-compact v-else style="width: 100%">
-                <a-input v-model:value="clarificationAnswers[item.id]" placeholder="输入统一、明确的答复" />
-                <a-button type="primary" :disabled="!clarificationAnswers[item.id]?.trim()" @click="answerClarification(item)">回复</a-button>
+                <a-input
+                  v-model:value="clarificationAnswers[item.id]"
+                  placeholder="输入统一、明确的答复"
+                />
+                <a-button
+                  type="primary"
+                  :disabled="!clarificationAnswers[item.id]?.trim()"
+                  @click="answerClarification(item)"
+                  >回复</a-button
+                >
               </a-space-compact>
             </div>
           </a-list-item>
@@ -505,7 +620,9 @@ const inviteSupplierOptions = computed(() => {
   const alreadyInvited = new Set(
     selectedInquiry.value?.invitations?.map((item) => item.supplierId) || [],
   );
-  return supplierOptions.value.filter((item) => !alreadyInvited.has(item.value));
+  return supplierOptions.value.filter(
+    (item) => !alreadyInvited.has(item.value),
+  );
 });
 
 onMounted(load);
@@ -676,7 +793,9 @@ async function answerClarification(item: api.InquiryClarification) {
   if (!answer || !selectedInquiry.value) return;
   await api.answerInquiryClarification(item.id, answer);
   clarificationAnswers[item.id] = "";
-  clarifications.value = await api.listInquiryClarifications(selectedInquiry.value.id);
+  clarifications.value = await api.listInquiryClarifications(
+    selectedInquiry.value.id,
+  );
   message.success("澄清答复已提交");
 }
 
@@ -704,15 +823,22 @@ async function saveScore() {
 }
 
 function invitationStatusText(status: string) {
-  return { INVITED: "待查看", VIEWED: "已查看", RESPONDED: "已响应", DECLINED: "已放弃" }[
-    status
-  ] || status;
+  return (
+    {
+      INVITED: "待查看",
+      VIEWED: "已查看",
+      RESPONDED: "已响应",
+      DECLINED: "已放弃",
+    }[status] || status
+  );
 }
 
 function deliveryStatusText(status?: string) {
-  return { PENDING: "待人工发送", DELIVERED: "已送达", FAILED: "发送失败" }[
-    status || "PENDING"
-  ] || status;
+  return (
+    { PENDING: "待人工发送", DELIVERED: "已送达", FAILED: "发送失败" }[
+      status || "PENDING"
+    ] || status
+  );
 }
 
 function selectQuote(

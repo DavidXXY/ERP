@@ -15,14 +15,14 @@
 
 - `common`：统一响应、异常、基础实体、租户上下文、存储、删除治理、安全和通用工具。
 - `config`：Spring Security、异步执行器、Web MVC、OpenAPI、分布式任务锁等全局配置。
-- `modules.crm`：客户池、联系人、项目地址、线索商机、报价、客户合同、应收联动。
-- `modules.procurement`：供应商、采购申请、询价、采购订单、到货、三单匹配、入库和应付联动。
+- `modules.crm`：客户池、联系人、项目地址、线索商机、报价、客户合同、合同变更审批和应收联动。
+- `modules.procurement`：供应商、采购申请、询价、采购订单、到货质检、退换货、三单匹配、入库和应付联动。
 - `modules.project`：项目立项、预算、进度、成本归集、验收、质保。
-- `modules.maintenance`：设备、维保计划、工单派工、现场执行、验收、移动端离线动作和成本归集。
+- `modules.maintenance`：设备、维保计划、工单派工、现场执行、客户验收、收费工单应收联动、移动端离线动作和成本归集。
 - `modules.inventory`：物料、库存、出入库、盘点、低库存采购联动。
 - `modules.qualification`：公司资质、资质人员、人员证书、项目业绩、投标组合查询与到期预警。
-- `modules.finance`：应收、应付、开票、回款核销、凭证。
-- `modules.office`：条件审批、费用报销、出差、用章、外包、档案、通知和操作审计。
+- `modules.finance`：应收、应付、开票、回款核销、付款三岗分离和凭证。
+- `modules.office`：条件审批、费用报销及付款、出差、用章、外包、档案、通知和操作审计。
 - `modules.collaboration`：跨部门责任绑定、协作待办、动作日志和导出。
 - `modules.risk`：统一风险项、规则、责任人、SLA、升级、闭环和快照。
 - `modules.governance`：跨模块经营控制、会计期间、关账守卫、银行流水和对账。
@@ -42,6 +42,11 @@
 - `GET/POST /api/procurement/suppliers`：供应商列表、新增供应商。
 - `GET/POST /api/procurement/requests`：采购申请列表、新增采购申请。
 - `GET/POST /api/procurement/orders`：采购订单列表、新增采购订单。
+- `POST /api/procurement/orders/{id}/cancel|close`：取消未到货订单、关闭已完成质检和退换货处理的订单。
+- `POST /api/procurement/receipts/{id}/inspection`：到货质检，采购订单取消或关闭后拒绝继续入库。
+- `POST /api/procurement/returns/{id}/resolve`：登记换货、折让或索赔并结案退换货。
+- `PUT /api/maintenance/work-orders/{id}/accept`：客户验收工单，并为非质保收费工单生成应收。
+- `POST /api/office/expenses/{id}/pay`：支付审批通过的费用报销并生成付款凭证。
 
 ## 数据策略
 
@@ -53,6 +58,7 @@
 - 财务、总账、采购、资质、BI、删除治理和提醒任务优先按当前页 ID 或业务条件批量查询，并由数据库完成求和、计数和分组，避免整表加载及逐行 N+1 查询。
 - V86 引入按用户通知回执、审批申请人 ID、JWT 认证版本和移动审批查询索引。
 - V87 引入经营控制台账、治理动作日志、会计期间、银行对账和凭证复核/记账/冲销审计字段。交易模块通过 `AccountingPeriodGuard` 共享期间开关，不各自实现关账判断。
+- V105 引入费用付款日期、流水和操作人字段，付款申请人/审批人/执行人 ID，以及会计期间待复核动作、发起人、时间和原因字段。应用服务使用这些稳定用户 ID 执行不相容职责和双人复核校验。
 - 文件只在数据库保存元数据。当前实现通过统一存储接口保存原文件，并对文件大小、扩展名和路径穿越做统一校验；`ops.storage.type=local` 使用本地磁盘，`ops.storage.type=minio` 使用 MinIO/S3 兼容对象存储，生产 profile 默认启用 MinIO。
 
 ## 权限策略
@@ -62,6 +68,8 @@
 - 前端菜单按权限展示，后端接口使用 `@PreAuthorize` 兜底。
 - 维修工单、证书和排班已拆分为细粒度权限；新增权限通过 Flyway 和启动初始化双路径补齐，历史 ADMIN 角色会自动获得缺失权限。
 - 经营治理拆分查看、维护、关账和银行对账权限；手工凭证拆分制单、复核、记账和冲销权限，服务层同时校验不相容操作人。
+- 付款流程分别使用 `finance:payment:apply`、`finance:payment:approve` 和 `finance:payment:execute`；申请人不得审批，申请人和审批人均不得执行付款。
+- 强制关账和反结账共用 `governance:period:close` 权限，但必须由一名用户发起、另一名用户复核；普通且已满足检查项的关账仍可直接完成。
 - 业务闭环提供可复用聚合接口：OA 统一待办/预警、采购三单匹配、库存补货建议、项目利润摘要，前端可直接接入形成经营看板和异常处理入口。
 - 当前种子角色包括 `ADMIN` 和 `CRM_MANAGER`；`ADMIN` 拥有全部已落地权限。
 - 开发环境默认管理员为 `admin / Admin@123`，生产环境必须改为正式密码策略和用户初始化流程。
@@ -119,6 +127,7 @@
 - `POST /api/finance/payment-applications`：创建付款申请
 - `POST /api/finance/payment-applications/{id}/approval`：审批付款申请
 - `POST /api/finance/payment-applications/{id}/payment`：执行付款
+- `POST /api/office/expenses/{id}/pay`：执行费用报销付款并生成 `EXPENSE_PAYMENT` 凭证
 - `GET /api/finance/payments`：付款记录
 - `GET /api/finance/ledger/overview`：总账科目概览
 - `GET /api/finance/ledger/vouchers`：会计凭证列表
@@ -127,7 +136,8 @@
 - `POST /api/finance/ledger/vouchers/{id}/review|post|reverse`：凭证复核、记账和冲销
 - `GET /api/governance/overview`：经营治理总览
 - `GET/POST /api/governance/controls`：经营控制台账
-- `GET/POST /api/governance/periods/**`：会计期间与关账控制
+- `POST /api/governance/periods/{year}/{month}/close`：正常关账或发起/复核强制关账
+- `POST /api/governance/periods/{year}/{month}/reopen`：发起/复核反结账
 - `GET/POST /api/governance/bank-lines/**`：银行流水与对账
 
 ### 前端 API 客户端

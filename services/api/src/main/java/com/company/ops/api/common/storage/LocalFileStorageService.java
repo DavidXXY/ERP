@@ -6,7 +6,6 @@ import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.util.Map;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -19,18 +18,9 @@ import org.springframework.web.multipart.MultipartFile;
 @ConditionalOnProperty(name = "ops.storage.type", havingValue = "local", matchIfMissing = true)
 public class LocalFileStorageService implements FileStorageService {
   private final Path storageRoot;
-  private final Map<String, Path> namespaceRoots;
 
   public LocalFileStorageService(@Value("${ops.storage.local-path:.local-data/uploads}") String storagePath) {
     this.storageRoot = Path.of(storagePath).toAbsolutePath().normalize();
-    this.namespaceRoots = Map.of(
-        "crm", storageRoot.resolve("crm"),
-        "office", storageRoot.resolve("office"),
-        "qualification", storageRoot.resolve("qualification"),
-        "supplier-portal", storageRoot.resolve("supplier-portal"),
-        "supplier-quotes", storageRoot.resolve("supplier-quotes"),
-        "work-orders", storageRoot.resolve("work-orders")
-    );
   }
 
   @Override
@@ -89,8 +79,15 @@ public class LocalFileStorageService implements FileStorageService {
   }
 
   private Path namespaceRoot(String namespace) {
-    Path folder = namespaceRoots.get(namespace);
-    if (folder == null) throw new BusinessException("文件路径非法");
+    Path folder = switch (namespace) {
+      case "crm" -> storageRoot.resolve("crm");
+      case "office" -> storageRoot.resolve("office");
+      case "qualification" -> storageRoot.resolve("qualification");
+      case "supplier-portal" -> storageRoot.resolve("supplier-portal");
+      case "supplier-quotes" -> storageRoot.resolve("supplier-quotes");
+      case "work-orders" -> storageRoot.resolve("work-orders");
+      default -> throw new BusinessException("文件路径非法");
+    };
     ensureInside(storageRoot, folder);
     return folder;
   }

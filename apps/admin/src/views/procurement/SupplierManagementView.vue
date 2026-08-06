@@ -1051,7 +1051,11 @@ const portalReviewDecision = ref<"ACTIVE" | "REJECTED">("ACTIVE");
 const portalReviewComment = ref("");
 const portalOpening = ref(false);
 const portalOpenAccountSupplier = ref<Supplier | null>(null);
-const portalOpenAccountForm = reactive({ email: "", phone: "", contactName: "" });
+const portalOpenAccountForm = reactive({
+  email: "",
+  phone: "",
+  contactName: "",
+});
 const reviewTarget = ref<Supplier | null>(null);
 const reviewForm = reactive<{
   decision: "APPROVED" | "REJECTED";
@@ -1207,7 +1211,10 @@ function openPortalAccount(supplier: Supplier) {
 async function submitOpenPortalAccount() {
   const supplier = portalOpenAccountSupplier.value;
   if (!supplier) return;
-  if (!portalOpenAccountForm.email.trim() || !portalOpenAccountForm.contactName.trim()) {
+  if (
+    !portalOpenAccountForm.email.trim() ||
+    !portalOpenAccountForm.contactName.trim()
+  ) {
     message.warning("请填写门户登录邮箱和联系人");
     return;
   }

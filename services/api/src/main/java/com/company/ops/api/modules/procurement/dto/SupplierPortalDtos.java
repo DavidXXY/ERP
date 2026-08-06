@@ -131,6 +131,12 @@ public final class SupplierPortalDtos {
       @Size(max = 500) String comment
   ) {}
 
+  public record OpenAccountRequest(
+      @NotBlank @Email @Size(max = 160) String email,
+      @Size(max = 40) String phone,
+      @NotBlank @Size(max = 80) String contactName
+  ) {}
+
   public record ReviewDocumentRequest(
       @NotBlank String decision,
       @Size(max = 500) String comment
@@ -147,6 +153,8 @@ public final class SupplierPortalDtos {
   ) {}
 
   public record ResetPasswordResponse(String temporaryPassword, AccountResponse account) {}
+
+  public record OpenAccountResponse(String temporaryPassword, AccountResponse account) {}
 
   public record DeclineQuoteRequest(@NotBlank @Size(max = 500) String reason) {}
 

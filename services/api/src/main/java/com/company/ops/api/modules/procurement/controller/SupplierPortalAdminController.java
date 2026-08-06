@@ -31,6 +31,15 @@ public class SupplierPortalAdminController {
     return ApiResponse.ok(service.listAccounts());
   }
 
+  @PostMapping("/suppliers/{supplierId}/account")
+  @PreAuthorize("hasAuthority('procurement:portal-account:approve')")
+  public ApiResponse<OpenAccountResponse> openAccount(
+      @PathVariable UUID supplierId,
+      @Valid @RequestBody OpenAccountRequest request
+  ) {
+    return ApiResponse.ok(service.openAccount(supplierId, request));
+  }
+
   @PostMapping("/accounts/{id}/review")
   @PreAuthorize("hasAuthority('procurement:portal-account:approve')")
   public ApiResponse<AccountResponse> reviewAccount(

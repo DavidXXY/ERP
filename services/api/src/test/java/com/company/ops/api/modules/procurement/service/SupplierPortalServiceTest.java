@@ -16,6 +16,7 @@ import com.company.ops.api.modules.procurement.domain.SupplierPortalAccount;
 import com.company.ops.api.modules.procurement.domain.SupplierQuotation;
 import com.company.ops.api.modules.procurement.domain.SupplierRiskStatus;
 import com.company.ops.api.modules.procurement.dto.SupplierPortalDtos.UpdateAccountStatusRequest;
+import com.company.ops.api.modules.procurement.dto.SupplierPortalDtos.OpenAccountRequest;
 import com.company.ops.api.modules.procurement.repository.ProcurementInquiryInvitationRepository;
 import com.company.ops.api.modules.procurement.repository.ProcurementInquiryRepository;
 import com.company.ops.api.modules.procurement.repository.ProcurementInquiryRequestRepository;
@@ -147,6 +148,38 @@ class SupplierPortalServiceTest {
     assertThat(fixture.account.getStatus()).isEqualTo("SUSPENDED");
     assertThat(fixture.account.getAuthVersion()).isEqualTo(previousAuthVersion + 1);
     verify(accounts).save(fixture.account);
+  }
+
+  @Test
+  void procurementManagerCanOpenAccountForExistingSupplier() {
+    Fixture fixture = fixture();
+    fixture.supplier.setPhone("13800000000");
+    when(suppliers.findById(fixture.supplier.getId())).thenReturn(Optional.of(fixture.supplier));
+    when(accounts.existsBySupplierId(fixture.supplier.getId())).thenReturn(false);
+    when(accounts.existsByEmailIgnoreCase("buyer@example.com")).thenReturn(false);
+    when(passwordEncoder.encode(any())).thenReturn("encoded-password");
+    when(accounts.save(any(SupplierPortalAccount.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+    var result = service.openAccount(fixture.supplier.getId(),
+        new OpenAccountRequest(" Buyer@Example.com ", null, "供应商联系人"));
+
+    assertThat(result.temporaryPassword()).startsWith("Tmp").endsWith("!");
+    assertThat(result.account().email()).isEqualTo("buyer@example.com");
+    assertThat(result.account().phone()).isEqualTo("13800000000");
+    assertThat(result.account().status()).isEqualTo("ACTIVE");
+    assertThat(result.account().mustChangePassword()).isTrue();
+  }
+
+  @Test
+  void openingSecondAccountForSupplierIsRejected() {
+    Fixture fixture = fixture();
+    when(suppliers.findById(fixture.supplier.getId())).thenReturn(Optional.of(fixture.supplier));
+    when(accounts.existsBySupplierId(fixture.supplier.getId())).thenReturn(true);
+
+    assertThatThrownBy(() -> service.openAccount(fixture.supplier.getId(),
+        new OpenAccountRequest("buyer@example.com", null, "供应商联系人")))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("已经开通门户账号");
   }
 
   @Test

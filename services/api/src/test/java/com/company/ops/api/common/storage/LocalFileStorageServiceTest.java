@@ -38,6 +38,7 @@ class LocalFileStorageServiceTest {
 
     assertThat(stored.originalName()).isEqualTo("contract.pdf");
     assertThat(stored.relativePath()).startsWith("office/");
+    assertThat(stored.objectKey()).doesNotContain("contract").doesNotEndWith(".pdf");
     assertThat(stored.path()).startsWith(tempDir.resolve("office").toAbsolutePath().normalize());
     assertThat(Files.exists(stored.path())).isTrue();
   }

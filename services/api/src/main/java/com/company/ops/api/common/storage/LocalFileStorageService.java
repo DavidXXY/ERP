@@ -29,7 +29,7 @@ public class LocalFileStorageService implements FileStorageService {
     try {
       Path folder = namespaceRoot(namespace);
       Files.createDirectories(folder);
-      String objectKey = UUID.randomUUID() + validated.extension();
+      String objectKey = UUID.randomUUID().toString();
       Path target = folder.resolve(objectKey).normalize();
       ensureInside(folder, target);
       Files.copy(file.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);

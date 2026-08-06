@@ -31,6 +31,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.stream.Collectors;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -41,6 +44,7 @@ public class ProcurementControlService {
   private final ProcurementInquiryRepository inquiries;
   private final ProcurementInquiryRequestRepository inquiryRequests;
   private final SupplierQuotationRepository quotes;
+  private final ProcurementInquiryInvitationRepository invitations;
   private final SupplierQuotationLineRepository quoteLines;
   private final PurchaseRequestRepository requests;
   private final SupplierRepository suppliers;
@@ -62,6 +66,7 @@ public class ProcurementControlService {
       ProcurementInquiryRepository inquiries,
       ProcurementInquiryRequestRepository inquiryRequests,
       SupplierQuotationRepository quotes,
+      ProcurementInquiryInvitationRepository invitations,
       SupplierQuotationLineRepository quoteLines,
       PurchaseRequestRepository requests,
       SupplierRepository suppliers,
@@ -82,6 +87,7 @@ public class ProcurementControlService {
     this.inquiries = inquiries;
     this.inquiryRequests = inquiryRequests;
     this.quotes = quotes;
+    this.invitations = invitations;
     this.quoteLines = quoteLines;
     this.requests = requests;
     this.suppliers = suppliers;
@@ -360,8 +366,8 @@ public class ProcurementControlService {
         .filter(java.util.Objects::nonNull)
         .max(LocalDate::compareTo)
         .orElse(request.deliveryDate());
-    BigDecimal technical = valueOr(request.technicalScore(), BigDecimal.valueOf(100));
-    BigDecimal commercial = valueOr(request.commercialScore(), BigDecimal.valueOf(100));
+    BigDecimal technical = BigDecimal.ZERO;
+    BigDecimal commercial = BigDecimal.ZERO;
     SupplierQuotation quote = new SupplierQuotation();
     quote.setInquiryId(inquiryId);
     quote.setSupplierId(request.supplierId());
@@ -378,6 +384,13 @@ public class ProcurementControlService {
     quote.setTotalScore(technical.multiply(BigDecimal.valueOf(.4))
         .add(commercial.multiply(BigDecimal.valueOf(.6))).setScale(2, RoundingMode.HALF_UP));
     quote.setValidUntil(request.validUntil());
+    quote.setSubmissionSource("INTERNAL_ENTRY");
+    quote.setSubmissionStatus("SUBMITTED");
+    quote.setVersionNo(1);
+    quote.setSubmittedByType("INTERNAL_USER");
+    quote.setSubmittedById(currentUserId());
+    quote.setSubmittedByName(currentName());
+    quote.setSubmittedAt(OffsetDateTime.now());
     SupplierQuotation saved = quotes.save(quote);
     List<SupplierQuotationLine> persistedLines = submittedLines.stream().map(line -> {
       SupplierQuotationLine entity = new SupplierQuotationLine();
@@ -395,13 +408,90 @@ public class ProcurementControlService {
   }
 
   @Transactional
+  public Map<String, Object> inviteSuppliers(UUID inquiryId, InviteSuppliers request) {
+    ProcurementInquiry inquiry = inquiries.findById(inquiryId)
+        .orElseThrow(() -> new BusinessException("询价单不存在"));
+    if (!"OPEN".equals(inquiry.getStatus())) {
+      throw new BusinessException("只有进行中的询价可以邀请供应商");
+    }
+    if (inquiry.getDeadline() != null && LocalDate.now().isAfter(inquiry.getDeadline())) {
+      throw new BusinessException("询价已超过截止日期");
+    }
+    OffsetDateTime now = OffsetDateTime.now();
+    Map<UUID, String> registrationCodes = new LinkedHashMap<>();
+    for (UUID supplierId : request.supplierIds().stream().distinct().toList()) {
+      Supplier supplier = suppliers.findById(supplierId)
+          .orElseThrow(() -> new BusinessException("供应商不存在"));
+      requireEligibleSupplier(supplier);
+      if (invitations.findByInquiryIdAndSupplierId(inquiryId, supplierId).isEmpty()) {
+        ProcurementInquiryInvitation invitation = new ProcurementInquiryInvitation();
+        invitation.setInquiryId(inquiryId);
+        invitation.setSupplierId(supplierId);
+        invitation.setStatus("INVITED");
+        invitation.setInvitedByName(currentName());
+        invitation.setInvitedAt(now);
+        String registrationCode = "REG-" + UUID.randomUUID().toString().replace("-", "").substring(0, 10).toUpperCase();
+        invitation.setRegistrationCodeHash(sha256Text(registrationCode));
+        invitation.setRegistrationCodeExpiresAt(now.plusDays(7));
+        invitation.setDeliveryStatus("PENDING");
+        invitations.save(invitation);
+        registrationCodes.put(supplierId, registrationCode);
+      }
+    }
+    Map<String, Object> result = inquiryView(inquiry);
+    result.put("registrationCodes", registrationCodes);
+    return result;
+  }
+
+  @Transactional
+  public Map<String, Object> updateInquiryDeadline(
+      UUID inquiryId,
+      UpdateInquiryDeadline request
+  ) {
+    ProcurementInquiry inquiry = inquiries.findById(inquiryId)
+        .orElseThrow(() -> new BusinessException("询价单不存在"));
+    if (!"OPEN".equals(inquiry.getStatus())) {
+      throw new BusinessException("只有进行中的询价可以调整截止日期");
+    }
+    if (request.deadline().isBefore(LocalDate.now())) {
+      throw new BusinessException("截止日期不能早于今天");
+    }
+    inquiry.setDeadline(request.deadline());
+    return inquiryView(inquiries.save(inquiry));
+  }
+
+  @Transactional
+  public Map<String, Object> scoreQuote(
+      UUID inquiryId,
+      UUID quoteId,
+      ScoreSupplierQuote request
+  ) {
+    SupplierQuotation quote = quotes.findById(quoteId)
+        .orElseThrow(() -> new BusinessException("供应商报价不存在"));
+    if (!quote.getInquiryId().equals(inquiryId)) {
+      throw new BusinessException("报价不属于该询价单");
+    }
+    if (!"SUBMITTED".equals(quote.getSubmissionStatus())) {
+      throw new BusinessException("只有已提交的报价可以评分");
+    }
+    quote.setTechnicalScore(request.technicalScore());
+    quote.setCommercialScore(request.commercialScore());
+    quote.setTotalScore(request.technicalScore().multiply(BigDecimal.valueOf(.4))
+        .add(request.commercialScore().multiply(BigDecimal.valueOf(.6)))
+        .setScale(2, RoundingMode.HALF_UP));
+    return quoteView(quotes.save(quote));
+  }
+
+  @Transactional
   public Map<String, Object> selectQuote(UUID inquiryId, UUID quoteId, SelectSupplierQuote request) {
     ProcurementInquiry inquiry = inquiries.findById(inquiryId)
         .orElseThrow(() -> new BusinessException("询价单不存在"));
     if (!"OPEN".equals(inquiry.getStatus())) {
       throw new BusinessException("只有进行中的询价可以定标");
     }
-    List<SupplierQuotation> allQuotes = quotes.findByInquiryIdOrderByUnitPriceAsc(inquiryId);
+    List<SupplierQuotation> allQuotes = quotes.findByInquiryIdOrderByUnitPriceAsc(inquiryId).stream()
+        .filter(item -> "SUBMITTED".equals(item.getSubmissionStatus()))
+        .toList();
     if (allQuotes.size() < inquiry.getMinQuoteCount()
         && !"SINGLE_SOURCE".equals(inquiry.getSourcingMethod())) {
       throw new BusinessException("有效报价不足 " + inquiry.getMinQuoteCount() + " 家，不能定标");
@@ -410,6 +500,9 @@ public class ProcurementControlService {
         .orElseThrow(() -> new BusinessException("供应商报价不存在"));
     if (!selected.getInquiryId().equals(inquiryId)) {
       throw new BusinessException("报价不属于该询价单");
+    }
+    if (!"SUBMITTED".equals(selected.getSubmissionStatus())) {
+      throw new BusinessException("只有已提交的报价可以定标");
     }
     Supplier supplier = suppliers.findById(selected.getSupplierId())
         .orElseThrow(() -> new BusinessException("供应商不存在"));
@@ -773,7 +866,30 @@ public class ProcurementControlService {
     view.put("selectionReason", inquiry.getSelectionReason());
     view.put("selectedByName", inquiry.getSelectedByName());
     view.put("selectedAt", inquiry.getSelectedAt());
+    List<ProcurementInquiryInvitation> invitationList =
+        invitations.findByInquiryIdOrderByInvitedAtAsc(inquiry.getId());
+    Map<UUID, Supplier> invitedSuppliers = suppliers.findAllById(
+        invitationList.stream().map(ProcurementInquiryInvitation::getSupplierId).toList()
+    ).stream().collect(Collectors.toMap(Supplier::getId, item -> item));
+    view.put("invitations", invitationList.stream().map(invitation -> {
+      Supplier supplier = invitedSuppliers.get(invitation.getSupplierId());
+      Map<String, Object> item = new LinkedHashMap<>();
+      item.put("id", invitation.getId());
+      item.put("supplierId", invitation.getSupplierId());
+      item.put("supplierName", supplier == null ? null : supplier.getName());
+      item.put("status", invitation.getStatus());
+      item.put("invitedByName", invitation.getInvitedByName());
+      item.put("invitedAt", invitation.getInvitedAt());
+      item.put("viewedAt", invitation.getViewedAt());
+      item.put("respondedAt", invitation.getRespondedAt());
+      item.put("deliveryStatus", invitation.getDeliveryStatus());
+      item.put("deliveryAttemptCount", invitation.getDeliveryAttemptCount());
+      item.put("lastDeliveryAt", invitation.getLastDeliveryAt());
+      item.put("deliveryError", invitation.getDeliveryError());
+      return item;
+    }).toList());
     view.put("quotes", quotes.findByInquiryIdOrderByUnitPriceAsc(inquiry.getId()).stream()
+        .filter(item -> !"DRAFT".equals(item.getSubmissionStatus()))
         .map(this::quoteView).toList());
     return view;
   }
@@ -869,6 +985,17 @@ public class ProcurementControlService {
     view.put("commercialScore", quote.getCommercialScore());
     view.put("totalScore", quote.getTotalScore());
     view.put("validUntil", quote.getValidUntil());
+    view.put("submissionSource", quote.getSubmissionSource());
+    view.put("submissionStatus", quote.getSubmissionStatus());
+    view.put("versionNo", quote.getVersionNo());
+    view.put("submittedByType", quote.getSubmittedByType());
+    view.put("submittedById", quote.getSubmittedById());
+    view.put("submittedByName", quote.getSubmittedByName());
+    view.put("submittedAt", quote.getSubmittedAt());
+    view.put("confirmed", quote.getConfirmedAt() != null);
+    view.put("confirmedAt", quote.getConfirmedAt());
+    view.put("declinedAt", quote.getDeclinedAt());
+    view.put("declineReason", quote.getDeclineReason());
     view.put("lines", lineViews);
     view.put("materialAmount", materialAmount);
     view.put("totalAmount", materialAmount
@@ -906,6 +1033,12 @@ public class ProcurementControlService {
         ? principal.displayName() : "系统";
   }
 
+  private UUID currentUserId() {
+    var authentication = SecurityContextHolder.getContext().getAuthentication();
+    return authentication != null && authentication.getPrincipal() instanceof UserPrincipal principal
+        ? principal.id() : null;
+  }
+
   private static BigDecimal valueOr(BigDecimal value, BigDecimal fallback) {
     return value == null ? fallback : value;
   }
@@ -916,5 +1049,14 @@ public class ProcurementControlService {
 
   private static boolean isBlank(String value) {
     return value == null || value.isBlank();
+  }
+
+  private static String sha256Text(String value) {
+    try {
+      MessageDigest digest = MessageDigest.getInstance("SHA-256");
+      return HexFormat.of().formatHex(digest.digest(value.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+    } catch (NoSuchAlgorithmException exception) {
+      throw new BusinessException("注册码生成失败");
+    }
   }
 }

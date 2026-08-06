@@ -20,15 +20,18 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             apps/admin/package-lock.json
+            apps/supplier-portal/package-lock.json
             apps/mobile/package-lock.json
       - name: Use the repository npm version
         run: npm install --global npm@11.6.2
       - run: npm run version:check
       - run: npm ci
       - run: npm ci --prefix apps/admin
+      - run: npm ci --prefix apps/supplier-portal
       - run: npm ci --prefix apps/mobile
       - run: npm audit --audit-level=high
       - run: npm audit --audit-level=high --prefix apps/admin
+      - run: npm audit --audit-level=high --prefix apps/supplier-portal
       - run: npm audit --audit-level=high --prefix apps/mobile
       - run: npm run lint
       - run: npm run format:check
@@ -37,6 +40,9 @@ jobs:
         run: npm sbom --sbom-format cyclonedx > sbom-frontend.cdx.json
       - run: npm --prefix apps/admin run typecheck
       - run: npm run build
+      - run: npm run supplier:lint
+      - run: npm run supplier:typecheck
+      - run: npm run supplier:build
       - name: Enforce bundle budget
         run: node scripts/check-bundle-size.js
       - run: npm run mobile:typecheck

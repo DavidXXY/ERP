@@ -7,6 +7,7 @@
 ## 分层
 
 - `apps/admin`：PC 管理后台，覆盖 CRM、供应链采购、项目管理、库存管理、财务、OA、系统设置。
+- `apps/supplier-portal`：供应商外部协作端，使用独立 JWT 与本地令牌，覆盖注册、企业资料、资质文件、受邀询价和报价。
 - `apps/mobile`：uni-app 移动办公端，发布为微信小程序或 H5，共用后端认证、审批、通知、工单和库存能力。
 - `services/api`：统一业务 API，负责权限、事务、审批、数据落库和外部服务集成。
 - `infra`：本地开发基础设施，包括 PostgreSQL、Redis、MinIO。
@@ -17,6 +18,7 @@
 - `config`：Spring Security、异步执行器、Web MVC、OpenAPI、分布式任务锁等全局配置。
 - `modules.crm`：客户池、联系人、项目地址、线索商机、报价、客户合同、合同变更审批和应收联动。
 - `modules.procurement`：供应商、采购申请、询价、采购订单、到货质检、退换货、三单匹配、入库和应付联动。
+- `modules.procurement.security`：供应商门户专用认证主体与过滤器，不复用内部 `sys_users`；门户令牌仅访问 `/api/supplier-portal/**`。
 - `modules.project`：项目立项、预算、进度、成本归集、验收、质保。
 - `modules.maintenance`：设备、维保计划、工单派工、现场执行、客户验收、收费工单应收联动、移动端离线动作和成本归集。
 - `modules.inventory`：物料、库存、出入库、盘点、低库存采购联动。
@@ -45,6 +47,18 @@
 - `POST /api/procurement/orders/{id}/cancel|close`：取消未到货订单、关闭已完成质检和退换货处理的订单。
 - `POST /api/procurement/receipts/{id}/inspection`：到货质检，采购订单取消或关闭后拒绝继续入库。
 - `POST /api/procurement/returns/{id}/resolve`：登记换货、折让或索赔并结案退换货。
+- `POST /api/procurement/inquiries/{id}/invitations`：采购员定向邀请一个或多个已准入供应商。
+- `POST /api/procurement/inquiries/{id}/deadline`：调整进行中询价的截止日期。
+- `POST /api/procurement/inquiries/{id}/quotes`：采购员代录供应商报价。
+- `POST /api/procurement/inquiries/{id}/quotes/{quoteId}/score`：内部技术与商务评分，不向供应商展示。
+- `POST /api/supplier-portal/auth/register|login`：供应商注册与独立登录。
+- `GET/PUT /api/supplier-portal/profile`：读取会话并维护企业档案。
+- `GET/POST /api/supplier-portal/documents`：供应商资料清单与上传。
+- `GET /api/supplier-portal/inquiries`：读取当前供应商被邀请的询价。
+- `PUT/POST /api/supplier-portal/inquiries/{id}/quote/**`：保存草稿、提交、撤回或确认采购代录报价。
+- `POST /api/supplier-portal/inquiries/{id}/decline`：供应商放弃响应并记录原因。
+- `GET/POST /api/supplier-portal/inquiries/{id}/attachments`：报价附件管理。
+- `GET/POST /api/supplier-portal/inquiries/{id}/clarifications`：询价澄清协作。
 - `PUT /api/maintenance/work-orders/{id}/accept`：客户验收工单，并为非质保收费工单生成应收。
 - `POST /api/office/expenses/{id}/pay`：支付审批通过的费用报销并生成付款凭证。
 
@@ -59,6 +73,7 @@
 - V86 引入按用户通知回执、审批申请人 ID、JWT 认证版本和移动审批查询索引。
 - V87 引入经营控制台账、治理动作日志、会计期间、银行对账和凭证复核/记账/冲销审计字段。交易模块通过 `AccountingPeriodGuard` 共享期间开关，不各自实现关账判断。
 - V105 引入费用付款日期、流水和操作人字段，付款申请人/审批人/执行人 ID，以及会计期间待复核动作、发起人、时间和原因字段。应用服务使用这些稳定用户 ID 执行不相容职责和双人复核校验。
+- V106 引入供应商门户账号、自助资料、询价邀请、报价来源/提交人/确认状态和版本快照。V107 增加安全邀请码绑定、审核前资料草稿、账号认证版本、邀请送达状态、报价附件、放弃响应、询价澄清及拆分审核权限。报价要求账号 `ACTIVE`、供应商 `APPROVED`、未冻结、已受邀且不处于强制改密状态。
 - 文件只在数据库保存元数据。当前实现通过统一存储接口保存原文件，并对文件大小、扩展名和路径穿越做统一校验；`ops.storage.type=local` 使用本地磁盘，`ops.storage.type=minio` 使用 MinIO/S3 兼容对象存储，生产 profile 默认启用 MinIO。
 
 ## 权限策略

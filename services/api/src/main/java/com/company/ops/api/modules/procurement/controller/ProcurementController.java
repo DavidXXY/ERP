@@ -79,7 +79,7 @@ public class ProcurementController {
   }
 
   @PostMapping("/suppliers/{id}/admission/review")
-  @PreAuthorize("hasAuthority('procurement:request:approve')")
+  @PreAuthorize("hasAuthority('procurement:supplier:admission')")
   public ApiResponse<SupplierResponse> reviewSupplierAdmission(
       @PathVariable UUID id,
       @Valid @RequestBody ReviewSupplierAdmissionRequest request

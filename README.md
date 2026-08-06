@@ -5,6 +5,7 @@
 ## 技术路线
 
 - 管理端：Vue 3 + TypeScript + Vite + Ant Design Vue
+- 供应商门户：Vue 3 + TypeScript + Vite + Ant Design Vue
 - 微信小程序：uni-app + Vue 3 + TypeScript
 - 后端：Spring Boot 3 + Spring Data JPA + Spring Security + Flyway
 - 数据库：PostgreSQL
@@ -16,6 +17,7 @@
 
 ```text
 apps/admin        PC 管理后台
+apps/supplier-portal  供应商资料与报价协作门户
 apps/mobile       微信小程序与 H5 移动办公端
 services/api      Spring Boot 后端服务
 infra             本地数据库、缓存、对象存储配置
@@ -36,10 +38,11 @@ npm run tools:install
 npm run infra:up
 npm run api:dev
 npm run admin:dev
+npm run supplier:dev
 npm run mobile:dev
 ```
 
-管理端默认访问 `http://localhost:5174`，移动 H5 默认访问 `http://localhost:5180`，后端 API 默认访问 `http://localhost:8080/api`。
+管理端默认访问 `http://localhost:5174`，供应商门户默认访问 `http://localhost:5176`，移动 H5 默认访问 `http://localhost:5180`，后端 API 默认访问 `http://localhost:8080/api`。
 
 开发环境默认管理员账号：
 
@@ -51,7 +54,7 @@ npm run mobile:dev
 - CRM：客户、商机、报价审批、合同、跟进、续约、应收与客户画像
 - 项目：预算审批、阶段推进、人工/材料/差旅/外包成本归集
 - 服务：资产设备、服务计划、自动工单、人员派工、现场签到、完工与客户验收；非质保收费工单验收后自动生成应收
-- 供应链：采购申请、审批、订单、分批收货、质检、退换货、库存入库与应付；到货后禁止直接取消，待质检或未结退货阻止关单
+- 供应链：采购申请、审批、供应商准入、定向询价、采购代录/供应商自报双通道报价、注册邀请码、报价附件、询价澄清、报价版本与确认留痕、订单、分批收货、质检、退换货、库存入库与应付
 - 仓储：物料、库存流水、项目领退料、工单物料消耗与安全库存
 - 财务：应收开票回款、应付申请审批付款、费用报销付款、自动凭证、总账与财务报表；付款申请、审批和执行实施不相容职责校验
 - 经营治理：31 类跨模块经营控制、预算/承诺/实际/预测对比、会计期间关账、银行流水自动候选对账、凭证制单复核记账分权
@@ -67,7 +70,8 @@ npm run mobile:dev
 - 本轮系统加固：JWT 版本失效、Redis/本地降级登录限流、可信代理 IP 解析、按用户通知回执与审批私有投递、库存/项目成本编号一致性、CSV 公式注入防护、数据库级分页与 200 条单页上限、移动审批可见范围索引、异步审计与 365 天默认保留、三套独立前端依赖锁及完整 CI 构建。
 - 本轮全系统优化：稳定分页 DTO、审批摘要/详情分离、跨财务/总账/采购/资质/BI/提醒任务的聚合查询与 N+1 治理、审计短事务分批清理、可轮换数据密钥、PostgreSQL 与对象存储联合备份、Prometheus 最小暴露，以及桌面/移动浏览器关键流程 E2E。
 - 本轮业务强化：新增经营治理中心，将合同履约、项目预测、采购预算、库存资产、服务 SLA、主数据和 KPI 纳入统一控制台账及异常扫描；财务补齐 V87 会计期间、关账检查、反结账留痕、银行对账，以及手工凭证草稿/复核/记账/冲销分权。
-- 本轮流程闭环：补齐采购取消、质检、退换货和关单约束，维修工单验收转应收，生效合同变更审批，费用报销付款凭证，付款申请/审批/执行三岗分离，以及强制关账和反结账双人复核；数据库增量版本为 V105。
+- 本轮流程闭环：补齐采购取消、质检、退换货和关单约束，维修工单验收转应收，生效合同变更审批，费用报销付款凭证，付款申请/审批/执行三岗分离，以及强制关账和反结账双人复核。
+- 本轮供应商协作：新增独立供应商门户、企业资料草稿及资质自助维护、邀请码绑定、账号停用/恢复与临时密码、拆分审核权限、定向询价、双通道报价、代录确认、放弃响应、报价附件、询价澄清、截止日调整、报价版本快照和内部独立评分；数据库增量版本为 V107。
 - 待生产配置：替换正式小程序 AppID，配置已备案 HTTPS API 域名及微信 AppSecret，并提交微信平台隐私声明和版本审核。
 
 ## 文档
@@ -78,6 +82,7 @@ npm run mobile:dev
 - [2026-07-26 全系统优化与运维基线](docs/system-optimization-2026-07-26.md)
 - [2026-07-26 经营治理强化说明](docs/business-governance-2026-07-26.md)
 - [2026-08-05 流程控制闭环说明](docs/process-control-optimization-2026-08-05.md)
+- [供应商门户与双通道报价说明](docs/supplier-portal.md)
 - [生产部署指南](deploy/README.md)
 - [微信小程序发布指南](docs/WECHAT_MINIPROGRAM_DEPLOYMENT.md)
 
@@ -90,7 +95,7 @@ node scripts/check-bundle-size.js
 cd services/api && mvn test
 ```
 
-前端依赖分为根目录、管理端和移动端三套。CI 和可复现安装使用 `npm ci`、`npm ci --prefix apps/admin`、`npm ci --prefix apps/mobile`；不要删除子项目锁文件后只安装根目录依赖。
+前端依赖分为根目录、管理端、供应商门户和移动端四套。CI 和可复现安装使用 `npm ci`、`npm ci --prefix apps/admin`、`npm ci --prefix apps/supplier-portal`、`npm ci --prefix apps/mobile`。
 
 运行 `BACKUP_OBJECTS=required npm run data:backup` 可生成并校验 PostgreSQL 与 MinIO/S3 对象的 V2 联合备份（`.tar.gz` 和外层 `.sha256`）。生产环境应使用 `required`，避免缺少 MinIO Client 时静默退化为数据库单备份。
 

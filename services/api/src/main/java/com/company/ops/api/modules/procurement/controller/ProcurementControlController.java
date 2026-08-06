@@ -60,6 +60,34 @@ public class ProcurementControlController {
     return ApiResponse.ok(service.addQuote(id, request));
   }
 
+  @PostMapping("/inquiries/{id}/invitations")
+  @PreAuthorize("hasAuthority('procurement:purchase:create')")
+  public ApiResponse<Map<String, Object>> inviteSuppliers(
+      @PathVariable UUID id,
+      @Valid @RequestBody InviteSuppliers request
+  ) {
+    return ApiResponse.ok(service.inviteSuppliers(id, request));
+  }
+
+  @PostMapping("/inquiries/{id}/deadline")
+  @PreAuthorize("hasAuthority('procurement:purchase:create')")
+  public ApiResponse<Map<String, Object>> updateInquiryDeadline(
+      @PathVariable UUID id,
+      @Valid @RequestBody UpdateInquiryDeadline request
+  ) {
+    return ApiResponse.ok(service.updateInquiryDeadline(id, request));
+  }
+
+  @PostMapping("/inquiries/{id}/quotes/{quoteId}/score")
+  @PreAuthorize("hasAuthority('procurement:request:approve')")
+  public ApiResponse<Map<String, Object>> scoreQuote(
+      @PathVariable UUID id,
+      @PathVariable UUID quoteId,
+      @Valid @RequestBody ScoreSupplierQuote request
+  ) {
+    return ApiResponse.ok(service.scoreQuote(id, quoteId, request));
+  }
+
   @PostMapping("/inquiries/{id}/quotes/{quoteId}/select")
   @PreAuthorize("hasAuthority('procurement:request:approve')")
   public ApiResponse<Map<String, Object>> selectQuote(

@@ -3,8 +3,10 @@ package com.company.ops.api.common.storage;
 import com.company.ops.api.common.exception.BusinessException;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -17,9 +19,18 @@ import org.springframework.web.multipart.MultipartFile;
 @ConditionalOnProperty(name = "ops.storage.type", havingValue = "local", matchIfMissing = true)
 public class LocalFileStorageService implements FileStorageService {
   private final Path storageRoot;
+  private final Map<String, Path> namespaceRoots;
 
   public LocalFileStorageService(@Value("${ops.storage.local-path:.local-data/uploads}") String storagePath) {
     this.storageRoot = Path.of(storagePath).toAbsolutePath().normalize();
+    this.namespaceRoots = Map.of(
+        "crm", storageRoot.resolve("crm"),
+        "office", storageRoot.resolve("office"),
+        "qualification", storageRoot.resolve("qualification"),
+        "supplier-portal", storageRoot.resolve("supplier-portal"),
+        "supplier-quotes", storageRoot.resolve("supplier-quotes"),
+        "work-orders", storageRoot.resolve("work-orders")
+    );
   }
 
   @Override
@@ -50,14 +61,20 @@ public class LocalFileStorageService implements FileStorageService {
   }
 
   public Path resolve(String relativePath) {
-    Path file = storageRoot.resolve(relativePath).normalize();
-    ensureInside(storageRoot, file);
-    return file;
+    try {
+      Path relative = Path.of(relativePath);
+      if (relative.isAbsolute() || relative.getNameCount() != 2 || !relative.equals(relative.normalize())) {
+        throw new BusinessException("文件路径非法");
+      }
+      return resolveInNamespace(relative.getName(0).toString(), relative.getName(1).toString());
+    } catch (InvalidPathException exception) {
+      throw new BusinessException("文件路径非法");
+    }
   }
 
   public Path resolveInNamespace(String namespace, String objectKey) {
     Path folder = namespaceRoot(namespace);
-    Path file = folder.resolve(Path.of(objectKey).getFileName()).normalize();
+    Path file = folder.resolve(safeObjectKey(objectKey)).normalize();
     ensureInside(folder, file);
     return file;
   }
@@ -72,9 +89,24 @@ public class LocalFileStorageService implements FileStorageService {
   }
 
   private Path namespaceRoot(String namespace) {
-    Path folder = storageRoot.resolve(namespace).normalize();
+    Path folder = namespaceRoots.get(namespace);
+    if (folder == null) throw new BusinessException("文件路径非法");
     ensureInside(storageRoot, folder);
     return folder;
+  }
+
+  private static String safeObjectKey(String objectKey) {
+    try {
+      Path key = Path.of(objectKey);
+      if (key.isAbsolute() || key.getNameCount() != 1) throw new BusinessException("文件路径非法");
+      String value = key.getFileName().toString();
+      if (!value.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,199}") || value.contains("..")) {
+        throw new BusinessException("文件路径非法");
+      }
+      return value;
+    } catch (InvalidPathException exception) {
+      throw new BusinessException("文件路径非法");
+    }
   }
 
   private static void ensureInside(Path root, Path child) {

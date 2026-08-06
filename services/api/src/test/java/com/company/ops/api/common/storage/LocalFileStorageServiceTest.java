@@ -71,4 +71,25 @@ class LocalFileStorageServiceTest {
         .isInstanceOf(BusinessException.class)
         .hasMessage("文件类型与扩展名不匹配");
   }
+
+  @Test
+  void resolveRejectsRelativePathTraversal() {
+    LocalFileStorageService service = new LocalFileStorageService(tempDir.toString());
+
+    assertThatThrownBy(() -> service.resolve("../outside/contract.pdf"))
+        .isInstanceOf(BusinessException.class)
+        .hasMessage("文件路径非法");
+  }
+
+  @Test
+  void resolveRejectsObjectKeyTraversalAndUnknownNamespace() {
+    LocalFileStorageService service = new LocalFileStorageService(tempDir.toString());
+
+    assertThatThrownBy(() -> service.resolveInNamespace("office", "../contract.pdf"))
+        .isInstanceOf(BusinessException.class)
+        .hasMessage("文件路径非法");
+    assertThatThrownBy(() -> service.resolveInNamespace("unknown", "contract.pdf"))
+        .isInstanceOf(BusinessException.class)
+        .hasMessage("文件路径非法");
+  }
 }

@@ -19,7 +19,7 @@
     "gen:api": "bash ./scripts/gen-api-types.sh",
     "prototype:build": "cd prototypes/react && npm run build",
     "prototype:preview": "vite preview --host 0.0.0.0",
-    "deps:install": "npm install --prefix apps/admin && npm install --prefix apps/mobile",
+    "deps:install": "npm install --prefix apps/admin && npm install --prefix apps/mobile && npm install --prefix apps/supplier-portal",
     "admin:dev": "npm --prefix apps/admin run dev",
     "admin:build": "npm --prefix apps/admin run build",
     "admin:preview": "npm --prefix apps/admin run preview",
@@ -29,6 +29,10 @@
     "mobile:build:h5": "npm --prefix apps/mobile run build:h5",
     "mobile:typecheck": "npm --prefix apps/mobile run typecheck",
     "mobile:test": "npm --prefix apps/mobile run test",
+    "supplier:dev": "npm --prefix apps/supplier-portal run dev",
+    "supplier:build": "npm --prefix apps/supplier-portal run build",
+    "supplier:typecheck": "npm --prefix apps/supplier-portal run typecheck",
+    "supplier:lint": "npm --prefix apps/supplier-portal run lint",
     "api:check": "bash scripts/check-backend.sh",
     "api:dev": "bash scripts/start-api.sh",
     "infra:up": "docker compose -f infra/docker-compose.yml up -d",
@@ -49,7 +53,7 @@
     "version:minor": "node scripts/version.mjs minor",
     "version:major": "node scripts/version.mjs major",
     "version:set": "node scripts/version.mjs set",
-    "verify": "npm run lint && npm run format:check && npm run test && npm --prefix apps/admin run typecheck && npm run build && npm run mobile:typecheck && npm run mobile:test && npm run mobile:build:h5 && npm run mobile:build"
+    "verify": "npm run lint && npm run format:check && npm run test && npm --prefix apps/admin run typecheck && npm run build && npm run supplier:lint && npm run supplier:typecheck && npm run supplier:build && npm run mobile:typecheck && npm run mobile:test && npm run mobile:build:h5 && npm run mobile:build"
   },
   "dependencies": {
     "@vitejs/plugin-react": "6.0.3",

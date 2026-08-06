@@ -19,6 +19,16 @@
         >
           <template #icon><PlusOutlined /></template>新增供应商
         </a-button>
+        <a-button
+          v-if="auth.can('procurement:view')"
+          @click="openPortalAccounts"
+        >
+          供应商门户账号
+          <a-badge
+            v-if="pendingPortalAccounts"
+            :count="pendingPortalAccounts"
+          />
+        </a-button>
       </a-space>
 
       <section class="supplier-score-panel">
@@ -180,7 +190,7 @@
               <a-button
                 v-if="
                   record.admissionStatus === 'PENDING' &&
-                  auth.can('procurement:request:approve')
+                  auth.can('procurement:supplier:admission')
                 "
                 type="link"
                 size="small"
@@ -668,6 +678,202 @@
     </a-modal>
 
     <a-drawer
+      v-model:open="portalAccountsOpen"
+      width="min(960px, 100vw)"
+      title="供应商门户账号审核"
+    >
+      <a-alert
+        type="info"
+        show-icon
+        message="门户账号审核与供应商准入审批相互独立；两项均通过后，供应商才可自行报价。"
+        style="margin-bottom: 16px"
+      />
+      <a-table
+        :columns="portalAccountColumns"
+        :data-source="portalAccounts"
+        :loading="portalLoading"
+        row-key="id"
+        :pagination="{ pageSize: 10 }"
+        :scroll="{ x: 820 }"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'supplier'">
+            <strong>{{ record.supplierName || "-" }}</strong>
+            <span class="table-subtitle">{{
+              record.supplierCode || "待分配编码"
+            }}</span>
+          </template>
+          <template v-else-if="column.key === 'contact'">
+            {{ record.contactName }}
+            <span class="table-subtitle"
+              >{{ record.email }} · {{ record.phone || "-" }}</span
+            >
+          </template>
+          <template v-else-if="column.key === 'status'">
+            <a-tag :color="portalStatusColor(record.status)">{{
+              portalStatusText(record.status)
+            }}</a-tag>
+            <a-tag v-if="record.mustChangePassword" color="orange"
+              >需修改临时密码</a-tag
+            >
+            <span class="table-subtitle"
+              >供应商准入：{{
+                admissionLabel(record.supplierAdmissionStatus)
+              }}</span
+            >
+          </template>
+          <template v-else-if="column.key === 'action'">
+            <a-space wrap @click.stop>
+              <a-button
+                type="link"
+                size="small"
+                @click="openPortalDocuments(record)"
+                >自助资料</a-button
+              >
+              <a-button
+                v-if="
+                  record.status === 'PENDING_REVIEW' &&
+                  auth.can('procurement:portal-account:approve')
+                "
+                type="link"
+                size="small"
+                @click="openPortalReview(record, 'ACTIVE')"
+                >通过</a-button
+              >
+              <a-button
+                v-if="
+                  record.status === 'PENDING_REVIEW' &&
+                  auth.can('procurement:portal-account:approve')
+                "
+                type="link"
+                danger
+                size="small"
+                @click="openPortalReview(record, 'REJECTED')"
+                >驳回</a-button
+              >
+              <a-button
+                v-if="
+                  record.status === 'ACTIVE' &&
+                  auth.can('procurement:portal-account:approve')
+                "
+                type="link"
+                danger
+                size="small"
+                @click="changePortalAccountStatus(record, 'SUSPENDED')"
+                >停用</a-button
+              >
+              <a-button
+                v-if="
+                  record.status === 'SUSPENDED' &&
+                  auth.can('procurement:portal-account:approve')
+                "
+                type="link"
+                size="small"
+                @click="changePortalAccountStatus(record, 'ACTIVE')"
+                >恢复</a-button
+              >
+              <a-button
+                v-if="
+                  ['ACTIVE', 'SUSPENDED'].includes(record.status) &&
+                  auth.can('procurement:portal-account:approve')
+                "
+                type="link"
+                size="small"
+                @click="resetPortalPassword(record)"
+                >重置密码</a-button
+              >
+            </a-space>
+          </template>
+        </template>
+      </a-table>
+    </a-drawer>
+
+    <a-modal
+      v-model:open="portalReviewOpen"
+      :title="
+        portalReviewDecision === 'ACTIVE' ? '通过门户账号' : '驳回门户账号'
+      "
+      @ok="submitPortalReview"
+    >
+      <a-form layout="vertical"
+        ><a-form-item
+          label="审核意见"
+          :required="portalReviewDecision === 'REJECTED'"
+          ><a-textarea
+            v-model:value="portalReviewComment"
+            :rows="3" /></a-form-item
+      ></a-form>
+    </a-modal>
+
+    <a-drawer
+      v-model:open="portalDocumentsOpen"
+      width="min(760px, 100vw)"
+      title="供应商自助上传资料"
+    >
+      <a-table
+        :columns="portalDocumentColumns"
+        :data-source="portalDocuments"
+        :loading="portalDocumentsLoading"
+        row-key="id"
+        :pagination="false"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'file'"
+            ><strong>{{ record.documentName }}</strong
+            ><span class="table-subtitle"
+              >{{ portalDocumentTypeText(record.documentType) }} ·
+              {{ formatFileSize(record.sizeBytes) }}</span
+            ></template
+          >
+          <template v-else-if="column.key === 'review'"
+            ><a-tag
+              :color="
+                record.reviewStatus === 'APPROVED'
+                  ? 'green'
+                  : record.reviewStatus === 'REJECTED'
+                    ? 'red'
+                    : 'orange'
+              "
+              >{{
+                record.reviewStatus === "APPROVED"
+                  ? "已通过"
+                  : record.reviewStatus === "REJECTED"
+                    ? "已退回"
+                    : "待审核"
+              }}</a-tag
+            ><span v-if="record.reviewComment" class="table-subtitle">{{
+              record.reviewComment
+            }}</span></template
+          >
+          <template v-else-if="column.key === 'action'"
+            ><a-space
+              ><a-button
+                v-if="
+                  record.reviewStatus !== 'APPROVED' &&
+                  auth.can('procurement:portal-document:approve')
+                "
+                type="link"
+                size="small"
+                @click="reviewPortalDocument(record, 'APPROVED')"
+                >通过</a-button
+              ><a-button
+                v-if="
+                  record.reviewStatus !== 'REJECTED' &&
+                  auth.can('procurement:portal-document:approve')
+                "
+                type="link"
+                danger
+                size="small"
+                @click="reviewPortalDocument(record, 'REJECTED')"
+                >退回</a-button
+              ></a-space
+            ></template
+          >
+        </template>
+      </a-table>
+    </a-drawer>
+
+    <a-drawer
       v-model:open="documentOpen"
       width="min(820px, 100vw)"
       title="供应商档案"
@@ -747,7 +953,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
-import { message } from "ant-design-vue";
+import { message, Modal } from "ant-design-vue";
 import PlusOutlined from "@ant-design/icons-vue/PlusOutlined";
 import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
 import UploadOutlined from "@ant-design/icons-vue/UploadOutlined";
@@ -756,10 +962,18 @@ import {
   listPurchaseOrders,
   createSupplier,
   reviewSupplierAdmission,
+  listSupplierPortalAccounts,
+  listSupplierPortalDocuments,
+  resetSupplierPortalPassword,
+  reviewSupplierPortalAccount,
+  reviewSupplierPortalDocument,
+  updateSupplierPortalAccountStatus,
   updateSupplier,
   type CreateSupplierPayload,
   type Supplier,
   type PurchaseOrder,
+  type SupplierPortalAccount,
+  type SupplierPortalDocument,
 } from "@/api/procurement";
 import {
   downloadDocument,
@@ -785,6 +999,17 @@ const createOpen = ref(false);
 const profileOpen = ref(false);
 const documentOpen = ref(false);
 const admissionReviewOpen = ref(false);
+const portalAccountsOpen = ref(false);
+const portalReviewOpen = ref(false);
+const portalDocumentsOpen = ref(false);
+const portalLoading = ref(false);
+const portalDocumentsLoading = ref(false);
+const portalAccounts = ref<SupplierPortalAccount[]>([]);
+const portalDocuments = ref<SupplierPortalDocument[]>([]);
+const portalReviewTarget = ref<SupplierPortalAccount | null>(null);
+const portalDocumentSupplierId = ref("");
+const portalReviewDecision = ref<"ACTIVE" | "REJECTED">("ACTIVE");
+const portalReviewComment = ref("");
 const reviewTarget = ref<Supplier | null>(null);
 const reviewForm = reactive<{
   decision: "APPROVED" | "REJECTED";
@@ -824,6 +1049,19 @@ const supplierColumns = [
   { title: "风险", key: "status", width: 100 },
   { title: "操作", key: "action", width: 210, fixed: "right" },
 ];
+const portalAccountColumns = [
+  { title: "供应商", key: "supplier", width: 210 },
+  { title: "联系人", key: "contact", width: 260 },
+  { title: "账号与准入", key: "status", width: 190 },
+  { title: "注册时间", dataIndex: "createdAt", width: 190 },
+  { title: "操作", key: "action", width: 180, fixed: "right" },
+];
+const portalDocumentColumns = [
+  { title: "文件", key: "file" },
+  { title: "有效期", dataIndex: "validTo", width: 120 },
+  { title: "审核", key: "review", width: 160 },
+  { title: "操作", key: "action", width: 120 },
+];
 function formatMoney(value?: number) {
   return new Intl.NumberFormat("zh-CN", {
     style: "currency",
@@ -855,6 +1093,11 @@ const watchSupplierCount = computed(
         isExpiring(item.qualificationValidTo),
     ).length,
 );
+const pendingPortalAccounts = computed(
+  () =>
+    portalAccounts.value.filter((item) => item.status === "PENDING_REVIEW")
+      .length,
+);
 const supplierScoreCards = computed(() => [
   {
     label: "供应商总数",
@@ -883,13 +1126,163 @@ onMounted(loadData);
 async function loadData() {
   loading.value = true;
   try {
-    const result = await listSuppliers(0, 999);
+    const [result, accounts] = await Promise.all([
+      listSuppliers(0, 999),
+      listSupplierPortalAccounts(),
+    ]);
     suppliers.value = result.content;
+    portalAccounts.value = accounts;
   } catch (error) {
     message.error(error instanceof Error ? error.message : "加载失败");
   } finally {
     loading.value = false;
   }
+}
+
+async function openPortalAccounts() {
+  portalAccountsOpen.value = true;
+  portalLoading.value = true;
+  try {
+    portalAccounts.value = await listSupplierPortalAccounts();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "门户账号加载失败");
+  } finally {
+    portalLoading.value = false;
+  }
+}
+
+function openPortalReview(
+  account: SupplierPortalAccount,
+  decision: "ACTIVE" | "REJECTED",
+) {
+  portalReviewTarget.value = account;
+  portalReviewDecision.value = decision;
+  portalReviewComment.value = decision === "ACTIVE" ? "账号身份核验通过" : "";
+  portalReviewOpen.value = true;
+}
+
+async function submitPortalReview() {
+  if (!portalReviewTarget.value) return;
+  if (
+    portalReviewDecision.value === "REJECTED" &&
+    !portalReviewComment.value.trim()
+  ) {
+    message.warning("驳回时请填写原因");
+    return;
+  }
+  await reviewSupplierPortalAccount(
+    portalReviewTarget.value.id,
+    portalReviewDecision.value,
+    portalReviewComment.value,
+  );
+  portalReviewOpen.value = false;
+  message.success("门户账号审核已完成");
+  await openPortalAccounts();
+}
+
+function changePortalAccountStatus(
+  account: SupplierPortalAccount,
+  status: "ACTIVE" | "SUSPENDED",
+) {
+  Modal.confirm({
+    title: status === "SUSPENDED" ? "停用门户账号？" : "恢复门户账号？",
+    content:
+      status === "SUSPENDED"
+        ? "停用后现有登录令牌立即失效，供应商无法继续报价。"
+        : "恢复后供应商可重新登录；是否允许报价仍取决于供应商准入状态。",
+    okText: status === "SUSPENDED" ? "确认停用" : "确认恢复",
+    okButtonProps: { danger: status === "SUSPENDED" },
+    async onOk() {
+      await updateSupplierPortalAccountStatus(
+        account.id,
+        status,
+        status === "SUSPENDED"
+          ? "采购管理员停用门户账号"
+          : "采购管理员恢复门户账号",
+      );
+      message.success(status === "SUSPENDED" ? "账号已停用" : "账号已恢复");
+      await openPortalAccounts();
+    },
+  });
+}
+
+function resetPortalPassword(account: SupplierPortalAccount) {
+  Modal.confirm({
+    title: "重置门户密码？",
+    content: "重置后现有登录令牌立即失效，新密码只展示一次。",
+    okText: "确认重置",
+    async onOk() {
+      const result = await resetSupplierPortalPassword(account.id);
+      Modal.info({
+        title: "临时密码已生成",
+        content: `临时密码：${result.temporaryPassword}。请通过可信渠道交给供应商，首次登录后必须修改。`,
+        okText: "我已记录",
+      });
+      await openPortalAccounts();
+    },
+  });
+}
+
+async function openPortalDocuments(account: SupplierPortalAccount) {
+  portalDocumentSupplierId.value = account.supplierId;
+  portalDocumentsOpen.value = true;
+  portalDocumentsLoading.value = true;
+  try {
+    portalDocuments.value = await listSupplierPortalDocuments(
+      account.supplierId,
+    );
+  } finally {
+    portalDocumentsLoading.value = false;
+  }
+}
+
+async function reviewPortalDocument(
+  document: SupplierPortalDocument,
+  decision: "APPROVED" | "REJECTED",
+) {
+  await reviewSupplierPortalDocument(
+    document.id,
+    decision,
+    decision === "APPROVED" ? "资料核验通过" : "资料不符合要求，请重新上传",
+  );
+  portalDocuments.value = await listSupplierPortalDocuments(
+    portalDocumentSupplierId.value,
+  );
+  message.success("资料审核已更新");
+}
+
+function portalStatusText(status: string) {
+  return (
+    {
+      PENDING_REVIEW: "待审核",
+      ACTIVE: "已启用",
+      REJECTED: "已驳回",
+      SUSPENDED: "已停用",
+    }[status] || status
+  );
+}
+
+function portalStatusColor(status: string) {
+  return (
+    {
+      PENDING_REVIEW: "orange",
+      ACTIVE: "green",
+      REJECTED: "red",
+      SUSPENDED: "default",
+    }[status] || "default"
+  );
+}
+
+function portalDocumentTypeText(type: string) {
+  return (
+    {
+      BUSINESS_LICENSE: "营业执照",
+      QUALIFICATION: "行业资质",
+      BANK_PROOF: "银行证明",
+      TAX_DOCUMENT: "税务资料",
+      OTHER: "其他",
+    }[type] || type
+  );
 }
 
 function openCreate() {

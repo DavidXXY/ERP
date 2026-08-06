@@ -30,6 +30,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class ProcurementControlServiceWorkflowTest {
   @Mock private ProcurementInquiryRepository inquiries;
   @Mock private ProcurementInquiryRequestRepository inquiryRequests;
+  @Mock private ProcurementInquiryInvitationRepository invitations;
   @Mock private SupplierQuotationRepository quotes;
   @Mock private SupplierQuotationLineRepository quoteLines;
   @Mock private PurchaseRequestRepository requests;
@@ -86,6 +87,80 @@ class ProcurementControlServiceWorkflowTest {
     assertThat(captor.getValue().getQuantity()).isEqualByComparingTo("1");
     assertThat(captor.getValue().getInspectionStatus()).isEqualTo("PENDING");
     assertThat(captor.getValue().getClientRequestId()).isEqualTo("RETURN:" + returnOrder.getId());
+  }
+
+  @Test
+  void draftQuoteCannotBeSelectedEvenWhenAnotherValidQuoteExists() {
+    UUID inquiryId = UUID.randomUUID();
+    ProcurementInquiry inquiry = new ProcurementInquiry();
+    inquiry.setId(inquiryId);
+    inquiry.setStatus("OPEN");
+    inquiry.setSourcingMethod("COMPETITIVE");
+    inquiry.setMinQuoteCount(1);
+
+    SupplierQuotation submitted = new SupplierQuotation();
+    submitted.setId(UUID.randomUUID());
+    submitted.setInquiryId(inquiryId);
+    submitted.setSubmissionStatus("SUBMITTED");
+    SupplierQuotation draft = new SupplierQuotation();
+    draft.setId(UUID.randomUUID());
+    draft.setInquiryId(inquiryId);
+    draft.setSubmissionStatus("DRAFT");
+
+    when(inquiries.findById(inquiryId)).thenReturn(Optional.of(inquiry));
+    when(quotes.findByInquiryIdOrderByUnitPriceAsc(inquiryId)).thenReturn(java.util.List.of(submitted, draft));
+    when(quotes.findById(draft.getId())).thenReturn(Optional.of(draft));
+
+    assertThatThrownBy(() -> service.selectQuote(inquiryId, draft.getId(),
+        new SelectSupplierQuote("采购员", "选择当前报价")))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("已提交");
+  }
+
+  @Test
+  void expiredInquiryCannotInviteSuppliers() {
+    UUID inquiryId = UUID.randomUUID();
+    ProcurementInquiry inquiry = new ProcurementInquiry();
+    inquiry.setId(inquiryId);
+    inquiry.setStatus("OPEN");
+    inquiry.setDeadline(LocalDate.now().minusDays(1));
+    when(inquiries.findById(inquiryId)).thenReturn(Optional.of(inquiry));
+
+    assertThatThrownBy(() -> service.inviteSuppliers(inquiryId,
+        new InviteSuppliers(java.util.List.of(UUID.randomUUID()))))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("截止日期");
+  }
+
+  @Test
+  void openInquiryDeadlineCanBeExtended() {
+    UUID inquiryId = UUID.randomUUID();
+    ProcurementInquiry inquiry = new ProcurementInquiry();
+    inquiry.setId(inquiryId);
+    inquiry.setStatus("OPEN");
+    inquiry.setDeadline(LocalDate.now().plusDays(1));
+    LocalDate newDeadline = LocalDate.now().plusDays(7);
+    when(inquiries.findById(inquiryId)).thenReturn(Optional.of(inquiry));
+    when(inquiries.save(inquiry)).thenReturn(inquiry);
+
+    service.updateInquiryDeadline(inquiryId, new UpdateInquiryDeadline(newDeadline));
+
+    assertThat(inquiry.getDeadline()).isEqualTo(newDeadline);
+    verify(inquiries).save(inquiry);
+  }
+
+  @Test
+  void inquiryDeadlineCannotMoveIntoPast() {
+    UUID inquiryId = UUID.randomUUID();
+    ProcurementInquiry inquiry = new ProcurementInquiry();
+    inquiry.setId(inquiryId);
+    inquiry.setStatus("OPEN");
+    when(inquiries.findById(inquiryId)).thenReturn(Optional.of(inquiry));
+
+    assertThatThrownBy(() -> service.updateInquiryDeadline(
+        inquiryId, new UpdateInquiryDeadline(LocalDate.now().minusDays(1))))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("不能早于今天");
   }
 
   private GoodsReceipt receipt() {

@@ -2,6 +2,8 @@ package com.company.ops.api.modules.procurement.dto;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
@@ -49,6 +51,15 @@ public final class ProcurementControlDtos {
   ) {}
 
   public record SelectSupplierQuote(@NotBlank String operatorName, @NotBlank String reason) {}
+
+  public record InviteSuppliers(@NotEmpty List<@NotNull UUID> supplierIds) {}
+
+  public record UpdateInquiryDeadline(@NotNull LocalDate deadline) {}
+
+  public record ScoreSupplierQuote(
+      @NotNull @PositiveOrZero @DecimalMax("100") BigDecimal technicalScore,
+      @NotNull @PositiveOrZero @DecimalMax("100") BigDecimal commercialScore
+  ) {}
 
   public record ApproveOrder(@NotNull String decision, @NotBlank String approverName, @NotBlank String comment) {}
 

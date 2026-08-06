@@ -29,6 +29,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
   }
 
   @Override
+  protected boolean shouldNotFilter(HttpServletRequest request) {
+    return request.getRequestURI().startsWith("/api/supplier-portal/");
+  }
+
+  @Override
   protected void doFilterInternal(
       HttpServletRequest request,
       HttpServletResponse response,
@@ -46,26 +51,36 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     String token = authorization.substring(7);
-    try (TenantContext.Scope ignored = TenantContext.use(jwtService.extractTenant(token))) {
-      String username = jwtService.extractUsername(token);
-      if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-        UserPrincipal principal = (UserPrincipal) userDetailsService.loadUserByUsername(username);
-        if (jwtService.isValid(token, principal)) {
-          UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-              principal,
-              null,
-              principal.getAuthorities()
-          );
-          authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-          SecurityContextHolder.getContext().setAuthentication(authentication);
-        }
-      }
-      filterChain.doFilter(request, response);
-      return;
+    String tenantId;
+    try {
+      tenantId = jwtService.extractTenant(token);
     } catch (RuntimeException e) {
       log.debug("JWT validation failed for request {}: {}", request.getRequestURI(), e.getMessage());
       SecurityContextHolder.clearContext();
+      filterChain.doFilter(request, response);
+      return;
     }
-    filterChain.doFilter(request, response);
+
+    try (TenantContext.Scope ignored = TenantContext.use(tenantId)) {
+      try {
+        String username = jwtService.extractUsername(token);
+        if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+          UserPrincipal principal = (UserPrincipal) userDetailsService.loadUserByUsername(username);
+          if (jwtService.isValid(token, principal)) {
+            UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                principal,
+                null,
+                principal.getAuthorities()
+            );
+            authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+          }
+        }
+      } catch (RuntimeException e) {
+        log.debug("JWT validation failed for request {}: {}", request.getRequestURI(), e.getMessage());
+        SecurityContextHolder.clearContext();
+      }
+      filterChain.doFilter(request, response);
+    }
   }
 }

@@ -1,4 +1,4 @@
-import { request, requestAllPages } from "./http";
+import { http, request, requestAllPages } from "./http";
 import { type PageResponse } from "./system";
 
 export type SupplierRiskStatus = "NORMAL" | "WATCHLIST" | "BLOCKED";
@@ -96,6 +96,39 @@ export type Supplier = {
   payableAmount: number;
   paidAmount: number;
   outstandingAmount: number;
+};
+
+export type SupplierPortalAccount = {
+  id: string;
+  supplierId: string;
+  supplierCode?: string;
+  supplierName?: string;
+  supplierAdmissionStatus?: string;
+  email: string;
+  phone?: string;
+  contactName: string;
+  status: "PENDING_REVIEW" | "ACTIVE" | "REJECTED" | "SUSPENDED";
+  mustChangePassword: boolean;
+  reviewComment?: string;
+  reviewedByName?: string;
+  reviewedAt?: string;
+  lastLoginAt?: string;
+  createdAt: string;
+};
+
+export type SupplierPortalDocument = {
+  id: string;
+  supplierId: string;
+  documentType: string;
+  documentName: string;
+  contentType?: string;
+  sizeBytes: number;
+  validTo?: string;
+  reviewStatus: "PENDING" | "APPROVED" | "REJECTED";
+  reviewComment?: string;
+  reviewedByName?: string;
+  reviewedAt?: string;
+  createdAt: string;
 };
 
 export type PurchaseRequest = {
@@ -361,7 +394,28 @@ export type ProcurementInquiry = {
   selectionReason?: string;
   selectedByName?: string;
   selectedAt?: string;
+  invitations?: ProcurementInquiryInvitation[];
   quotes: SupplierQuotation[];
+};
+export type ProcurementInquiryInvitation = {
+  id: string;
+  supplierId: string;
+  supplierName?: string;
+  status: "INVITED" | "VIEWED" | "RESPONDED" | "DECLINED";
+  invitedByName?: string;
+  invitedAt: string;
+  viewedAt?: string;
+  respondedAt?: string;
+  deliveryStatus?: "PENDING" | "DELIVERED" | "FAILED";
+  deliveryAttemptCount?: number;
+  lastDeliveryAt?: string;
+  deliveryError?: string;
+  declinedAt?: string;
+  declineReason?: string;
+};
+
+export type InviteSuppliersResult = ProcurementInquiry & {
+  registrationCodes: Record<string, string>;
 };
 
 export type ProcurementPurchasePoolItem = {
@@ -434,9 +488,40 @@ export type SupplierQuotation = {
   commercialScore: number;
   totalScore: number;
   validUntil?: string;
+  submissionSource: "INTERNAL_ENTRY" | "SUPPLIER_PORTAL";
+  submissionStatus: "DRAFT" | "SUBMITTED" | "WITHDRAWN";
+  versionNo: number;
+  submittedByType: "INTERNAL_USER" | "SUPPLIER_ACCOUNT";
+  submittedById?: string;
+  submittedByName?: string;
+  submittedAt?: string;
+  confirmed: boolean;
+  confirmedAt?: string;
   lines: SupplierQuotationLine[];
   materialAmount: number;
   totalAmount: number;
+};
+export type SupplierQuoteAttachment = {
+  id: string;
+  quoteId: string;
+  attachmentType: string;
+  fileName: string;
+  contentType?: string;
+  sizeBytes: number;
+  sha256: string;
+  createdAt: string;
+};
+export type InquiryClarification = {
+  id: string;
+  inquiryId: string;
+  supplierId: string;
+  supplierName?: string;
+  question: string;
+  askedAt: string;
+  answer?: string;
+  answeredByName?: string;
+  answeredAt?: string;
+  status: "OPEN" | "ANSWERED";
 };
 export type ProcurementReturnOrder = {
   id: string;
@@ -549,6 +634,59 @@ export function updateSupplier(id: string, payload: CreateSupplierPayload) {
     method: "PUT",
     url: `/procurement/suppliers/${id}`,
     data: payload,
+  });
+}
+export function listSupplierPortalAccounts() {
+  return request<SupplierPortalAccount[]>({
+    method: "GET",
+    url: "/procurement/supplier-portal/accounts",
+  });
+}
+export function reviewSupplierPortalAccount(
+  id: string,
+  decision: "ACTIVE" | "REJECTED",
+  comment?: string,
+) {
+  return request<SupplierPortalAccount>({
+    method: "POST",
+    url: `/procurement/supplier-portal/accounts/${id}/review`,
+    data: { decision, comment },
+  });
+}
+export function updateSupplierPortalAccountStatus(
+  id: string,
+  status: "ACTIVE" | "SUSPENDED",
+  comment?: string,
+) {
+  return request<SupplierPortalAccount>({
+    method: "POST",
+    url: `/procurement/supplier-portal/accounts/${id}/status`,
+    data: { status, comment },
+  });
+}
+export function resetSupplierPortalPassword(id: string) {
+  return request<{ temporaryPassword: string; account: SupplierPortalAccount }>(
+    {
+      method: "POST",
+      url: `/procurement/supplier-portal/accounts/${id}/reset-password`,
+    },
+  );
+}
+export function listSupplierPortalDocuments(supplierId: string) {
+  return request<SupplierPortalDocument[]>({
+    method: "GET",
+    url: `/procurement/supplier-portal/suppliers/${supplierId}/documents`,
+  });
+}
+export function reviewSupplierPortalDocument(
+  id: string,
+  decision: "APPROVED" | "REJECTED",
+  comment?: string,
+) {
+  return request<SupplierPortalDocument>({
+    method: "POST",
+    url: `/procurement/supplier-portal/documents/${id}/review`,
+    data: { decision, comment },
   });
 }
 
@@ -837,8 +975,6 @@ export function addSupplierQuotation(
     currency?: string;
     freightAmount?: number;
     otherCostAmount?: number;
-    technicalScore?: number;
-    commercialScore?: number;
     validUntil?: string;
     lines?: Array<{
       requestId: string;
@@ -852,6 +988,64 @@ export function addSupplierQuotation(
   return request<SupplierQuotation>({
     method: "POST",
     url: `/procurement/inquiries/${id}/quotes`,
+    data: payload,
+  });
+}
+export function inviteInquirySuppliers(id: string, supplierIds: string[]) {
+  return request<InviteSuppliersResult>({
+    method: "POST",
+    url: `/procurement/inquiries/${id}/invitations`,
+    data: { supplierIds },
+  });
+}
+export function updateProcurementInquiryDeadline(id: string, deadline: string) {
+  return request<ProcurementInquiry>({
+    method: "POST",
+    url: `/procurement/inquiries/${id}/deadline`,
+    data: { deadline },
+  });
+}
+export function listSupplierQuoteAttachments(quoteId: string) {
+  return request<SupplierQuoteAttachment[]>({
+    method: "GET",
+    url: `/procurement/supplier-portal/quotes/${quoteId}/attachments`,
+  });
+}
+export async function downloadSupplierQuoteAttachment(
+  attachment: SupplierQuoteAttachment,
+) {
+  const response = await http.get<Blob>(
+    `/procurement/supplier-portal/quote-attachments/${attachment.id}/download`,
+    { responseType: "blob" },
+  );
+  const url = URL.createObjectURL(response.data);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = attachment.fileName;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+export function listInquiryClarifications(inquiryId: string) {
+  return request<InquiryClarification[]>({
+    method: "GET",
+    url: `/procurement/supplier-portal/inquiries/${inquiryId}/clarifications`,
+  });
+}
+export function answerInquiryClarification(id: string, answer: string) {
+  return request<InquiryClarification>({
+    method: "POST",
+    url: `/procurement/supplier-portal/clarifications/${id}/answer`,
+    data: { answer },
+  });
+}
+export function scoreSupplierQuotation(
+  id: string,
+  quoteId: string,
+  payload: { technicalScore: number; commercialScore: number },
+) {
+  return request<SupplierQuotation>({
+    method: "POST",
+    url: `/procurement/inquiries/${id}/quotes/${quoteId}/score`,
     data: payload,
   });
 }

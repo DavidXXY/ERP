@@ -1,6 +1,7 @@
 package com.company.ops.api.config;
 
 import com.company.ops.api.modules.system.security.JwtAuthenticationFilter;
+import com.company.ops.api.modules.procurement.security.SupplierPortalAuthenticationFilter;
 import java.util.List;
 import java.util.Arrays;
 import org.springframework.beans.factory.annotation.Value;
@@ -28,13 +29,16 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 public class SecurityConfig {
 
   private final JwtAuthenticationFilter jwtAuthenticationFilter;
+  private final SupplierPortalAuthenticationFilter supplierPortalAuthenticationFilter;
   private final String allowedOrigins;
 
   public SecurityConfig(
       JwtAuthenticationFilter jwtAuthenticationFilter,
-      @Value("${ops.security.allowed-origins:http://localhost:5174,http://127.0.0.1:5174,http://localhost:5180,http://127.0.0.1:5180,http://localhost:8088,http://127.0.0.1:8088}") String allowedOrigins
+      SupplierPortalAuthenticationFilter supplierPortalAuthenticationFilter,
+      @Value("${ops.security.allowed-origins:http://localhost:5174,http://127.0.0.1:5174,http://localhost:5176,http://127.0.0.1:5176,http://localhost:5180,http://127.0.0.1:5180,http://localhost:8088,http://127.0.0.1:8088}") String allowedOrigins
   ) {
     this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+    this.supplierPortalAuthenticationFilter = supplierPortalAuthenticationFilter;
     this.allowedOrigins = allowedOrigins;
   }
 
@@ -52,11 +56,13 @@ public class SecurityConfig {
         .authorizeHttpRequests(auth -> auth
             .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
             .requestMatchers("/api/auth/login", "/api/auth/wechat/login", "/api/auth/wechat/bind").permitAll()
+            .requestMatchers("/api/supplier-portal/auth/register", "/api/supplier-portal/auth/login").permitAll()
             .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
             .requestMatchers("/api-docs/**").permitAll()
             .requestMatchers("/qualification-files/**").authenticated()
             .requestMatchers("/actuator/health", "/actuator/prometheus").permitAll()
             .anyRequest().authenticated())
+        .addFilterBefore(supplierPortalAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
         .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
     return http.build();
   }

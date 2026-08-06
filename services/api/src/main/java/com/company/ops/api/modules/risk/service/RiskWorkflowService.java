@@ -4,11 +4,13 @@ import com.company.ops.api.common.exception.BusinessException;
 import com.company.ops.api.modules.risk.domain.RiskWorkflow;
 import com.company.ops.api.modules.risk.domain.RiskWorkflowAction;
 import com.company.ops.api.modules.risk.dto.RiskWorkflowDtos.RiskWorkflowActionResponse;
+import com.company.ops.api.modules.risk.dto.RiskWorkflowDtos.RiskAssigneeResponse;
 import com.company.ops.api.modules.risk.dto.RiskWorkflowDtos.BatchUpdateRiskWorkflowRequest;
 import com.company.ops.api.modules.risk.dto.RiskWorkflowDtos.RiskWorkflowResponse;
 import com.company.ops.api.modules.risk.dto.RiskWorkflowDtos.UpdateRiskWorkflowRequest;
 import com.company.ops.api.modules.risk.repository.RiskWorkflowActionRepository;
 import com.company.ops.api.modules.risk.repository.RiskWorkflowRepository;
+import com.company.ops.api.modules.system.repository.SystemUserRepository;
 import com.company.ops.api.modules.system.security.UserPrincipal;
 import java.time.Duration;
 import java.time.OffsetDateTime;
@@ -22,10 +24,13 @@ public class RiskWorkflowService {
   private static final List<String> STATUSES = List.of("UNCLAIMED", "CLAIMED", "PROCESSING", "IGNORED", "CLOSED");
   private final RiskWorkflowRepository repository;
   private final RiskWorkflowActionRepository actionRepository;
+  private final SystemUserRepository userRepository;
 
-  public RiskWorkflowService(RiskWorkflowRepository repository, RiskWorkflowActionRepository actionRepository) {
+  public RiskWorkflowService(RiskWorkflowRepository repository, RiskWorkflowActionRepository actionRepository,
+      SystemUserRepository userRepository) {
     this.repository = repository;
     this.actionRepository = actionRepository;
+    this.userRepository = userRepository;
   }
 
   @Transactional(readOnly = true)
@@ -36,6 +41,16 @@ public class RiskWorkflowService {
   @Transactional(readOnly = true)
   public List<RiskWorkflowActionResponse> actions(String riskKey) {
     return actionRepository.findByRiskKeyOrderByCreatedAtDesc(riskKey).stream().map(this::toActionResponse).toList();
+  }
+
+  @Transactional(readOnly = true)
+  public List<RiskAssigneeResponse> assignees() {
+    return userRepository.findByEnabledTrueOrderByDisplayNameAsc().stream()
+        .map(user -> new RiskAssigneeResponse(
+            user.getId(),
+            user.getDisplayName(),
+            user.getOrganization() == null ? null : user.getOrganization().getName()))
+        .toList();
   }
 
   @Transactional
@@ -64,6 +79,9 @@ public class RiskWorkflowService {
     });
     String previousStatus = workflow.getStatus();
     String owner = trimToNull(ownerValue);
+    if (owner != null && userRepository.findByDisplayNameAndEnabledTrue(owner).isEmpty()) {
+      throw new BusinessException("风险处理人必须选择启用的公司人员");
+    }
     String note = trimToNull(noteValue);
     String reason = trimToNull(reasonValue);
     String rootCause = trimToNull(rootCauseValue);

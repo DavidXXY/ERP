@@ -46,6 +46,12 @@ public final class RiskWorkflowDtos {
       OffsetDateTime createdAt
   ) {}
 
+  public record RiskAssigneeResponse(
+      UUID id,
+      String displayName,
+      String organizationName
+  ) {}
+
   public record RiskItemResponse(
       String key,
       String module,

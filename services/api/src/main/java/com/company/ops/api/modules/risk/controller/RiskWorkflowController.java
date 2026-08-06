@@ -2,6 +2,7 @@ package com.company.ops.api.modules.risk.controller;
 
 import com.company.ops.api.common.api.ApiResponse;
 import com.company.ops.api.modules.risk.dto.RiskWorkflowDtos.RiskWorkflowActionResponse;
+import com.company.ops.api.modules.risk.dto.RiskWorkflowDtos.RiskAssigneeResponse;
 import com.company.ops.api.modules.risk.dto.RiskWorkflowDtos.BatchUpdateRiskWorkflowRequest;
 import com.company.ops.api.modules.risk.dto.RiskWorkflowDtos.RiskWorkflowResponse;
 import com.company.ops.api.modules.risk.dto.RiskWorkflowDtos.UpdateRiskWorkflowRequest;
@@ -35,6 +36,12 @@ public class RiskWorkflowController {
   @PreAuthorize("hasAnyAuthority('risk:view','dashboard:view','office:approval:view','inventory:view','procurement:view','project:view','finance:receivable:view','finance:payable:view','qualification:warning:view','crm:renewal:view')")
   public ApiResponse<List<RiskWorkflowActionResponse>> actions(@RequestParam String riskKey) {
     return ApiResponse.ok(service.actions(riskKey));
+  }
+
+  @GetMapping("/assignees")
+  @PreAuthorize("hasAnyAuthority('risk:update','dashboard:view','office:approval:view','inventory:view','procurement:view','project:view','finance:receivable:view','finance:payable:view','qualification:warning:view','crm:renewal:view')")
+  public ApiResponse<List<RiskAssigneeResponse>> assignees() {
+    return ApiResponse.ok(service.assignees());
   }
 
   @PostMapping

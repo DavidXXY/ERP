@@ -143,6 +143,7 @@ CI 还会执行依赖漏洞审查、Secret scan、CodeQL、SBOM 生成、迁移�
 
 ## 文档导航
 
+- [超详细使用教程（带实际界面截图）](docs/使用教程-带截图.md)
 - [系统详细使用教程](docs/system-usage.md)
 - [系统架构说明](docs/architecture.md)
 - [供应商门户与双通道报价说明](docs/supplier-portal.md)

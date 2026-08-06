@@ -516,6 +516,33 @@ public class SupplierPortalService {
   }
 
   @Transactional
+  public OpenAccountResponse openAccount(UUID supplierId, OpenAccountRequest request) {
+    Supplier supplier = requireSupplier(supplierId);
+    if (accounts.existsBySupplierId(supplierId)) {
+      throw new BusinessException("该供应商已经开通门户账号，请使用重置密码或停用账号功能");
+    }
+    String email = normalizeEmail(request.email());
+    if (accounts.existsByEmailIgnoreCase(email)) {
+      throw new BusinessException("该邮箱已经绑定其他供应商门户账号");
+    }
+    String temporaryPassword = temporaryPassword();
+    SupplierPortalAccount account = new SupplierPortalAccount();
+    account.setTenantId(TenantContext.currentTenant());
+    account.setSupplierId(supplierId);
+    account.setEmail(email);
+    account.setPhone(trim(request.phone()) == null ? supplier.getPhone() : trim(request.phone()));
+    account.setContactName(request.contactName().trim());
+    account.setPasswordHash(passwordEncoder.encode(temporaryPassword));
+    account.setStatus("ACTIVE");
+    account.setMustChangePassword(true);
+    account.setReviewedByName(currentInternalName());
+    account.setReviewedAt(OffsetDateTime.now());
+    account.setReviewComment("采购管理员为已有供应商开通门户账号");
+    SupplierPortalAccount saved = accounts.save(account);
+    return new OpenAccountResponse(temporaryPassword, account(saved, supplier));
+  }
+
+  @Transactional
   public AccountResponse reviewAccount(UUID id, ReviewAccountRequest request) {
     SupplierPortalAccount account = requireAccount(id);
     if (!"PENDING_REVIEW".equals(account.getStatus())) throw new BusinessException("门户账号已处理");
@@ -561,13 +588,17 @@ public class SupplierPortalService {
   @Transactional
   public ResetPasswordResponse resetPassword(UUID id) {
     SupplierPortalAccount account = requireAccount(id);
-    String temporaryPassword = "Tmp" + UUID.randomUUID().toString().replace("-", "").substring(0, 9) + "!";
+    String temporaryPassword = temporaryPassword();
     account.setPasswordHash(passwordEncoder.encode(temporaryPassword));
     account.setMustChangePassword(true);
     account.setPasswordChangedAt(OffsetDateTime.now());
     account.bumpAuthVersion();
     SupplierPortalAccount saved = accounts.save(account);
     return new ResetPasswordResponse(temporaryPassword, account(saved, requireSupplier(saved.getSupplierId())));
+  }
+
+  private String temporaryPassword() {
+    return "Tmp" + UUID.randomUUID().toString().replace("-", "").substring(0, 9) + "!";
   }
 
   @Transactional(readOnly = true)

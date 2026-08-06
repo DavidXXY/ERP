@@ -333,6 +333,14 @@
             >
             <a-button
               v-if="
+                !portalAccountForSupplier(selectedSupplier.id) &&
+                auth.can('procurement:portal-account:approve')
+              "
+              @click="openPortalAccount(selectedSupplier)"
+              >开通门户账号</a-button
+            >
+            <a-button
+              v-if="
                 selectedSupplier.admissionStatus === 'PENDING' &&
                 auth.can('procurement:request:approve')
               "
@@ -789,6 +797,35 @@
     </a-drawer>
 
     <a-modal
+      v-model:open="portalOpenAccountOpen"
+      title="为已有供应商开通门户账号"
+      :confirm-loading="portalOpening"
+      @ok="submitOpenPortalAccount"
+    >
+      <a-alert
+        type="info"
+        show-icon
+        message="系统会生成一次性临时密码"
+        description="账号开通后供应商可以登录门户，但首次登录必须修改临时密码；供应商能否报价仍取决于准入审批和风险状态。"
+        style="margin-bottom: 16px"
+      />
+      <a-form layout="vertical">
+        <a-form-item label="供应商">
+          <a-input :value="portalOpenAccountSupplier?.name || ''" disabled />
+        </a-form-item>
+        <a-form-item label="门户登录邮箱" required>
+          <a-input v-model:value="portalOpenAccountForm.email" type="email" />
+        </a-form-item>
+        <a-form-item label="联系人" required>
+          <a-input v-model:value="portalOpenAccountForm.contactName" />
+        </a-form-item>
+        <a-form-item label="联系电话">
+          <a-input v-model:value="portalOpenAccountForm.phone" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <a-modal
       v-model:open="portalReviewOpen"
       :title="
         portalReviewDecision === 'ACTIVE' ? '通过门户账号' : '驳回门户账号'
@@ -963,6 +1000,7 @@ import {
   createSupplier,
   reviewSupplierAdmission,
   listSupplierPortalAccounts,
+  openSupplierPortalAccount,
   listSupplierPortalDocuments,
   resetSupplierPortalPassword,
   reviewSupplierPortalAccount,
@@ -1000,6 +1038,7 @@ const profileOpen = ref(false);
 const documentOpen = ref(false);
 const admissionReviewOpen = ref(false);
 const portalAccountsOpen = ref(false);
+const portalOpenAccountOpen = ref(false);
 const portalReviewOpen = ref(false);
 const portalDocumentsOpen = ref(false);
 const portalLoading = ref(false);
@@ -1010,6 +1049,13 @@ const portalReviewTarget = ref<SupplierPortalAccount | null>(null);
 const portalDocumentSupplierId = ref("");
 const portalReviewDecision = ref<"ACTIVE" | "REJECTED">("ACTIVE");
 const portalReviewComment = ref("");
+const portalOpening = ref(false);
+const portalOpenAccountSupplier = ref<Supplier | null>(null);
+const portalOpenAccountForm = reactive({
+  email: "",
+  phone: "",
+  contactName: "",
+});
 const reviewTarget = ref<Supplier | null>(null);
 const reviewForm = reactive<{
   decision: "APPROVED" | "REJECTED";
@@ -1098,6 +1144,9 @@ const pendingPortalAccounts = computed(
     portalAccounts.value.filter((item) => item.status === "PENDING_REVIEW")
       .length,
 );
+function portalAccountForSupplier(supplierId: string) {
+  return portalAccounts.value.find((item) => item.supplierId === supplierId);
+}
 const supplierScoreCards = computed(() => [
   {
     label: "供应商总数",
@@ -1148,6 +1197,45 @@ async function openPortalAccounts() {
     message.error(error instanceof Error ? error.message : "门户账号加载失败");
   } finally {
     portalLoading.value = false;
+  }
+}
+
+function openPortalAccount(supplier: Supplier) {
+  portalOpenAccountSupplier.value = supplier;
+  portalOpenAccountForm.email = "";
+  portalOpenAccountForm.phone = supplier.phone || "";
+  portalOpenAccountForm.contactName = supplier.contactName || "";
+  portalOpenAccountOpen.value = true;
+}
+
+async function submitOpenPortalAccount() {
+  const supplier = portalOpenAccountSupplier.value;
+  if (!supplier) return;
+  if (
+    !portalOpenAccountForm.email.trim() ||
+    !portalOpenAccountForm.contactName.trim()
+  ) {
+    message.warning("请填写门户登录邮箱和联系人");
+    return;
+  }
+  portalOpening.value = true;
+  try {
+    const result = await openSupplierPortalAccount(supplier.id, {
+      email: portalOpenAccountForm.email.trim(),
+      phone: portalOpenAccountForm.phone.trim() || undefined,
+      contactName: portalOpenAccountForm.contactName.trim(),
+    });
+    portalOpenAccountOpen.value = false;
+    Modal.info({
+      title: "供应商门户账号已开通",
+      content: `登录邮箱：${result.account.email}\n临时密码：${result.temporaryPassword}\n请通过可信渠道交给供应商，首次登录后必须修改密码。`,
+      okText: "我已记录",
+    });
+    portalAccounts.value = await listSupplierPortalAccounts();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "门户账号开通失败");
+  } finally {
+    portalOpening.value = false;
   }
 }
 

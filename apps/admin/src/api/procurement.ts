@@ -642,6 +642,18 @@ export function listSupplierPortalAccounts() {
     url: "/procurement/supplier-portal/accounts",
   });
 }
+export function openSupplierPortalAccount(
+  supplierId: string,
+  payload: { email: string; phone?: string; contactName: string },
+) {
+  return request<{ temporaryPassword: string; account: SupplierPortalAccount }>(
+    {
+      method: "POST",
+      url: `/procurement/supplier-portal/suppliers/${supplierId}/account`,
+      data: payload,
+    },
+  );
+}
 export function reviewSupplierPortalAccount(
   id: string,
   decision: "ACTIVE" | "REJECTED",

@@ -29,6 +29,13 @@
             :count="pendingPortalAccounts"
           />
         </a-button>
+        <a-button
+          v-if="auth.can('procurement:supplier:create')"
+          @click="openSupplierCategoryDictionary"
+        >
+          <template #icon><TagsOutlined /></template>
+          供应商类别字典
+        </a-button>
       </a-space>
 
       <section class="supplier-score-panel">
@@ -222,10 +229,12 @@
               ><a-input v-model:value="form.name" /></a-form-item
           ></a-col>
           <a-col :xs="24" :md="6"
-            ><a-form-item label="供应商类别"
-              ><a-input
+            ><a-form-item label="供应商类别" name="category"
+              ><a-select
                 v-model:value="form.category"
-                placeholder="材料/外包/设备/服务" /></a-form-item
+                :options="supplierCategoryOptions"
+                placeholder="请选择供应商类别"
+                allow-clear /></a-form-item
           ></a-col>
           <a-col :xs="24" :md="8"
             ><a-form-item label="联系人"
@@ -518,8 +527,12 @@
                     ><a-input v-model:value="form.name" /></a-form-item
                 ></a-col>
                 <a-col :xs="24" :md="6"
-                  ><a-form-item label="供应商类别"
-                    ><a-input v-model:value="form.category" /></a-form-item
+                  ><a-form-item label="供应商类别" name="category"
+                    ><a-select
+                      v-model:value="form.category"
+                      :options="supplierCategoryOptions"
+                      placeholder="请选择供应商类别"
+                      allow-clear /></a-form-item
                 ></a-col>
                 <a-col :xs="24" :md="8"
                   ><a-form-item label="联系人"
@@ -984,6 +997,97 @@
         </a-table>
       </template>
     </a-drawer>
+
+    <a-modal
+      v-model:open="supplierCategoryOpen"
+      title="供应商类别字典"
+      width="760px"
+      :confirm-loading="supplierCategorySaving"
+      :footer="null"
+    >
+      <a-space direction="vertical" style="width: 100%" size="middle">
+        <a-form
+          ref="supplierCategoryFormRef"
+          :model="supplierCategoryForm"
+          layout="inline"
+          @finish="saveSupplierCategory"
+        >
+          <a-form-item
+            label="类别名称"
+            name="name"
+            :rules="[{ required: true, message: '请输入类别名称' }]"
+          >
+            <a-input
+              v-model:value="supplierCategoryForm.name"
+              placeholder="如：原材料与辅料"
+              style="width: 180px"
+            />
+          </a-form-item>
+          <a-form-item label="说明" name="description">
+            <a-input
+              v-model:value="supplierCategoryForm.description"
+              placeholder="可选"
+              style="width: 180px"
+            />
+          </a-form-item>
+          <a-form-item label="排序" name="sortOrder">
+            <a-input-number
+              v-model:value="supplierCategoryForm.sortOrder"
+              :min="0"
+              style="width: 90px"
+            />
+          </a-form-item>
+          <a-form-item name="enabled">
+            <a-checkbox v-model:checked="supplierCategoryForm.enabled"
+              >启用</a-checkbox
+            >
+          </a-form-item>
+          <a-form-item>
+            <a-space>
+              <a-button
+                type="primary"
+                html-type="submit"
+                :loading="supplierCategorySaving"
+              >
+                {{ editingSupplierCategory ? "保存" : "新增" }}
+              </a-button>
+              <a-button
+                v-if="editingSupplierCategory"
+                @click="resetSupplierCategoryForm"
+                >取消编辑</a-button
+              >
+            </a-space>
+          </a-form-item>
+        </a-form>
+        <a-table
+          size="small"
+          :columns="supplierCategoryColumns"
+          :data-source="supplierCategories"
+          :loading="supplierCategoryLoading"
+          row-key="id"
+          :pagination="false"
+        >
+          <template #bodyCell="{ column, record }">
+            <template v-if="column.key === 'status'">
+              <a-tag :color="record.enabled ? 'green' : 'default'">
+                {{ record.enabled ? "启用" : "停用" }}
+              </a-tag>
+            </template>
+            <template v-else-if="column.key === 'builtIn'">
+              {{ record.builtIn ? "系统预置" : "自定义" }}
+            </template>
+            <template v-else-if="column.key === 'action'">
+              <a-button
+                type="link"
+                size="small"
+                @click="editSupplierCategory(record)"
+                >编辑</a-button
+              >
+            </template>
+          </template>
+        </a-table>
+      </a-space>
+    </a-modal>
   </div>
 </template>
 
@@ -993,6 +1097,7 @@ import { useRouter } from "vue-router";
 import { message, Modal } from "ant-design-vue";
 import PlusOutlined from "@ant-design/icons-vue/PlusOutlined";
 import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
+import TagsOutlined from "@ant-design/icons-vue/TagsOutlined";
 import UploadOutlined from "@ant-design/icons-vue/UploadOutlined";
 import {
   listSuppliers,
@@ -1012,6 +1117,10 @@ import {
   type PurchaseOrder,
   type SupplierPortalAccount,
   type SupplierPortalDocument,
+  type SupplierCategory,
+  listSupplierCategories,
+  createSupplierCategory,
+  updateSupplierCategory,
 } from "@/api/procurement";
 import {
   downloadDocument,
@@ -1065,8 +1174,47 @@ const formRef = ref();
 const profileFormRef = ref();
 const supplierEditing = ref(false);
 const form = reactive<CreateSupplierPayload>(emptySupplierForm());
+const supplierCategories = ref<SupplierCategory[]>([]);
+const supplierCategoryOpen = ref(false);
+const supplierCategoryLoading = ref(false);
+const supplierCategorySaving = ref(false);
+const supplierCategoryFormRef = ref();
+const editingSupplierCategory = ref<SupplierCategory | null>(null);
+const supplierCategoryForm = reactive({
+  name: "",
+  description: "",
+  sortOrder: 0,
+  enabled: true,
+});
 
-const rules = { code: [{ required: true }], name: [{ required: true }] };
+const rules = {
+  code: [{ required: true, message: "请输入供应商编码" }],
+  name: [{ required: true, message: "请输入供应商名称" }],
+  category: [{ required: true, message: "请选择供应商类别" }],
+};
+const supplierCategoryOptions = computed(() =>
+  supplierCategories.value
+    .filter((item) => item.enabled || item.name === form.category)
+    .map((item) => ({
+      label: item.name,
+      value: item.name,
+      disabled: !item.enabled,
+    })),
+);
+const supplierCategoryColumns = [
+  { title: "类别", dataIndex: "name", key: "name", width: 180 },
+  { title: "说明", dataIndex: "description", key: "description" },
+  { title: "排序", dataIndex: "sortOrder", key: "sortOrder", width: 80 },
+  { title: "状态", key: "status", width: 90 },
+  {
+    title: "供应商数",
+    dataIndex: "supplierCount",
+    key: "supplierCount",
+    width: 100,
+  },
+  { title: "来源", key: "builtIn", width: 90 },
+  { title: "操作", key: "action", width: 80 },
+];
 const riskOptions = [
   { label: "正常", value: "NORMAL" },
   { label: "关注", value: "WATCHLIST" },
@@ -1175,12 +1323,17 @@ onMounted(loadData);
 async function loadData() {
   loading.value = true;
   try {
-    const [result, accounts] = await Promise.all([
+    const [result, accounts, categories] = await Promise.all([
       listSuppliers(0, 999),
       listSupplierPortalAccounts(),
+      listSupplierCategories(),
     ]);
     suppliers.value = result.content;
     portalAccounts.value = accounts;
+    supplierCategories.value = categories;
+    if (!form.category) {
+      form.category = categories.find((item) => item.enabled)?.name || "";
+    }
   } catch (error) {
     message.error(error instanceof Error ? error.message : "加载失败");
   } finally {
@@ -1375,7 +1528,75 @@ function portalDocumentTypeText(type: string) {
 
 function openCreate() {
   Object.assign(form, emptySupplierForm(), { code: generateCode("GYS") });
+  form.category =
+    supplierCategories.value.find((item) => item.enabled)?.name || "";
   createOpen.value = true;
+}
+
+async function openSupplierCategoryDictionary() {
+  supplierCategoryOpen.value = true;
+  resetSupplierCategoryForm();
+  supplierCategoryLoading.value = true;
+  try {
+    supplierCategories.value = await listSupplierCategories();
+  } catch (error) {
+    message.error(
+      error instanceof Error ? error.message : "供应商类别加载失败",
+    );
+  } finally {
+    supplierCategoryLoading.value = false;
+  }
+}
+
+function resetSupplierCategoryForm() {
+  editingSupplierCategory.value = null;
+  Object.assign(supplierCategoryForm, {
+    name: "",
+    description: "",
+    sortOrder: supplierCategories.value.length + 1,
+    enabled: true,
+  });
+}
+
+function editSupplierCategory(category: SupplierCategory) {
+  editingSupplierCategory.value = category;
+  Object.assign(supplierCategoryForm, {
+    name: category.name,
+    description: category.description || "",
+    sortOrder: category.sortOrder,
+    enabled: category.enabled,
+  });
+}
+
+async function saveSupplierCategory() {
+  supplierCategorySaving.value = true;
+  try {
+    const payload = {
+      name: supplierCategoryForm.name.trim(),
+      description: supplierCategoryForm.description.trim() || undefined,
+      sortOrder: supplierCategoryForm.sortOrder,
+      enabled: supplierCategoryForm.enabled,
+    };
+    if (!payload.name) {
+      message.warning("请输入类别名称");
+      return;
+    }
+    if (editingSupplierCategory.value) {
+      await updateSupplierCategory(editingSupplierCategory.value.id, payload);
+      message.success("供应商类别已更新");
+    } else {
+      await createSupplierCategory(payload);
+      message.success("供应商类别已新增");
+    }
+    supplierCategories.value = await listSupplierCategories();
+    resetSupplierCategoryForm();
+  } catch (error) {
+    message.error(
+      error instanceof Error ? error.message : "供应商类别保存失败",
+    );
+  } finally {
+    supplierCategorySaving.value = false;
+  }
 }
 
 async function handleCreate() {

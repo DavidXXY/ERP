@@ -18,6 +18,7 @@ import com.company.ops.api.modules.procurement.domain.ProcurementPayable;
 import com.company.ops.api.modules.procurement.domain.PurchaseOrder;
 import com.company.ops.api.modules.procurement.domain.PurchaseOrderStatus;
 import com.company.ops.api.modules.procurement.domain.Supplier;
+import com.company.ops.api.modules.procurement.domain.SupplierCategory;
 import com.company.ops.api.modules.procurement.domain.SupplierRiskStatus;
 import com.company.ops.api.modules.procurement.dto.CreatePurchaseRequestRequest;
 import com.company.ops.api.modules.procurement.dto.CreateSupplierRequest;
@@ -33,6 +34,7 @@ import com.company.ops.api.modules.procurement.repository.PurchaseOrderRepositor
 import com.company.ops.api.modules.procurement.repository.PurchaseRequestApprovalRecordRepository;
 import com.company.ops.api.modules.procurement.repository.PurchaseRequestRepository;
 import com.company.ops.api.modules.procurement.repository.SupplierRepository;
+import com.company.ops.api.modules.procurement.repository.SupplierCategoryRepository;
 import com.company.ops.api.modules.project.domain.Project;
 import com.company.ops.api.modules.project.domain.ProjectApprovalStatus;
 import com.company.ops.api.modules.project.domain.ProjectCostEntry;
@@ -58,6 +60,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class ProcurementServiceTest {
 
   @Mock private SupplierRepository supplierRepository;
+  @Mock private SupplierCategoryRepository supplierCategoryRepository;
   @Mock private PurchaseRequestRepository requestRepository;
   @Mock private PurchaseRequestApprovalRecordRepository requestApprovalRepository;
   @Mock private PurchaseOrderRepository orderRepository;
@@ -94,6 +97,11 @@ class ProcurementServiceTest {
   @Test
   void newSupplierAlwaysRequiresAdmissionApproval() {
     when(supplierRepository.existsByCode("GYS-NEW")).thenReturn(false);
+    SupplierCategory category = new SupplierCategory();
+    category.setName("Equipment");
+    category.setEnabled(true);
+    when(supplierCategoryRepository.findByNameIgnoreCase("Equipment"))
+        .thenReturn(Optional.of(category));
     when(supplierRepository.save(any(Supplier.class)))
         .thenAnswer(invocation -> invocation.getArgument(0));
 

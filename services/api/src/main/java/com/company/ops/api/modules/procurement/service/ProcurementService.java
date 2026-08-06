@@ -50,6 +50,7 @@ import com.company.ops.api.modules.procurement.repository.PurchaseOrderRepositor
 import com.company.ops.api.modules.procurement.repository.PurchaseRequestApprovalRecordRepository;
 import com.company.ops.api.modules.procurement.repository.PurchaseRequestRepository;
 import com.company.ops.api.modules.procurement.repository.SupplierRepository;
+import com.company.ops.api.modules.procurement.repository.SupplierCategoryRepository;
 import com.company.ops.api.modules.procurement.repository.SupplierInvoiceRepository;
 import com.company.ops.api.modules.procurement.repository.SupplierQuotationRepository;
 import com.company.ops.api.modules.procurement.repository.SupplierQuotationLineRepository;
@@ -98,6 +99,7 @@ public class ProcurementService {
 
   private final CodeGenerator codeGenerator;
   private final SupplierRepository supplierRepository;
+  private final SupplierCategoryRepository supplierCategoryRepository;
   private final PurchaseRequestRepository requestRepository;
   private final PurchaseRequestApprovalRecordRepository requestApprovalRepository;
   private final PurchaseOrderRepository orderRepository;
@@ -120,6 +122,7 @@ public class ProcurementService {
   public ProcurementService(
       CodeGenerator codeGenerator,
       SupplierRepository supplierRepository,
+      SupplierCategoryRepository supplierCategoryRepository,
       PurchaseRequestRepository requestRepository,
       PurchaseRequestApprovalRecordRepository requestApprovalRepository,
       PurchaseOrderRepository orderRepository,
@@ -141,6 +144,7 @@ public class ProcurementService {
   ) {
     this.codeGenerator = codeGenerator;
     this.supplierRepository = supplierRepository;
+    this.supplierCategoryRepository = supplierCategoryRepository;
     this.requestRepository = requestRepository;
     this.requestApprovalRepository = requestApprovalRepository;
     this.orderRepository = orderRepository;
@@ -253,8 +257,14 @@ public class ProcurementService {
   }
 
   private void applySupplierRequest(Supplier supplier, CreateSupplierRequest request) {
+    String categoryName = request.category().trim();
+    var category = supplierCategoryRepository.findByNameIgnoreCase(categoryName)
+        .orElseThrow(() -> new BusinessException("供应商分类不存在，请先在分类字典中新增"));
+    if (!category.isEnabled() && !categoryName.equalsIgnoreCase(supplier.getCategory())) {
+      throw new BusinessException("供应商分类已停用，请选择启用中的分类");
+    }
     supplier.setName(request.name());
-    supplier.setCategory(request.category());
+    supplier.setCategory(category.getName());
     supplier.setContactName(request.contactName());
     supplier.setPhone(request.phone());
     supplier.setSettlementTerms(request.settlementTerms());

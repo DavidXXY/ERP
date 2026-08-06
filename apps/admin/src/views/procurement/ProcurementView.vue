@@ -575,8 +575,11 @@
               ><a-input v-model:value="supplierForm.name" /></a-form-item
           ></a-col>
           <a-col :xs="24" :md="12"
-            ><a-form-item label="品类"
-              ><a-input v-model:value="supplierForm.category" /></a-form-item
+            ><a-form-item label="供应商类别" name="category"
+              ><a-select
+                v-model:value="supplierForm.category"
+                :options="supplierCategoryOptions"
+                placeholder="请选择供应商类别" /></a-form-item
           ></a-col>
           <a-col :xs="24" :md="12"
             ><a-form-item label="账期"
@@ -922,6 +925,7 @@ import {
   listPurchaseOrders,
   listPurchaseRequests,
   listSuppliers,
+  listSupplierCategories,
   processPurchaseRequestApproval,
   updatePurchaseRequest,
   registerPurchaseArrival,
@@ -943,6 +947,7 @@ import {
   type PurchaseRequest,
   type PurchaseRequestStatus,
   type Supplier,
+  type SupplierCategory,
   type SupplierRiskStatus,
 } from "@/api/procurement";
 import { useAuthStore } from "@/stores/auth";
@@ -1095,6 +1100,7 @@ const receiptFormRef = ref();
 const selectedRequest = ref<PurchaseRequest | null>(null);
 const selectedOrder = ref<PurchaseOrder | null>(null);
 const supplierForm = reactive<CreateSupplierPayload>(initialSupplierForm());
+const supplierCategories = ref<SupplierCategory[]>([]);
 const requestForm =
   reactive<CreatePurchaseRequestPayload>(initialRequestForm());
 const approvalForm = reactive<ApprovalForm>(initialApprovalForm());
@@ -1214,6 +1220,7 @@ const costFilterOptions = [{ label: "全部", value: "ALL" }, ...costTypeOptions
 const supplierRules = {
   code: [{ required: true, message: "请输入供应商编码" }],
   name: [{ required: true, message: "请输入供应商名称" }],
+  category: [{ required: true, message: "请选择供应商类别" }],
 };
 const requestRules = {
   requesterName: [{ required: true, message: "请输入申请人" }],
@@ -1292,6 +1299,11 @@ const supplierOptions = computed(() =>
       value: item.id,
     })),
 );
+const supplierCategoryOptions = computed(() =>
+  supplierCategories.value
+    .filter((item) => item.enabled)
+    .map((item) => ({ label: item.name, value: item.name })),
+);
 const projectOptions = computed(() =>
   costTargets.value.projects.map((item) => ({
     label: `${item.name} (${item.code})`,
@@ -1355,6 +1367,7 @@ async function loadData() {
       targetData,
       allocationData,
       inquiryData,
+      categoryData,
     ] = await Promise.all([
       listSuppliers(),
       listPurchaseRequests(),
@@ -1367,6 +1380,7 @@ async function loadData() {
       listProcurementCostTargets(),
       listProcurementCostAllocations(),
       listProcurementInquiries(),
+      listSupplierCategories(),
     ]);
     suppliers.value = supplierData.content || supplierData;
     purchaseRequests.value = requestData.content || requestData;
@@ -1377,6 +1391,7 @@ async function loadData() {
     costTargets.value = targetData;
     costAllocations.value = allocationData;
     procurementInquiries.value = inquiryData;
+    supplierCategories.value = categoryData;
   } catch (error) {
     errorMessage.value =
       error instanceof Error ? error.message : "采购数据加载失败";
@@ -1412,6 +1427,8 @@ async function loadOrders() {
 
 function openSupplier() {
   Object.assign(supplierForm, initialSupplierForm());
+  supplierForm.category =
+    supplierCategories.value.find((item) => item.enabled)?.name || "";
   supplierOpen.value = true;
 }
 function openEditRequest(record: PurchaseRequest) {

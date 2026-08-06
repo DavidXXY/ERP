@@ -12,5 +12,7 @@ public interface SupplierRepository extends JpaRepository<Supplier, UUID> {
 
   boolean existsByCode(String code);
 
+  long countByCategoryIgnoreCase(String category);
+
   Optional<Supplier> findFirstByUnifiedSocialCreditCodeIgnoreCase(String unifiedSocialCreditCode);
 }

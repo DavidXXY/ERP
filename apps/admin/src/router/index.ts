@@ -213,6 +213,24 @@ const rootRoutes: RouteRecordRaw[] = [
     meta: { title: "询价管理", permission: "procurement:view" },
   },
   {
+    path: "procurement/framework-agreements",
+    name: "procurement-framework-agreements",
+    component: () => import("@/views/procurement/FrameworkAgreementsView.vue"),
+    meta: { title: "框架协议", permission: "procurement:view" },
+  },
+  {
+    path: "procurement/central-plans",
+    name: "procurement-central-plans",
+    component: () => import("@/views/procurement/CentralPlansView.vue"),
+    meta: { title: "集采计划", permission: "procurement:view" },
+  },
+  {
+    path: "procurement/approval-rules",
+    name: "procurement-approval-rules",
+    component: () => import("@/views/procurement/ApprovalRulesView.vue"),
+    meta: { title: "分级审批规则", permission: "procurement:view" },
+  },
+  {
     path: "procurement/orders",
     name: "procurement-orders",
     component: () => import("@/views/procurement/PurchaseOrdersView.vue"),

@@ -46,6 +46,59 @@
           ></a-col>
         </a-row>
 
+        <a-row :gutter="[16, 16]" class="metric-row">
+          <a-col :xs="12" :xl="6"
+            ><a-card
+              ><a-statistic
+                title="平均单价节约率"
+                :value="priceSaving.rate"
+                :precision="1"
+                suffix="%"
+                :value-style="{
+                  color: priceSaving.rate >= 0 ? '#52c41a' : '#f5222d',
+                }" /></a-card
+          ></a-col>
+          <a-col :xs="12" :xl="6"
+            ><a-card
+              ><a-statistic
+                title="TOP1 供应商占比"
+                :value="supplierConcentration?.share || 0"
+                :precision="1"
+                suffix="%"
+                :formatter="undefined"
+              />
+              <div class="table-subtitle">
+                {{ supplierConcentration?.topName || "暂无数据" }}
+              </div></a-card
+            ></a-col
+          >
+          <a-col :xs="12" :xl="6"
+            ><a-card
+              ><a-statistic
+                title="风险供应商数"
+                :value="supplierRiskCounts.WARNING + supplierRiskCounts.BLOCKED"
+                suffix="家"
+                :value-style="
+                  supplierRiskCounts.BLOCKED > 0
+                    ? { color: '#f5222d' }
+                    : undefined
+                "
+              />
+              <div class="table-subtitle">
+                冻结 {{ supplierRiskCounts.BLOCKED }} · 预警
+                {{ supplierRiskCounts.WARNING }}
+              </div></a-card
+            ></a-col
+          >
+          <a-col :xs="12" :xl="6"
+            ><a-card
+              ><a-statistic
+                title="供应商总数"
+                :value="suppliers.length"
+                suffix="家" /></a-card
+          ></a-col>
+        </a-row>
+
         <a-row :gutter="12" style="margin-top: 12px">
           <a-col :xs="24" :lg="12">
             <a-card title="支出按类型" size="small">
@@ -153,13 +206,19 @@ import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
 import {
   listProcurementCostAllocations,
   listPurchaseOrders,
+  listPurchaseRequests,
+  listSuppliers,
   type ProcurementCostAllocation,
+  type PurchaseRequest,
   type PurchaseOrder,
+  type Supplier,
 } from "@/api/procurement";
 const router = useRouter();
 const loading = ref(false);
 const costs = ref<ProcurementCostAllocation[]>([]);
 const orders = ref<PurchaseOrder[]>([]);
+const requests = ref<PurchaseRequest[]>([]);
+const suppliers = ref<Supplier[]>([]);
 const selectedYear = ref(new Date().getFullYear());
 const yearOptions = computed(() => {
   const years = new Set(
@@ -194,6 +253,40 @@ const deptSpend = computed(() =>
 const orderCount = computed(
   () => new Set(filteredCosts.value.map((item) => item.orderId)).size,
 );
+
+const requestMap = computed(
+  () => new Map(requests.value.map((item) => [item.id, item])),
+);
+const priceSaving = computed(() => {
+  let estimateUnits = 0;
+  let actualUnits = 0;
+  let pairs = 0;
+  orders.value.forEach((order) => {
+    const request = requestMap.value.get(order.requestId || "");
+    if (!request?.unitPrice || !order.unitPrice) return;
+    estimateUnits += Number(request.unitPrice);
+    actualUnits += Number(order.unitPrice);
+    pairs += 1;
+  });
+  const rate = pairs
+    ? ((estimateUnits - actualUnits) / estimateUnits) * 100
+    : 0;
+  return { rate };
+});
+const supplierConcentration = computed(() => {
+  const total = supplierSpend.value.reduce((sum, item) => sum + item.amount, 0);
+  const top = supplierSpend.value[0];
+  if (!total || !top) return null;
+  return { topName: top.name, share: (top.amount / total) * 100 };
+});
+const supplierRiskCounts = computed(() => {
+  const counts = { NORMAL: 0, WARNING: 0, BLOCKED: 0 };
+  suppliers.value.forEach((item) => {
+    const key = (item.riskStatus || "NORMAL") as keyof typeof counts;
+    counts[key] = (counts[key] || 0) + 1;
+  });
+  return counts;
+});
 
 const costByType = computed(() => {
   const map: { name: string; value: number; color: string }[] = [];
@@ -263,12 +356,16 @@ onMounted(loadData);
 async function loadData() {
   loading.value = true;
   try {
-    const [costData, orderData] = await Promise.all([
+    const [costData, orderData, requestData, supplierData] = await Promise.all([
       listProcurementCostAllocations(),
       listPurchaseOrders(),
+      listPurchaseRequests({ page: 0, size: 999 }),
+      listSuppliers(),
     ]);
     costs.value = costData;
     orders.value = orderData.content;
+    requests.value = requestData.content;
+    suppliers.value = supplierData.content;
   } catch (e: any) {
     message.error(e.message || "加载失败");
   } finally {

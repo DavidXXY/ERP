@@ -200,4 +200,11 @@ public final class SupplierPortalDtos {
       OffsetDateTime reviewedAt,
       OffsetDateTime createdAt
   ) {}
+
+  public record CreateShipmentRequest(
+      @Size(max = 80) String deliveryNo,
+      @Size(max = 80) String carrier,
+      LocalDate expectedArrival,
+      @Size(max = 500) String remark
+  ) {}
 }

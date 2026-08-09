@@ -11,10 +11,12 @@ import com.company.ops.api.common.storage.FileStorageService;
 import com.company.ops.api.common.exception.BusinessException;
 import com.company.ops.api.modules.procurement.domain.ProcurementInquiry;
 import com.company.ops.api.modules.procurement.domain.ProcurementInquiryInvitation;
+import com.company.ops.api.modules.procurement.domain.ProcurementContract;
 import com.company.ops.api.modules.procurement.domain.Supplier;
 import com.company.ops.api.modules.procurement.domain.SupplierPortalAccount;
 import com.company.ops.api.modules.procurement.domain.SupplierQuotation;
 import com.company.ops.api.modules.procurement.domain.SupplierRiskStatus;
+import com.company.ops.api.modules.procurement.repository.ProcurementContractRepository;
 import com.company.ops.api.modules.procurement.dto.SupplierPortalDtos.UpdateAccountStatusRequest;
 import com.company.ops.api.modules.procurement.dto.SupplierPortalDtos.OpenAccountRequest;
 import com.company.ops.api.modules.procurement.dto.SupplierPortalDtos.UpdateProfileRequest;
@@ -23,8 +25,12 @@ import com.company.ops.api.modules.procurement.repository.ProcurementInquiryRepo
 import com.company.ops.api.modules.procurement.repository.ProcurementInquiryRequestRepository;
 import com.company.ops.api.modules.procurement.repository.PurchaseRequestRepository;
 import com.company.ops.api.modules.procurement.repository.InquiryClarificationRepository;
+import com.company.ops.api.modules.procurement.repository.ProcurementOrderDocumentRepository;
+import com.company.ops.api.modules.procurement.repository.ProcurementShipmentRepository;
+import com.company.ops.api.modules.procurement.repository.PurchaseOrderRepository;
 import com.company.ops.api.modules.procurement.repository.SupplierPortalAccountRepository;
 import com.company.ops.api.modules.procurement.repository.SupplierPortalDocumentRepository;
+import com.company.ops.api.modules.procurement.repository.SupplierPortalNotificationRepository;
 import com.company.ops.api.modules.procurement.repository.SupplierQuoteAttachmentRepository;
 import com.company.ops.api.modules.procurement.repository.SupplierQuotationLineRepository;
 import com.company.ops.api.modules.procurement.repository.SupplierQuotationRepository;
@@ -37,6 +43,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -60,6 +67,12 @@ class SupplierPortalServiceTest {
   @Mock private SupplierQuotationRevisionRepository revisions;
   @Mock private SupplierQuoteAttachmentRepository quoteAttachments;
   @Mock private InquiryClarificationRepository clarifications;
+  @Mock private ProcurementContractRepository contracts;
+  @Mock private ProcurementOrderDocumentRepository orderDocuments;
+  @Mock private PurchaseOrderRepository orders;
+  @Mock private SupplierPortalNotificationRepository notifications;
+  @Mock private ProcurementShipmentRepository shipments;
+  @Mock private SupplierPortalNotifier notifier;
   @Mock private PasswordEncoder passwordEncoder;
   @Mock private JwtService jwtService;
   @Mock private LoginAttemptService loginAttempts;
@@ -211,6 +224,74 @@ class SupplierPortalServiceTest {
     assertThatThrownBy(() -> service.confirmInternalQuote(fixture.principal, fixture.inquiry.getId()))
         .isInstanceOf(BusinessException.class)
         .hasMessage("请先修改临时密码");
+  }
+
+  @Test
+  void awardedInquiryShowsAwardStatusAndContractInPortalList() {
+    Fixture fixture = fixture();
+    fixture.inquiry.setStatus("AWARDED");
+    fixture.inquiry.setSelectedAt(OffsetDateTime.now().minusDays(1));
+    SupplierQuotation quote = quote(fixture, "SUPPLIER_PORTAL", "SUBMITTED");
+    fixture.inquiry.setSelectedQuoteId(quote.getId());
+    quote.setSelected(true);
+    ProcurementContract contract = new ProcurementContract();
+    contract.setId(UUID.randomUUID());
+    contract.setContractNo("HT-2026-001");
+    contract.setName("设备采购合同");
+    contract.setSupplierId(fixture.supplier.getId());
+    contract.setInquiryId(fixture.inquiry.getId());
+    contract.setSelectedQuoteId(quote.getId());
+    contract.setAmount(java.math.BigDecimal.valueOf(200));
+    contract.setStatus("ACTIVE");
+    contract.setApprovalStatus("APPROVED");
+    when(invitations.findBySupplierIdOrderByInvitedAtDesc(fixture.supplier.getId()))
+        .thenReturn(List.of(fixture.invitation));
+    when(inquiries.findById(fixture.inquiry.getId())).thenReturn(Optional.of(fixture.inquiry));
+    when(inquiryRequests.findByInquiryIdOrderByCreatedAtAsc(fixture.inquiry.getId()))
+        .thenReturn(List.of());
+    when(purchaseRequests.findAllById(any())).thenReturn(List.of());
+    when(quotes.findByInquiryIdAndSupplierId(fixture.inquiry.getId(), fixture.supplier.getId()))
+        .thenReturn(Optional.of(quote));
+    when(quoteLines.findByQuoteIdOrderByCreatedAtAsc(quote.getId())).thenReturn(List.of());
+    when(contracts.findFirstByInquiryIdAndSupplierIdOrderByCreatedAtDesc(
+        fixture.inquiry.getId(), fixture.supplier.getId())).thenReturn(Optional.of(contract));
+
+    List<Map<String, Object>> views = service.listInquiries(fixture.principal);
+
+    Map<String, Object> view = views.get(0);
+    assertThat(view.get("awardStatus")).isEqualTo("AWARDED");
+    assertThat(view.get("awardedAt")).isEqualTo(fixture.inquiry.getSelectedAt());
+    @SuppressWarnings("unchecked")
+    Map<String, Object> contractView = (Map<String, Object>) view.get("contract");
+    assertThat(contractView).isNotNull();
+    assertThat(contractView.get("contractNo")).isEqualTo("HT-2026-001");
+    assertThat(contractView.get("status")).isEqualTo("ACTIVE");
+  }
+
+  @Test
+  void nonWinningSupplierSeesNotAwardedStatusWithoutContract() {
+    Fixture fixture = fixture();
+    fixture.inquiry.setStatus("AWARDED");
+    fixture.inquiry.setSelectedAt(OffsetDateTime.now());
+    SupplierQuotation quote = quote(fixture, "SUPPLIER_PORTAL", "SUBMITTED");
+    fixture.inquiry.setSelectedQuoteId(UUID.randomUUID());
+    quote.setSelected(false);
+    when(invitations.findBySupplierIdOrderByInvitedAtDesc(fixture.supplier.getId()))
+        .thenReturn(List.of(fixture.invitation));
+    when(inquiries.findById(fixture.inquiry.getId())).thenReturn(Optional.of(fixture.inquiry));
+    when(inquiryRequests.findByInquiryIdOrderByCreatedAtAsc(fixture.inquiry.getId()))
+        .thenReturn(List.of());
+    when(purchaseRequests.findAllById(any())).thenReturn(List.of());
+    when(quotes.findByInquiryIdAndSupplierId(fixture.inquiry.getId(), fixture.supplier.getId()))
+        .thenReturn(Optional.of(quote));
+    when(quoteLines.findByQuoteIdOrderByCreatedAtAsc(quote.getId())).thenReturn(List.of());
+
+    List<Map<String, Object>> views = service.listInquiries(fixture.principal);
+
+    Map<String, Object> view = views.get(0);
+    assertThat(view.get("awardStatus")).isEqualTo("NOT_AWARDED");
+    assertThat(view.get("awardedAt")).isNull();
+    assertThat(view.get("contract")).isNull();
   }
 
   private Fixture fixture() {

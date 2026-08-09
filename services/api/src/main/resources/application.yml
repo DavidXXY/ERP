@@ -100,5 +100,12 @@ ops:
   notifications:
     webhook-url: ${NOTIFICATION_WEBHOOK_URL:}
     dispatch-interval-ms: ${NOTIFICATION_DISPATCH_INTERVAL_MS:60000}
+    smtp:
+      enabled: ${SMTP_ENABLED:false}
+      from: ${SMTP_FROM:ops-erp@localhost}
+      host: ${SMTP_HOST:localhost}
+      port: ${SMTP_PORT:25}
+      username: ${SMTP_USERNAME:}
+      password: ${SMTP_PASSWORD:}
   maintenance:
     plan-generation-cron: ${MAINTENANCE_PLAN_GENERATION_CRON:0 5 1 * * *}

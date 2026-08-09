@@ -50,6 +50,7 @@ button, input, textarea { font: inherit; }
 .readiness-items { display: grid; gap: 10px; text-align: left; margin-top: 22px; }
 .readiness-items span { color: #78837e; } .readiness-items .done { color: #27845f; }
 .inquiry-list { display: grid; gap: 12px; }
+.award-summary { color: #176b4d !important; font-weight: 600; }
 .inquiry-list.compact { gap: 0; }
 .inquiry-row { width: 100%; min-height: 72px; display: grid; grid-template-columns: minmax(0, 1fr) auto 20px; align-items: center; gap: 20px; text-align: left; border: 0; border-top: 1px solid #e7ece9; background: white; cursor: pointer; padding: 12px 4px; color: inherit; }
 .inquiry-row:hover { background: #f8faf9; }

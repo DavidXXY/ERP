@@ -21,6 +21,12 @@ public class ProcurementContract extends BaseEntity {
   @Column(name = "supplier_id", nullable = false)
   private UUID supplierId;
 
+  @Column(name = "inquiry_id")
+  private UUID inquiryId;
+
+  @Column(name = "selected_quote_id")
+  private UUID selectedQuoteId;
+
   @Column(nullable = false, precision = 14, scale = 2)
   private BigDecimal amount = BigDecimal.ZERO;
 
@@ -66,6 +72,18 @@ public class ProcurementContract extends BaseEntity {
   @Column(name = "approved_at")
   private OffsetDateTime approvedAt;
 
+  @Column(name = "order_id")
+  private UUID orderId;
+
+  @Column(name = "source_type", nullable = false, length = 16)
+  private String sourceType = "MANUAL";
+
+  @Column(name = "acknowledged_at")
+  private OffsetDateTime acknowledgedAt;
+
+  @Column(name = "acknowledged_by_name", length = 80)
+  private String acknowledgedByName;
+
   @Column(length = 1000)
   private String remark;
 
@@ -75,6 +93,10 @@ public class ProcurementContract extends BaseEntity {
   public void setName(String name) { this.name = name; }
   public UUID getSupplierId() { return supplierId; }
   public void setSupplierId(UUID supplierId) { this.supplierId = supplierId; }
+  public UUID getInquiryId() { return inquiryId; }
+  public void setInquiryId(UUID inquiryId) { this.inquiryId = inquiryId; }
+  public UUID getSelectedQuoteId() { return selectedQuoteId; }
+  public void setSelectedQuoteId(UUID selectedQuoteId) { this.selectedQuoteId = selectedQuoteId; }
   public BigDecimal getAmount() { return amount; }
   public void setAmount(BigDecimal amount) { this.amount = amount; }
   public String getCurrency() { return currency; }
@@ -105,6 +127,14 @@ public class ProcurementContract extends BaseEntity {
   public void setApprovalComment(String approvalComment) { this.approvalComment = approvalComment; }
   public OffsetDateTime getApprovedAt() { return approvedAt; }
   public void setApprovedAt(OffsetDateTime approvedAt) { this.approvedAt = approvedAt; }
+  public UUID getOrderId() { return orderId; }
+  public void setOrderId(UUID orderId) { this.orderId = orderId; }
+  public String getSourceType() { return sourceType; }
+  public void setSourceType(String sourceType) { this.sourceType = sourceType; }
+  public OffsetDateTime getAcknowledgedAt() { return acknowledgedAt; }
+  public void setAcknowledgedAt(OffsetDateTime acknowledgedAt) { this.acknowledgedAt = acknowledgedAt; }
+  public String getAcknowledgedByName() { return acknowledgedByName; }
+  public void setAcknowledgedByName(String acknowledgedByName) { this.acknowledgedByName = acknowledgedByName; }
   public String getRemark() { return remark; }
   public void setRemark(String remark) { this.remark = remark; }
 }

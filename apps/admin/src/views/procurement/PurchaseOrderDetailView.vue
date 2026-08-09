@@ -87,6 +87,9 @@
                 <a-descriptions-item label="采购申请">{{
                   order.requestCode || "-"
                 }}</a-descriptions-item>
+                <a-descriptions-item label="负责人">{{
+                  order.responsibleName || "-"
+                }}</a-descriptions-item>
                 <a-descriptions-item label="物料">{{
                   order.partName
                 }}</a-descriptions-item>
@@ -123,11 +126,55 @@
                   money(order.freightAmount || 0)
                 }}</a-descriptions-item>
                 <a-descriptions-item label="询价单">{{
-                  order.inquiryId || "未关联"
+                  order.inquiryCode || order.inquiryId || "未关联"
                 }}</a-descriptions-item>
-                <a-descriptions-item label="采购合同">{{
-                  order.contractId || "未关联"
-                }}</a-descriptions-item>
+                <a-descriptions-item label="订单合同"
+                  ><strong v-if="order.contractNo">{{
+                    order.contractNo
+                  }}</strong
+                  ><span v-else>{{ order.contractId || "未关联" }}</span
+                  ><a-tag
+                    v-if="order.contractStatus === 'ACTIVE'"
+                    color="green"
+                    style="margin-left: 8px"
+                    >合同已生效</a-tag
+                  ><a-tag
+                    v-else-if="order.contractStatus"
+                    color="orange"
+                    style="margin-left: 8px"
+                    >待生效</a-tag
+                  ><a-tag
+                    v-if="order.contractAcknowledged"
+                    color="green"
+                    style="margin-left: 8px"
+                    >供应商已确认{{
+                      order.contractAcknowledgedByName
+                        ? " · " + order.contractAcknowledgedByName
+                        : ""
+                    }}</a-tag
+                  ><a-tag
+                    v-else-if="order.contractId || order.contractNo"
+                    color="default"
+                    style="margin-left: 8px"
+                    >待供应商确认</a-tag
+                  ></a-descriptions-item
+                >
+                <a-descriptions-item
+                  v-if="order.contractName"
+                  label="合同名称"
+                  >{{ order.contractName }}</a-descriptions-item
+                >
+                <a-descriptions-item
+                  v-if="order.contractStartDate || order.contractEndDate"
+                  label="合同有效期"
+                  >{{ order.contractStartDate || "-" }} 至
+                  {{ order.contractEndDate || "-" }}</a-descriptions-item
+                >
+                <a-descriptions-item
+                  v-if="order.contractPaymentTerms"
+                  label="付款条款"
+                  >{{ order.contractPaymentTerms }}</a-descriptions-item
+                >
                 <a-descriptions-item label="寻源/直接采购依据" :span="2">{{
                   order.sourceReason || "-"
                 }}</a-descriptions-item>
@@ -356,6 +403,171 @@
           </a-table>
         </a-tab-pane>
 
+        <a-tab-pane key="shipments" :tab="`发货协同 (${shipments.length})`">
+          <a-alert
+            type="info"
+            show-icon
+            message="供应商在门户回传的送货单号、承运方与预计到货时间，收货登记时可参考。"
+          />
+          <a-table
+            :columns="shipmentColumns"
+            :data-source="shipments"
+            row-key="id"
+            size="small"
+            :pagination="false"
+            :loading="loadingShipments"
+            style="margin-top: 12px"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'arrival'">{{
+                record.expectedArrival || "-"
+              }}</template>
+              <template v-else-if="column.key === 'date'">{{
+                dateTime(record.createdAt)
+              }}</template>
+            </template>
+          </a-table>
+        </a-tab-pane>
+
+        <a-tab-pane key="documents" tab="合同附件">
+          <a-space direction="vertical" style="width: 100%">
+            <a-alert
+              type="info"
+              show-icon
+              message="上传采购合同扫描件或相关文件，供应商门户可同步查看下载。"
+            />
+            <a-upload
+              :show-upload-list="false"
+              :before-upload="handleUploadDocument"
+              :disabled="uploadingDocument || !canManageDocuments"
+              accept=".jpg,.jpeg,.png,.webp,.pdf,.doc,.docx,.xls,.xlsx"
+            >
+              <a-button
+                v-if="canManageDocuments"
+                :loading="uploadingDocument"
+                type="primary"
+                ><template #icon><UploadOutlined /></template
+                >上传合同附件</a-button
+              >
+            </a-upload>
+            <a-table
+              :columns="documentColumns"
+              :data-source="orderDocuments"
+              row-key="id"
+              size="small"
+              :pagination="false"
+              :loading="loadingDocuments"
+            >
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.key === 'file'">
+                  <a @click="downloadOrderDocument(record)">{{
+                    record.fileName
+                  }}</a>
+                  <span class="sub">{{ formatBytes(record.sizeBytes) }}</span>
+                </template>
+                <template v-else-if="column.key === 'uploadedAt'">{{
+                  dateTime(record.uploadedAt)
+                }}</template>
+                <template v-else-if="column.key === 'actions'">
+                  <a-popconfirm
+                    v-if="canManageDocuments"
+                    title="确认删除该合同附件？"
+                    @confirm="handleDeleteDocument(record)"
+                  >
+                    <a-button type="link" size="small" danger>删除</a-button>
+                  </a-popconfirm>
+                </template>
+              </template>
+            </a-table>
+          </a-space>
+        </a-tab-pane>
+
+
+        <a-tab-pane key="changes" :tab="`订单变更 (${changes.length})`">
+          <a-space direction="vertical" style="width: 100%">
+            <a-alert
+              type="info"
+              show-icon
+              message="数量、单价、交期变更通过变更单留痕，审批通过后自动应用到订单并将订单版本 +1。"
+            />
+            <a-space>
+              <a-button
+                v-if="auth.can('procurement:purchase:create')"
+                type="primary"
+                :disabled="
+                  !order ||
+                  order.status === 'CANCELLED' ||
+                  order.status === 'CLOSED'
+                "
+                @click="openChange"
+                ><template #icon><PlusOutlined /></template>发起变更</a-button
+              >
+            </a-space>
+            <a-table
+              :columns="changeColumns"
+              :data-source="changes"
+              row-key="id"
+              size="small"
+              :pagination="false"
+            >
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.key === 'no'">
+                  <strong>{{ record.changeNo }}</strong>
+                  <span class="sub">订单 v{{ record.orderVersionBefore }}</span>
+                </template>
+                <template v-else-if="column.key === 'type'">
+                  <a-tag>{{ changeTypeLabel(record.changeType) }}</a-tag>
+                </template>
+                <template v-else-if="column.key === 'qty'">
+                  <span v-if="record.quantityBefore != null"
+                    >{{ record.quantityBefore }} → {{ record.quantityAfter }}</span
+                  >
+                  <span v-else>-</span>
+                </template>
+                <template v-else-if="column.key === 'price'">
+                  <span v-if="record.unitPriceBefore != null"
+                    >{{ money(record.unitPriceBefore) }} → {{ money(record.unitPriceAfter) }}</span
+                  >
+                  <span v-else>-</span>
+                </template>
+                <template v-else-if="column.key === 'date'">
+                  <span v-if="record.expectedDateBefore != null"
+                    >{{ record.expectedDateBefore }} → {{ record.expectedDateAfter }}</span
+                  >
+                  <span v-else>-</span>
+                </template>
+                <template v-else-if="column.key === 'status'">
+                  <a-tag
+                    :color="
+                      record.status === 'APPROVED'
+                        ? 'green'
+                        : record.status === 'REJECTED'
+                          ? 'red'
+                          : 'orange'
+                    "
+                    >{{ changeStatusLabel(record.status) }}</a-tag
+                  >
+                  <span v-if="record.decidedByName" class="sub"
+                    >{{ record.decidedByName }}</span
+                  >
+                </template>
+                <template v-else-if="column.key === 'actions'">
+                  <a-button
+                    v-if="
+                      record.status === 'PENDING' &&
+                      auth.can('procurement:request:approve')
+                    "
+                    type="link"
+                    size="small"
+                    @click="openChangeDecide(record)"
+                    >审批</a-button
+                  >
+                  <span v-else class="sub">{{ dateTime(record.appliedAt) }}</span>
+                </template>
+              </template>
+            </a-table>
+          </a-space>
+        </a-tab-pane>
         <a-tab-pane key="audit" tab="审批与审计">
           <a-timeline>
             <a-timeline-item color="green"
@@ -427,6 +639,67 @@
         /></a-form-item>
       </a-form>
     </a-modal>
+
+    <a-modal
+      v-model:open="changeOpen"
+      title="发起订单变更"
+      width="640px"
+      :confirm-loading="changeSaving"
+      @ok="submitChange"
+    >
+      <a-form layout="vertical">
+        <a-alert
+          v-if="order"
+          class="section-alert"
+          type="info"
+          :message="`${order.code} · 当前数量 ${order.orderedQty} · 单价 ${money(order.unitPrice)} · 版本 v${order.orderVersion || 1}`"
+        />
+        <a-form-item label="变更后数量">
+          <a-input-number
+            v-model:value="changeForm.quantityAfter"
+            :min="0.01"
+            :precision="2"
+            class="full-input"
+          />
+        </a-form-item>
+        <a-form-item label="变更后单价（含税，元）">
+          <a-input-number
+            v-model:value="changeForm.unitPriceAfter"
+            :min="0.01"
+            :precision="2"
+            class="full-input"
+          />
+        </a-form-item>
+        <a-form-item label="变更后期望交期">
+          <a-input
+            v-model:value="changeForm.expectedDateAfter"
+            type="date"
+          />
+        </a-form-item>
+        <a-form-item label="变更原因" required>
+          <a-textarea v-model:value="changeForm.reason" :rows="3" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <a-modal
+      v-model:open="changeDecideOpen"
+      title="处理订单变更"
+      width="560px"
+      @ok="submitChangeDecision"
+    >
+      <a-form layout="vertical">
+        <a-form-item label="审批结论">
+          <a-radio-group v-model:value="changeDecideForm.decision" button-style="solid">
+            <a-radio-button value="APPROVED">通过</a-radio-button>
+            <a-radio-button value="REJECTED">驳回</a-radio-button>
+          </a-radio-group>
+        </a-form-item>
+        <a-form-item label="意见">
+          <a-textarea v-model:value="changeDecideForm.comment" :rows="3" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </BusinessDetailPage>
 </template>
 
@@ -434,13 +707,22 @@
 import { computed, onMounted, reactive, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { message } from "ant-design-vue";
+import UploadOutlined from "@ant-design/icons-vue/UploadOutlined";
+import PlusOutlined from "@ant-design/icons-vue/PlusOutlined";
 import BusinessDetailPage, {
   type DetailMetric,
 } from "@/components/BusinessDetailPage.vue";
 import { useAuthStore } from "@/stores/auth";
 import {
   approvePurchaseOrder,
+  createOrderChange,
+  decideOrderChange,
+  deleteOrderDocument,
+  downloadOrderDocument,
+  listOrderChanges,
   listGoodsReceipts,
+  listOrderDocuments,
+  listOrderShipments,
   listProcurementInquiries,
   listProcurementMatching,
   listProcurementPayables,
@@ -449,12 +731,16 @@ import {
   listPurchaseRequests,
   listSupplierInvoices,
   submitPurchaseOrder,
+  uploadOrderDocument,
   type GoodsReceipt,
+  type OrderDocument,
   type ProcurementInquiry,
   type ProcurementMatching,
   type ProcurementPayable,
   type ProcurementReturnOrder,
+  type ProcurementShipment,
   type PurchaseOrder,
+  type PurchaseOrderChange,
   type PurchaseRequest,
   type SupplierInvoice,
 } from "@/api/procurement";
@@ -476,7 +762,16 @@ const route = useRoute(),
   returns = ref<ProcurementReturnOrder[]>([]),
   invoices = ref<SupplierInvoice[]>([]),
   applications = ref<PaymentApplication[]>([]),
-  matching = ref<ProcurementMatching | null>(null);
+  matching = ref<ProcurementMatching | null>(null),
+  orderDocuments = ref<OrderDocument[]>([]),
+  shipments = ref<ProcurementShipment[]>([]),
+  loadingShipments = ref(false),
+  changes = ref<PurchaseOrderChange[]>([]),
+  changeOpen = ref(false),
+  changeSaving = ref(false),
+  changeDecideOpen = ref(false),
+  loadingDocuments = ref(false),
+  uploadingDocument = ref(false);
 const approvalForm = reactive<{
   decision: "APPROVED" | "REJECTED";
   comment: string;
@@ -486,12 +781,35 @@ const approvalForm = reactive<{
   comment: "同意采购",
   approverName: auth.user?.displayName || "",
 });
+const changeForm = reactive<{
+  quantityAfter?: number;
+  unitPriceAfter?: number;
+  expectedDateAfter?: string;
+  reason: string;
+}>({
+  quantityAfter: undefined,
+  unitPriceAfter: undefined,
+  expectedDateAfter: undefined,
+  reason: "",
+});
+const changeDecideForm = reactive<{
+  id: string | null;
+  decision: "APPROVED" | "REJECTED";
+  comment: string;
+}>({
+  id: null,
+  decision: "APPROVED",
+  comment: "",
+});
 const paidAmount = computed(() =>
     payables.value.reduce((s, i) => s + Number(i.paidAmount || 0), 0),
   ),
   outstanding = computed(() =>
     payables.value.reduce((s, i) => s + Number(i.outstandingAmount || 0), 0),
   );
+const canManageDocuments = computed(() =>
+  auth.can("procurement:purchase:create"),
+);
 const metrics = computed<DetailMetric[]>(() =>
   order.value
     ? [
@@ -556,6 +874,7 @@ const receiptColumns = [
   { title: "收货金额（含税，元）", key: "amount", width: 190 },
   { title: "日期", dataIndex: "receivedDate", width: 120 },
   { title: "送货单", dataIndex: "deliveryNo", width: 160 },
+  { title: "承运方", dataIndex: "carrier", width: 120 },
   { title: "质检结果", key: "inspection", width: 180 },
   { title: "质检人", dataIndex: "inspectorName", width: 120 },
 ];
@@ -590,6 +909,30 @@ const applicationColumns = [
   { title: "申请日期", dataIndex: "requestedDate", width: 120 },
   { title: "状态", dataIndex: "status", width: 120 },
 ];
+const changeColumns = [
+  { title: "变更单", key: "no", width: 180 },
+  { title: "类型", key: "type", width: 90 },
+  { title: "数量", key: "qty", width: 150 },
+  { title: "单价（含税，元）", key: "price", width: 170 },
+  { title: "期望交期", key: "date", width: 190 },
+  { title: "变更原因", dataIndex: "reason" },
+  { title: "状态", dataIndex: "status", width: 100 },
+  { title: "申请人", dataIndex: "createdByName", width: 110 },
+  { title: "操作", key: "actions", width: 150 },
+];
+const documentColumns = [
+  { title: "文件", key: "file", width: 260 },
+  { title: "上传人", dataIndex: "uploadedBy", width: 140 },
+  { title: "上传时间", key: "uploadedAt", width: 180 },
+  { title: "操作", key: "actions", width: 100 },
+];
+const shipmentColumns = [
+  { title: "送货单号", dataIndex: "deliveryNo", width: 180 },
+  { title: "承运方", dataIndex: "carrier", width: 140 },
+  { title: "预计到货", key: "arrival", width: 130 },
+  { title: "备注", dataIndex: "remark" },
+  { title: "回传时间", key: "date", width: 180 },
+];
 onMounted(loadData);
 async function loadData() {
   loading.value = true;
@@ -617,6 +960,9 @@ async function loadData() {
       returns.value = rts.filter((i) => i.orderId === id);
       invoices.value = isx.filter((i) => i.orderId === id);
       matching.value = ms.find((i) => i.orderId === id) || null;
+      await loadDocuments(id);
+      await loadShipments(id);
+      await loadChanges(id);
       const payableIds = new Set(payables.value.map((i) => i.id));
       applications.value = apps.filter((i) => payableIds.has(i.payableId));
     }
@@ -625,6 +971,139 @@ async function loadData() {
   } finally {
     loading.value = false;
   }
+}
+async function loadDocuments(orderId: string) {
+  loadingDocuments.value = true;
+  try {
+    orderDocuments.value = await listOrderDocuments(orderId);
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : "合同附件加载失败");
+  } finally {
+    loadingDocuments.value = false;
+  }
+}
+async function loadShipments(orderId: string) {
+  loadingShipments.value = true;
+  try {
+    shipments.value = await listOrderShipments(orderId);
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : "发货信息加载失败");
+  } finally {
+    loadingShipments.value = false;
+  }
+}
+async function loadChanges(orderId: string) {
+  try {
+    changes.value = await listOrderChanges(orderId);
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : "变更记录加载失败");
+  }
+}
+function openChange() {
+  if (!order.value) return;
+  changeForm.quantityAfter = Number(order.value.orderedQty);
+  changeForm.unitPriceAfter = Number(order.value.unitPrice);
+  changeForm.expectedDateAfter = order.value.expectedDeliveryDate || undefined;
+  changeForm.reason = "";
+  changeOpen.value = true;
+}
+async function submitChange() {
+  if (!order.value) return;
+  if (!changeForm.reason.trim()) {
+    message.warning("请填写变更原因");
+    return;
+  }
+  changeSaving.value = true;
+  try {
+    await createOrderChange(order.value.id, {
+      changeType: "MIXED",
+      quantityAfter: changeForm.quantityAfter,
+      unitPriceAfter: changeForm.unitPriceAfter,
+      expectedDateAfter: changeForm.expectedDateAfter,
+      reason: changeForm.reason.trim(),
+    });
+    changeOpen.value = false;
+    message.success("变更单已提交，等待审批");
+    await loadChanges(order.value.id);
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : "变更单提交失败");
+  } finally {
+    changeSaving.value = false;
+  }
+}
+function openChangeDecide(record: PurchaseOrderChange) {
+  changeDecideForm.id = record.id;
+  changeDecideForm.decision = "APPROVED";
+  changeDecideForm.comment = "";
+  changeDecideOpen.value = true;
+}
+async function submitChangeDecision() {
+  if (!changeDecideForm.id) return;
+  const id = changeDecideForm.id;
+  try {
+    const result = await decideOrderChange(id, {
+      decision: changeDecideForm.decision,
+      comment: changeDecideForm.comment,
+    });
+    changeDecideOpen.value = false;
+    message.success(
+      result.status === "APPROVED" ? "变更已通过并应用到订单" : "变更已驳回",
+    );
+    await loadData();
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : "变更处理失败");
+  }
+}
+function changeTypeLabel(type?: string) {
+  return (
+    {
+      QTY: "改数量",
+      PRICE: "改价格",
+      DATE: "改交期",
+      MIXED: "综合变更",
+    } as Record<string, string>
+  )[type || ""] || type || "-";
+}
+function changeStatusLabel(status?: string) {
+  return (
+    {
+      PENDING: "待审批",
+      APPROVED: "已通过",
+      REJECTED: "已驳回",
+    } as Record<string, string>
+  )[status || ""] || status || "-";
+}
+async function handleUploadDocument(file: File) {
+  if (!order.value) return false;
+  uploadingDocument.value = true;
+  try {
+    await uploadOrderDocument(order.value.id, file);
+    message.success("合同附件已上传，供应商门户同步可见");
+    await loadDocuments(order.value.id);
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : "合同附件上传失败");
+  } finally {
+    uploadingDocument.value = false;
+  }
+  return false;
+}
+async function handleDeleteDocument(record: OrderDocument) {
+  if (!order.value) return;
+  try {
+    await deleteOrderDocument(order.value.id, record.id);
+    message.success("合同附件已删除");
+    orderDocuments.value = orderDocuments.value.filter(
+      (item) => item.id !== record.id,
+    );
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : "删除失败");
+  }
+}
+function formatBytes(bytes?: number) {
+  const value = Number(bytes || 0);
+  if (value >= 1048576) return `${(value / 1048576).toFixed(1)} MB`;
+  if (value >= 1024) return `${Math.ceil(value / 1024)} KB`;
+  return `${value} B`;
 }
 async function handleSubmit() {
   if (!order.value) return;

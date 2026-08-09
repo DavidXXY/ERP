@@ -17,6 +17,8 @@ public final class ProcurementGovernanceDtos {
       @NotBlank String name,
       @NotNull UUID supplierId,
       @NotNull @Positive BigDecimal amount,
+      UUID inquiryId,
+      UUID selectedQuoteId,
       String currency,
       LocalDate startDate,
       LocalDate endDate,

@@ -51,6 +51,7 @@ public class GoodsReceipt extends BaseEntity {
   @Column(name="payable_due_date") private LocalDate payableDueDate;
   @Column(name="client_request_id",length=80) private String clientRequestId;
   @Column(name="asn_no",length=80) private String asnNo;
+  @Column(length=80) private String carrier;
 
   public String getCode() {
     return code;
@@ -140,4 +141,5 @@ public class GoodsReceipt extends BaseEntity {
   public LocalDate getPayableDueDate(){return payableDueDate;} public void setPayableDueDate(LocalDate v){payableDueDate=v;}
   public String getClientRequestId(){return clientRequestId;} public void setClientRequestId(String v){clientRequestId=v;}
   public String getAsnNo(){return asnNo;} public void setAsnNo(String v){asnNo=v;}
+  public String getCarrier(){return carrier;} public void setCarrier(String v){carrier=v;}
 }

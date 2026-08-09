@@ -42,6 +42,7 @@ public interface PurchaseOrderRepository extends JpaRepository<PurchaseOrder, UU
   boolean existsByRequestId(UUID requestId);
   List<PurchaseOrder> findByRequestId(UUID requestId);
   List<PurchaseOrder> findBySupplierId(UUID supplierId);
+  List<PurchaseOrder> findByPartIdIn(java.util.Collection<UUID> partIds);
   List<PurchaseOrder> findByProjectIdIn(Collection<UUID> projectIds);
   List<PurchaseOrder> findByApprovalStatus(ApprovalStatus approvalStatus);
 

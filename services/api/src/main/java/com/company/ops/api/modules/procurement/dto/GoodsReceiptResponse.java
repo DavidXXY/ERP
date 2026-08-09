@@ -32,6 +32,7 @@ public record GoodsReceiptResponse(
     String inspectionComment,
     OffsetDateTime inspectedAt,
     String clientRequestId,
-    String asnNo
+    String asnNo,
+    String carrier
 ) {
 }

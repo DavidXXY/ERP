@@ -174,6 +174,7 @@ export type PurchaseRequest = {
   lastApprovalComment?: string;
   lastApproverName?: string;
   lastApprovalAt?: string;
+  approvalLevel?: string;
 };
 
 export type PurchaseOrder = {
@@ -210,9 +211,35 @@ export type PurchaseOrder = {
   currency?: string;
   freightAmount?: number;
   sourceReason?: string;
+  responsibleName?: string;
   submittedAt?: string;
   closedAt?: string;
   orderVersion?: number;
+  inquiryCode?: string;
+  contractNo?: string;
+  contractName?: string;
+  contractPaymentTerms?: string;
+  contractStartDate?: string;
+  contractEndDate?: string;
+  contractStatus?: string;
+  contractSourceType?: string;
+  contractAcknowledged?: boolean;
+  contractAcknowledgedByName?: string;
+};
+
+export type ProcurementShipment = {
+  id: string;
+  orderId: string;
+  orderCode?: string;
+  supplierId: string;
+  supplierName?: string;
+  deliveryNo?: string;
+  carrier?: string;
+  expectedArrival?: string;
+  remark?: string;
+  status: string;
+  createdByName?: string;
+  createdAt: string;
 };
 
 export type CreateSupplierPayload = {
@@ -281,6 +308,12 @@ export type CreatePurchaseOrderPayload = {
   currency?: string;
   freightAmount?: number;
   sourceReason?: string;
+  generateContract?: boolean;
+  contractNo?: string;
+  contractName?: string;
+  paymentTerms?: string;
+  contractStartDate?: string;
+  contractEndDate?: string;
 };
 
 export type GoodsReceipt = {
@@ -310,6 +343,17 @@ export type GoodsReceipt = {
   inspectedAt?: string;
   clientRequestId?: string;
   asnNo?: string;
+};
+
+export type OrderDocument = {
+  id: string;
+  orderId: string;
+  orderCode?: string;
+  fileName: string;
+  contentType?: string;
+  sizeBytes: number;
+  uploadedBy?: string;
+  uploadedAt?: string;
 };
 
 export type PayableStatus = "PENDING" | "PARTIAL_PAID" | "PAID" | "CANCELLED";
@@ -878,6 +922,50 @@ export function createPurchaseOrder(payload: CreatePurchaseOrderPayload) {
   });
 }
 
+export function listOrderDocuments(orderId: string) {
+  return request<OrderDocument[]>({
+    method: "GET",
+    url: `/procurement/orders/${orderId}/documents`,
+  });
+}
+
+export async function uploadOrderDocument(orderId: string, file: File) {
+  const form = new FormData();
+  form.append("file", file);
+  return request<OrderDocument>({
+    method: "POST",
+    url: `/procurement/orders/${orderId}/documents`,
+    data: form,
+  });
+}
+
+export async function downloadOrderDocument(doc: OrderDocument) {
+  const response = await http.get<Blob>(
+    `/procurement/orders/${doc.orderId}/documents/${doc.id}/download`,
+    { responseType: "blob" },
+  );
+  const url = URL.createObjectURL(response.data);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = doc.fileName;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+export function deleteOrderDocument(orderId: string, docId: string) {
+  return request<void>({
+    method: "DELETE",
+    url: `/procurement/orders/${orderId}/documents/${docId}`,
+  });
+}
+
+export function listOrderShipments(orderId: string) {
+  return request<ProcurementShipment[]>({
+    method: "GET",
+    url: `/procurement/orders/${orderId}/shipments`,
+  });
+}
+
 export function cancelPurchaseOrder(id: string) {
   return request<PurchaseOrder>({
     method: "POST",
@@ -1060,6 +1148,16 @@ export function updateProcurementInquiryDeadline(id: string, deadline: string) {
     data: { deadline },
   });
 }
+export function updateProcurementInquiryMinQuotes(
+  id: string,
+  minQuoteCount: number,
+) {
+  return request<ProcurementInquiry>({
+    method: "POST",
+    url: `/procurement/inquiries/${id}/min-quotes`,
+    data: { minQuoteCount },
+  });
+}
 export function listSupplierQuoteAttachments(quoteId: string) {
   return request<SupplierQuoteAttachment[]>({
     method: "GET",
@@ -1174,5 +1272,270 @@ export function resolveProcurementReturn(
     method: "POST",
     url: `/procurement/returns/${id}/resolve`,
     data: payload,
+  });
+}
+
+// ---------- 订单变更单 ----------
+
+export type PurchaseOrderChange = {
+  id: string;
+  orderId: string;
+  orderCode?: string;
+  changeNo: string;
+  changeType: "QTY" | "PRICE" | "DATE" | "MIXED";
+  quantityBefore?: number;
+  quantityAfter?: number;
+  unitPriceBefore?: number;
+  unitPriceAfter?: number;
+  expectedDateBefore?: string;
+  expectedDateAfter?: string;
+  reason: string;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  createdByName: string;
+  decidedByName?: string;
+  decisionComment?: string;
+  orderVersionBefore?: number;
+  orderVersionAfter?: number;
+  appliedAt?: string;
+  createdAt: string;
+};
+
+export function listOrderChanges(orderId: string) {
+  return request<PurchaseOrderChange[]>({
+    method: "GET",
+    url: `/procurement/orders/${orderId}/changes`,
+  });
+}
+export function createOrderChange(
+  orderId: string,
+  payload: {
+    changeType?: string;
+    quantityAfter?: number;
+    unitPriceAfter?: number;
+    expectedDateAfter?: string;
+    reason: string;
+  },
+) {
+  return request<PurchaseOrderChange>({
+    method: "POST",
+    url: `/procurement/orders/${orderId}/changes`,
+    data: payload,
+  });
+}
+export function decideOrderChange(
+  id: string,
+  payload: { decision: "APPROVED" | "REJECTED"; comment?: string },
+) {
+  return request<PurchaseOrderChange>({
+    method: "POST",
+    url: `/procurement/order-changes/${id}/decision`,
+    data: payload,
+  });
+}
+
+// ---------- 列表 Excel 导出 ----------
+
+export async function exportProcurementRequests() {
+  const response = await http.get<Blob>("/procurement/requests/export", {
+    responseType: "blob",
+  });
+  downloadExcelBlob(response.data, "采购申请.xlsx");
+}
+export async function exportProcurementInquiries() {
+  const response = await http.get<Blob>("/procurement/inquiries/export", {
+    responseType: "blob",
+  });
+  downloadExcelBlob(response.data, "询价管理.xlsx");
+}
+export async function exportProcurementOrders() {
+  const response = await http.get<Blob>("/procurement/orders/export", {
+    responseType: "blob",
+  });
+  downloadExcelBlob(response.data, "采购订单.xlsx");
+}
+export async function exportProcurementSuppliers() {
+  const response = await http.get<Blob>("/procurement/suppliers/export", {
+    responseType: "blob",
+  });
+  downloadExcelBlob(response.data, "供应商.xlsx");
+}
+function downloadExcelBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// ---------- 分级审批规则 ----------
+
+export type ApprovalRule = {
+  id: string;
+  ruleName: string;
+  minAmount?: number;
+  maxAmount?: number;
+  approvalLevel: string;
+  requiredRoleCode?: string;
+  enabled: boolean;
+  sortOrder: number;
+};
+export type SaveApprovalRulePayload = {
+  ruleName: string;
+  minAmount?: number;
+  maxAmount?: number;
+  approvalLevel: string;
+  requiredRoleCode?: string;
+  enabled: boolean;
+  sortOrder: number;
+};
+export function listApprovalRules() {
+  return request<ApprovalRule[]>({
+    method: "GET",
+    url: "/procurement/approval-rules",
+  });
+}
+export function createApprovalRule(payload: SaveApprovalRulePayload) {
+  return request<ApprovalRule>({
+    method: "POST",
+    url: "/procurement/approval-rules",
+    data: payload,
+  });
+}
+export function updateApprovalRule(id: string, payload: SaveApprovalRulePayload) {
+  return request<ApprovalRule>({
+    method: "PUT",
+    url: `/procurement/approval-rules/${id}`,
+    data: payload,
+  });
+}
+export function deleteApprovalRule(id: string) {
+  return request<void>({
+    method: "DELETE",
+    url: `/procurement/approval-rules/${id}`,
+  });
+}
+
+// ---------- 框架协议 ----------
+
+export type FrameworkAgreementItem = {
+  id: string;
+  partId: string;
+  partName: string;
+  unitPrice: number;
+  taxRate: number;
+};
+export type FrameworkAgreement = {
+  id: string;
+  code: string;
+  title: string;
+  supplierId: string;
+  supplierName?: string;
+  validFrom: string;
+  validTo: string;
+  status: "ACTIVE" | "CLOSED";
+  remark?: string;
+  createdByName?: string;
+  items: FrameworkAgreementItem[];
+};
+export function listFrameworkAgreements() {
+  return request<FrameworkAgreement[]>({
+    method: "GET",
+    url: "/procurement/framework-agreements",
+  });
+}
+export function getFrameworkAgreement(id: string) {
+  return request<FrameworkAgreement>({
+    method: "GET",
+    url: `/procurement/framework-agreements/${id}`,
+  });
+}
+export function saveFrameworkAgreement(
+  id: string | null,
+  payload: {
+    title: string;
+    supplierId: string;
+    validFrom: string;
+    validTo: string;
+    remark?: string;
+    items: { partId: string; partName: string; unitPrice: number; taxRate?: number }[];
+  },
+) {
+  return request<FrameworkAgreement>({
+    method: id ? "PUT" : "POST",
+    url: id ? `/procurement/framework-agreements/${id}` : "/procurement/framework-agreements",
+    data: payload,
+  });
+}
+export function closeFrameworkAgreement(id: string) {
+  return request<FrameworkAgreement>({
+    method: "POST",
+    url: `/procurement/framework-agreements/${id}/close`,
+  });
+}
+
+// ---------- 集采计划 ----------
+
+export type CentralPlanItem = {
+  id: string;
+  partId: string;
+  partName: string;
+  plannedQty: number;
+  unitPrice: number;
+  expectedDate?: string;
+  requestId?: string;
+  requestCode?: string;
+  status: "PLANNED" | "REQUESTED";
+};
+export type CentralPlan = {
+  id: string;
+  code: string;
+  name: string;
+  periodYear: number;
+  status: "DRAFT" | "ACTIVE" | "CLOSED";
+  remark?: string;
+  createdByName?: string;
+  items: CentralPlanItem[];
+};
+export function listCentralPlans() {
+  return request<CentralPlan[]>({
+    method: "GET",
+    url: "/procurement/central-plans",
+  });
+}
+export function saveCentralPlan(
+  id: string | null,
+  payload: {
+    name: string;
+    periodYear: number;
+    remark?: string;
+    items: {
+      partId: string;
+      partName: string;
+      plannedQty: number;
+      unitPrice?: number;
+      expectedDate?: string;
+    }[];
+  },
+) {
+  return request<CentralPlan>({
+    method: id ? "PUT" : "POST",
+    url: id ? `/procurement/central-plans/${id}` : "/procurement/central-plans",
+    data: payload,
+  });
+}
+export function updateCentralPlanStatus(id: string, status: string) {
+  return request<CentralPlan>({
+    method: "POST",
+    url: `/procurement/central-plans/${id}/status?status=${encodeURIComponent(status)}`,
+  });
+}
+export function convertCentralPlanItem(planId: string, itemId: string, departmentId?: string) {
+  const params = new URLSearchParams();
+  if (departmentId) params.set("departmentId", departmentId);
+  const query = params.toString();
+  return request<PurchaseRequest>({
+    method: "POST",
+    url: `/procurement/central-plans/${planId}/items/${itemId}/convert${query ? `?${query}` : ""}`,
   });
 }

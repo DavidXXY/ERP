@@ -14,7 +14,8 @@ public record ReceivePurchaseOrderRequest(
     @NotBlank @Size(max = 80) String receiverName,
     @NotNull LocalDate payableDueDate,
     @Size(max = 80) String clientRequestId,
-    @Size(max = 80) String asnNo
+    @Size(max = 80) String asnNo,
+    @Size(max = 80) String carrier
 ) {
   public ReceivePurchaseOrderRequest(
       BigDecimal quantity,
@@ -23,6 +24,18 @@ public record ReceivePurchaseOrderRequest(
       String receiverName,
       LocalDate payableDueDate
   ) {
-    this(quantity, receivedDate, deliveryNo, receiverName, payableDueDate, null, null);
+    this(quantity, receivedDate, deliveryNo, receiverName, payableDueDate, null, null, null);
+  }
+
+  public ReceivePurchaseOrderRequest(
+      BigDecimal quantity,
+      LocalDate receivedDate,
+      String deliveryNo,
+      String receiverName,
+      LocalDate payableDueDate,
+      String clientRequestId,
+      String asnNo
+  ) {
+    this(quantity, receivedDate, deliveryNo, receiverName, payableDueDate, clientRequestId, asnNo, null);
   }
 }

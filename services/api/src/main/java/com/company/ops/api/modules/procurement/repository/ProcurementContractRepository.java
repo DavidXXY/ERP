@@ -10,4 +10,6 @@ public interface ProcurementContractRepository extends JpaRepository<Procurement
   List<ProcurementContract> findAllByOrderByCreatedAtDesc();
   List<ProcurementContract> findBySupplierIdOrderByCreatedAtDesc(UUID supplierId);
   Optional<ProcurementContract> findFirstByContractNoOrderByVersionNoDesc(String contractNo);
+  boolean existsByInquiryIdAndStatusNotIn(UUID inquiryId, List<String> statuses);
+  Optional<ProcurementContract> findFirstByInquiryIdAndSupplierIdOrderByCreatedAtDesc(UUID inquiryId, UUID supplierId);
 }

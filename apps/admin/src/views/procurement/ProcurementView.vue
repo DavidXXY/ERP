@@ -303,6 +303,24 @@
               <template v-else-if="column.key === 'amount'">
                 <strong>{{ formatMoney(record.orderAmount) }}</strong>
               </template>
+              <template v-else-if="column.key === 'contract'">
+                <a
+                  v-if="record.contractNo"
+                  @click="router.push(`/procurement/orders/${record.id}`)"
+                  >{{ record.contractNo }}</a
+                ><span v-else class="table-subtitle">未关联</span>
+                <a-tag v-if="record.contractStatus === 'ACTIVE'" color="green"
+                  >已生效</a-tag
+                >
+                <a-tag
+                  v-else-if="record.contractStatus === 'REJECTED'"
+                  color="red"
+                  >已取消</a-tag
+                >
+                <a-tag v-else-if="record.contractStatus" color="orange"
+                  >待生效</a-tag
+                >
+              </template>
               <template v-else-if="column.key === 'costTarget'">
                 <a-tag :color="costTypeColor(record.costType)">{{
                   costTypeLabel(record.costType)
@@ -759,7 +777,7 @@
 
     <a-modal
       v-model:open="orderOpen"
-      title="根据审批申请创建采购订单"
+      title="创建采购订单（订单即合同）"
       width="760px"
       :confirm-loading="savingOrder"
       @ok="handleCreateOrder"
@@ -788,8 +806,39 @@
                 :options="supplierOptions"
                 show-search
                 option-filter-prop="label"
-                placeholder="停用供应商不会显示" /></a-form-item
+                placeholder="停用供应商不会显示"
+                @change="syncSupplierForOrder" /></a-form-item
           ></a-col>
+          <a-col :xs="24" :md="16"
+            ><a-form-item label="合同名称（订单即合同）"
+              ><a-input
+                v-model:value="orderForm.contractName"
+                placeholder="留空默认：供应商名 + 采购合同" /></a-form-item
+          ></a-col>
+          <a-col :xs="24" :md="8"
+            ><a-form-item label="合同开始日期"
+              ><a-input
+                v-model:value="orderForm.contractStartDate"
+                type="date" /></a-form-item
+          ></a-col>
+          <a-col :xs="24" :md="8"
+            ><a-form-item label="合同结束日期"
+              ><a-input
+                v-model:value="orderForm.contractEndDate"
+                type="date" /></a-form-item
+          ></a-col>
+          <a-col :span="24"
+            ><a-form-item label="付款条款"
+              ><a-input
+                v-model:value="orderForm.paymentTerms"
+                placeholder="如：货到验收合格后 30 日内付款" /></a-form-item
+          ></a-col>
+          <a-col :span="24"
+            ><a-alert
+              type="info"
+              show-icon
+              message="订单即合同：下单自动生成合同，订单审批通过即生效，供应商门户同步可见"
+          /></a-col>
           <a-col :xs="24" :md="8"
             ><a-form-item label="预计到货"
               ><a-input
@@ -894,6 +943,10 @@
               ><a-input v-model:value="receiptForm.deliveryNo" /></a-form-item
           ></a-col>
           <a-col :xs="24" :md="12"
+            ><a-form-item label="承运方" name="carrier"
+              ><a-input v-model:value="receiptForm.carrier" placeholder="供应商回传的承运方将自动填入" /></a-form-item
+          ></a-col>
+          <a-col :xs="24" :md="12"
             ><a-form-item label="收货人" name="receiverName"
               ><a-input v-model:value="receiptForm.receiverName" /></a-form-item
           ></a-col>
@@ -922,6 +975,7 @@ import {
   listProcurementInquiries,
   listProcurementMaterials,
   listProcurementPayables,
+  listOrderShipments,
   listPurchaseOrders,
   listPurchaseRequests,
   listSuppliers,
@@ -966,6 +1020,7 @@ type ReceiptForm = {
   quantity: number;
   receivedDate: string;
   deliveryNo: string;
+  carrier: string;
   receiverName: string;
   payableDueDate: string;
 };
@@ -1137,6 +1192,7 @@ const requestColumns = [
 ];
 const orderColumns = [
   { title: "订单", key: "code", width: 230, sorter: true },
+  { title: "负责人", dataIndex: "responsibleName", width: 100 },
   {
     title: "供应商",
     dataIndex: "supplierName",
@@ -1165,6 +1221,7 @@ const orderColumns = [
     responsive: ["xxl"],
     sorter: true,
   },
+  { title: "订单合同", key: "contract", width: 170 },
   { title: "状态", key: "status", width: 110 },
   { title: "操作", key: "action", width: 120, fixed: "right" },
 ];
@@ -1349,7 +1406,16 @@ const remainingQuantity = computed(() =>
 onMounted(async () => {
   await loadData();
   if (route.query.createOrder === "1") {
+    activeTab.value = "orders";
     openOrder();
+    const requestId = String(route.query.requestId || "");
+    if (
+      requestId &&
+      purchaseRequests.value.some((item) => item.id === requestId)
+    ) {
+      orderForm.requestId = requestId;
+      syncOrderRequest(requestId);
+    }
   }
 });
 
@@ -1465,13 +1531,25 @@ function openOrder() {
     return;
   }
   Object.assign(orderForm, initialOrderForm());
+  orderForm.contractStartDate = addDays(0);
+  orderForm.contractEndDate = addDays(365);
   orderOpen.value = true;
 }
-function openReceipt(record: PurchaseOrder) {
+async function openReceipt(record: PurchaseOrder) {
   selectedOrder.value = record;
   Object.assign(receiptForm, initialReceiptForm(), {
     quantity: Number(record.orderedQty) - Number(record.receivedQty),
   });
+  try {
+    const shipments = await listOrderShipments(record.id);
+    const latest = shipments.find((item) => item.status === "PENDING") || shipments[0];
+    if (latest) {
+      receiptForm.deliveryNo = latest.deliveryNo || receiptForm.deliveryNo;
+      receiptForm.carrier = latest.carrier || receiptForm.carrier;
+    }
+  } catch {
+    // 供应商尚未回传发货信息时使用空值
+  }
   receiptOpen.value = true;
 }
 
@@ -1518,6 +1596,15 @@ function syncOrderRequest(requestId: string) {
   orderForm.sourceReason = inquiry
     ? `询价单 ${inquiry.code} 已定标${inquiry.selectionReason ? `：${inquiry.selectionReason}` : ""}`
     : "";
+  syncSupplierForOrder(orderForm.supplierId);
+}
+
+function syncSupplierForOrder(supplierId?: string) {
+  if (!supplierId) return;
+  const supplier = suppliers.value.find((item) => item.id === supplierId);
+  if (!orderForm.contractName && supplier?.name) {
+    orderForm.contractName = `${supplier.name}采购合同`;
+  }
 }
 
 async function handleCreateSupplier() {
@@ -1630,7 +1717,10 @@ async function handleCreateOrder() {
   await orderFormRef.value?.validate();
   savingOrder.value = true;
   try {
-    await createPurchaseOrder({ ...orderForm });
+    await createPurchaseOrder({
+      ...orderForm,
+      generateContract: true,
+    });
     orderOpen.value = false;
     activeTab.value = "orders";
     message.success("采购订单已创建");
@@ -1708,6 +1798,12 @@ function initialOrderForm(): CreatePurchaseOrderPayload {
     currency: "CNY",
     freightAmount: 0,
     sourceReason: "",
+    generateContract: true,
+    contractNo: undefined,
+    contractName: "",
+    paymentTerms: "",
+    contractStartDate: undefined,
+    contractEndDate: undefined,
   };
 }
 function initialReceiptForm(): ReceiptForm {
@@ -1715,6 +1811,7 @@ function initialReceiptForm(): ReceiptForm {
     quantity: 1,
     receivedDate: addDays(0),
     deliveryNo: "",
+    carrier: "",
     receiverName: auth.user?.displayName || "",
     payableDueDate: addDays(30),
   };

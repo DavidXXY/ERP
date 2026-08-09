@@ -77,6 +77,7 @@ public class PurchaseOrder extends BaseEntity {
   @Column(nullable=false,length=8) private String currency="CNY";
   @Column(name="freight_amount",nullable=false,precision=14,scale=2) private BigDecimal freightAmount=BigDecimal.ZERO;
   @Column(name="source_reason",length=1000) private String sourceReason;
+  @Column(name="responsible_name",length=80) private String responsibleName;
   @Column(name="submitted_at") private OffsetDateTime submittedAt;
   @Column(name="closed_at") private OffsetDateTime closedAt;
   @Column(name="order_version",nullable=false) private Integer orderVersion=1;
@@ -225,6 +226,7 @@ public class PurchaseOrder extends BaseEntity {
   public String getCurrency(){return currency;} public void setCurrency(String v){currency=v;}
   public BigDecimal getFreightAmount(){return freightAmount;} public void setFreightAmount(BigDecimal v){freightAmount=v;}
   public String getSourceReason(){return sourceReason;} public void setSourceReason(String v){sourceReason=v;}
+  public String getResponsibleName(){return responsibleName;} public void setResponsibleName(String v){responsibleName=v;}
   public OffsetDateTime getSubmittedAt(){return submittedAt;} public void setSubmittedAt(OffsetDateTime v){submittedAt=v;}
   public OffsetDateTime getClosedAt(){return closedAt;} public void setClosedAt(OffsetDateTime v){closedAt=v;}
   public Integer getOrderVersion(){return orderVersion;} public void setOrderVersion(Integer v){orderVersion=v;}

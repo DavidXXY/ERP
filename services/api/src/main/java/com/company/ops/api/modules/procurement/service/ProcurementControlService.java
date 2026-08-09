@@ -61,6 +61,7 @@ public class ProcurementControlService {
   private final ProcurementArrivalService arrivals;
   private final LedgerService ledgerService;
   private final DataScopeService dataScopeService;
+  private final SupplierPortalNotifier portalNotifier;
 
   public ProcurementControlService(
       ProcurementInquiryRepository inquiries,
@@ -82,7 +83,8 @@ public class ProcurementControlService {
       ProjectRepository projects,
       ProcurementArrivalService arrivals,
       LedgerService ledgerService,
-      DataScopeService dataScopeService
+      DataScopeService dataScopeService,
+      SupplierPortalNotifier portalNotifier
   ) {
     this.inquiries = inquiries;
     this.inquiryRequests = inquiryRequests;
@@ -104,6 +106,7 @@ public class ProcurementControlService {
     this.arrivals = arrivals;
     this.ledgerService = ledgerService;
     this.dataScopeService = dataScopeService;
+    this.portalNotifier = portalNotifier;
   }
 
   @Transactional(readOnly = true)
@@ -435,6 +438,10 @@ public class ProcurementControlService {
         invitation.setRegistrationCodeExpiresAt(now.plusDays(7));
         invitation.setDeliveryStatus("PENDING");
         invitations.save(invitation);
+        portalNotifier.notify(supplierId, "INQUIRY_INVITATION",
+            "收到新的询价邀请",
+            "询价单 " + inquiry.getCode() + " 邀请贵司参与报价，请在截止前响应。",
+            "INQUIRY", inquiryId);
         registrationCodes.put(supplierId, registrationCode);
       }
     }
@@ -457,6 +464,20 @@ public class ProcurementControlService {
       throw new BusinessException("截止日期不能早于今天");
     }
     inquiry.setDeadline(request.deadline());
+    return inquiryView(inquiries.save(inquiry));
+  }
+
+  @Transactional
+  public Map<String, Object> updateInquiryMinQuotes(
+      UUID inquiryId,
+      UpdateInquiryMinQuotes request
+  ) {
+    ProcurementInquiry inquiry = inquiries.findById(inquiryId)
+        .orElseThrow(() -> new BusinessException("询价单不存在"));
+    if (!"OPEN".equals(inquiry.getStatus())) {
+      throw new BusinessException("只有进行中的询价可以调整最低报价数");
+    }
+    inquiry.setMinQuoteCount(request.minQuoteCount());
     return inquiryView(inquiries.save(inquiry));
   }
 
@@ -519,7 +540,17 @@ public class ProcurementControlService {
     inquiry.setSelectedByName(currentName());
     inquiry.setSelectedAt(OffsetDateTime.now());
     inquiry.setStatus("AWARDED");
-    return inquiryView(inquiries.save(inquiry));
+    Map<String, Object> result = inquiryView(inquiries.save(inquiry));
+    portalNotifier.notify(selected.getSupplierId(), "AWARD",
+        "恭喜，贵司已中标",
+        "询价单 " + inquiry.getCode() + " 已完成定标，采购方将据此下单签约。",
+        "INQUIRY", inquiryId);
+    allQuotes.stream().filter(item -> !item.getId().equals(quoteId)).forEach(item ->
+        portalNotifier.notify(item.getSupplierId(), "NOT_AWARDED",
+            "询价未中标通知",
+            "询价单 " + inquiry.getCode() + " 已完成定标，感谢贵司参与报价。",
+            "INQUIRY", inquiryId));
+    return result;
   }
 
   @Transactional

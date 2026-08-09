@@ -36,6 +36,9 @@
           <template #icon><TagsOutlined /></template>
           供应商类别字典
         </a-button>
+        <a-button :loading="exporting" @click="handleExport">
+          <template #icon><DownloadOutlined /></template>导出 Excel
+        </a-button>
       </a-space>
 
       <section class="supplier-score-panel">
@@ -1095,6 +1098,7 @@
 import { computed, onMounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 import { message, Modal } from "ant-design-vue";
+import DownloadOutlined from "@ant-design/icons-vue/DownloadOutlined";
 import PlusOutlined from "@ant-design/icons-vue/PlusOutlined";
 import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
 import TagsOutlined from "@ant-design/icons-vue/TagsOutlined";
@@ -1121,6 +1125,7 @@ import {
   listSupplierCategories,
   createSupplierCategory,
   updateSupplierCategory,
+  exportProcurementSuppliers,
 } from "@/api/procurement";
 import {
   downloadDocument,
@@ -1134,6 +1139,7 @@ import { useAuthStore } from "@/stores/auth";
 const auth = useAuthStore();
 const router = useRouter();
 const loading = ref(false);
+const exporting = ref(false);
 const saving = ref(false);
 const reviewing = ref(false);
 const documentsLoading = ref(false);
@@ -1971,6 +1977,17 @@ function formatDateTime(value?: string) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+async function handleExport() {
+  exporting.value = true;
+  try {
+    await exportProcurementSuppliers();
+    message.success("供应商已导出");
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : "导出失败");
+  } finally {
+    exporting.value = false;
+  }
 }
 </script>
 

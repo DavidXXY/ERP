@@ -33,6 +33,9 @@ public class ProcurementGovernanceService {
   private final PurchaseRequestRepository purchaseRequests;
   private final InventoryPartRepository parts;
   private final ProcurementService procurementService;
+  private final ProcurementInquiryRepository inquiries;
+  private final SupplierQuotationRepository quotes;
+  private final SupplierQuotationLineRepository quoteLines;
 
   public ProcurementGovernanceService(
       ProcurementContractRepository contracts,
@@ -46,7 +49,10 @@ public class ProcurementGovernanceService {
       SupplierInvoiceRepository invoices,
       PurchaseRequestRepository purchaseRequests,
       InventoryPartRepository parts,
-      ProcurementService procurementService
+      ProcurementService procurementService,
+      ProcurementInquiryRepository inquiries,
+      SupplierQuotationRepository quotes,
+      SupplierQuotationLineRepository quoteLines
   ) {
     this.contracts = contracts;
     this.supplierChanges = supplierChanges;
@@ -60,6 +66,9 @@ public class ProcurementGovernanceService {
     this.purchaseRequests = purchaseRequests;
     this.parts = parts;
     this.procurementService = procurementService;
+    this.inquiries = inquiries;
+    this.quotes = quotes;
+    this.quoteLines = quoteLines;
   }
 
   @Transactional(readOnly = true)
@@ -79,6 +88,37 @@ public class ProcurementGovernanceService {
     contract.setContractNo(request.contractNo());
     contract.setName(request.name());
     contract.setSupplierId(request.supplierId());
+    if (request.inquiryId() != null || request.selectedQuoteId() != null) {
+      if (request.inquiryId() == null || request.selectedQuoteId() == null) {
+        throw new BusinessException("中标合同必须同时指定询价单和中标报价");
+      }
+      ProcurementInquiry inquiry = inquiries.findById(request.inquiryId())
+          .orElseThrow(() -> new BusinessException("询价单不存在"));
+      if (!"AWARDED".equals(inquiry.getStatus()) || !request.selectedQuoteId().equals(inquiry.getSelectedQuoteId())) {
+        throw new BusinessException("只能从已定标的询价单创建合同");
+      }
+      SupplierQuotation quote = quotes.findById(request.selectedQuoteId())
+          .orElseThrow(() -> new BusinessException("中标报价不存在"));
+      if (!request.inquiryId().equals(quote.getInquiryId()) || !request.supplierId().equals(quote.getSupplierId()) || !quote.isSelected()) {
+        throw new BusinessException("中标报价与供应商或询价单不一致");
+      }
+      List<SupplierQuotationLine> lines = quoteLines.findByQuoteIdOrderByCreatedAtAsc(quote.getId());
+      if (!lines.isEmpty()) {
+        BigDecimal awardedAmount = lines.stream()
+            .map(line -> value(line.getQuantity()).multiply(value(line.getUnitPrice())))
+            .reduce(BigDecimal.ZERO, BigDecimal::add)
+            .add(value(quote.getFreightAmount()))
+            .add(value(quote.getOtherCostAmount()));
+        if (request.amount().compareTo(awardedAmount) != 0) {
+          throw new BusinessException("合同金额必须与中标报价总额一致：" + awardedAmount.stripTrailingZeros().toPlainString());
+        }
+      }
+      if (contracts.existsByInquiryIdAndStatusNotIn(request.inquiryId(), List.of("REJECTED", "SUPERSEDED"))) {
+        throw new BusinessException("该询价单已经建立采购合同，不能重复签约");
+      }
+      contract.setInquiryId(request.inquiryId());
+      contract.setSelectedQuoteId(request.selectedQuoteId());
+    }
     contract.setAmount(request.amount());
     contract.setCurrency(blank(request.currency()) ? "CNY" : request.currency());
     contract.setStartDate(request.startDate());
@@ -136,6 +176,8 @@ public class ProcurementGovernanceService {
     amendment.setContractNo(parent.getContractNo());
     amendment.setName(parent.getName());
     amendment.setSupplierId(parent.getSupplierId());
+    amendment.setInquiryId(parent.getInquiryId());
+    amendment.setSelectedQuoteId(parent.getSelectedQuoteId());
     amendment.setAmount(request.amount());
     amendment.setCurrency(parent.getCurrency());
     amendment.setStartDate(request.startDate());

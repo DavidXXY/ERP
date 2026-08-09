@@ -14,6 +14,8 @@
           type="primary"
           @click="openCreate"
           ><template #icon><PlusOutlined /></template>新增订单</a-button
+        ><a-button :loading="exporting" @click="handleExport"
+          ><template #icon><DownloadOutlined /></template>导出 Excel</a-button
         ></a-space
       >
       <a-table
@@ -34,6 +36,9 @@
           <template v-else-if="column.key === 'items'"
             ><span>{{ record.orderItems?.length || 0 }} 项</span></template
           >
+          <template v-else-if="column.key === 'responsible'">{{
+            record.responsibleName || "-"
+          }}</template>
           <template v-else-if="column.key === 'amount'"
             ><strong>{{
               formatMoney(
@@ -138,6 +143,7 @@
 import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { message } from "ant-design-vue";
+import DownloadOutlined from "@ant-design/icons-vue/DownloadOutlined";
 import PlusOutlined from "@ant-design/icons-vue/PlusOutlined";
 import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
 import {
@@ -145,18 +151,21 @@ import {
   submitPurchaseOrder,
   approvePurchaseOrder,
   closePurchaseOrder,
+  exportProcurementOrders,
   type PurchaseOrder,
 } from "@/api/procurement";
 import { useAuthStore } from "@/stores/auth";
 const auth = useAuthStore();
 const router = useRouter();
 const loading = ref(false);
+const exporting = ref(false);
 const orders = ref<PurchaseOrder[]>([]);
 function openCreate() {
   router.push("/procurement/workbench?tab=orders&createOrder=1");
 }
 const orderColumns = [
   { title: "订单编号", key: "order", width: 220 },
+  { title: "负责人", key: "responsible", width: 110 },
   { title: "明细", key: "items", width: 80 },
   { title: "订单金额（含税，元）", key: "amount", width: 190 },
   { title: "状态", key: "status", width: 130 },
@@ -222,5 +231,16 @@ function formatTaxRate(v?: number) {
   return `${Number(v ?? 13)
     .toFixed(2)
     .replace(/\.?0+$/, "")}%`;
+}
+async function handleExport() {
+  exporting.value = true;
+  try {
+    await exportProcurementOrders();
+    message.success("采购订单已导出");
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : "导出失败");
+  } finally {
+    exporting.value = false;
+  }
 }
 </script>

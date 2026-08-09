@@ -3,6 +3,8 @@ package com.company.ops.api.modules.procurement.dto;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -55,6 +57,8 @@ public final class ProcurementControlDtos {
   public record InviteSuppliers(@NotEmpty List<@NotNull UUID> supplierIds) {}
 
   public record UpdateInquiryDeadline(@NotNull LocalDate deadline) {}
+
+  public record UpdateInquiryMinQuotes(@NotNull @Min(1) @Max(20) Integer minQuoteCount) {}
 
   public record ScoreSupplierQuote(
       @NotNull @PositiveOrZero @DecimalMax("100") BigDecimal technicalScore,

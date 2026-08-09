@@ -48,6 +48,7 @@ class ProcurementControlServiceWorkflowTest {
   @Mock private ProcurementArrivalService arrivals;
   @Mock private LedgerService ledgerService;
   @Mock private DataScopeService dataScopeService;
+  @Mock private SupplierPortalNotifier portalNotifier;
   @InjectMocks private ProcurementControlService service;
 
   @Test

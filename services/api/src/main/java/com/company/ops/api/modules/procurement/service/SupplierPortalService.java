@@ -8,6 +8,8 @@ import com.company.ops.api.common.storage.FileStorageService;
 import com.company.ops.api.common.storage.FileStorageService.FilePolicy;
 import com.company.ops.api.common.tenant.TenantContext;
 import com.company.ops.api.modules.procurement.domain.*;
+import com.company.ops.api.modules.procurement.dto.ProcurementShipmentResponse;
+import com.company.ops.api.modules.procurement.dto.SupplierPortalNotificationResponse;
 import com.company.ops.api.modules.procurement.repository.*;
 import com.company.ops.api.modules.procurement.security.SupplierPortalPrincipal;
 import com.company.ops.api.modules.system.security.JwtService;
@@ -58,6 +60,12 @@ public class SupplierPortalService {
   private final SupplierQuotationRevisionRepository revisions;
   private final SupplierQuoteAttachmentRepository quoteAttachments;
   private final InquiryClarificationRepository clarifications;
+  private final ProcurementContractRepository contracts;
+  private final ProcurementOrderDocumentRepository orderDocuments;
+  private final PurchaseOrderRepository orders;
+  private final SupplierPortalNotificationRepository notifications;
+  private final ProcurementShipmentRepository shipments;
+  private final SupplierPortalNotifier notifier;
   private final PasswordEncoder passwordEncoder;
   private final JwtService jwtService;
   private final LoginAttemptService loginAttempts;
@@ -78,6 +86,12 @@ public class SupplierPortalService {
       SupplierQuotationRevisionRepository revisions,
       SupplierQuoteAttachmentRepository quoteAttachments,
       InquiryClarificationRepository clarifications,
+      ProcurementContractRepository contracts,
+      ProcurementOrderDocumentRepository orderDocuments,
+      PurchaseOrderRepository orders,
+      SupplierPortalNotificationRepository notifications,
+      ProcurementShipmentRepository shipments,
+      SupplierPortalNotifier notifier,
       PasswordEncoder passwordEncoder,
       JwtService jwtService,
       LoginAttemptService loginAttempts,
@@ -97,6 +111,12 @@ public class SupplierPortalService {
     this.revisions = revisions;
     this.quoteAttachments = quoteAttachments;
     this.clarifications = clarifications;
+    this.contracts = contracts;
+    this.orderDocuments = orderDocuments;
+    this.orders = orders;
+    this.notifications = notifications;
+    this.shipments = shipments;
+    this.notifier = notifier;
     this.passwordEncoder = passwordEncoder;
     this.jwtService = jwtService;
     this.loginAttempts = loginAttempts;
@@ -478,6 +498,36 @@ public class SupplierPortalService {
   }
 
   @Transactional(readOnly = true)
+  public Resource loadContractDocument(SupplierPortalPrincipal principal, UUID id) {
+    ProcurementOrderDocument document = requireContractDocument(principal, id);
+    return storage.loadInNamespace("procurement-orders", document.getObjectKey());
+  }
+
+  @Transactional(readOnly = true)
+  public Map<String, Object> contractDocumentMetadata(SupplierPortalPrincipal principal, UUID id) {
+    ProcurementOrderDocument document = requireContractDocument(principal, id);
+    Map<String, Object> view = new LinkedHashMap<>();
+    view.put("id", document.getId());
+    view.put("fileName", document.getFileName());
+    view.put("contentType", document.getContentType());
+    return view;
+  }
+
+  private ProcurementOrderDocument requireContractDocument(
+      SupplierPortalPrincipal principal,
+      UUID id
+  ) {
+    ProcurementOrderDocument document = orderDocuments.findById(id)
+        .orElseThrow(() -> new BusinessException("采购合同附件不存在"));
+    PurchaseOrder order = orders.findById(document.getOrderId())
+        .orElseThrow(() -> new BusinessException("采购订单不存在"));
+    if (!order.getSupplierId().equals(principal.supplierId())) {
+      throw new BusinessException("无权访问该合同附件");
+    }
+    return document;
+  }
+
+  @Transactional(readOnly = true)
   public List<ClarificationResponse> listClarifications(
       SupplierPortalPrincipal principal,
       UUID inquiryId
@@ -597,6 +647,106 @@ public class SupplierPortalService {
     return new ResetPasswordResponse(temporaryPassword, account(saved, requireSupplier(saved.getSupplierId())));
   }
 
+  @Transactional(readOnly = true)
+  public List<SupplierPortalNotificationResponse> listNotifications(SupplierPortalPrincipal principal) {
+    return notifications.findByAccountIdOrderByCreatedAtDesc(principal.accountId()).stream()
+        .map(this::notificationView).toList();
+  }
+
+  @Transactional(readOnly = true)
+  public long unreadNotificationCount(SupplierPortalPrincipal principal) {
+    return notifications.countByAccountIdAndReadFalse(principal.accountId());
+  }
+
+  @Transactional
+  public void markNotificationRead(SupplierPortalPrincipal principal, UUID id) {
+    SupplierPortalNotification notification = notifications.findById(id)
+        .orElseThrow(() -> new BusinessException("通知不存在"));
+    if (!notification.getAccountId().equals(principal.accountId())) {
+      throw new BusinessException("无权操作该通知");
+    }
+    notification.setRead(true);
+    notification.setReadAt(OffsetDateTime.now());
+    notifications.save(notification);
+  }
+
+  @Transactional
+  public void markAllNotificationsRead(SupplierPortalPrincipal principal) {
+    notifications.findByAccountIdOrderByCreatedAtDesc(principal.accountId()).stream()
+        .filter(item -> !item.isRead())
+        .forEach(item -> {
+          item.setRead(true);
+          item.setReadAt(OffsetDateTime.now());
+          notifications.save(item);
+        });
+  }
+
+  private SupplierPortalNotificationResponse notificationView(SupplierPortalNotification item) {
+    return new SupplierPortalNotificationResponse(
+        item.getId(), item.getType(), item.getTitle(), item.getContent(),
+        item.getRelatedType(), item.getRelatedId(), item.isRead(),
+        item.getReadAt(), item.getCreatedAt());
+  }
+
+  @Transactional(readOnly = true)
+  public List<ProcurementShipmentResponse> listMyShipments(SupplierPortalPrincipal principal) {
+    return shipments.findBySupplierIdOrderByCreatedAtDesc(principal.supplierId()).stream()
+        .map(item -> shipmentView(item, null)).toList();
+  }
+
+  @Transactional
+  public ProcurementShipmentResponse createShipment(
+      SupplierPortalPrincipal principal,
+      UUID orderId,
+      CreateShipmentRequest request
+  ) {
+    PurchaseOrder order = orders.findById(orderId)
+        .orElseThrow(() -> new BusinessException("采购订单不存在"));
+    if (!order.getSupplierId().equals(principal.supplierId())) {
+      throw new BusinessException("无权为该订单回传发货信息");
+    }
+    String status = order.getStatus() == null ? "" : order.getStatus().name();
+    if (!"ORDERED".equals(status) && !"PARTIAL_RECEIVED".equals(status)) {
+      throw new BusinessException("只有已下单的订单可以回传发货信息");
+    }
+    ProcurementShipment shipment = new ProcurementShipment();
+    shipment.setOrderId(order.getId());
+    shipment.setSupplierId(principal.supplierId());
+    shipment.setDeliveryNo(trim(request.deliveryNo()));
+    shipment.setCarrier(trim(request.carrier()));
+    shipment.setExpectedArrival(request.expectedArrival());
+    shipment.setRemark(trim(request.remark()));
+    shipment.setStatus("PENDING");
+    ProcurementShipment saved = shipments.save(shipment);
+    return shipmentView(saved, order.getCode());
+  }
+
+  private ProcurementShipmentResponse shipmentView(ProcurementShipment item, String orderCode) {
+    return new ProcurementShipmentResponse(
+        item.getId(), item.getOrderId(), orderCode, item.getSupplierId(), null,
+        item.getDeliveryNo(), item.getCarrier(), item.getExpectedArrival(),
+        item.getRemark(), item.getStatus(), null, item.getCreatedAt());
+  }
+
+  @Transactional
+  public Map<String, Object> acknowledgeContract(
+      SupplierPortalPrincipal principal,
+      UUID contractId
+  ) {
+    ProcurementContract contract = contracts.findById(contractId)
+        .orElseThrow(() -> new BusinessException("采购合同不存在"));
+    if (!contract.getSupplierId().equals(principal.supplierId())) {
+      throw new BusinessException("无权确认该合同");
+    }
+    if (contract.getAcknowledgedAt() != null) {
+      throw new BusinessException("该合同已确认，无需重复操作");
+    }
+    contract.setAcknowledgedAt(OffsetDateTime.now());
+    contract.setAcknowledgedByName(principal.contactName());
+    contracts.save(contract);
+    return contractView(contract);
+  }
+
   private String temporaryPassword() {
     return "Tmp" + UUID.randomUUID().toString().replace("-", "").substring(0, 9) + "!";
   }
@@ -656,7 +806,12 @@ public class SupplierPortalService {
     item.setAnsweredByName(currentInternalName());
     item.setAnsweredAt(OffsetDateTime.now());
     item.setStatus("ANSWERED");
-    return clarification(clarifications.save(item));
+    InquiryClarification saved = clarifications.save(item);
+    notifier.notify(saved.getSupplierId(), "CLARIFICATION_ANSWER",
+        "询价澄清已回复",
+        "您在询价中的问题已由采购方回复，请查看。",
+        "INQUIRY", saved.getInquiryId());
+    return clarification(saved);
   }
 
   private Supplier createPendingSupplier(RegisterRequest request, String creditCode) {
@@ -786,6 +941,16 @@ public class SupplierPortalService {
     Map<UUID, PurchaseRequest> requestMap = purchaseRequests.findAllById(
         links.stream().map(ProcurementInquiryRequest::getRequestId).toList()
     ).stream().collect(Collectors.toMap(PurchaseRequest::getId, item -> item));
+    List<UUID> partIds = requestMap.values().stream()
+        .map(PurchaseRequest::getPartId).filter(Objects::nonNull).distinct().toList();
+    Map<UUID, BigDecimal> historicalPriceByPart = orders.findByPartIdIn(partIds).stream()
+        .filter(order -> order.getUnitPrice() != null)
+        .collect(Collectors.groupingBy(PurchaseOrder::getPartId,
+            Collectors.mapping(PurchaseOrder::getUnitPrice, Collectors.toList())))
+        .entrySet().stream()
+        .collect(Collectors.toMap(Map.Entry::getKey, entry ->
+            entry.getValue().stream().reduce(BigDecimal.ZERO, BigDecimal::add)
+                .divide(BigDecimal.valueOf(entry.getValue().size()), 2, RoundingMode.HALF_UP)));
     List<Map<String, Object>> lineViews = links.stream().map(link -> {
       PurchaseRequest source = requestMap.get(link.getRequestId());
       Map<String, Object> line = new LinkedHashMap<>();
@@ -794,6 +959,8 @@ public class SupplierPortalService {
       line.put("partName", source == null ? null : source.getPartName());
       line.put("quantity", link.getRequestedQty());
       line.put("expectedDate", source == null ? null : source.getExpectedDate());
+      line.put("historicalPrice", source == null || source.getPartId() == null
+          ? null : historicalPriceByPart.get(source.getPartId()));
       return line;
     }).toList();
     Map<String, Object> view = new LinkedHashMap<>();
@@ -803,11 +970,51 @@ public class SupplierPortalService {
     view.put("invitedAt", invitation.getInvitedAt()); view.put("lines", lineViews);
     view.put("declineReason", invitation.getDeclineReason()); view.put("declinedAt", invitation.getDeclinedAt());
     SupplierQuotation quote = quotes.findByInquiryIdAndSupplierId(inquiry.getId(), supplierId).orElse(null);
+    boolean awarded = "AWARDED".equals(inquiry.getStatus()) && quote != null
+        && quote.getId().equals(inquiry.getSelectedQuoteId());
+    view.put("awardStatus", !"AWARDED".equals(inquiry.getStatus()) ? "PENDING" : awarded ? "AWARDED" : "NOT_AWARDED");
+    view.put("awardedAt", awarded ? inquiry.getSelectedAt() : null);
     view.put("quote", quote == null ? null : portalQuote(quote, quoteLines.findByQuoteIdOrderByCreatedAtAsc(quote.getId())));
+    ProcurementContract contract = awarded
+        ? contracts.findFirstByInquiryIdAndSupplierIdOrderByCreatedAtDesc(inquiry.getId(), supplierId).orElse(null)
+        : null;
+    view.put("contract", contract == null ? null : contractView(contract));
     view.put("attachments", quote == null ? List.of() : quoteAttachments.findByQuoteIdOrderByCreatedAtDesc(quote.getId())
         .stream().map(this::attachment).toList());
     view.put("clarifications", clarifications.findByInquiryIdAndSupplierIdOrderByAskedAtAsc(inquiry.getId(), supplierId)
         .stream().map(this::clarification).toList());
+    return view;
+  }
+
+  private Map<String, Object> contractView(ProcurementContract contract) {
+    Map<String, Object> view = new LinkedHashMap<>();
+    view.put("id", contract.getId());
+    view.put("contractNo", contract.getContractNo());
+    view.put("name", contract.getName());
+    view.put("amount", contract.getAmount());
+    view.put("currency", contract.getCurrency());
+    view.put("status", contract.getStatus());
+    view.put("approvalStatus", contract.getApprovalStatus());
+    view.put("startDate", contract.getStartDate() == null ? "" : contract.getStartDate().toString());
+    view.put("endDate", contract.getEndDate() == null ? "" : contract.getEndDate().toString());
+    view.put("orderId", contract.getOrderId());
+    view.put("acknowledged", contract.getAcknowledgedAt() != null);
+    view.put("acknowledgedAt", contract.getAcknowledgedAt());
+    view.put("acknowledgedByName", contract.getAcknowledgedByName());
+    view.put("documents", contract.getOrderId() == null ? List.of()
+        : orderDocuments.findByOrderIdOrderByCreatedAtDesc(contract.getOrderId()).stream()
+            .map(this::orderDocumentView).toList());
+    return view;
+  }
+
+  private Map<String, Object> orderDocumentView(ProcurementOrderDocument document) {
+    Map<String, Object> view = new LinkedHashMap<>();
+    view.put("id", document.getId());
+    view.put("fileName", document.getFileName());
+    view.put("contentType", document.getContentType());
+    view.put("sizeBytes", document.getSizeBytes());
+    view.put("uploadedBy", document.getUploadedBy());
+    view.put("uploadedAt", document.getUploadedAt());
     return view;
   }
 

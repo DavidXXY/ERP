@@ -33,6 +33,9 @@
         <a-button @click="router.push('/procurement/purchase-pool')">
           <template #icon><ShoppingCartOutlined /></template>待采购清单
         </a-button>
+        <a-button :loading="exporting" @click="handleExport">
+          <template #icon><DownloadOutlined /></template>导出 Excel
+        </a-button>
       </a-space>
 
       <a-alert
@@ -60,6 +63,9 @@
             <span class="table-subtitle"
               >合计数量 {{ formatQuantity(record.totalQuantity) }}</span
             >
+          </template>
+          <template v-else-if="column.key === 'requester'">
+            {{ record.requesterName || "-" }}
           </template>
           <template v-else-if="column.key === 'amount'">
             <strong>{{ formatMoney(record.totalAmount) }}</strong>
@@ -141,6 +147,12 @@
                 </template>
                 <template v-else-if="column.key === 'date'">
                   {{ line.expectedDate || line.requiredDate || "-" }}
+                </template>
+                <template v-else-if="column.key === 'level'">
+                  <a-tag v-if="line.approvalLevel" color="blue">{{
+                    approvalLevelLabel(line.approvalLevel)
+                  }}</a-tag>
+                  <span v-else>-</span>
                 </template>
                 <template v-else-if="column.key === 'approval'">
                   <a-tag :color="approvalColor(line.approvalStatus)">
@@ -472,6 +484,7 @@ import {
   type ProcurementCostTargetOption,
   type ProcurementCostType,
   type PurchaseRequest,
+  exportProcurementRequests,
 } from "@/api/procurement";
 import {
   downloadDocument,
@@ -509,6 +522,7 @@ type RequestBatch = {
 const auth = useAuthStore();
 const router = useRouter();
 const loading = ref(false);
+const exporting = ref(false);
 const saving = ref(false);
 const importing = ref(false);
 const requests = ref<PurchaseRequest[]>([]);
@@ -570,6 +584,7 @@ const costTypeOptions = [
 ];
 const batchColumns = [
   { title: "申请批次", key: "batch", width: 240 },
+  { title: "申请人", key: "requester", width: 130 },
   { title: "明细汇总", key: "summary", width: 150 },
   { title: "预计金额（含税，元）", key: "amount", width: 190 },
   { title: "成本归属", key: "target", width: 190 },
@@ -580,10 +595,12 @@ const batchColumns = [
 const lineColumns = [
   { title: "行号/申请号", key: "line", width: 160 },
   { title: "物料/说明", key: "material", width: 280 },
+  { title: "申请人", dataIndex: "requesterName", width: 110 },
   { title: "数量", key: "qty", width: 90 },
   { title: "预计单价（含税，元）", key: "price", width: 180 },
   { title: "预计金额（含税，元）", key: "amount", width: 190 },
   { title: "到货日期", key: "date", width: 120 },
+  { title: "审批级别", key: "level", width: 100 },
   { title: "审批", key: "approval", width: 100 },
   { title: "操作", key: "action", width: 120, fixed: "right" as const },
 ];
@@ -984,6 +1001,29 @@ function batchApprovalSteps(batch: RequestBatch): ApprovalProgressStep[] {
       state: batch.approvalStatus === "APPROVED" ? "pending" : "waiting",
     },
   ];
+}
+async function handleExport() {
+  exporting.value = true;
+  try {
+    await exportProcurementRequests();
+    message.success("采购申请已导出");
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : "导出失败");
+  } finally {
+    exporting.value = false;
+  }
+}
+function approvalLevelLabel(level: string) {
+  return (
+    (
+      {
+        DEPARTMENT: "部门级",
+        MANAGER: "经理级",
+        EXECUTIVE: "总经理级",
+        CUSTOM: "自定义",
+      } as Record<string, string>
+    )[level] || level
+  );
 }
 </script>
 

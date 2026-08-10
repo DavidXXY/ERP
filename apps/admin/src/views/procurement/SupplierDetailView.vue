@@ -42,8 +42,11 @@
           title="准入建档"
           :description="`${profileCompleteness}% 完整`"
         />
-        <a-step title="询价比价" :description="`${quotations.length} 次报价`" />
-        <a-step title="采购签约" :description="`${orders.length} 笔订单`" />
+        <a-step
+          title="询价比价"
+          :description="`${quotations.length} 次报价 · ${awardedQuotes.length} 次中标`"
+        />
+        <a-step title="采购下单" :description="`${orders.length} 个订单`" />
         <a-step title="到货质检" :description="`${receipts.length} 笔到货`" />
         <a-step title="发票结算" :description="`${invoices.length} 张发票`" />
         <a-step title="付款闭环" :description="money(supplier?.paidAmount)" />
@@ -133,16 +136,42 @@
           />
         </a-tab-pane>
 
-        <a-tab-pane key="quotes" :tab="`询价报价 (${quotations.length})`">
+        <a-tab-pane key="quotes" :tab="`中标与报价 (${quotations.length})`">
           <a-table
             :columns="quoteColumns"
             :data-source="quotations"
             row-key="id"
           >
             <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'price'">{{
+              <template v-if="column.key === 'inquiry'"
+                ><span>{{ record.inquiryCode }}</span
+                ><span class="sub">{{ record.inquiryTitle }}</span></template
+              >
+              <template v-else-if="column.key === 'price'">{{
                 money(record.unitPrice)
               }}</template>
+              <template v-else-if="column.key === 'award'">
+                <a-tag
+                  v-if="record.selected && record.inquiryStatus === 'AWARDED'"
+                  color="green"
+                  >中标</a-tag
+                >
+                <a-tag v-else color="default">未中标</a-tag>
+              </template>
+              <template v-else-if="column.key === 'contract'">
+                <a-button
+                  v-if="
+                    auth.can('procurement:purchase:create') &&
+                    record.selected &&
+                    record.inquiryStatus === 'AWARDED'
+                  "
+                  type="link"
+                  size="small"
+                  @click="createOrderFromQuote(record)"
+                  >转采购订单</a-button
+                >
+                <span v-else class="sub">-</span>
+              </template>
               <template v-else-if="column.key === 'selected'"
                 ><a-tag :color="record.selected ? 'green' : 'default'">{{
                   record.selected ? "已中选" : "未中选"
@@ -327,6 +356,7 @@ import { message } from "ant-design-vue";
 import BusinessDetailPage, {
   type DetailMetric,
 } from "@/components/BusinessDetailPage.vue";
+import { useAuthStore } from "@/stores/auth";
 import {
   listGoodsReceipts,
   listProcurementInquiries,
@@ -346,6 +376,7 @@ import {
 
 const route = useRoute();
 const router = useRouter();
+const auth = useAuthStore();
 const supplierId = computed(() => String(route.params.id));
 const loading = ref(false);
 const supplier = ref<Supplier | null>(null);
@@ -354,7 +385,22 @@ const receipts = ref<GoodsReceipt[]>([]);
 const payables = ref<ProcurementPayable[]>([]);
 const invoices = ref<SupplierInvoice[]>([]);
 const returns = ref<ProcurementReturnOrder[]>([]);
-const quotations = ref<SupplierQuotation[]>([]);
+type SupplierQuotationRow = SupplierQuotation & {
+  inquiryId: string;
+  requestId?: string;
+  inquiryCode: string;
+  inquiryTitle: string;
+  inquiryStatus: string;
+  selectionReason?: string;
+  selectedByName?: string;
+  selectedAt?: string;
+};
+const quotations = ref<SupplierQuotationRow[]>([]);
+const awardedQuotes = computed(() =>
+  quotations.value.filter(
+    (item) => item.inquiryStatus === "AWARDED" && item.selected,
+  ),
+);
 const profileFields = computed(() =>
   supplier.value
     ? [
@@ -483,12 +529,13 @@ const overallScore = computed(() =>
   ),
 );
 const quoteColumns = [
-  { title: "询价单", dataIndex: "inquiryCode" },
+  { title: "询价单", key: "inquiry", width: 220 },
   { title: "单价（含税，元）", key: "price", width: 180 },
   { title: "税率", dataIndex: "taxRate", width: 90 },
   { title: "交付日", dataIndex: "deliveryDate", width: 120 },
   { title: "付款条款", dataIndex: "paymentTerms" },
-  { title: "结果", key: "selected", width: 100 },
+  { title: "定标结果", key: "award", width: 100 },
+  { title: "合同", key: "contract", width: 110 },
 ];
 const orderColumns = [
   { title: "采购订单", key: "order", width: 230 },
@@ -568,7 +615,19 @@ async function loadData() {
     quotations.value = inquiries
       .flatMap((inquiry) =>
         inquiry.quotes.map((quote) =>
-          Object.assign({}, quote, { inquiryCode: inquiry.code }),
+          Object.assign({}, quote, {
+            inquiryId: inquiry.id,
+            requestId: inquiry.requestId,
+            inquiryCode: inquiry.code,
+            inquiryTitle: inquiry.title,
+            inquiryStatus: inquiry.status,
+            selectionReason: inquiry.selectionReason,
+            selectedByName: inquiry.selectedByName,
+            selectedAt: inquiry.selectedAt,
+            selected:
+              inquiry.status === "AWARDED" &&
+              inquiry.selectedQuoteId === quote.id,
+          }),
         ),
       )
       .filter((item) => item.supplierId === supplierId.value);
@@ -579,6 +638,16 @@ async function loadData() {
   } finally {
     loading.value = false;
   }
+}
+function createOrderFromQuote(quote: SupplierQuotationRow) {
+  router.push({
+    path: "/procurement/workbench",
+    query: {
+      tab: "orders",
+      createOrder: "1",
+      requestId: quote.requestId || "",
+    },
+  });
 }
 function money(value?: number) {
   return new Intl.NumberFormat("zh-CN", {

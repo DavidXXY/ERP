@@ -32,5 +32,6 @@ public record PurchaseRequestResponse(
     ApprovalStatus approvalStatus,
     String lastApprovalComment,
     String lastApproverName,
-    OffsetDateTime lastApprovalAt
+    OffsetDateTime lastApprovalAt,
+    String approvalLevel
 ) {}

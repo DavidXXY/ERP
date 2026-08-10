@@ -88,6 +88,7 @@ public class ProcurementArrivalService {
     receipt.setInspectionStatus("PENDING");
     receipt.setClientRequestId(clientRequestId);
     receipt.setAsnNo(request.asnNo());
+    receipt.setCarrier(request.carrier());
     return receipts.save(receipt);
   }
 

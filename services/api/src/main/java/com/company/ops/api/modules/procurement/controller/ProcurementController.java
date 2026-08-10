@@ -7,7 +7,14 @@ import com.company.ops.api.modules.procurement.dto.CreatePurchaseRequestRequest;
 import com.company.ops.api.modules.procurement.dto.CreateSupplierRequest;
 import com.company.ops.api.modules.procurement.dto.GoodsReceiptResponse;
 import com.company.ops.api.modules.procurement.dto.ImportPurchaseRequestBatchResponse;
+import com.company.ops.api.modules.procurement.dto.OrderDocumentResponse;
+import com.company.ops.api.modules.procurement.dto.OrderChangeDtos.CreateOrderChangeRequest;
+import com.company.ops.api.modules.procurement.dto.OrderChangeDtos.DecideOrderChangeRequest;
+import com.company.ops.api.modules.procurement.dto.OrderChangeDtos.OrderChangeResponse;
+import com.company.ops.api.modules.procurement.service.ProcurementChangeService;
+import com.company.ops.api.modules.procurement.service.ProcurementExportService;
 import com.company.ops.api.modules.procurement.dto.ProcessPurchaseRequestApprovalRequest;
+import com.company.ops.api.modules.procurement.dto.ProcurementShipmentResponse;
 import com.company.ops.api.modules.procurement.dto.ProcurementCostAllocationResponse;
 import com.company.ops.api.modules.procurement.dto.ProcurementCostTargetOptionsResponse;
 import com.company.ops.api.modules.procurement.dto.ProcurementMatchingResponse;
@@ -25,14 +32,21 @@ import com.company.ops.api.modules.procurement.dto.ProcurementControlDtos;
 import com.company.ops.api.modules.procurement.dto.SupplierResponse;
 import com.company.ops.api.modules.procurement.service.ProcurementService;
 import jakarta.validation.Valid;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.http.ContentDisposition;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -49,9 +63,17 @@ import org.springframework.web.multipart.MultipartFile;
 public class ProcurementController {
 
   private final ProcurementService procurementService;
+  private final ProcurementChangeService changeService;
+  private final ProcurementExportService exportService;
 
-  public ProcurementController(ProcurementService procurementService) {
+  public ProcurementController(
+      ProcurementService procurementService,
+      ProcurementChangeService changeService,
+      ProcurementExportService exportService
+  ) {
     this.procurementService = procurementService;
+    this.changeService = changeService;
+    this.exportService = exportService;
   }
 
   @GetMapping("/suppliers")
@@ -238,5 +260,118 @@ public class ProcurementController {
   @PreAuthorize("hasAuthority('procurement:payable:view')")
   public ApiResponse<List<ProcurementPayableResponse>> listPayables() {
     return ApiResponse.ok(procurementService.listPayables());
+  }
+
+  @PostMapping(value = "/orders/{id}/documents", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  @ResponseStatus(HttpStatus.CREATED)
+  @PreAuthorize("hasAuthority('procurement:purchase:create')")
+  public ApiResponse<OrderDocumentResponse> uploadOrderDocument(
+      @PathVariable UUID id,
+      @RequestPart MultipartFile file
+  ) {
+    return ApiResponse.ok(procurementService.uploadOrderDocument(id, file));
+  }
+
+  @GetMapping("/orders/{id}/documents")
+  @PreAuthorize("hasAuthority('procurement:view')")
+  public ApiResponse<List<OrderDocumentResponse>> listOrderDocuments(@PathVariable UUID id) {
+    return ApiResponse.ok(procurementService.listOrderDocuments(id));
+  }
+
+  @GetMapping("/orders/{id}/documents/{docId}/download")
+  @PreAuthorize("hasAuthority('procurement:view')")
+  public ResponseEntity<Resource> downloadOrderDocument(
+      @PathVariable UUID id,
+      @PathVariable UUID docId
+  ) {
+    OrderDocumentResponse metadata = procurementService.listOrderDocuments(id).stream()
+        .filter(item -> item.id().equals(docId))
+        .findFirst()
+        .orElseThrow(() -> new com.company.ops.api.common.exception.BusinessException("采购合同附件不存在"));
+    return ResponseEntity.ok()
+        .contentType(MediaType.parseMediaType(metadata.contentType() == null
+            ? MediaType.APPLICATION_OCTET_STREAM_VALUE : metadata.contentType()))
+        .header(HttpHeaders.CONTENT_DISPOSITION,
+            ContentDisposition.attachment().filename(metadata.fileName(), StandardCharsets.UTF_8).build().toString())
+        .body(procurementService.loadOrderDocument(docId));
+  }
+
+  @DeleteMapping("/orders/{id}/documents/{docId}")
+  @PreAuthorize("hasAuthority('procurement:purchase:create')")
+  public ApiResponse<Void> deleteOrderDocument(
+      @PathVariable UUID id,
+      @PathVariable UUID docId
+  ) {
+    procurementService.deleteOrderDocument(docId);
+    return ApiResponse.ok();
+  }
+
+  @GetMapping("/orders/{id}/shipments")
+  @PreAuthorize("hasAuthority('procurement:view')")
+  public ApiResponse<List<ProcurementShipmentResponse>> listOrderShipments(
+      @PathVariable UUID id
+  ) {
+    return ApiResponse.ok(procurementService.listOrderShipments(id));
+  }
+
+  // ---------- 订单变更单 ----------
+
+  @GetMapping("/orders/{id}/changes")
+  @PreAuthorize("hasAuthority('procurement:view')")
+  public ApiResponse<List<OrderChangeResponse>> listOrderChanges(@PathVariable UUID id) {
+    return ApiResponse.ok(changeService.listChanges(id));
+  }
+
+  @PostMapping("/orders/{id}/changes")
+  @PreAuthorize("hasAuthority('procurement:purchase:create')")
+  public ApiResponse<OrderChangeResponse> createOrderChange(
+      @PathVariable UUID id,
+      @Valid @RequestBody CreateOrderChangeRequest request
+  ) {
+    return ApiResponse.ok(changeService.createChange(id, request));
+  }
+
+  @PostMapping("/order-changes/{id}/decision")
+  @PreAuthorize("hasAuthority('procurement:request:approve')")
+  public ApiResponse<OrderChangeResponse> decideOrderChange(
+      @PathVariable UUID id,
+      @Valid @RequestBody DecideOrderChangeRequest request
+  ) {
+    return ApiResponse.ok(changeService.decideChange(id, request));
+  }
+
+  // ---------- 列表导出 ----------
+
+  @GetMapping("/requests/export")
+  @PreAuthorize("hasAuthority('procurement:view')")
+  public ResponseEntity<byte[]> exportRequests() {
+    return excel(exportService.exportRequests(), "purchase-requests.xlsx");
+  }
+
+  @GetMapping("/inquiries/export")
+  @PreAuthorize("hasAuthority('procurement:view')")
+  public ResponseEntity<byte[]> exportInquiries() {
+    return excel(exportService.exportInquiries(), "inquiries.xlsx");
+  }
+
+  @GetMapping("/orders/export")
+  @PreAuthorize("hasAuthority('procurement:view')")
+  public ResponseEntity<byte[]> exportOrders() {
+    return excel(exportService.exportOrders(), "purchase-orders.xlsx");
+  }
+
+  @GetMapping("/suppliers/export")
+  @PreAuthorize("hasAuthority('procurement:view')")
+  public ResponseEntity<byte[]> exportSuppliers() {
+    return excel(exportService.exportSuppliers(), "suppliers.xlsx");
+  }
+
+  private ResponseEntity<byte[]> excel(byte[] bytes, String filename) {
+    return ResponseEntity.ok()
+        .contentType(MediaType.parseMediaType(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+        .header(HttpHeaders.CONTENT_DISPOSITION,
+            ContentDisposition.attachment().filename(filename, StandardCharsets.UTF_8).build().toString())
+        .body(bytes);
   }
 }

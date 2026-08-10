@@ -9,7 +9,7 @@
       <article class="metric"><span class="metric-icon green"><SafetyCertificateOutlined /></span><div><small>供应商准入</small><strong>{{ admissionText }}</strong></div></article>
       <article class="metric"><span class="metric-icon amber"><ClockCircleOutlined /></span><div><small>待处理询价</small><strong>{{ pendingCount }}</strong></div></article>
       <article class="metric"><span class="metric-icon blue"><SendOutlined /></span><div><small>已提交报价</small><strong>{{ submittedCount }}</strong></div></article>
-      <article class="metric"><span class="metric-icon gray"><FileDoneOutlined /></span><div><small>资质文件</small><strong>{{ documents.length }}</strong></div></article>
+      <article class="metric"><span class="metric-icon green"><FileDoneOutlined /></span><div><small>中标项目</small><strong>{{ awardedCount }}</strong></div></article>
     </section>
 
     <section class="dashboard-grid">
@@ -52,6 +52,7 @@ const inquiries = ref<api.PortalInquiry[]>([]); const documents = ref<api.Portal
 const pending = computed(() => inquiries.value.filter((i) => i.status === "OPEN" && i.quote?.status !== "SUBMITTED"));
 const pendingCount = computed(() => pending.value.length);
 const submittedCount = computed(() => inquiries.value.filter((i) => i.quote?.status === "SUBMITTED").length);
+const awardedCount = computed(() => inquiries.value.filter((i) => i.awardStatus === "AWARDED").length);
 const admissionText = computed(() => ({ APPROVED: "已通过", REJECTED: "已退回", PENDING: "审核中" })[store.session?.supplier.admissionStatus || "PENDING"]);
 const readiness = computed(() => [Boolean(store.session?.supplier.registeredAddress), documents.value.length > 0, store.session?.account.status === "ACTIVE", store.session?.supplier.admissionStatus === "APPROVED"].filter(Boolean).length * 25);
 onMounted(load);

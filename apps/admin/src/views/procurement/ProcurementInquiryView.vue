@@ -7,6 +7,9 @@
             待采购清单
           </a-button>
           <a-button :loading="loading" @click="load">刷新</a-button>
+          <a-button :loading="exporting" @click="handleExport"
+            >导出 Excel</a-button
+          >
         </a-space>
       </template>
 
@@ -196,6 +199,16 @@
           <template v-else-if="column.key === 'action'">
             <a-button
               v-if="
+                record.status === 'AWARDED' &&
+                auth.can('procurement:purchase:create')
+              "
+              type="link"
+              size="small"
+              @click.stop="createOrderFromInquiry(record)"
+              >转采购订单</a-button
+            >
+            <a-button
+              v-if="
                 record.status === 'OPEN' &&
                 auth.can('procurement:purchase:create')
               "
@@ -203,6 +216,16 @@
               size="small"
               @click.stop="openDeadlineEditor(record)"
               >调整截止日</a-button
+            >
+            <a-button
+              v-if="
+                record.status === 'OPEN' &&
+                auth.can('procurement:purchase:create')
+              "
+              type="link"
+              size="small"
+              @click.stop="openMinQuotesEditor(record)"
+              >调整报价家数</a-button
             >
           </template>
         </template>
@@ -394,6 +417,31 @@
       </a-form>
     </a-modal>
 
+    <a-modal
+      v-model:open="minQuotesOpen"
+      title="调整最低有效报价数"
+      @ok="saveMinQuotes"
+    >
+      <a-form layout="vertical">
+        <a-alert
+          v-if="selectedInquiry"
+          type="info"
+          show-icon
+          :message="`当前设定 ${selectedInquiry.minQuoteCount} 家，已提交有效报价 ${submittedQuoteCount} 家`"
+          description="定标时有效报价数不足设定值将无法定标；“单一来源”寻源方式不受此限制。"
+          style="margin-bottom: 16px"
+        />
+        <a-form-item label="最低有效报价数" required>
+          <a-input-number
+            v-model:value="minQuotesValue"
+            :min="1"
+            :max="20"
+            style="width: 100%"
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
     <a-drawer
       v-model:open="attachmentsOpen"
       width="min(620px, 100vw)"
@@ -477,6 +525,7 @@ import {
 const auth = useAuthStore();
 const router = useRouter();
 const loading = ref(false);
+const exporting = ref(false);
 const inquiries = ref<api.ProcurementInquiry[]>([]);
 const requests = ref<api.PurchaseRequest[]>([]);
 const suppliers = ref<api.Supplier[]>([]);
@@ -486,6 +535,15 @@ const inviteOpen = ref(false);
 const scoreOpen = ref(false);
 const deadlineOpen = ref(false);
 const deadlineValue = ref("");
+const minQuotesOpen = ref(false);
+const minQuotesValue = ref(3);
+const submittedQuoteCount = computed(() =>
+  selectedInquiry.value
+    ? selectedInquiry.value.quotes.filter(
+        (item) => item.submissionStatus === "SUBMITTED",
+      ).length
+    : 0,
+);
 const attachmentsOpen = ref(false);
 const attachmentsLoading = ref(false);
 const quoteAttachments = ref<api.SupplierQuoteAttachment[]>([]);
@@ -530,6 +588,7 @@ const sourcingOptions = sourcingMethodOptions;
 const inquiryColumns = [
   { title: "询价单", dataIndex: "code", width: 190 },
   { title: "主题", dataIndex: "title", width: 260 },
+  { title: "负责采购", dataIndex: "createdByName", width: 120 },
   {
     title: "询价包",
     width: 170,
@@ -763,6 +822,30 @@ async function saveDeadline() {
   await load();
 }
 
+function openMinQuotesEditor(inquiry: api.ProcurementInquiry) {
+  selectedInquiry.value = inquiry;
+  minQuotesValue.value = inquiry.minQuoteCount || 3;
+  minQuotesOpen.value = true;
+}
+
+async function saveMinQuotes() {
+  if (!selectedInquiry.value || !minQuotesValue.value) {
+    message.warning("请填写最低有效报价数");
+    return;
+  }
+  try {
+    await api.updateProcurementInquiryMinQuotes(
+      selectedInquiry.value.id,
+      minQuotesValue.value,
+    );
+    minQuotesOpen.value = false;
+    message.success("最低有效报价数已更新");
+    await load();
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : "调整失败");
+  }
+}
+
 async function openQuoteAttachments(quote: api.SupplierQuotation) {
   attachmentsOpen.value = true;
   attachmentsLoading.value = true;
@@ -858,6 +941,17 @@ function selectQuote(
   });
 }
 
+function createOrderFromInquiry(inquiry: api.ProcurementInquiry) {
+  router.push({
+    path: "/procurement/workbench",
+    query: {
+      tab: "orders",
+      createOrder: "1",
+      requestId: inquiry.requestId || "",
+    },
+  });
+}
+
 function money(value: number) {
   return new Intl.NumberFormat("zh-CN", {
     style: "currency",
@@ -869,6 +963,17 @@ function formatFileSize(value: number) {
   return value >= 1024 * 1024
     ? `${(value / 1024 / 1024).toFixed(1)} MB`
     : `${Math.max(1, Math.ceil(value / 1024))} KB`;
+}
+async function handleExport() {
+  exporting.value = true;
+  try {
+    await api.exportProcurementInquiries();
+    message.success("询价单已导出");
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : "导出失败");
+  } finally {
+    exporting.value = false;
+  }
 }
 </script>
 

@@ -40,7 +40,10 @@ public class CodeGenerator {
     Map.entry("QUAL_EMPLOYEE", "YG"),
     Map.entry("QUAL_COMPANY", "GSZZ"),
     Map.entry("EMPLOYEE_CONTRACT", "YGHT"),
-    Map.entry("CODE_SEQUENCE", "SEQ")
+    Map.entry("CODE_SEQUENCE", "SEQ"),
+    Map.entry("PURCHASE_ORDER_CHANGE", "BGD"),
+    Map.entry("FRAMEWORK_AGREEMENT", "KJXY"),
+    Map.entry("CENTRAL_PLAN", "JCJH")
   );
 
   private static final int DEFAULT_WIDTH = 4;

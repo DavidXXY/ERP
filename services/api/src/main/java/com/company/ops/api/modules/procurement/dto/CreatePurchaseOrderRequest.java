@@ -20,7 +20,14 @@ public record CreatePurchaseOrderRequest(
     UUID contractId,
     String currency,
     @DecimalMin("0") BigDecimal freightAmount,
-    String sourceReason
+    String sourceReason,
+    Boolean generateContract,
+    String contractNo,
+    String contractName,
+    String paymentTerms,
+    LocalDate contractStartDate,
+    LocalDate contractEndDate,
+    UUID frameworkAgreementId
 ) {
   public CreatePurchaseOrderRequest(
       String code,
@@ -31,6 +38,51 @@ public record CreatePurchaseOrderRequest(
       LocalDate expectedDeliveryDate
   ) {
     this(code, supplierId, requestId, unitPrice, taxRate, expectedDeliveryDate,
-        null, null, null, null, null, null);
+        null, null, null, null, null, null, null, null, null, null, null, null, null);
+  }
+
+  public CreatePurchaseOrderRequest(
+      String code,
+      UUID supplierId,
+      UUID requestId,
+      BigDecimal unitPrice,
+      BigDecimal taxRate,
+      LocalDate expectedDeliveryDate,
+      BigDecimal orderedQty,
+      UUID inquiryId,
+      UUID contractId,
+      String currency,
+      BigDecimal freightAmount,
+      String sourceReason
+  ) {
+    this(code, supplierId, requestId, unitPrice, taxRate, expectedDeliveryDate,
+        orderedQty, inquiryId, contractId, currency, freightAmount, sourceReason,
+        null, null, null, null, null, null, null);
+  }
+
+  public CreatePurchaseOrderRequest(
+      String code,
+      UUID supplierId,
+      UUID requestId,
+      BigDecimal unitPrice,
+      BigDecimal taxRate,
+      LocalDate expectedDeliveryDate,
+      BigDecimal orderedQty,
+      UUID inquiryId,
+      UUID contractId,
+      String currency,
+      BigDecimal freightAmount,
+      String sourceReason,
+      Boolean generateContract,
+      String contractNo,
+      String contractName,
+      String paymentTerms,
+      LocalDate contractStartDate,
+      LocalDate contractEndDate
+  ) {
+    this(code, supplierId, requestId, unitPrice, taxRate, expectedDeliveryDate,
+        orderedQty, inquiryId, contractId, currency, freightAmount, sourceReason,
+        generateContract, contractNo, contractName, paymentTerms, contractStartDate,
+        contractEndDate, null);
   }
 }

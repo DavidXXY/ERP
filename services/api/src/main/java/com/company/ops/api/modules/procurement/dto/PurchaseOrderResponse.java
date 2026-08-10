@@ -37,7 +37,18 @@ public record PurchaseOrderResponse(
     String currency,
     BigDecimal freightAmount,
     String sourceReason,
+    String responsibleName,
     OffsetDateTime submittedAt,
     OffsetDateTime closedAt,
-    Integer orderVersion
+    Integer orderVersion,
+    String inquiryCode,
+    String contractNo,
+    String contractName,
+    String contractPaymentTerms,
+    LocalDate contractStartDate,
+    LocalDate contractEndDate,
+    String contractStatus,
+    String contractSourceType,
+    Boolean contractAcknowledged,
+    String contractAcknowledgedByName
 ) {}

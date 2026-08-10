@@ -99,7 +99,7 @@ class LocalApplicationContextTest {
         "select max(cast(version as integer)) from flyway_schema_history where success = true",
         Integer.class
     );
-    assertThat(version).isEqualTo(108);
+    assertThat(version).isEqualTo(119);
     assertThat(jdbc.queryForObject(
         "select count(*) from information_schema.tables where lower(table_name) = 'procurement_supplier_categories'",
         Integer.class)).isEqualTo(1);

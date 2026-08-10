@@ -4,6 +4,8 @@ import static com.company.ops.api.modules.procurement.dto.SupplierPortalDtos.*;
 
 import com.company.ops.api.common.api.ApiResponse;
 import com.company.ops.api.common.security.ClientIpResolver;
+import com.company.ops.api.modules.procurement.dto.ProcurementShipmentResponse;
+import com.company.ops.api.modules.procurement.dto.SupplierPortalNotificationResponse;
 import com.company.ops.api.modules.procurement.security.SupplierPortalPrincipal;
 import com.company.ops.api.modules.procurement.service.SupplierPortalService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -207,6 +209,24 @@ public class SupplierPortalController {
         .body(service.loadQuoteAttachment(principal, id));
   }
 
+  @GetMapping("/contract-documents/{id}/download")
+  @PreAuthorize("hasAuthority('supplier-portal:access')")
+  public ResponseEntity<Resource> downloadContractDocument(
+      @AuthenticationPrincipal SupplierPortalPrincipal principal,
+      @PathVariable UUID id
+  ) {
+    Map<String, Object> metadata = service.contractDocumentMetadata(principal, id);
+    String fileName = String.valueOf(metadata.get("fileName"));
+    String contentType = String.valueOf(metadata.get("contentType"));
+    return ResponseEntity.ok()
+        .contentType(MediaType.parseMediaType(
+            contentType == null || "null".equals(contentType)
+                ? MediaType.APPLICATION_OCTET_STREAM_VALUE : contentType))
+        .header(HttpHeaders.CONTENT_DISPOSITION,
+            ContentDisposition.attachment().filename(fileName, StandardCharsets.UTF_8).build().toString())
+        .body(service.loadContractDocument(principal, id));
+  }
+
   @DeleteMapping("/inquiries/{inquiryId}/attachments/{id}")
   @PreAuthorize("hasAuthority('supplier-portal:access')")
   public ApiResponse<Void> deleteAttachment(
@@ -235,5 +255,67 @@ public class SupplierPortalController {
       @Valid @RequestBody AskClarificationRequest request
   ) {
     return ApiResponse.ok(service.askClarification(principal, id, request));
+  }
+
+  @GetMapping("/notifications")
+  @PreAuthorize("hasAuthority('supplier-portal:access')")
+  public ApiResponse<List<SupplierPortalNotificationResponse>> notifications(
+      @AuthenticationPrincipal SupplierPortalPrincipal principal
+  ) {
+    return ApiResponse.ok(service.listNotifications(principal));
+  }
+
+  @GetMapping("/notifications/unread-count")
+  @PreAuthorize("hasAuthority('supplier-portal:access')")
+  public ApiResponse<Long> unreadNotificationCount(
+      @AuthenticationPrincipal SupplierPortalPrincipal principal
+  ) {
+    return ApiResponse.ok(service.unreadNotificationCount(principal));
+  }
+
+  @PostMapping("/notifications/{id}/read")
+  @PreAuthorize("hasAuthority('supplier-portal:access')")
+  public ApiResponse<Void> markNotificationRead(
+      @AuthenticationPrincipal SupplierPortalPrincipal principal,
+      @PathVariable UUID id
+  ) {
+    service.markNotificationRead(principal, id);
+    return ApiResponse.ok();
+  }
+
+  @PostMapping("/notifications/read-all")
+  @PreAuthorize("hasAuthority('supplier-portal:access')")
+  public ApiResponse<Void> markAllNotificationsRead(
+      @AuthenticationPrincipal SupplierPortalPrincipal principal
+  ) {
+    service.markAllNotificationsRead(principal);
+    return ApiResponse.ok();
+  }
+
+  @GetMapping("/shipments")
+  @PreAuthorize("hasAuthority('supplier-portal:access')")
+  public ApiResponse<List<ProcurementShipmentResponse>> myShipments(
+      @AuthenticationPrincipal SupplierPortalPrincipal principal
+  ) {
+    return ApiResponse.ok(service.listMyShipments(principal));
+  }
+
+  @PostMapping("/orders/{orderId}/shipments")
+  @PreAuthorize("hasAuthority('supplier-portal:access')")
+  public ApiResponse<ProcurementShipmentResponse> createShipment(
+      @AuthenticationPrincipal SupplierPortalPrincipal principal,
+      @PathVariable UUID orderId,
+      @Valid @RequestBody CreateShipmentRequest request
+  ) {
+    return ApiResponse.ok(service.createShipment(principal, orderId, request));
+  }
+
+  @PostMapping("/contracts/{id}/acknowledge")
+  @PreAuthorize("hasAuthority('supplier-portal:access')")
+  public ApiResponse<Map<String, Object>> acknowledgeContract(
+      @AuthenticationPrincipal SupplierPortalPrincipal principal,
+      @PathVariable UUID id
+  ) {
+    return ApiResponse.ok(service.acknowledgeContract(principal, id));
   }
 }

@@ -44,6 +44,22 @@ class LocalFileStorageServiceTest {
   }
 
   @Test
+  void storeAndResolveSupportProcurementOrdersNamespace() throws Exception {
+    LocalFileStorageService service = new LocalFileStorageService(tempDir.toString());
+    MockMultipartFile file = new MockMultipartFile(
+        "file",
+        "合同扫描件.pdf",
+        "application/pdf",
+        "%PDF-1.7\ncontract".getBytes()
+    );
+
+    var stored = service.store(file, "procurement-orders", PDF_ONLY);
+
+    assertThat(stored.relativePath()).startsWith("procurement-orders/");
+    assertThat(Files.exists(service.resolve(stored.relativePath()))).isTrue();
+  }
+
+  @Test
   void storeRejectsUnsupportedExtension() {
     LocalFileStorageService service = new LocalFileStorageService(tempDir.toString());
     MockMultipartFile file = new MockMultipartFile(

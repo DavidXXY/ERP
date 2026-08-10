@@ -2,6 +2,7 @@ package com.company.ops.api.modules.procurement.service;
 
 import com.company.ops.api.common.exception.BusinessException;
 import com.company.ops.api.common.service.CodeGenerator;
+import com.company.ops.api.common.storage.FileStorageService;
 import com.company.ops.api.common.tenant.TenantContext;
 import com.company.ops.api.modules.inventory.domain.InventoryPart;
 import com.company.ops.api.modules.inventory.domain.StockMovement;
@@ -25,12 +26,17 @@ import com.company.ops.api.modules.procurement.domain.SupplierQuotation;
 import com.company.ops.api.modules.procurement.domain.SupplierQuotationLine;
 import com.company.ops.api.modules.procurement.domain.ProcurementInquiry;
 import com.company.ops.api.modules.procurement.domain.ProcurementContract;
+import com.company.ops.api.modules.procurement.domain.ProcurementOrderDocument;
+import com.company.ops.api.modules.procurement.domain.ProcurementShipment;
+import com.company.ops.api.modules.procurement.domain.MaterialCategory;
 import com.company.ops.api.modules.procurement.domain.SupplierRiskStatus;
 import com.company.ops.api.modules.procurement.dto.CreatePurchaseOrderRequest;
 import com.company.ops.api.modules.procurement.dto.CreatePurchaseRequestRequest;
 import com.company.ops.api.modules.procurement.dto.CreateSupplierRequest;
 import com.company.ops.api.modules.procurement.dto.GoodsReceiptResponse;
 import com.company.ops.api.modules.procurement.dto.ImportPurchaseRequestBatchResponse;
+import com.company.ops.api.modules.procurement.dto.OrderDocumentResponse;
+import com.company.ops.api.modules.procurement.dto.ProcurementShipmentResponse;
 import com.company.ops.api.modules.procurement.dto.ProcessPurchaseRequestApprovalRequest;
 import com.company.ops.api.modules.procurement.dto.ProcurementCostAllocationResponse;
 import com.company.ops.api.modules.procurement.dto.ProcurementCostTargetOptionResponse;
@@ -48,6 +54,12 @@ import com.company.ops.api.modules.procurement.repository.ProcurementPayableRepo
 import com.company.ops.api.modules.procurement.repository.ProcurementCostAllocationRepository;
 import com.company.ops.api.modules.procurement.repository.PurchaseOrderRepository;
 import com.company.ops.api.modules.procurement.repository.PurchaseRequestApprovalRecordRepository;
+import com.company.ops.api.modules.procurement.repository.ProcurementApprovalRuleRepository;
+import com.company.ops.api.modules.procurement.domain.ProcurementApprovalRule;
+import com.company.ops.api.modules.procurement.repository.FrameworkAgreementItemRepository;
+import com.company.ops.api.modules.procurement.repository.FrameworkAgreementRepository;
+import com.company.ops.api.modules.procurement.domain.FrameworkAgreement;
+import com.company.ops.api.modules.procurement.domain.FrameworkAgreementItem;
 import com.company.ops.api.modules.procurement.repository.PurchaseRequestRepository;
 import com.company.ops.api.modules.procurement.repository.SupplierRepository;
 import com.company.ops.api.modules.procurement.repository.SupplierCategoryRepository;
@@ -57,7 +69,10 @@ import com.company.ops.api.modules.procurement.repository.SupplierQuotationLineR
 import com.company.ops.api.modules.procurement.repository.ProcurementInquiryRepository;
 import com.company.ops.api.modules.procurement.repository.ProcurementInquiryRequestRepository;
 import com.company.ops.api.modules.procurement.repository.ProcurementContractRepository;
+import com.company.ops.api.modules.procurement.repository.ProcurementOrderDocumentRepository;
+import com.company.ops.api.modules.procurement.repository.ProcurementShipmentRepository;
 import com.company.ops.api.modules.procurement.repository.ProcurementReturnOrderRepository;
+import com.company.ops.api.modules.procurement.repository.MaterialCategoryRepository;
 import com.company.ops.api.modules.project.domain.Project;
 import com.company.ops.api.modules.project.domain.ProjectApprovalStatus;
 import com.company.ops.api.modules.project.domain.ProjectStage;
@@ -69,7 +84,11 @@ import java.math.RoundingMode;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.nio.charset.StandardCharsets;
+import java.util.HexFormat;
+import java.util.Set;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -90,12 +109,20 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.util.StringUtils;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.core.io.Resource;
 import org.springframework.web.multipart.MultipartFile;
 import com.company.ops.api.modules.system.security.UserPrincipal;
 import static com.company.ops.api.common.util.MoneyUtils.amount;
 
 @Service
 public class ProcurementService {
+
+  private static final FileStorageService.FilePolicy ORDER_DOCUMENT_POLICY = new FileStorageService.FilePolicy(
+      20L * 1024 * 1024,
+      Set.of(".jpg", ".jpeg", ".png", ".webp", ".pdf", ".doc", ".docx", ".xls", ".xlsx"),
+      "采购合同附件不能超过20MB",
+      "仅支持图片、PDF、Word 和 Excel 文件",
+      true);
 
   private final CodeGenerator codeGenerator;
   private final SupplierRepository supplierRepository;
@@ -117,7 +144,15 @@ public class ProcurementService {
   private final SupplierQuotationLineRepository quoteLineRepository;
   private final ProcurementContractRepository contractRepository;
   private final ProcurementReturnOrderRepository returnRepository;
+  private final MaterialCategoryRepository materialCategoryRepository;
+  private final ProcurementOrderDocumentRepository orderDocumentRepository;
+  private final ProcurementShipmentRepository shipmentRepository;
+  private final FileStorageService storage;
   private final ProcurementArrivalService arrivals;
+  private final SupplierPortalNotifier portalNotifier;
+  private final ProcurementApprovalRuleRepository approvalRuleRepository;
+  private final FrameworkAgreementItemRepository frameworkAgreementItemRepository;
+  private final FrameworkAgreementRepository frameworkAgreementRepository;
 
   public ProcurementService(
       CodeGenerator codeGenerator,
@@ -140,7 +175,15 @@ public class ProcurementService {
       SupplierQuotationLineRepository quoteLineRepository,
       ProcurementContractRepository contractRepository,
       ProcurementReturnOrderRepository returnRepository,
-      ProcurementArrivalService arrivals
+      MaterialCategoryRepository materialCategoryRepository,
+      ProcurementOrderDocumentRepository orderDocumentRepository,
+      ProcurementShipmentRepository shipmentRepository,
+      FileStorageService storage,
+      ProcurementArrivalService arrivals,
+      SupplierPortalNotifier portalNotifier,
+      ProcurementApprovalRuleRepository approvalRuleRepository,
+      FrameworkAgreementItemRepository frameworkAgreementItemRepository,
+      FrameworkAgreementRepository frameworkAgreementRepository
   ) {
     this.codeGenerator = codeGenerator;
     this.supplierRepository = supplierRepository;
@@ -162,7 +205,15 @@ public class ProcurementService {
     this.quoteLineRepository = quoteLineRepository;
     this.contractRepository = contractRepository;
     this.returnRepository = returnRepository;
+    this.materialCategoryRepository = materialCategoryRepository;
+    this.orderDocumentRepository = orderDocumentRepository;
+    this.shipmentRepository = shipmentRepository;
+    this.storage = storage;
     this.arrivals = arrivals;
+    this.portalNotifier = portalNotifier;
+    this.approvalRuleRepository = approvalRuleRepository;
+    this.frameworkAgreementItemRepository = frameworkAgreementItemRepository;
+    this.frameworkAgreementRepository = frameworkAgreementRepository;
   }
 
   @Transactional(readOnly = true)
@@ -407,6 +458,7 @@ public class ProcurementService {
     purchaseRequest.setCostTargetName(costTarget.name());
     purchaseRequest.setStatus(PurchaseRequestStatus.SUBMITTED);
     purchaseRequest.setApprovalStatus(ApprovalStatus.PENDING);
+    purchaseRequest.setApprovalLevel(resolveApprovalLevel(requestAmount));
     return toPurchaseRequestResponse(requestRepository.save(purchaseRequest));
   }
 
@@ -481,6 +533,7 @@ public class ProcurementService {
       item.setCostTargetName(costTarget.name());
       item.setStatus(PurchaseRequestStatus.SUBMITTED);
       item.setApprovalStatus(ApprovalStatus.PENDING);
+      item.setApprovalLevel(resolveApprovalLevel(item.getTotalAmount()));
       item.setSourceType("IMPORT");
       item.setSourceReference(fileName.length() > 120 ? fileName.substring(fileName.length() - 120) : fileName);
       entities.add(item);
@@ -505,6 +558,9 @@ public class ProcurementService {
     }
     if (request.decision() == ApprovalStatus.PENDING) {
       throw new BusinessException("请选择通过或驳回");
+    }
+    if (request.decision() == ApprovalStatus.APPROVED) {
+      enforceApprovalRole(purchaseRequest);
     }
 
     purchaseRequest.setApprovalStatus(request.decision());
@@ -540,6 +596,11 @@ public class ProcurementService {
         .toList();
     if (pending.isEmpty()) {
       throw new BusinessException("该批次没有待处理的采购明细");
+    }
+    if (request.decision() == ApprovalStatus.APPROVED) {
+      for (PurchaseRequest item : pending) {
+        enforceApprovalRole(item);
+      }
     }
     String approverName = currentName();
     OffsetDateTime decidedAt = OffsetDateTime.now();
@@ -596,6 +657,7 @@ public class ProcurementService {
     purchaseRequest.setUnitPrice(amount(request.unitPrice()));
     purchaseRequest.setTaxRate(defaultTaxRate(request.taxRate()));
     purchaseRequest.setTotalAmount(request.quantity().multiply(amount(request.unitPrice())));
+    purchaseRequest.setApprovalLevel(resolveApprovalLevel(purchaseRequest.getTotalAmount()));
     purchaseRequest.setExpectedDate(request.expectedDate());
     purchaseRequest.setReason(request.reason());
     purchaseRequest.setCostType(request.costType());
@@ -657,14 +719,20 @@ public class ProcurementService {
       throw new BusinessException("采购申请审批通过后才能下单");
     }
     if (purchaseRequest.getPartId() == null && StringUtils.hasText(purchaseRequest.getPartName())) {
-      List<InventoryPart> exactMatches = partRepository.findByNameIgnoreCase(
-          purchaseRequest.getPartName().trim());
+      String partName = purchaseRequest.getPartName().trim();
+      List<InventoryPart> exactMatches = partRepository.findByNameIgnoreCase(partName);
+      InventoryPart part;
       if (exactMatches.size() == 1) {
-        InventoryPart part = exactMatches.get(0);
-        purchaseRequest.setPartId(part.getId());
-        purchaseRequest.setPartName(part.getName());
-        requestRepository.save(purchaseRequest);
+        part = exactMatches.get(0);
+      } else if (exactMatches.isEmpty()) {
+        part = autoCreatePart(partName, purchaseRequest.getUnitPrice());
+      } else {
+        throw new BusinessException("物料「" + partName
+            + "」在物料库存在多个同名档案，请消除同名物料或为采购申请关联唯一物料");
       }
+      purchaseRequest.setPartId(part.getId());
+      purchaseRequest.setPartName(part.getName());
+      requestRepository.save(purchaseRequest);
     }
     if (purchaseRequest.getPartId() == null) {
       throw new BusinessException("采购申请未关联唯一物料，请先建立物料档案或消除同名物料");
@@ -728,6 +796,27 @@ public class ProcurementService {
     } else if (!StringUtils.hasText(request.sourceReason())) {
       throw new BusinessException("未关联询价单时必须填写直接采购原因");
     }
+
+    if (request.frameworkAgreementId() != null) {
+      FrameworkAgreement agreement = frameworkAgreementRepository.findById(request.frameworkAgreementId())
+          .orElseThrow(() -> new BusinessException("框架协议不存在"));
+      if (!"ACTIVE".equals(agreement.getStatus())) {
+        throw new BusinessException("框架协议已关闭，不能据此下单");
+      }
+      if (!agreement.getSupplierId().equals(request.supplierId())) {
+        throw new BusinessException("订单供应商必须与框架协议供应商一致");
+      }
+      if (inquiryId == null) {
+        FrameworkAgreementItem item = frameworkAgreementItemRepository
+            .findByAgreementIdOrderByCreatedAtAsc(agreement.getId()).stream()
+            .filter(line -> line.getPartId().equals(purchaseRequest.getPartId()))
+            .findFirst()
+            .orElseThrow(() -> new BusinessException("框架协议未包含该物料，请补充协议物料"));
+        if (request.unitPrice().compareTo(item.getUnitPrice()) != 0) {
+          throw new BusinessException("订单价格必须与框架协议约定价格一致");
+        }
+      }
+    }
     if (request.contractId() != null) {
       ProcurementContract contract = contractRepository.findById(request.contractId())
           .orElseThrow(() -> new BusinessException("采购合同不存在"));
@@ -769,14 +858,150 @@ public class ProcurementService {
     order.setStatus(PurchaseOrderStatus.DRAFT);
     order.setApprovalStatus(ApprovalStatus.PENDING);
     order.setInquiryId(inquiryId);
-    order.setContractId(request.contractId());
     order.setCurrency(StringUtils.hasText(request.currency()) ? request.currency()
         : selectedQuote == null ? "CNY" : selectedQuote.getCurrency());
     order.setFreightAmount(freight);
     order.setSourceReason(request.sourceReason());
+    order.setResponsibleName(currentName());
 
     PurchaseOrder saved = orderRepository.save(order);
+    if (request.contractId() != null) {
+      saved.setContractId(request.contractId());
+      saved = orderRepository.save(saved);
+    } else if (Boolean.TRUE.equals(request.generateContract())) {
+      String contractNo = StringUtils.hasText(request.contractNo())
+          ? request.contractNo().trim() : codeGenerator.generate("CONTRACT");
+      if (contractRepository.findFirstByContractNoOrderByVersionNoDesc(contractNo).isPresent()) {
+        throw new BusinessException("合同编号已存在");
+      }
+      ProcurementContract contract = new ProcurementContract();
+      contract.setContractNo(contractNo);
+      contract.setName(StringUtils.hasText(request.contractName())
+          ? request.contractName().trim() : supplier.getName() + "采购合同");
+      contract.setSupplierId(request.supplierId());
+      contract.setInquiryId(inquiryId);
+      contract.setSelectedQuoteId(selectedQuote == null ? null : selectedQuote.getId());
+      contract.setAmount(saved.getOrderAmount());
+      contract.setCurrency(saved.getCurrency());
+      contract.setStartDate(request.contractStartDate());
+      contract.setEndDate(request.contractEndDate());
+      contract.setPaymentTerms(request.paymentTerms());
+      contract.setStatus("DRAFT");
+      contract.setApprovalStatus("PENDING");
+      contract.setSourceType("FROM_ORDER");
+      contract.setOrderId(saved.getId());
+      contract.setRemark("随采购订单 " + saved.getCode() + " 自动生成，订单审批通过后生效");
+      ProcurementContract savedContract = contractRepository.save(contract);
+      saved.setContractId(savedContract.getId());
+      saved = orderRepository.save(saved);
+    }
     return toPurchaseOrderResponse(saved, supplier, purchaseRequest);
+  }
+
+  @Transactional
+  public OrderDocumentResponse uploadOrderDocument(UUID orderId, MultipartFile file) {
+    PurchaseOrder order = orderRepository.findById(orderId)
+        .orElseThrow(() -> new BusinessException("采购订单不存在"));
+    FileStorageService.StoredFile stored = null;
+    try {
+      String checksum = sha256(file);
+      stored = storage.store(file, "procurement-orders", ORDER_DOCUMENT_POLICY);
+      ProcurementOrderDocument document = new ProcurementOrderDocument();
+      document.setOrderId(order.getId());
+      document.setFileName(stored.originalName());
+      document.setObjectKey(stored.objectKey());
+      document.setContentType(stored.contentType());
+      document.setSizeBytes(stored.sizeBytes());
+      document.setSha256(checksum);
+      document.setUploadedBy(currentName());
+      document.setUploadedAt(OffsetDateTime.now());
+      OrderDocumentResponse saved = toOrderDocumentResponse(
+          orderDocumentRepository.save(document), order);
+      portalNotifier.notify(order.getSupplierId(), "ORDER_DOCUMENT",
+          "采购订单合同附件已上传",
+          "采购订单 " + order.getCode() + " 已上传合同附件，可在供应商门户查看下载。",
+          "ORDER", order.getId());
+      return saved;
+    } catch (RuntimeException exception) {
+      if (stored != null) {
+        storage.delete(stored.relativePath());
+      }
+      throw exception;
+    }
+  }
+
+  @Transactional(readOnly = true)
+  public List<OrderDocumentResponse> listOrderDocuments(UUID orderId) {
+    orderRepository.findById(orderId)
+        .orElseThrow(() -> new BusinessException("采购订单不存在"));
+    return orderDocumentRepository.findByOrderIdOrderByCreatedAtDesc(orderId).stream()
+        .map(document -> toOrderDocumentResponse(document, null))
+        .toList();
+  }
+
+  @Transactional(readOnly = true)
+  public List<ProcurementShipmentResponse> listOrderShipments(UUID orderId) {
+    orderRepository.findById(orderId)
+        .orElseThrow(() -> new BusinessException("采购订单不存在"));
+    Supplier supplier = orderRepository.findById(orderId)
+        .map(PurchaseOrder::getSupplierId)
+        .flatMap(id -> supplierRepository.findById(id)).orElse(null);
+    return shipmentRepository.findByOrderIdOrderByCreatedAtDesc(orderId).stream()
+        .map(item -> toShipmentResponse(item, supplier)).toList();
+  }
+
+  private ProcurementShipmentResponse toShipmentResponse(
+      ProcurementShipment item,
+      Supplier supplier
+  ) {
+    return new ProcurementShipmentResponse(
+        item.getId(), item.getOrderId(), null, item.getSupplierId(),
+        supplier == null ? null : supplier.getName(),
+        item.getDeliveryNo(), item.getCarrier(), item.getExpectedArrival(),
+        item.getRemark(), item.getStatus(), item.getCreatedBy(), item.getCreatedAt());
+  }
+
+  @Transactional(readOnly = true)
+  public Resource loadOrderDocument(UUID id) {
+    ProcurementOrderDocument document = requireOrderDocument(id);
+    return storage.loadInNamespace("procurement-orders", document.getObjectKey());
+  }
+
+  @Transactional
+  public void deleteOrderDocument(UUID id) {
+    ProcurementOrderDocument document = requireOrderDocument(id);
+    orderDocumentRepository.delete(document);
+    storage.deleteInNamespace("procurement-orders", document.getObjectKey());
+  }
+
+  private ProcurementOrderDocument requireOrderDocument(UUID id) {
+    return orderDocumentRepository.findById(id)
+        .orElseThrow(() -> new BusinessException("采购合同附件不存在"));
+  }
+
+  private OrderDocumentResponse toOrderDocumentResponse(
+      ProcurementOrderDocument document,
+      PurchaseOrder order
+  ) {
+    return new OrderDocumentResponse(
+        document.getId(),
+        document.getOrderId(),
+        order == null ? null : order.getCode(),
+        document.getFileName(),
+        document.getContentType(),
+        document.getSizeBytes(),
+        document.getUploadedBy(),
+        document.getUploadedAt()
+    );
+  }
+
+  private static String sha256(MultipartFile file) {
+    try {
+      MessageDigest digest = MessageDigest.getInstance("SHA-256");
+      return HexFormat.of().formatHex(digest.digest(file.getBytes()));
+    } catch (NoSuchAlgorithmException | IOException exception) {
+      throw new BusinessException("合同附件校验失败");
+    }
   }
 
   @Transactional
@@ -792,6 +1017,17 @@ public class ProcurementService {
     }
     order.setStatus(PurchaseOrderStatus.CANCELLED);
     PurchaseOrder saved = orderRepository.save(order);
+    if (order.getContractId() != null) {
+      ProcurementContract linkedContract = contractRepository.findById(order.getContractId())
+          .orElse(null);
+      if (linkedContract != null && "FROM_ORDER".equals(linkedContract.getSourceType())
+          && !"ACTIVE".equals(linkedContract.getStatus())) {
+        linkedContract.setStatus("REJECTED");
+        linkedContract.setApprovalStatus("REJECTED");
+        linkedContract.setApprovalComment("随采购订单 " + order.getCode() + " 取消");
+        contractRepository.save(linkedContract);
+      }
+    }
     // Revert the associated purchase request back to APPROVED
     if (order.getRequestId() != null) {
       PurchaseRequest pr = requestRepository.findById(order.getRequestId()).orElse(null);
@@ -861,6 +1097,16 @@ public class ProcurementService {
     order.setApprovalStatus(decision); order.setApproverName(currentName()); order.setApprovalComment(comment); order.setApprovedAt(OffsetDateTime.now());
     if (decision == ApprovalStatus.APPROVED) {
       order.setStatus(PurchaseOrderStatus.ORDERED);
+      ProcurementContract linkedContract = order.getContractId() == null ? null
+          : contractRepository.findById(order.getContractId()).orElse(null);
+      if (linkedContract != null && "FROM_ORDER".equals(linkedContract.getSourceType())) {
+        linkedContract.setStatus("ACTIVE");
+        linkedContract.setApprovalStatus("APPROVED");
+        linkedContract.setApprovedByName(currentName());
+        linkedContract.setApprovalComment(comment);
+        linkedContract.setApprovedAt(OffsetDateTime.now());
+        contractRepository.save(linkedContract);
+      }
       requestRepository.findById(order.getRequestId()).ifPresent(pr -> {
         BigDecimal approvedQty = orderRepository.findByRequestId(pr.getId()).stream()
             .filter(existing -> existing.getApprovalStatus() == ApprovalStatus.APPROVED
@@ -1101,7 +1347,8 @@ public class ProcurementService {
         request.getApprovalStatus(),
         approval == null ? null : approval.getComment(),
         approval == null ? null : approval.getApproverName(),
-        approval == null ? null : approval.getDecidedAt()
+        approval == null ? null : approval.getDecidedAt(),
+        request.getApprovalLevel()
     );
   }
 
@@ -1110,6 +1357,10 @@ public class ProcurementService {
       Supplier supplier,
       PurchaseRequest request
   ) {
+    ProcurementInquiry inquiry = order.getInquiryId() == null ? null
+        : inquiryRepository.findById(order.getInquiryId()).orElse(null);
+    ProcurementContract contract = order.getContractId() == null ? null
+        : contractRepository.findById(order.getContractId()).orElse(null);
     return new PurchaseOrderResponse(
         order.getId(),
         order.getCode(),
@@ -1131,8 +1382,18 @@ public class ProcurementService {
         order.getCostTargetName(),
         order.getStatus(), order.getApprovalStatus(), order.getApprovalComment(), order.getApproverName(),
         order.getApprovedAt(), order.getInquiryId(), order.getContractId(), order.getCurrency(),
-        amount(order.getFreightAmount()), order.getSourceReason(), order.getSubmittedAt(),
-        order.getClosedAt(), order.getOrderVersion()
+        amount(order.getFreightAmount()), order.getSourceReason(), order.getResponsibleName(),
+        order.getSubmittedAt(), order.getClosedAt(), order.getOrderVersion(),
+        inquiry == null ? null : inquiry.getCode(),
+        contract == null ? null : contract.getContractNo(),
+        contract == null ? null : contract.getName(),
+        contract == null ? null : contract.getPaymentTerms(),
+        contract == null ? null : contract.getStartDate(),
+        contract == null ? null : contract.getEndDate(),
+        contract == null ? null : contract.getStatus(),
+        contract == null ? null : contract.getSourceType(),
+        contract == null ? null : contract.getAcknowledgedAt() != null,
+        contract == null ? null : contract.getAcknowledgedByName()
     );
   }
 
@@ -1164,7 +1425,7 @@ public class ProcurementService {
         order == null ? null : order.getCostTargetName(),
         receipt.getInspectionStatus(), receipt.getQualifiedQty(), receipt.getRejectedQty(),
         receipt.getInspectorName(), receipt.getInspectionComment(), receipt.getInspectedAt(),
-        receipt.getClientRequestId(), receipt.getAsnNo()
+        receipt.getClientRequestId(), receipt.getAsnNo(), receipt.getCarrier()
     );
   }
 
@@ -1218,6 +1479,56 @@ public class ProcurementService {
         amount(allocation.getAmount()),
         allocation.getIncurredDate()
     );
+  }
+
+  private String resolveApprovalLevel(BigDecimal amount) {
+    return approvalRuleRepository.findByEnabledTrueOrderBySortOrderAsc().stream()
+        .filter(rule -> matchesApprovalRule(rule, amount))
+        .map(ProcurementApprovalRule::getApprovalLevel)
+        .findFirst()
+        .orElse(null);
+  }
+
+  private boolean matchesApprovalRule(ProcurementApprovalRule rule, BigDecimal value) {
+    if (rule.getMinAmount() != null && value.compareTo(rule.getMinAmount()) < 0) {
+      return false;
+    }
+    if (rule.getMaxAmount() != null && value.compareTo(rule.getMaxAmount()) >= 0) {
+      return false;
+    }
+    return true;
+  }
+
+  private void enforceApprovalRole(PurchaseRequest purchaseRequest) {
+    if (purchaseRequest.getApprovalLevel() == null) {
+      return;
+    }
+    ProcurementApprovalRule rule = approvalRuleRepository.findByEnabledTrueOrderBySortOrderAsc().stream()
+        .filter(item -> purchaseRequest.getApprovalLevel().equals(item.getApprovalLevel()))
+        .findFirst()
+        .orElse(null);
+    if (rule == null || rule.getRequiredRoleCode() == null) {
+      return;
+    }
+    var authentication = SecurityContextHolder.getContext().getAuthentication();
+    boolean permitted = authentication != null
+        && authentication.getPrincipal() instanceof UserPrincipal principal
+        && roleAllows(principal.roleCodes(), rule.getRequiredRoleCode());
+    if (!permitted) {
+      throw new BusinessException("该申请金额达到「" + rule.getRuleName() + "」审批级别，需要角色 "
+          + rule.getRequiredRoleCode() + " 审批");
+    }
+  }
+
+  private boolean roleAllows(List<String> roles, String required) {
+    if (roles.contains("ADMIN")) {
+      return true;
+    }
+    if (roles.contains(required)) {
+      return true;
+    }
+    // 采购经理可代审专员级申请
+    return "PROCUREMENT_SPECIALIST".equals(required) && roles.contains("PROCUREMENT_MANAGER");
   }
 
   private CostTarget resolveCostTarget(
@@ -1323,6 +1634,27 @@ public class ProcurementService {
 
   private BigDecimal amount(BigDecimal value) {
     return value == null ? BigDecimal.ZERO : value;
+  }
+
+  private InventoryPart autoCreatePart(String partName, BigDecimal unitPrice) {
+    InventoryPart part = new InventoryPart();
+    part.setCode(codeGenerator.generate("PART"));
+    part.setName(partName);
+    part.setCategory(defaultMaterialCategory().getName());
+    part.setSafetyQty(BigDecimal.ZERO);
+    part.setUnitCost(amount(unitPrice));
+    part.setStockQty(BigDecimal.ZERO);
+    return partRepository.save(part);
+  }
+
+  private MaterialCategory defaultMaterialCategory() {
+    return materialCategoryRepository.findByNameIgnoreCase("未分类")
+        .orElseGet(() -> {
+          MaterialCategory category = new MaterialCategory();
+          category.setName("未分类");
+          category.setBuiltIn(true);
+          return materialCategoryRepository.save(category);
+        });
   }
 
   private BigDecimal defaultTaxRate(BigDecimal value) {

@@ -78,6 +78,15 @@ public class ProcurementControlController {
     return ApiResponse.ok(service.updateInquiryDeadline(id, request));
   }
 
+  @PostMapping("/inquiries/{id}/min-quotes")
+  @PreAuthorize("hasAuthority('procurement:purchase:create')")
+  public ApiResponse<Map<String, Object>> updateInquiryMinQuotes(
+      @PathVariable UUID id,
+      @Valid @RequestBody UpdateInquiryMinQuotes request
+  ) {
+    return ApiResponse.ok(service.updateInquiryMinQuotes(id, request));
+  }
+
   @PostMapping("/inquiries/{id}/quotes/{quoteId}/score")
   @PreAuthorize("hasAuthority('procurement:request:approve')")
   public ApiResponse<Map<String, Object>> scoreQuote(

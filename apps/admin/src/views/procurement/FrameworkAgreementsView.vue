@@ -57,16 +57,24 @@
           </template>
           <template v-else-if="column.key === 'action'">
             <a-space size="small">
-              <a-button type="link" size="small" @click="openDetail(record)">查看</a-button>
+              <a-button type="link" size="small" @click="openDetail(record)"
+                >查看</a-button
+              >
               <a-button
-                v-if="record.status === 'ACTIVE' && auth.can('procurement:purchase:create')"
+                v-if="
+                  record.status === 'ACTIVE' &&
+                  auth.can('procurement:purchase:create')
+                "
                 type="link"
                 size="small"
                 @click="openEdit(record)"
                 >编辑</a-button
               >
               <a-popconfirm
-                v-if="record.status === 'ACTIVE' && auth.can('procurement:purchase:create')"
+                v-if="
+                  record.status === 'ACTIVE' &&
+                  auth.can('procurement:purchase:create')
+                "
                 title="确认关闭该框架协议？关闭后不能据此下单。"
                 @confirm="handleClose(record)"
               >
@@ -89,7 +97,10 @@
         <a-row :gutter="16">
           <a-col :xs="24" :md="12">
             <a-form-item label="协议名称" required>
-              <a-input v-model:value="form.title" placeholder="如：2026年度办公用品框架协议" />
+              <a-input
+                v-model:value="form.title"
+                placeholder="如：2026年度办公用品框架协议"
+              />
             </a-form-item>
           </a-col>
           <a-col :xs="24" :md="12">
@@ -141,13 +152,30 @@
               />
             </template>
             <template v-else-if="column.key === 'price'">
-              <a-input-number v-model:value="record.unitPrice" :min="0.01" :precision="2" style="width: 140px" />
+              <a-input-number
+                v-model:value="record.unitPrice"
+                :min="0.01"
+                :precision="2"
+                style="width: 140px"
+              />
             </template>
             <template v-else-if="column.key === 'tax'">
-              <a-input-number v-model:value="record.taxRate" :min="0" :max="100" :precision="2" style="width: 100px" />
+              <a-input-number
+                v-model:value="record.taxRate"
+                :min="0"
+                :max="100"
+                :precision="2"
+                style="width: 100px"
+              />
             </template>
             <template v-else-if="column.key === 'action'">
-              <a-button type="link" size="small" danger @click="removeItem(record.rowKey)">删除</a-button>
+              <a-button
+                type="link"
+                size="small"
+                danger
+                @click="removeItem(record.rowKey)"
+                >删除</a-button
+              >
             </template>
           </template>
         </a-table>
@@ -164,16 +192,26 @@
       :footer="null"
     >
       <a-descriptions v-if="detail" bordered size="small" :column="2">
-        <a-descriptions-item label="协议编码">{{ detail.code }}</a-descriptions-item>
-        <a-descriptions-item label="供应商">{{ detail.supplierName }}</a-descriptions-item>
-        <a-descriptions-item label="有效期">{{ detail.validFrom }} ~ {{ detail.validTo }}</a-descriptions-item>
+        <a-descriptions-item label="协议编码">{{
+          detail.code
+        }}</a-descriptions-item>
+        <a-descriptions-item label="供应商">{{
+          detail.supplierName
+        }}</a-descriptions-item>
+        <a-descriptions-item label="有效期"
+          >{{ detail.validFrom }} ~ {{ detail.validTo }}</a-descriptions-item
+        >
         <a-descriptions-item label="状态">
           <a-tag :color="detail.status === 'ACTIVE' ? 'green' : 'default'">{{
             detail.status === "ACTIVE" ? "生效中" : "已关闭"
           }}</a-tag>
         </a-descriptions-item>
-        <a-descriptions-item label="创建人">{{ detail.createdByName }}</a-descriptions-item>
-        <a-descriptions-item label="备注">{{ detail.remark || "-" }}</a-descriptions-item>
+        <a-descriptions-item label="创建人">{{
+          detail.createdByName
+        }}</a-descriptions-item>
+        <a-descriptions-item label="备注">{{
+          detail.remark || "-"
+        }}</a-descriptions-item>
       </a-descriptions>
       <a-table
         v-if="detail"

@@ -7,7 +7,9 @@
             待采购清单
           </a-button>
           <a-button :loading="loading" @click="load">刷新</a-button>
-          <a-button :loading="exporting" @click="handleExport">导出 Excel</a-button>
+          <a-button :loading="exporting" @click="handleExport"
+            >导出 Excel</a-button
+          >
         </a-space>
       </template>
 

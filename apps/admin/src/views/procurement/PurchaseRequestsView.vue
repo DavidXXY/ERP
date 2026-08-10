@@ -484,8 +484,6 @@ import {
   type ProcurementCostTargetOption,
   type ProcurementCostType,
   type PurchaseRequest,
-
-
   exportProcurementRequests,
 } from "@/api/procurement";
 import {
@@ -1017,13 +1015,15 @@ async function handleExport() {
 }
 function approvalLevelLabel(level: string) {
   return (
-    {
-      DEPARTMENT: "部门级",
-      MANAGER: "经理级",
-      EXECUTIVE: "总经理级",
-      CUSTOM: "自定义",
-    } as Record<string, string>
-  )[level] || level;
+    (
+      {
+        DEPARTMENT: "部门级",
+        MANAGER: "经理级",
+        EXECUTIVE: "总经理级",
+        CUSTOM: "自定义",
+      } as Record<string, string>
+    )[level] || level
+  );
 }
 </script>
 

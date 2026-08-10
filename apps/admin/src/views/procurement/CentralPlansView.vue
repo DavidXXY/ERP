@@ -47,7 +47,12 @@
           <template v-else-if="column.key === 'items'">
             {{ record.items.length }} 项
             <span class="table-subtitle"
-              >{{ (record.items as CentralPlanItem[]).filter((i: CentralPlanItem) => i.status === "REQUESTED").length }} 项已转申请</span
+              >{{
+                (record.items as CentralPlanItem[]).filter(
+                  (i: CentralPlanItem) => i.status === "REQUESTED",
+                ).length
+              }}
+              项已转申请</span
             >
           </template>
           <template v-else-if="column.key === 'status'">
@@ -70,7 +75,9 @@
           </template>
           <template v-else-if="column.key === 'action'">
             <a-space size="small">
-              <a-button type="link" size="small" @click="openEdit(record)">编辑</a-button>
+              <a-button type="link" size="small" @click="openEdit(record)"
+                >编辑</a-button
+              >
               <a-button
                 v-if="record.status === 'DRAFT'"
                 type="link"
@@ -102,9 +109,12 @@
                 <strong>{{ item.partName }}</strong>
               </template>
               <template v-else-if="column.key === 'status'">
-                <a-tag :color="item.status === 'REQUESTED' ? 'green' : 'blue'">{{
-                  item.status === "REQUESTED" ? "已转申请" : "待执行"
-                }}</a-tag>
+                <a-tag
+                  :color="item.status === 'REQUESTED' ? 'green' : 'blue'"
+                  >{{
+                    item.status === "REQUESTED" ? "已转申请" : "待执行"
+                  }}</a-tag
+                >
                 <span v-if="item.requestCode" class="table-subtitle">{{
                   item.requestCode
                 }}</span>
@@ -139,12 +149,21 @@
         <a-row :gutter="16">
           <a-col :xs="24" :md="12">
             <a-form-item label="计划名称" required>
-              <a-input v-model:value="form.name" placeholder="如：2026年度生产物料集采计划" />
+              <a-input
+                v-model:value="form.name"
+                placeholder="如：2026年度生产物料集采计划"
+              />
             </a-form-item>
           </a-col>
           <a-col :xs="24" :md="12">
             <a-form-item label="计划年度" required>
-              <a-input-number v-model:value="form.periodYear" :min="2000" :max="2100" :precision="0" style="width: 100%" />
+              <a-input-number
+                v-model:value="form.periodYear"
+                :min="2000"
+                :max="2100"
+                :precision="0"
+                style="width: 100%"
+              />
             </a-form-item>
           </a-col>
           <a-col :xs="24">
@@ -175,16 +194,32 @@
               />
             </template>
             <template v-else-if="column.key === 'qty'">
-              <a-input-number v-model:value="record.plannedQty" :min="0.01" :precision="2" style="width: 120px" />
+              <a-input-number
+                v-model:value="record.plannedQty"
+                :min="0.01"
+                :precision="2"
+                style="width: 120px"
+              />
             </template>
             <template v-else-if="column.key === 'price'">
-              <a-input-number v-model:value="record.unitPrice" :min="0" :precision="2" style="width: 130px" />
+              <a-input-number
+                v-model:value="record.unitPrice"
+                :min="0"
+                :precision="2"
+                style="width: 130px"
+              />
             </template>
             <template v-else-if="column.key === 'date'">
               <a-input v-model:value="record.expectedDate" type="date" />
             </template>
             <template v-else-if="column.key === 'action'">
-              <a-button type="link" size="small" danger @click="removeItem(record.rowKey)">删除</a-button>
+              <a-button
+                type="link"
+                size="small"
+                danger
+                @click="removeItem(record.rowKey)"
+                >删除</a-button
+              >
             </template>
           </template>
         </a-table>
@@ -205,7 +240,11 @@
         <a-alert
           class="section-alert"
           type="info"
-          :message="convertItem ? convertItem.partName + ' · 数量 ' + convertItem.plannedQty : ''"
+          :message="
+            convertItem
+              ? convertItem.partName + ' · 数量 ' + convertItem.plannedQty
+              : ''
+          "
         />
         <a-form-item label="成本部门" required>
           <a-select
@@ -354,7 +393,10 @@ async function handleSave() {
     message.warning("请填写计划年度");
     return;
   }
-  if (!form.items.length || form.items.some((i) => !i.partId || !i.plannedQty)) {
+  if (
+    !form.items.length ||
+    form.items.some((i) => !i.partId || !i.plannedQty)
+  ) {
     message.warning("请至少添加一条含物料和数量的计划明细");
     return;
   }

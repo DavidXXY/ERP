@@ -93,10 +93,14 @@
           <a-menu-item key="/procurement/requests">采购申请</a-menu-item>
           <a-menu-item key="/procurement/purchase-pool">待采购清单</a-menu-item>
           <a-menu-item key="/procurement/inquiries">询价管理</a-menu-item>
-          <a-menu-item key="/procurement/framework-agreements">框架协议</a-menu-item>
+          <a-menu-item key="/procurement/framework-agreements"
+            >框架协议</a-menu-item
+          >
           <a-menu-item key="/procurement/central-plans">集采计划</a-menu-item>
           <a-menu-item key="/procurement/orders">采购订单</a-menu-item>
-          <a-menu-item key="/procurement/approval-rules">分级审批规则</a-menu-item>
+          <a-menu-item key="/procurement/approval-rules"
+            >分级审批规则</a-menu-item
+          >
           <a-menu-item key="/procurement/receipts">到货入库</a-menu-item>
           <a-menu-item
             v-if="auth.can('procurement:payable:view')"

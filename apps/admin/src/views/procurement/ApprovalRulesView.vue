@@ -39,7 +39,9 @@
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'amount'">
             {{ formatAmount(record.minAmount) }} ~
-            {{ record.maxAmount != null ? formatAmount(record.maxAmount) : "不限" }}
+            {{
+              record.maxAmount != null ? formatAmount(record.maxAmount) : "不限"
+            }}
           </template>
           <template v-else-if="column.key === 'level'">
             <a-tag>{{ levelLabel(record.approvalLevel) }}</a-tag>
@@ -83,17 +85,30 @@
     >
       <a-form layout="vertical">
         <a-form-item label="规则名称" required>
-          <a-input v-model:value="form.ruleName" placeholder="如：大额采购-总经理审批" />
+          <a-input
+            v-model:value="form.ruleName"
+            placeholder="如：大额采购-总经理审批"
+          />
         </a-form-item>
         <a-row :gutter="16">
           <a-col :xs="24" :md="12">
             <a-form-item label="金额下限（元）">
-              <a-input-number v-model:value="form.minAmount" :min="0" :precision="2" style="width: 100%" />
+              <a-input-number
+                v-model:value="form.minAmount"
+                :min="0"
+                :precision="2"
+                style="width: 100%"
+              />
             </a-form-item>
           </a-col>
           <a-col :xs="24" :md="12">
             <a-form-item label="金额上限（元，不含）">
-              <a-input-number v-model:value="form.maxAmount" :min="0" :precision="2" style="width: 100%" />
+              <a-input-number
+                v-model:value="form.maxAmount"
+                :min="0"
+                :precision="2"
+                style="width: 100%"
+              />
             </a-form-item>
           </a-col>
           <a-col :xs="24" :md="12">
@@ -121,7 +136,12 @@
           </a-col>
           <a-col :xs="24" :md="12">
             <a-form-item label="排序">
-              <a-input-number v-model:value="form.sortOrder" :min="1" :precision="0" style="width: 100%" />
+              <a-input-number
+                v-model:value="form.sortOrder"
+                :min="1"
+                :precision="0"
+                style="width: 100%"
+              />
             </a-form-item>
           </a-col>
           <a-col :xs="24" :md="12">
@@ -198,13 +218,15 @@ function formatAmount(v?: number) {
 }
 function levelLabel(level: string) {
   return (
-    {
-      DEPARTMENT: "部门级",
-      MANAGER: "经理级",
-      EXECUTIVE: "总经理级",
-      CUSTOM: "自定义",
-    } as Record<string, string>
-  )[level] || level;
+    (
+      {
+        DEPARTMENT: "部门级",
+        MANAGER: "经理级",
+        EXECUTIVE: "总经理级",
+        CUSTOM: "自定义",
+      } as Record<string, string>
+    )[level] || level
+  );
 }
 function openCreate() {
   editingId.value = null;

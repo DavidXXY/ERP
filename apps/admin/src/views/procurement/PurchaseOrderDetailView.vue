@@ -482,7 +482,6 @@
           </a-space>
         </a-tab-pane>
 
-
         <a-tab-pane key="changes" :tab="`订单变更 (${changes.length})`">
           <a-space direction="vertical" style="width: 100%">
             <a-alert
@@ -520,19 +519,22 @@
                 </template>
                 <template v-else-if="column.key === 'qty'">
                   <span v-if="record.quantityBefore != null"
-                    >{{ record.quantityBefore }} → {{ record.quantityAfter }}</span
+                    >{{ record.quantityBefore }} →
+                    {{ record.quantityAfter }}</span
                   >
                   <span v-else>-</span>
                 </template>
                 <template v-else-if="column.key === 'price'">
                   <span v-if="record.unitPriceBefore != null"
-                    >{{ money(record.unitPriceBefore) }} → {{ money(record.unitPriceAfter) }}</span
+                    >{{ money(record.unitPriceBefore) }} →
+                    {{ money(record.unitPriceAfter) }}</span
                   >
                   <span v-else>-</span>
                 </template>
                 <template v-else-if="column.key === 'date'">
                   <span v-if="record.expectedDateBefore != null"
-                    >{{ record.expectedDateBefore }} → {{ record.expectedDateAfter }}</span
+                    >{{ record.expectedDateBefore }} →
+                    {{ record.expectedDateAfter }}</span
                   >
                   <span v-else>-</span>
                 </template>
@@ -547,9 +549,9 @@
                     "
                     >{{ changeStatusLabel(record.status) }}</a-tag
                   >
-                  <span v-if="record.decidedByName" class="sub"
-                    >{{ record.decidedByName }}</span
-                  >
+                  <span v-if="record.decidedByName" class="sub">{{
+                    record.decidedByName
+                  }}</span>
                 </template>
                 <template v-else-if="column.key === 'actions'">
                   <a-button
@@ -562,7 +564,9 @@
                     @click="openChangeDecide(record)"
                     >审批</a-button
                   >
-                  <span v-else class="sub">{{ dateTime(record.appliedAt) }}</span>
+                  <span v-else class="sub">{{
+                    dateTime(record.appliedAt)
+                  }}</span>
                 </template>
               </template>
             </a-table>
@@ -671,10 +675,7 @@
           />
         </a-form-item>
         <a-form-item label="变更后期望交期">
-          <a-input
-            v-model:value="changeForm.expectedDateAfter"
-            type="date"
-          />
+          <a-input v-model:value="changeForm.expectedDateAfter" type="date" />
         </a-form-item>
         <a-form-item label="变更原因" required>
           <a-textarea v-model:value="changeForm.reason" :rows="3" />
@@ -690,7 +691,10 @@
     >
       <a-form layout="vertical">
         <a-form-item label="审批结论">
-          <a-radio-group v-model:value="changeDecideForm.decision" button-style="solid">
+          <a-radio-group
+            v-model:value="changeDecideForm.decision"
+            button-style="solid"
+          >
             <a-radio-button value="APPROVED">通过</a-radio-button>
             <a-radio-button value="REJECTED">驳回</a-radio-button>
           </a-radio-group>
@@ -1056,22 +1060,30 @@ async function submitChangeDecision() {
 }
 function changeTypeLabel(type?: string) {
   return (
-    {
-      QTY: "改数量",
-      PRICE: "改价格",
-      DATE: "改交期",
-      MIXED: "综合变更",
-    } as Record<string, string>
-  )[type || ""] || type || "-";
+    (
+      {
+        QTY: "改数量",
+        PRICE: "改价格",
+        DATE: "改交期",
+        MIXED: "综合变更",
+      } as Record<string, string>
+    )[type || ""] ||
+    type ||
+    "-"
+  );
 }
 function changeStatusLabel(status?: string) {
   return (
-    {
-      PENDING: "待审批",
-      APPROVED: "已通过",
-      REJECTED: "已驳回",
-    } as Record<string, string>
-  )[status || ""] || status || "-";
+    (
+      {
+        PENDING: "待审批",
+        APPROVED: "已通过",
+        REJECTED: "已驳回",
+      } as Record<string, string>
+    )[status || ""] ||
+    status ||
+    "-"
+  );
 }
 async function handleUploadDocument(file: File) {
   if (!order.value) return false;

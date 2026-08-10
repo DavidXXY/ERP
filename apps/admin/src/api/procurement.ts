@@ -1402,7 +1402,10 @@ export function createApprovalRule(payload: SaveApprovalRulePayload) {
     data: payload,
   });
 }
-export function updateApprovalRule(id: string, payload: SaveApprovalRulePayload) {
+export function updateApprovalRule(
+  id: string,
+  payload: SaveApprovalRulePayload,
+) {
   return request<ApprovalRule>({
     method: "PUT",
     url: `/procurement/approval-rules/${id}`,
@@ -1458,12 +1461,19 @@ export function saveFrameworkAgreement(
     validFrom: string;
     validTo: string;
     remark?: string;
-    items: { partId: string; partName: string; unitPrice: number; taxRate?: number }[];
+    items: {
+      partId: string;
+      partName: string;
+      unitPrice: number;
+      taxRate?: number;
+    }[];
   },
 ) {
   return request<FrameworkAgreement>({
     method: id ? "PUT" : "POST",
-    url: id ? `/procurement/framework-agreements/${id}` : "/procurement/framework-agreements",
+    url: id
+      ? `/procurement/framework-agreements/${id}`
+      : "/procurement/framework-agreements",
     data: payload,
   });
 }
@@ -1530,7 +1540,11 @@ export function updateCentralPlanStatus(id: string, status: string) {
     url: `/procurement/central-plans/${id}/status?status=${encodeURIComponent(status)}`,
   });
 }
-export function convertCentralPlanItem(planId: string, itemId: string, departmentId?: string) {
+export function convertCentralPlanItem(
+  planId: string,
+  itemId: string,
+  departmentId?: string,
+) {
   const params = new URLSearchParams();
   if (departmentId) params.set("departmentId", departmentId);
   const query = params.toString();

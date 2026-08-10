@@ -944,7 +944,9 @@
           ></a-col>
           <a-col :xs="24" :md="12"
             ><a-form-item label="承运方" name="carrier"
-              ><a-input v-model:value="receiptForm.carrier" placeholder="供应商回传的承运方将自动填入" /></a-form-item
+              ><a-input
+                v-model:value="receiptForm.carrier"
+                placeholder="供应商回传的承运方将自动填入" /></a-form-item
           ></a-col>
           <a-col :xs="24" :md="12"
             ><a-form-item label="收货人" name="receiverName"
@@ -1542,7 +1544,8 @@ async function openReceipt(record: PurchaseOrder) {
   });
   try {
     const shipments = await listOrderShipments(record.id);
-    const latest = shipments.find((item) => item.status === "PENDING") || shipments[0];
+    const latest =
+      shipments.find((item) => item.status === "PENDING") || shipments[0];
     if (latest) {
       receiptForm.deliveryNo = latest.deliveryNo || receiptForm.deliveryNo;
       receiptForm.carrier = latest.carrier || receiptForm.carrier;

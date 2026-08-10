@@ -342,6 +342,18 @@
                     详情
                   </a-button>
                   <a-button
+                    v-if="auth.can('procurement:purchase:create')"
+                    type="link"
+                    size="small"
+                    @click="
+                      router.push(
+                        `/procurement/orders/${record.id}?tab=documents`,
+                      )
+                    "
+                  >
+                    上传合同
+                  </a-button>
+                  <a-button
                     v-if="
                       auth.can('procurement:purchase:create') &&
                       record.status === 'DRAFT' &&
@@ -1225,7 +1237,7 @@ const orderColumns = [
   },
   { title: "订单合同", key: "contract", width: 170 },
   { title: "状态", key: "status", width: 110 },
-  { title: "操作", key: "action", width: 120, fixed: "right" },
+  { title: "操作", key: "action", width: 150, fixed: "right" },
 ];
 const receiptColumns = [
   { title: "入库单", key: "receipt", width: 250 },

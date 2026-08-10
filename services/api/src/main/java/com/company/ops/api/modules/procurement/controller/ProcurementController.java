@@ -267,9 +267,10 @@ public class ProcurementController {
   @PreAuthorize("hasAuthority('procurement:purchase:create')")
   public ApiResponse<OrderDocumentResponse> uploadOrderDocument(
       @PathVariable UUID id,
-      @RequestPart MultipartFile file
+      @RequestPart MultipartFile file,
+      @RequestParam(required = false) String docType
   ) {
-    return ApiResponse.ok(procurementService.uploadOrderDocument(id, file));
+    return ApiResponse.ok(procurementService.uploadOrderDocument(id, file, docType));
   }
 
   @GetMapping("/orders/{id}/documents")

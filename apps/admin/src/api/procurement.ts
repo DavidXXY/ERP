@@ -472,6 +472,43 @@ export type InviteSuppliersResult = ProcurementInquiry & {
   registrationCodes: Record<string, string>;
 };
 
+export type SupplierChangeRequest = {
+  id: string;
+  supplierId: string;
+  changeType: string;
+  proposedName?: string;
+  proposedCreditCode?: string;
+  proposedBankName?: string;
+  proposedBankAccount?: string;
+  proposedSettlementTerms?: string;
+  reason: string;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  requestedByName?: string;
+  requestSource?: string;
+  reviewedByName?: string;
+  reviewComment?: string;
+  reviewedAt?: string;
+  createdAt: string;
+};
+
+export function listSupplierChangeRequests() {
+  return request<SupplierChangeRequest[]>({
+    method: "GET",
+    url: "/procurement/governance/supplier-changes",
+  });
+}
+
+export function reviewSupplierChangeRequest(
+  id: string,
+  data: { decision: "APPROVED" | "REJECTED"; comment?: string },
+) {
+  return request<SupplierChangeRequest>({
+    method: "POST",
+    url: `/procurement/governance/supplier-changes/${id}/review`,
+    data,
+  });
+}
+
 export type ProcurementPurchasePoolItem = {
   requestId: string;
   requestCode: string;
@@ -1134,11 +1171,15 @@ export function addSupplierQuotation(
     data: payload,
   });
 }
-export function inviteInquirySuppliers(id: string, supplierIds: string[]) {
+export function inviteInquirySuppliers(
+  id: string,
+  supplierIds: string[],
+  contactEmails?: Record<string, string>,
+) {
   return request<InviteSuppliersResult>({
     method: "POST",
     url: `/procurement/inquiries/${id}/invitations`,
-    data: { supplierIds },
+    data: { supplierIds, contactEmails: contactEmails || {} },
   });
 }
 export function updateProcurementInquiryDeadline(id: string, deadline: string) {

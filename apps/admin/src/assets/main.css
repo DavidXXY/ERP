@@ -596,3 +596,37 @@ body {
     padding: 12px !important;
   }
 }
+
+/* 询价邀请：通知邮箱录入 */
+.invite-emails {
+  margin-bottom: 14px;
+}
+.invite-email-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+.invite-email-head span {
+  font-weight: 600;
+}
+.invite-email-head small {
+  color: #8c8c8c;
+}
+.invite-email-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.invite-email-name {
+  min-width: 180px;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.invite-email-row .ant-input {
+  flex: 1;
+  min-width: 0;
+}

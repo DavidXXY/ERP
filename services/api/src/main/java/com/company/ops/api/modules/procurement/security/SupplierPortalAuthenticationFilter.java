@@ -43,11 +43,23 @@ public class SupplierPortalAuthenticationFilter extends OncePerRequestFilter {
       FilterChain filterChain
   ) throws ServletException, IOException {
     String authorization = request.getHeader(HttpHeaders.AUTHORIZATION);
+    String token = null;
     if (authorization == null || !authorization.startsWith("Bearer ")) {
-      filterChain.doFilter(request, response);
-      return;
+      // 大文件下载使用 <a> 链接，无法携带请求头；仅允许 GET 下载端点通过查询参数携带令牌。
+      if ("GET".equalsIgnoreCase(request.getMethod())
+          && request.getRequestURI().endsWith("/download")) {
+        String queryToken = request.getParameter("token");
+        if (queryToken != null && !queryToken.isBlank()) {
+          token = queryToken;
+        }
+      }
+      if (token == null) {
+        filterChain.doFilter(request, response);
+        return;
+      }
+    } else {
+      token = authorization.substring(7);
     }
-    String token = authorization.substring(7);
     String tenantId;
     try {
       tenantId = jwtService.extractTenant(token);

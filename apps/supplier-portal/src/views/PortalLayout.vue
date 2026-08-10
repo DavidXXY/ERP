@@ -236,7 +236,22 @@ async function openNotification(item: api.PortalNotification) {
     item.read = true;
     unread.value = Math.max(0, unread.value - 1);
   }
-  if (item.relatedType === "INQUIRY") router.push("/inquiries");
+  notifOpen.value = false;
+  const inquiryRelated = new Set([
+    "INQUIRY",
+    "CLARIFICATION_ANSWER",
+    "AWARD",
+    "NOT_AWARDED",
+  ]);
+  if (inquiryRelated.has(item.relatedType || "")) {
+    if (item.relatedId) {
+      router.push({ path: "/inquiries", query: { inquiry: item.relatedId } });
+    } else {
+      router.push("/inquiries");
+    }
+  } else if (item.relatedType === "ORDER_DOCUMENT") {
+    router.push("/inquiries");
+  }
 }
 async function readAll() {
   try {

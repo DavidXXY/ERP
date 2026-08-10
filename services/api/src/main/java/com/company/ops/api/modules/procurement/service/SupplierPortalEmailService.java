@@ -58,9 +58,10 @@ public class SupplierPortalEmailService {
     this.mailSender = sender;
   }
 
-  public void send(String to, String title, String content) {
+  /** 返回 null 表示邮件通道未启用（未尝试发送），true 成功，false 失败。 */
+  public Boolean send(String to, String title, String content) {
     if (!enabled || mailSender == null || !StringUtils.hasText(to)) {
-      return;
+      return null;
     }
     try {
       SimpleMailMessage message = new SimpleMailMessage();
@@ -70,9 +71,11 @@ public class SupplierPortalEmailService {
       message.setText(content);
       mailSender.send(message);
       log.info("Supplier notification email sent: to={}, title={}", to, title);
+      return true;
     } catch (RuntimeException ex) {
       log.warn("Supplier notification email failed: to={}, title={}, error={}",
           to, title, ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage());
+      return false;
     }
   }
 }

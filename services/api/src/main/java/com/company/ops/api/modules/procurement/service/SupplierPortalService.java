@@ -16,6 +16,7 @@ import com.company.ops.api.modules.system.security.JwtService;
 import com.company.ops.api.modules.system.security.LoginAttemptService;
 import com.company.ops.api.modules.system.security.UserPrincipal;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -65,6 +66,8 @@ public class SupplierPortalService {
   private final PurchaseOrderRepository orders;
   private final SupplierPortalNotificationRepository notifications;
   private final ProcurementShipmentRepository shipments;
+  private final SupplierChangeRequestRepository supplierChanges;
+  private final SupplierPerformanceReviewRepository performanceReviews;
   private final SupplierPortalNotifier notifier;
   private final PasswordEncoder passwordEncoder;
   private final JwtService jwtService;
@@ -91,6 +94,8 @@ public class SupplierPortalService {
       PurchaseOrderRepository orders,
       SupplierPortalNotificationRepository notifications,
       ProcurementShipmentRepository shipments,
+      SupplierChangeRequestRepository supplierChanges,
+      SupplierPerformanceReviewRepository performanceReviews,
       SupplierPortalNotifier notifier,
       PasswordEncoder passwordEncoder,
       JwtService jwtService,
@@ -116,6 +121,8 @@ public class SupplierPortalService {
     this.orders = orders;
     this.notifications = notifications;
     this.shipments = shipments;
+    this.supplierChanges = supplierChanges;
+    this.performanceReviews = performanceReviews;
     this.notifier = notifier;
     this.passwordEncoder = passwordEncoder;
     this.jwtService = jwtService;
@@ -126,9 +133,20 @@ public class SupplierPortalService {
   }
 
   @Transactional
-  public SessionResponse register(RegisterRequest request) {
+  public SessionResponse register(RegisterRequest request, String clientAddress) {
     String email = normalizeEmail(request.email());
-    if (accounts.existsByEmailIgnoreCase(email)) throw new BusinessException("该邮箱已经注册");
+    String registerKey = "supplier-reg|" + email + "|" + clientAddress;
+    String registerIpKey = "supplier-reg-ip|" + clientAddress;
+    loginAttempts.assertAllowed(registerKey);
+    loginAttempts.assertAllowed(registerIpKey);
+    if (!isBlank(request.website())) {
+      throw new BusinessException("注册未完成，请稍后重试");
+    }
+    if (accounts.existsByEmailIgnoreCase(email)) {
+      loginAttempts.failed(registerKey);
+      loginAttempts.failed(registerIpKey);
+      throw new BusinessException("该邮箱已经注册，请直接登录；如忘记密码请联系采购管理员重置");
+    }
     String creditCode = request.unifiedSocialCreditCode().trim().toUpperCase();
     Supplier supplier = suppliers.findFirstByUnifiedSocialCreditCodeIgnoreCase(creditCode).orElse(null);
     ProcurementInquiryInvitation registrationInvitation = null;
@@ -554,6 +572,90 @@ public class SupplierPortalService {
     item.setAskedAt(OffsetDateTime.now());
     item.setStatus("OPEN");
     return clarification(clarifications.save(item));
+  }
+
+  @Transactional(readOnly = true)
+  public List<QuoteRevisionResponse> listQuoteRevisions(
+      SupplierPortalPrincipal principal,
+      UUID inquiryId
+  ) {
+    requireInvitation(inquiryId, principal.supplierId());
+    SupplierQuotation quote = quotes.findByInquiryIdAndSupplierId(inquiryId, principal.supplierId())
+        .orElseThrow(() -> new BusinessException("报价不存在"));
+    return revisions.findByQuoteIdOrderByVersionNoDesc(quote.getId()).stream()
+        .map(revision -> {
+          Map<String, Object> snapshot;
+          try {
+            snapshot = objectMapper.readValue(revision.getSnapshotJson(),
+                new TypeReference<Map<String, Object>>() {});
+          } catch (JsonProcessingException exception) {
+            throw new BusinessException("报价版本快照解析失败");
+          }
+          return new QuoteRevisionResponse(revision.getId(), revision.getVersionNo(),
+              revision.getSubmissionSource(), revision.getSubmittedByName(),
+              revision.getSubmittedAt(), snapshot);
+        }).toList();
+  }
+
+  @Transactional(readOnly = true)
+  public List<PortalChangeRequestResponse> listChangeRequests(SupplierPortalPrincipal principal) {
+    return supplierChanges.findBySupplierIdOrderByCreatedAtDesc(principal.supplierId()).stream()
+        .map(this::changeView).toList();
+  }
+
+  @Transactional
+  public PortalChangeRequestResponse createChangeRequest(
+      SupplierPortalPrincipal principal,
+      PortalChangeRequest request
+  ) {
+    Supplier supplier = requireSupplier(principal.supplierId());
+    if (!"APPROVED".equals(supplier.getAdmissionStatus())) {
+      throw new BusinessException("供应商准入通过后才能提交信息变更申请");
+    }
+    if (supplierChanges.existsBySupplierIdAndStatus(supplier.getId(), "PENDING")) {
+      throw new BusinessException("已有待审批的变更申请，请等待处理完成");
+    }
+    String changeType = request.changeType().trim().toUpperCase();
+    if (!Set.of("NAME", "CREDIT_CODE", "BANK_INFO", "SETTLEMENT_TERMS").contains(changeType)) {
+      throw new BusinessException("不支持的变更类型");
+    }
+    if ("NAME".equals(changeType) && isBlank(request.proposedName())) {
+      throw new BusinessException("企业名称变更必须填写新的企业名称");
+    }
+    if ("CREDIT_CODE".equals(changeType) && isBlank(request.proposedCreditCode())) {
+      throw new BusinessException("信用代码变更必须填写新的统一社会信用代码");
+    }
+    if ("BANK_INFO".equals(changeType)
+        && isBlank(request.proposedBankName()) && isBlank(request.proposedBankAccount())) {
+      throw new BusinessException("银行信息变更必须填写开户银行或银行账号");
+    }
+    if ("SETTLEMENT_TERMS".equals(changeType) && isBlank(request.proposedSettlementTerms())) {
+      throw new BusinessException("结算条款变更必须填写新的结算条款");
+    }
+    SupplierChangeRequest change = new SupplierChangeRequest();
+    change.setSupplierId(supplier.getId());
+    change.setChangeType(changeType);
+    change.setProposedName(trim(request.proposedName()));
+    change.setProposedCreditCode(trim(request.proposedCreditCode()));
+    change.setProposedBankName(trim(request.proposedBankName()));
+    change.setProposedBankAccount(trim(request.proposedBankAccount()));
+    change.setProposedSettlementTerms(trim(request.proposedSettlementTerms()));
+    change.setReason(request.reason().trim());
+    change.setRequestedByName(principal.contactName());
+    change.setRequestSource("PORTAL");
+    change.setStatus("PENDING");
+    return changeView(supplierChanges.save(change));
+  }
+
+  @Transactional(readOnly = true)
+  public List<PerformanceReviewResponse> listPerformanceReviews(SupplierPortalPrincipal principal) {
+    return performanceReviews.findBySupplierIdOrderByReviewPeriodDesc(principal.supplierId()).stream()
+        .map(item -> new PerformanceReviewResponse(item.getId(), item.getReviewPeriod(),
+            item.getOnTimeRate(), item.getQualityRate(), item.getInvoiceMatchRate(),
+            item.getResponseScore(), item.getTotalScore(), item.getGrade(),
+            item.getReviewerName(), item.getImprovementAction(), item.getStatus(),
+            item.getCreatedAt()))
+        .toList();
   }
 
   @Transactional(readOnly = true)
@@ -1144,6 +1246,14 @@ public class SupplierPortalService {
   private QuoteAttachmentResponse attachment(SupplierQuoteAttachment item) {
     return new QuoteAttachmentResponse(item.getId(), item.getQuoteId(), item.getAttachmentType(),
         item.getFileName(), item.getContentType(), item.getSizeBytes(), item.getSha256(), item.getCreatedAt());
+  }
+
+  private PortalChangeRequestResponse changeView(SupplierChangeRequest item) {
+    return new PortalChangeRequestResponse(item.getId(), item.getChangeType(),
+        item.getProposedName(), item.getProposedCreditCode(), item.getProposedBankName(),
+        item.getProposedBankAccount(), item.getProposedSettlementTerms(), item.getReason(),
+        item.getStatus(), item.getRequestedByName(), item.getReviewedByName(),
+        item.getReviewComment(), item.getReviewedAt(), item.getCreatedAt());
   }
 
   private static String normalizeCompanyName(String value) {

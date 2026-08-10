@@ -45,6 +45,8 @@ public final class ProcurementGovernanceDtos {
       String proposedBankName,
       String proposedBankAccount,
       String proposedSettlementTerms,
+      String proposedName,
+      String proposedCreditCode,
       @NotBlank String reason
   ) {}
 

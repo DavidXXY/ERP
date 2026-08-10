@@ -34,6 +34,9 @@ public class ProcurementOrderDocument extends BaseEntity {
   @Column(name = "uploaded_at")
   private OffsetDateTime uploadedAt;
 
+  @Column(name = "doc_type", nullable = false, length = 20)
+  private String docType = "OTHER";
+
   public UUID getOrderId() { return orderId; }
   public void setOrderId(UUID value) { orderId = value; }
   public String getFileName() { return fileName; }
@@ -50,4 +53,6 @@ public class ProcurementOrderDocument extends BaseEntity {
   public void setUploadedBy(String value) { uploadedBy = value; }
   public OffsetDateTime getUploadedAt() { return uploadedAt; }
   public void setUploadedAt(OffsetDateTime value) { uploadedAt = value; }
+  public String getDocType() { return docType; }
+  public void setDocType(String value) { docType = value; }
 }

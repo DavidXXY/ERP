@@ -113,6 +113,15 @@
                 >审批通过</a-button
               >
               <a-button
+                v-if="auth.can('procurement:purchase:create')"
+                type="link"
+                size="small"
+                @click="
+                  router.push(`/procurement/orders/${record.id}?tab=documents`)
+                "
+                >上传合同</a-button
+              >
+              <a-button
                 v-if="
                   record.status === 'DRAFT' &&
                   record.approvalStatus === 'PENDING' &&

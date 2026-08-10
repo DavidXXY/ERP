@@ -112,6 +112,12 @@ public class Project extends BaseEntity {
   @Column(name = "warranty_end_date")
   private LocalDate warrantyEndDate;
 
+  @Column(name = "actual_start_date")
+  private LocalDate actualStartDate;
+
+  @Column(name = "actual_end_date")
+  private LocalDate actualEndDate;
+
   public UUID getCustomerId() {
     return customerId;
   }
@@ -331,5 +337,21 @@ public class Project extends BaseEntity {
 
   public void setWarrantyEndDate(LocalDate warrantyEndDate) {
     this.warrantyEndDate = warrantyEndDate;
+  }
+
+  public LocalDate getActualStartDate() {
+    return actualStartDate;
+  }
+
+  public void setActualStartDate(LocalDate actualStartDate) {
+    this.actualStartDate = actualStartDate;
+  }
+
+  public LocalDate getActualEndDate() {
+    return actualEndDate;
+  }
+
+  public void setActualEndDate(LocalDate actualEndDate) {
+    this.actualEndDate = actualEndDate;
   }
 }

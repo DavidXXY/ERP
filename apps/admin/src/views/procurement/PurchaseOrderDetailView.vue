@@ -66,7 +66,7 @@
     </template>
 
     <a-card v-if="order" :bordered="false">
-      <a-tabs>
+      <a-tabs v-model:activeKey="activeTab">
         <a-tab-pane key="overview" tab="订单总览">
           <a-row :gutter="[16, 16]">
             <a-col :xs="24" :xl="14">
@@ -434,22 +434,33 @@
             <a-alert
               type="info"
               show-icon
-              message="上传采购合同扫描件或相关文件，供应商门户可同步查看下载。"
+              message="采购合同请分别上传原件和双方盖章件，供应商门户可同步查看下载。"
             />
-            <a-upload
-              :show-upload-list="false"
-              :before-upload="handleUploadDocument"
-              :disabled="uploadingDocument || !canManageDocuments"
-              accept=".jpg,.jpeg,.png,.webp,.pdf,.doc,.docx,.xls,.xlsx"
-            >
-              <a-button
-                v-if="canManageDocuments"
-                :loading="uploadingDocument"
-                type="primary"
-                ><template #icon><UploadOutlined /></template
-                >上传合同附件</a-button
+            <a-space>
+              <a-radio-group
+                v-model:value="documentType"
+                :disabled="uploadingDocument || !canManageDocuments"
               >
-            </a-upload>
+                <a-radio-button value="ORIGINAL">原件</a-radio-button>
+                <a-radio-button value="STAMPED">盖章件</a-radio-button>
+                <a-radio-button value="OTHER">其他附件</a-radio-button>
+              </a-radio-group>
+              <a-upload
+                :show-upload-list="false"
+                :before-upload="handleUploadDocument"
+                :disabled="uploadingDocument || !canManageDocuments"
+                accept=".jpg,.jpeg,.png,.webp,.pdf,.doc,.docx,.xls,.xlsx"
+              >
+                <a-button
+                  v-if="canManageDocuments"
+                  :loading="uploadingDocument"
+                  type="primary"
+                  ><template #icon><UploadOutlined /></template>上传{{
+                    documentTypeLabel
+                  }}</a-button
+                >
+              </a-upload>
+            </a-space>
             <a-table
               :columns="documentColumns"
               :data-source="orderDocuments"
@@ -468,6 +479,11 @@
                 <template v-else-if="column.key === 'uploadedAt'">{{
                   dateTime(record.uploadedAt)
                 }}</template>
+                <template v-else-if="column.key === 'docType'">
+                  <a-tag :color="docTypeColor(record.docType)">{{
+                    docTypeLabel(record.docType)
+                  }}</a-tag>
+                </template>
                 <template v-else-if="column.key === 'actions'">
                   <a-popconfirm
                     v-if="canManageDocuments"
@@ -775,7 +791,11 @@ const route = useRoute(),
   changeSaving = ref(false),
   changeDecideOpen = ref(false),
   loadingDocuments = ref(false),
-  uploadingDocument = ref(false);
+  uploadingDocument = ref(false),
+  documentType = ref("ORIGINAL"),
+  activeTab = ref(
+    typeof route.query.tab === "string" ? route.query.tab : "overview",
+  );
 const approvalForm = reactive<{
   decision: "APPROVED" | "REJECTED";
   comment: string;
@@ -926,6 +946,7 @@ const changeColumns = [
 ];
 const documentColumns = [
   { title: "文件", key: "file", width: 260 },
+  { title: "类型", key: "docType", width: 100 },
   { title: "上传人", dataIndex: "uploadedBy", width: 140 },
   { title: "上传时间", key: "uploadedAt", width: 180 },
   { title: "操作", key: "actions", width: 100 },
@@ -1089,7 +1110,7 @@ async function handleUploadDocument(file: File) {
   if (!order.value) return false;
   uploadingDocument.value = true;
   try {
-    await uploadOrderDocument(order.value.id, file);
+    await uploadOrderDocument(order.value.id, file, documentType.value);
     message.success("合同附件已上传，供应商门户同步可见");
     await loadDocuments(order.value.id);
   } catch (e) {
@@ -1099,6 +1120,29 @@ async function handleUploadDocument(file: File) {
   }
   return false;
 }
+function docTypeLabel(type?: string) {
+  return (
+    (
+      {
+        ORIGINAL: "原件",
+        STAMPED: "盖章件",
+        OTHER: "其他附件",
+      } as Record<string, string>
+    )[type || ""] || "其他附件"
+  );
+}
+function docTypeColor(type?: string) {
+  return (
+    (
+      {
+        ORIGINAL: "blue",
+        STAMPED: "green",
+        OTHER: "default",
+      } as Record<string, string>
+    )[type || ""] || "default"
+  );
+}
+const documentTypeLabel = computed(() => docTypeLabel(documentType.value));
 async function handleDeleteDocument(record: OrderDocument) {
   if (!order.value) return;
   try {

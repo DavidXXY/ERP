@@ -86,6 +86,18 @@
               v-model:value="createForm.warrantyEndDate"
               type="date" /></a-form-item
         ></a-col>
+        <a-col :span="24"
+          ><a-form-item label="售前成本核算（可选）">
+            <a-select
+              v-model:value="createForm.quoteId"
+              :options="quoteOptions"
+              allow-clear
+              show-search
+              option-filter-prop="label"
+              placeholder="选择已审批的售前成本，自动带入分类预算"
+              @change="applyQuoteBudget"
+            /> </a-form-item
+        ></a-col>
       </a-row>
       <a-divider
         >分类预算合计（含税，元） ·
@@ -178,6 +190,17 @@
       type="info"
       :message="`${stageLabel(detail.project.stage)} → ${stageLabel(nextStage)}`"
     />
+    <a-alert
+      v-if="detail && nextStage === 'CLOSED'"
+      class="section-alert"
+      type="warning"
+      show-icon
+      :message="
+        closeoutReview?.status === 'APPROVED'
+          ? '结项复核已通过，可以关闭项目'
+          : '关闭项目前必须先提交结项申请并完成结项复核'
+      "
+    />
     <a-form
       ref="stageFormRef"
       :model="stageForm"
@@ -204,7 +227,7 @@
   <a-modal
     :open="costOpen"
     @update:open="emit('update:costOpen', $event)"
-    title="登记项目成本"
+    :title="editingCost ? '更正项目成本' : '登记项目成本'"
     width="760px"
     :confirm-loading="saving"
     @ok="handleCreateCost"
@@ -226,11 +249,11 @@
             : 'success'
       "
       show-icon
-      :message="`登记后预算使用率 ${costBudgetUsageAfter.toFixed(1)}%，预计余额（含税，元）${formatMoney(projectedBudgetVariance)}`"
+      :message="`${editingCost ? '更正后' : '登记后'}预算使用率 ${costBudgetUsageAfter.toFixed(1)}%，预计余额（含税，元）${formatMoney(projectedBudgetVariance)}`"
       :description="
         costBudgetOverrun
           ? '该成本会导致项目超预算，请申请调整项目总预算，审批通过后再登记。'
-          : '成本登记后会同步刷新项目实际成本和毛利。'
+          : '成本更正会同步刷新项目实际成本和毛利。'
       "
     >
       <template v-if="costBudgetOverrun" #action>
@@ -239,6 +262,13 @@
         </a-button>
       </template>
     </a-alert>
+    <a-alert
+      v-if="editingCost"
+      class="section-alert"
+      type="info"
+      show-icon
+      message="仅人工登记成本可更正；来源单据生成的成本请通过来源单据更正。"
+    />
     <a-form
       ref="costFormRef"
       :model="costForm"
@@ -256,7 +286,8 @@
           ><a-form-item label="来源类型" name="sourceType"
             ><a-select
               v-model:value="costForm.sourceType"
-              :options="sourceOptions" /></a-form-item
+              :options="sourceOptions"
+              :disabled="editingCost" /></a-form-item
         ></a-col>
         <a-col :xs="24" :md="8"
           ><a-form-item label="发生日期" name="incurredDate"
@@ -268,6 +299,7 @@
           ><a-form-item label="来源单号"
             ><a-input
               v-model:value="costForm.sourceNo"
+              :disabled="editingCost"
               placeholder="报销单、外包单、领料单" /></a-form-item
         ></a-col>
         <a-col :xs="24" :md="14"
@@ -284,16 +316,107 @@
         ></a-col>
       </a-row>
     </a-form>
+    <template v-if="editingCost" #footer>
+      <a-button danger @click="handleDeleteCost">删除该成本</a-button>
+      <a-button @click="emit('update:costOpen', false)">取消</a-button>
+      <a-button type="primary" :loading="saving" @click="handleCreateCost"
+        >保存更正</a-button
+      >
+    </template>
+  </a-modal>
+
+  <a-modal
+    :open="editOpen"
+    @update:open="emit('update:editOpen', $event)"
+    title="编辑项目并重新提交"
+    width="860px"
+    :confirm-loading="saving"
+    @ok="handleEdit"
+  >
+    <a-alert
+      v-if="editProject"
+      class="section-alert"
+      type="warning"
+      show-icon
+      :message="`${editProject.project.code} · 当前状态 ${approvalLabel(editProject.project.approvalStatus)}，保存后将重新进入待审批`"
+    />
+    <a-form
+      ref="editFormRef"
+      :model="editForm"
+      :rules="createRules"
+      layout="vertical"
+    >
+      <a-row :gutter="16">
+        <a-col :xs="24" :md="16"
+          ><a-form-item label="项目名称" name="name"
+            ><a-input v-model:value="editForm.name" /></a-form-item
+        ></a-col>
+        <a-col :span="24"
+          ><a-form-item label="现场地址" name="siteAddress"
+            ><a-input v-model:value="editForm.siteAddress" /></a-form-item
+        ></a-col>
+        <a-col :xs="24" :md="8"
+          ><a-form-item label="合同金额（含税，元）" name="contractAmount"
+            ><a-input-number
+              v-model:value="editForm.contractAmount"
+              :min="0"
+              :precision="2"
+              class="full-input" /></a-form-item
+        ></a-col>
+        <a-col :xs="24" :md="8"
+          ><a-form-item label="计划开始" name="plannedStartDate"
+            ><a-input
+              v-model:value="editForm.plannedStartDate"
+              type="date" /></a-form-item
+        ></a-col>
+        <a-col :xs="24" :md="8"
+          ><a-form-item label="计划结束" name="plannedEndDate"
+            ><a-input
+              v-model:value="editForm.plannedEndDate"
+              type="date" /></a-form-item
+        ></a-col>
+        <a-col :xs="24" :md="8"
+          ><a-form-item label="质保截止"
+            ><a-input
+              v-model:value="editForm.warrantyEndDate"
+              type="date" /></a-form-item
+        ></a-col>
+      </a-row>
+      <a-divider
+        >分类预算合计（含税，元） ·
+        {{ formatMoney(editBudgetTotal) }}</a-divider
+      >
+      <a-row :gutter="16">
+        <a-col
+          v-for="item in categoryOptions"
+          :key="item.value"
+          :xs="24"
+          :md="8"
+        >
+          <a-form-item :label="`${item.label}预算（含税，元）`">
+            <a-input-number
+              v-model:value="editForm.budgets[(item as any).value]"
+              :min="0"
+              :precision="2"
+              class="full-input"
+            />
+          </a-form-item>
+        </a-col>
+      </a-row>
+    </a-form>
   </a-modal>
 </template>
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from "vue";
-import { message } from "ant-design-vue";
+import { message, Modal } from "ant-design-vue";
 import { useRouter } from "vue-router";
 import {
   createProject,
   createProjectCost,
+  updateProjectCost,
+  deleteProjectCost,
+  updateProject,
   advanceProjectStage,
   assignProjectManager,
   type ProjectStage,
@@ -310,6 +433,8 @@ const emit = defineEmits([
   "update:approvalOpen",
   "update:stageOpen",
   "update:costOpen",
+  "update:editCostOpen",
+  "update:editOpen",
   "created",
   "updated",
 ]);
@@ -319,6 +444,12 @@ const props: any = defineProps([
   "approvalOpen",
   "stageOpen",
   "costOpen",
+  "editCostOpen",
+  "editCostEntry",
+  "editOpen",
+  "editProject",
+  "quoteOptions",
+  "closeoutReview",
   "saving",
   "customerOptions",
   "parentProjectOptions",
@@ -337,6 +468,10 @@ const createFormRef = ref();
 const approvalFormRef = ref();
 const stageFormRef = ref();
 const costFormRef = ref();
+const editFormRef = ref();
+const editBudgetTotal = computed(() =>
+  Object.values(editForm.budgets).reduce((s, v) => s + Number(v || 0), 0),
+);
 
 const createForm = reactive({
   customerId: "",
@@ -350,6 +485,7 @@ const createForm = reactive({
   plannedStartDate: dateAfter(0),
   plannedEndDate: dateAfter(90),
   warrantyEndDate: dateAfter(455),
+  quoteId: undefined as string | undefined,
   budgets: { LABOR: 0, MATERIAL: 0, SUBCONTRACT: 0, TRAVEL: 0, OTHER: 0 } as {
     [key: string]: number;
   },
@@ -362,7 +498,19 @@ const approvalForm = reactive({
 const stageForm = reactive({
   comment: "",
 });
+const editForm = reactive({
+  name: "",
+  siteAddress: "",
+  contractAmount: 0,
+  plannedStartDate: dateAfter(0),
+  plannedEndDate: dateAfter(90),
+  warrantyEndDate: "",
+  budgets: { LABOR: 0, MATERIAL: 0, SUBCONTRACT: 0, TRAVEL: 0, OTHER: 0 } as {
+    [key: string]: number;
+  },
+});
 const costForm = reactive({
+  costId: "",
   category: "LABOR",
   sourceType: "MANUAL",
   sourceNo: "",
@@ -397,6 +545,8 @@ const costRules = {
 const createBudgetTotal = computed(() =>
   Object.values(createForm.budgets).reduce((s, v) => s + Number(v || 0), 0),
 );
+const editingCost = computed(() => Boolean(props.editCostEntry));
+const quoteOptions = computed(() => props.quoteOptions || []);
 const userOptions = computed(() => props.userOptions || []);
 const managerModalTitle = computed(() =>
   props.activeProject?.approvalStatus === "APPROVED"
@@ -426,9 +576,75 @@ watch(
       createForm.parentProjectId = props.defaultParentProjectId || undefined;
       if (props.defaultCustomerId)
         createForm.customerId = props.defaultCustomerId;
+      createForm.quoteId = undefined;
     }
   },
 );
+
+watch(
+  () => props.costOpen,
+  (open) => {
+    if (open && !props.editCostEntry) {
+      Object.assign(costForm, {
+        costId: "",
+        category: "LABOR",
+        sourceType: "MANUAL",
+        sourceNo: "",
+        description: "",
+        amount: 0.01,
+        incurredDate: dateAfter(0),
+      });
+    }
+  },
+);
+
+watch(
+  () => props.editCostOpen,
+  (open) => {
+    if (!open) return;
+    const entry = props.editCostEntry;
+    if (!entry) {
+      Object.assign(costForm, {
+        costId: "",
+        category: "LABOR",
+        sourceType: "MANUAL",
+        sourceNo: "",
+        description: "",
+        amount: 0.01,
+        incurredDate: dateAfter(0),
+      });
+      return;
+    }
+    Object.assign(costForm, {
+      costId: entry.id,
+      category: entry.category,
+      sourceType: entry.sourceType,
+      sourceNo: entry.sourceNo || "",
+      description: entry.description,
+      amount: Number(entry.amount || 0),
+      incurredDate: entry.incurredDate,
+    });
+  },
+);
+
+function applyQuoteBudget(quoteId?: string) {
+  if (!quoteId) return;
+  const option = quoteOptions.value.find(
+    (item: any) => String(item.value) === String(quoteId),
+  );
+  const cost = option?.costRequest;
+  if (!cost) return;
+  createForm.budgets = {
+    LABOR: Number(cost.laborCost || 0),
+    MATERIAL: Number(cost.materialCost || 0),
+    SUBCONTRACT: Number(cost.subcontractCost || 0),
+    TRAVEL: Number(cost.travelCost || 0),
+    OTHER:
+      Number(cost.equipmentCost || 0) +
+      Number(cost.riskReserve || 0) +
+      Number(cost.otherCost || 0),
+  };
+}
 
 watch(
   () => props.approvalOpen,
@@ -493,6 +709,7 @@ async function handleCreate() {
         plannedAmount: createForm.budgets[item.value],
         remark: item.label + "预算",
       })),
+      quoteId: createForm.quoteId || undefined,
     });
     emit("created");
     emit("update:createOpen", false);
@@ -543,20 +760,32 @@ async function handleCreateCost() {
   await costFormRef.value?.validate();
   if (costBudgetOverrun.value) {
     showBudgetOverrunPrompt(
-      "登记后将超出项目预算",
+      editingCost.value ? "更正后将超出项目预算" : "登记后将超出项目预算",
       router,
       props.detail.project.id,
     );
     return;
   }
   try {
-    await createProjectCost(props.detail.project.id, {
-      ...costForm,
-      sourceNo: costForm.sourceNo || undefined,
-    } as any);
-    emit("updated");
-    emit("update:costOpen", false);
-    message.success("项目成本已归集");
+    if (editingCost.value && costForm.costId) {
+      await updateProjectCost(props.detail.project.id, costForm.costId, {
+        category: costForm.category as any,
+        description: costForm.description,
+        amount: costForm.amount,
+        incurredDate: costForm.incurredDate,
+      });
+      emit("updated");
+      emit("update:costOpen", false);
+      message.success("项目成本已更正");
+    } else {
+      await createProjectCost(props.detail.project.id, {
+        ...costForm,
+        sourceNo: costForm.sourceNo || undefined,
+      } as any);
+      emit("updated");
+      emit("update:costOpen", false);
+      message.success("项目成本已归集");
+    }
   } catch (error) {
     const msg = error instanceof Error ? error.message : "项目成本登记失败";
     const displayMessage = msg;
@@ -568,8 +797,97 @@ async function handleCreateCost() {
   }
 }
 
+function handleDeleteCost() {
+  if (!props.detail || !costForm.costId) return;
+  Modal.confirm({
+    title: "删除该成本明细？",
+    content: "删除后项目实际成本与毛利会同步刷新，该操作不可撤销。",
+    okText: "删除",
+    okButtonProps: { danger: true },
+    cancelText: "取消",
+    onOk: async () => {
+      try {
+        await deleteProjectCost(props.detail!.project.id, costForm.costId);
+        emit("updated");
+        emit("update:costOpen", false);
+        message.success("成本明细已删除");
+      } catch (error) {
+        message.error(error instanceof Error ? error.message : "成本删除失败");
+      }
+    },
+  });
+}
+
 function goToBudgetChange() {
   if (!props.detail) return;
   void openBudgetChangeRequest(router, props.detail.project.id);
+}
+
+function approvalLabel(status: string) {
+  return (
+    (
+      { PENDING: "待分配", APPROVED: "已分配", REJECTED: "已退回" } as Record<
+        string,
+        string
+      >
+    )[status] || status
+  );
+}
+
+watch(
+  () => props.editOpen,
+  (open) => {
+    if (!open || !props.editProject) return;
+    const detail = props.editProject;
+    const project = detail.project;
+    const budgets: { [key: string]: number } = {
+      LABOR: 0,
+      MATERIAL: 0,
+      SUBCONTRACT: 0,
+      TRAVEL: 0,
+      OTHER: 0,
+    };
+    (detail.budgetItems || []).forEach((item: any) => {
+      budgets[item.category] = Number(item.plannedAmount || 0);
+    });
+    Object.assign(editForm, {
+      name: project.name,
+      siteAddress: project.siteAddress || "",
+      contractAmount: Number(project.contractAmount || 0),
+      plannedStartDate: project.plannedStartDate || dateAfter(0),
+      plannedEndDate: project.plannedEndDate || dateAfter(90),
+      warrantyEndDate: project.warrantyEndDate || "",
+      budgets,
+    });
+  },
+);
+
+async function handleEdit() {
+  if (!props.editProject) return;
+  await editFormRef.value?.validate();
+  if (editBudgetTotal.value <= 0) {
+    message.warning("请填写项目分类预算");
+    return;
+  }
+  try {
+    await updateProject(props.editProject.project.id, {
+      name: editForm.name,
+      siteAddress: editForm.siteAddress,
+      contractAmount: editForm.contractAmount,
+      plannedStartDate: editForm.plannedStartDate,
+      plannedEndDate: editForm.plannedEndDate,
+      warrantyEndDate: editForm.warrantyEndDate || undefined,
+      budgetItems: props.categoryOptions.map((item: any) => ({
+        category: item.value,
+        plannedAmount: editForm.budgets[item.value],
+        remark: item.label + "预算",
+      })),
+    });
+    emit("updated");
+    emit("update:editOpen", false);
+    message.success("项目资料已更新，已重新提交审批");
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "项目编辑失败");
+  }
 }
 </script>

@@ -352,6 +352,7 @@ export type OrderDocument = {
   fileName: string;
   contentType?: string;
   sizeBytes: number;
+  docType?: string;
   uploadedBy?: string;
   uploadedAt?: string;
 };
@@ -966,9 +967,16 @@ export function listOrderDocuments(orderId: string) {
   });
 }
 
-export async function uploadOrderDocument(orderId: string, file: File) {
+export async function uploadOrderDocument(
+  orderId: string,
+  file: File,
+  docType?: string,
+) {
   const form = new FormData();
   form.append("file", file);
+  if (docType) {
+    form.append("docType", docType);
+  }
   return request<OrderDocument>({
     method: "POST",
     url: `/procurement/orders/${orderId}/documents`,

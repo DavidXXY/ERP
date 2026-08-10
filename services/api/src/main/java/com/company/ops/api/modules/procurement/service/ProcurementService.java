@@ -899,7 +899,7 @@ public class ProcurementService {
   }
 
   @Transactional
-  public OrderDocumentResponse uploadOrderDocument(UUID orderId, MultipartFile file) {
+  public OrderDocumentResponse uploadOrderDocument(UUID orderId, MultipartFile file, String docType) {
     PurchaseOrder order = orderRepository.findById(orderId)
         .orElseThrow(() -> new BusinessException("采购订单不存在"));
     FileStorageService.StoredFile stored = null;
@@ -913,6 +913,7 @@ public class ProcurementService {
       document.setContentType(stored.contentType());
       document.setSizeBytes(stored.sizeBytes());
       document.setSha256(checksum);
+      document.setDocType(normalizeDocType(docType));
       document.setUploadedBy(currentName());
       document.setUploadedAt(OffsetDateTime.now());
       OrderDocumentResponse saved = toOrderDocumentResponse(
@@ -990,9 +991,21 @@ public class ProcurementService {
         document.getFileName(),
         document.getContentType(),
         document.getSizeBytes(),
+        document.getDocType(),
         document.getUploadedBy(),
         document.getUploadedAt()
     );
+  }
+
+  private static String normalizeDocType(String docType) {
+    if (docType == null || docType.isBlank()) {
+      return "OTHER";
+    }
+    String normalized = docType.trim().toUpperCase();
+    if (normalized.equals("ORIGINAL") || normalized.equals("STAMPED")) {
+      return normalized;
+    }
+    return "OTHER";
   }
 
   private static String sha256(MultipartFile file) {

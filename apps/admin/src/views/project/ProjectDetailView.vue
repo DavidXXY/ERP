@@ -27,12 +27,9 @@
         @click="router.push(`/crm/contracts/${detail.project.contractId}`)"
         >查看合同</a-button
       >
-      <a-button
-        v-if="canPrepareChildProject"
-        type="primary"
-        @click="openPreparation"
-        >完善立项资料</a-button
-      >
+      <a-button v-if="canEditProject" type="primary" @click="openPreparation">{{
+        detail?.project.parentProjectId ? "完善立项资料" : "编辑并重新提交"
+      }}</a-button>
       <a-button
         v-if="auth.can('procurement:purchase:create')"
         @click="router.push(`/procurement/requests?projectId=${projectId}`)"
@@ -96,6 +93,10 @@
             <a-descriptions-item label="计划周期"
               >{{ detail.project.plannedStartDate || "-" }} 至
               {{ detail.project.plannedEndDate || "-" }}</a-descriptions-item
+            >
+            <a-descriptions-item label="实际周期"
+              >{{ detail.project.actualStartDate || "未开始" }} 至
+              {{ detail.project.actualEndDate || "-" }}</a-descriptions-item
             >
             <a-descriptions-item label="质保截止">{{
               detail.project.warrantyEndDate || "-"
@@ -261,7 +262,11 @@
 
     <a-modal
       v-model:open="preparationOpen"
-      title="完善子项目立项资料"
+      :title="
+        detail?.project.parentProjectId
+          ? '完善子项目立项资料'
+          : '编辑项目并重新提交'
+      "
       width="760px"
       :confirm-loading="preparationSaving"
       @ok="savePreparation"
@@ -334,7 +339,7 @@ import BusinessDetailPage, {
 } from "@/components/BusinessDetailPage.vue";
 import {
   getProject,
-  prepareChildProject,
+  updateProject,
   type ProjectDetail,
   type ProjectCostCategory,
   type ProjectStage,
@@ -376,9 +381,8 @@ const preparationForm = reactive({
     OTHER: 0,
   } as Record<ProjectCostCategory, number>,
 });
-const canPrepareChildProject = computed(
+const canEditProject = computed(
   () =>
-    Boolean(detail.value?.project.parentProjectId) &&
     detail.value?.project.approvalStatus !== "APPROVED" &&
     (auth.can("project:create") ||
       auth.can("project:approve") ||
@@ -545,8 +549,10 @@ async function savePreparation() {
   }
   preparationSaving.value = true;
   try {
-    detail.value = await prepareChildProject(projectId.value, {
+    detail.value = await updateProject(projectId.value, {
+      name: detail.value!.project.name,
       siteAddress: preparationForm.siteAddress.trim(),
+      contractAmount: detail.value!.project.contractAmount,
       plannedStartDate: preparationForm.plannedStartDate,
       plannedEndDate: preparationForm.plannedEndDate,
       warrantyEndDate: preparationForm.warrantyEndDate || undefined,
@@ -557,7 +563,7 @@ async function savePreparation() {
       })),
     });
     preparationOpen.value = false;
-    message.success("子项目立项资料已保存");
+    message.success("项目资料已保存并重新提交审批");
   } catch (error) {
     message.error(error instanceof Error ? error.message : "立项资料保存失败");
   } finally {

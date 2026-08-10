@@ -10,6 +10,7 @@ public record OrderDocumentResponse(
     String fileName,
     String contentType,
     long sizeBytes,
+    String docType,
     String uploadedBy,
     OffsetDateTime uploadedAt
 ) {}

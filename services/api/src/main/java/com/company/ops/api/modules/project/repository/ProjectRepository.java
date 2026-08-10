@@ -1,6 +1,7 @@
 package com.company.ops.api.modules.project.repository;
 
 import com.company.ops.api.modules.project.domain.Project;
+import com.company.ops.api.modules.project.domain.ProjectApprovalStatus;
 import com.company.ops.api.modules.project.domain.ProjectStage;
 import java.math.BigDecimal;
 import java.util.List;
@@ -42,5 +43,13 @@ public interface ProjectRepository extends JpaRepository<Project, UUID>, JpaSpec
   BigDecimal sumActualCost();
 
   long countByStageNot(ProjectStage stage);
+
+  List<Project> findByPlannedEndDateBetweenOrderByPlannedEndDateAsc(LocalDate startDate, LocalDate endDate);
+
+  List<Project> findByWarrantyEndDateBetweenOrderByWarrantyEndDateAsc(LocalDate startDate, LocalDate endDate);
+
+  List<Project> findByApprovalStatus(ProjectApprovalStatus status);
+
+  List<Project> findByApprovalStatusAndCreatedAtBefore(ProjectApprovalStatus status, java.time.OffsetDateTime before);
 
 }

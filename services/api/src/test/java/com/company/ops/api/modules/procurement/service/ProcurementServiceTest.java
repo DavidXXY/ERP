@@ -499,7 +499,7 @@ class ProcurementServiceTest {
       return document;
     });
 
-    var response = procurementService.uploadOrderDocument(orderId, file);
+    var response = procurementService.uploadOrderDocument(orderId, file, "CONTRACT");
 
     assertThat(response.fileName()).isEqualTo("采购合同.pdf");
     assertThat(response.orderCode()).isEqualTo("CGDD-DOC-001");

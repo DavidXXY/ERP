@@ -24,6 +24,16 @@
 
         <a-form :model="form" :rules="rules" layout="vertical" @finish="submit">
           <template v-if="mode === 'register'">
+            <div class="hp-field" aria-hidden="true">
+              <a-form-item label="网站">
+                <a-input
+                  v-model:value="form.website"
+                  name="website"
+                  tabindex="-1"
+                  autocomplete="off"
+                />
+              </a-form-item>
+            </div>
             <a-form-item label="企业名称" name="companyName" required>
               <a-input v-model:value="form.companyName" autocomplete="organization" />
             </a-form-item>
@@ -70,7 +80,7 @@ const store = usePortalStore();
 const mode = ref<"login" | "register">("login");
 const modeOptions = [{ label: "登录", value: "login" }, { label: "注册", value: "register" }];
 const submitting = ref(false);
-const form = reactive({ companyName: "", unifiedSocialCreditCode: "", contactName: "", phone: "", email: "", password: "", registrationCode: "" });
+const form = reactive({ companyName: "", unifiedSocialCreditCode: "", contactName: "", phone: "", email: "", password: "", registrationCode: "", website: "" });
 const rules = {
   companyName: [{ required: true, message: "请输入企业名称" }],
   unifiedSocialCreditCode: [{ required: true, message: "请输入统一社会信用代码" }],

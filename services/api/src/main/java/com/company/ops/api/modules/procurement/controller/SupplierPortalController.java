@@ -37,8 +37,11 @@ public class SupplierPortalController {
   }
 
   @PostMapping("/auth/register")
-  public ApiResponse<SessionResponse> register(@Valid @RequestBody RegisterRequest request) {
-    return ApiResponse.ok(service.register(request));
+  public ApiResponse<SessionResponse> register(
+      @Valid @RequestBody RegisterRequest request,
+      HttpServletRequest servletRequest
+  ) {
+    return ApiResponse.ok(service.register(request, clientIpResolver.resolve(servletRequest)));
   }
 
   @PostMapping("/auth/login")
@@ -255,6 +258,40 @@ public class SupplierPortalController {
       @Valid @RequestBody AskClarificationRequest request
   ) {
     return ApiResponse.ok(service.askClarification(principal, id, request));
+  }
+
+  @GetMapping("/inquiries/{id}/quote/revisions")
+  @PreAuthorize("hasAuthority('supplier-portal:access')")
+  public ApiResponse<List<QuoteRevisionResponse>> quoteRevisions(
+      @AuthenticationPrincipal SupplierPortalPrincipal principal,
+      @PathVariable UUID id
+  ) {
+    return ApiResponse.ok(service.listQuoteRevisions(principal, id));
+  }
+
+  @GetMapping("/change-requests")
+  @PreAuthorize("hasAuthority('supplier-portal:access')")
+  public ApiResponse<List<PortalChangeRequestResponse>> changeRequests(
+      @AuthenticationPrincipal SupplierPortalPrincipal principal
+  ) {
+    return ApiResponse.ok(service.listChangeRequests(principal));
+  }
+
+  @PostMapping("/change-requests")
+  @PreAuthorize("hasAuthority('supplier-portal:access')")
+  public ApiResponse<PortalChangeRequestResponse> createChangeRequest(
+      @AuthenticationPrincipal SupplierPortalPrincipal principal,
+      @Valid @RequestBody PortalChangeRequest request
+  ) {
+    return ApiResponse.ok(service.createChangeRequest(principal, request));
+  }
+
+  @GetMapping("/performance")
+  @PreAuthorize("hasAuthority('supplier-portal:access')")
+  public ApiResponse<List<PerformanceReviewResponse>> performanceReviews(
+      @AuthenticationPrincipal SupplierPortalPrincipal principal
+  ) {
+    return ApiResponse.ok(service.listPerformanceReviews(principal));
   }
 
   @GetMapping("/notifications")

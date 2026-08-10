@@ -34,6 +34,15 @@ public class SupplierChangeRequest extends BaseEntity {
   @Column(name = "proposed_settlement_terms", length = 160)
   private String proposedSettlementTerms;
 
+  @Column(name = "proposed_name", length = 160)
+  private String proposedName;
+
+  @Column(name = "proposed_credit_code", length = 80)
+  private String proposedCreditCode;
+
+  @Column(name = "request_source", nullable = false, length = 16)
+  private String requestSource = "INTERNAL";
+
   @Column(nullable = false, length = 1000)
   private String reason;
 
@@ -66,6 +75,12 @@ public class SupplierChangeRequest extends BaseEntity {
   public void setProposedBankAccount(String value) { proposedBankAccount = value; }
   public String getProposedSettlementTerms() { return proposedSettlementTerms; }
   public void setProposedSettlementTerms(String value) { proposedSettlementTerms = value; }
+  public String getProposedName() { return proposedName; }
+  public void setProposedName(String value) { proposedName = value; }
+  public String getProposedCreditCode() { return proposedCreditCode; }
+  public void setProposedCreditCode(String value) { proposedCreditCode = value; }
+  public String getRequestSource() { return requestSource; }
+  public void setRequestSource(String value) { requestSource = value; }
   public String getReason() { return reason; }
   public void setReason(String reason) { this.reason = reason; }
   public String getStatus() { return status; }

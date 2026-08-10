@@ -107,5 +107,6 @@ ops:
       port: ${SMTP_PORT:25}
       username: ${SMTP_USERNAME:}
       password: ${SMTP_PASSWORD:}
+    portal-url: ${SUPPLIER_PORTAL_URL:http://localhost:5176}
   maintenance:
     plan-generation-cron: ${MAINTENANCE_PLAN_GENERATION_CRON:0 5 1 * * *}

@@ -36,6 +36,13 @@
           <template #icon><TagsOutlined /></template>
           供应商类别字典
         </a-button>
+        <a-button
+          v-if="auth.can('procurement:view')"
+          @click="openChangeRequests"
+        >
+          供应商变更审批
+          <a-badge v-if="pendingChangeCount" :count="pendingChangeCount" />
+        </a-button>
         <a-button :loading="exporting" @click="handleExport">
           <template #icon><DownloadOutlined /></template>导出 Excel
         </a-button>
@@ -812,6 +819,125 @@
       </a-table>
     </a-drawer>
 
+    <a-drawer
+      v-model:open="changeRequestsOpen"
+      width="min(1080px, 100vw)"
+      title="供应商信息变更审批"
+    >
+      <a-alert
+        type="info"
+        show-icon
+        message="供应商在门户提交的企业名称、信用代码、银行信息或结算条款变更在此审批；通过后立即生效并同步供应商主档。"
+        style="margin-bottom: 16px"
+      />
+      <a-table
+        :columns="changeRequestColumns"
+        :data-source="changeRequests"
+        :loading="changeLoading"
+        row-key="id"
+        :pagination="{ pageSize: 10 }"
+        :scroll="{ x: 980 }"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'supplier'">
+            <strong>{{ supplierName(record.supplierId) || "-" }}</strong>
+            <span class="table-subtitle">{{
+              changeTypeLabel(record.changeType)
+            }}</span>
+          </template>
+          <template v-else-if="column.key === 'proposal'">
+            <div>{{ changeProposal(record) }}</div>
+            <span class="table-subtitle">{{ record.reason }}</span>
+          </template>
+          <template v-else-if="column.key === 'requester'">
+            {{ record.requestedByName || "-" }}
+            <span class="table-subtitle"
+              >{{ record.requestSource === "PORTAL" ? "供应商门户" : "内部" }} ·
+              {{ formatTime(record.createdAt) }}</span
+            >
+          </template>
+          <template v-else-if="column.key === 'status'">
+            <a-tag :color="changeStatusColor(record.status)">{{
+              changeStatusText(record.status)
+            }}</a-tag>
+            <span v-if="record.reviewComment" class="table-subtitle"
+              >意见：{{ record.reviewComment }}</span
+            >
+          </template>
+          <template v-else-if="column.key === 'action'">
+            <a-space wrap @click.stop>
+              <a-button
+                v-if="
+                  record.status === 'PENDING' &&
+                  auth.can('procurement:request:approve')
+                "
+                type="link"
+                size="small"
+                @click="openChangeReview(record, 'APPROVED')"
+                >通过</a-button
+              >
+              <a-button
+                v-if="
+                  record.status === 'PENDING' &&
+                  auth.can('procurement:request:approve')
+                "
+                type="link"
+                danger
+                size="small"
+                @click="openChangeReview(record, 'REJECTED')"
+                >驳回</a-button
+              >
+            </a-space>
+          </template>
+        </template>
+      </a-table>
+    </a-drawer>
+
+    <a-modal
+      v-model:open="changeReviewOpen"
+      :title="
+        changeReviewRecord
+          ? `${changeTypeLabel(changeReviewRecord.changeType)}变更审批`
+          : '变更审批'
+      "
+      ok-text="确认"
+      cancel-text="取消"
+      :ok-button-props="{ danger: changeReviewDecision === 'REJECTED' }"
+      :confirm-loading="changeReviewSaving"
+      @ok="submitChangeReview"
+    >
+      <a-alert
+        v-if="changeReviewDecision === 'APPROVED'"
+        type="success"
+        show-icon
+        message="通过后变更立即写入供应商主档。"
+        style="margin-bottom: 16px"
+      />
+      <a-alert
+        v-else
+        type="warning"
+        show-icon
+        message="驳回时请填写意见，供应商可在门户查看。"
+        style="margin-bottom: 16px"
+      />
+      <a-form layout="vertical">
+        <a-form-item
+          :label="
+            changeReviewDecision === 'APPROVED'
+              ? '审批意见（可选）'
+              : '驳回原因'
+          "
+          :required="changeReviewDecision === 'REJECTED'"
+        >
+          <a-textarea
+            v-model:value="changeReviewComment"
+            :rows="3"
+            :maxlength="500"
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
     <a-modal
       v-model:open="portalOpenAccountOpen"
       title="为已有供应商开通门户账号"
@@ -1115,12 +1241,15 @@ import {
   reviewSupplierPortalAccount,
   reviewSupplierPortalDocument,
   updateSupplierPortalAccountStatus,
+  listSupplierChangeRequests,
+  reviewSupplierChangeRequest,
   updateSupplier,
   type CreateSupplierPayload,
   type Supplier,
   type PurchaseOrder,
   type SupplierPortalAccount,
   type SupplierPortalDocument,
+  type SupplierChangeRequest,
   type SupplierCategory,
   listSupplierCategories,
   createSupplierCategory,
@@ -1159,6 +1288,24 @@ const portalDocumentsOpen = ref(false);
 const portalLoading = ref(false);
 const portalDocumentsLoading = ref(false);
 const portalAccounts = ref<SupplierPortalAccount[]>([]);
+const changeRequestsOpen = ref(false);
+const changeRequests = ref<SupplierChangeRequest[]>([]);
+const changeLoading = ref(false);
+const changeReviewOpen = ref(false);
+const changeReviewRecord = ref<SupplierChangeRequest | null>(null);
+const changeReviewDecision = ref<"APPROVED" | "REJECTED">("APPROVED");
+const changeReviewComment = ref("");
+const changeReviewSaving = ref(false);
+const pendingChangeCount = computed(
+  () => changeRequests.value.filter((item) => item.status === "PENDING").length,
+);
+const changeRequestColumns = [
+  { title: "供应商 / 变更类型", key: "supplier", width: 220 },
+  { title: "变更内容", key: "proposal" },
+  { title: "申请人 / 时间", key: "requester", width: 200 },
+  { title: "状态", key: "status", width: 160 },
+  { title: "操作", key: "action", width: 140 },
+];
 const portalDocuments = ref<SupplierPortalDocument[]>([]);
 const portalReviewTarget = ref<SupplierPortalAccount | null>(null);
 const portalDocumentSupplierId = ref("");
@@ -1356,6 +1503,114 @@ async function openPortalAccounts() {
     message.error(error instanceof Error ? error.message : "门户账号加载失败");
   } finally {
     portalLoading.value = false;
+  }
+}
+
+async function openChangeRequests() {
+  changeRequestsOpen.value = true;
+  changeLoading.value = true;
+  try {
+    changeRequests.value = await listSupplierChangeRequests();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "变更申请加载失败");
+  } finally {
+    changeLoading.value = false;
+  }
+}
+
+function supplierName(supplierId: string) {
+  return suppliers.value.find((item) => item.id === supplierId)?.name;
+}
+
+function changeTypeLabel(type: string) {
+  return (
+    (
+      {
+        NAME: "企业名称",
+        CREDIT_CODE: "统一社会信用代码",
+        BANK_INFO: "银行信息",
+        SETTLEMENT_TERMS: "结算条款",
+        ADMISSION: "供应商准入",
+        RISK: "风险状态",
+      } as Record<string, string>
+    )[type] || type
+  );
+}
+
+function changeProposal(record: SupplierChangeRequest) {
+  const value =
+    record.proposedName ||
+    record.proposedCreditCode ||
+    record.proposedBankName ||
+    record.proposedBankAccount ||
+    record.proposedSettlementTerms ||
+    "-";
+  return `${changeTypeLabel(record.changeType)}：${value}`;
+}
+
+function changeStatusText(status: string) {
+  return (
+    (
+      { PENDING: "待审批", APPROVED: "已通过", REJECTED: "已退回" } as Record<
+        string,
+        string
+      >
+    )[status] || status
+  );
+}
+
+function changeStatusColor(status: string) {
+  return (
+    (
+      { PENDING: "orange", APPROVED: "green", REJECTED: "red" } as Record<
+        string,
+        string
+      >
+    )[status] || "default"
+  );
+}
+
+function formatTime(value?: string) {
+  return value
+    ? new Intl.DateTimeFormat("zh-CN", { hour12: false }).format(
+        new Date(value),
+      )
+    : "";
+}
+
+function openChangeReview(
+  record: SupplierChangeRequest,
+  decision: "APPROVED" | "REJECTED",
+) {
+  changeReviewRecord.value = record;
+  changeReviewDecision.value = decision;
+  changeReviewComment.value = "";
+  changeReviewOpen.value = true;
+}
+
+async function submitChangeReview() {
+  const record = changeReviewRecord.value;
+  if (!record) return;
+  if (
+    changeReviewDecision.value === "REJECTED" &&
+    !changeReviewComment.value.trim()
+  ) {
+    message.warning("驳回时必须填写原因");
+    return;
+  }
+  changeReviewSaving.value = true;
+  try {
+    await reviewSupplierChangeRequest(record.id, {
+      decision: changeReviewDecision.value,
+      comment: changeReviewComment.value.trim() || undefined,
+    });
+    message.success("变更申请已处理");
+    changeReviewOpen.value = false;
+    await openChangeRequests();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "审批失败");
+  } finally {
+    changeReviewSaving.value = false;
   }
 }
 

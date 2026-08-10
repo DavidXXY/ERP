@@ -212,6 +212,21 @@
             message="发货信息已回传，采购方可提前安排收货。"
             class="quote-alert"
           />
+          <a-divider style="margin: 14px 0" />
+          <h3 style="margin-bottom: 8px">历史发货记录</h3>
+          <a-table
+            v-if="orderShipments.length > 0"
+            size="small"
+            row-key="id"
+            :data-source="orderShipments"
+            :columns="shipmentColumns"
+            :pagination="false"
+          />
+          <a-empty
+            v-else
+            :image="Empty.PRESENTED_IMAGE_SIMPLE"
+            description="该订单暂无发货记录"
+          />
         </section>
         <a-alert
           v-if="
@@ -445,6 +460,62 @@
             ></a-list
           >
         </section>
+        <section class="quote-section">
+          <div class="section-title">
+            <div>
+              <h2>报价版本历史</h2>
+              <p>每次提交报价都会保存版本快照，便于回溯对比。</p>
+            </div>
+            <a-tag v-if="selected?.quote" color="blue"
+              >当前版本 {{ selected.quote.versionNo }}</a-tag
+            >
+          </div>
+          <a-skeleton v-if="revisionLoading" active />
+          <a-empty
+            v-else-if="revisionRows.length === 0"
+            :image="Empty.PRESENTED_IMAGE_SIMPLE"
+            description="提交报价后生成版本快照"
+          />
+          <a-list
+            v-else
+            size="small"
+            :data-source="revisionRows"
+            :pagination="{ pageSize: 5, showSizeChanger: false }"
+          >
+            <template #renderItem="{ item }">
+              <a-list-item>
+                <a-list-item-meta>
+                  <template #title>
+                    版本 {{ item.versionNo }}
+                    <a-tag
+                      v-if="selected?.quote?.versionNo === item.versionNo"
+                      color="green"
+                      >当前</a-tag
+                    >
+                    <small class="table-subtitle">
+                      {{ item.submittedByName }} ·
+                      {{ formatTime(item.submittedAt) }}
+                    </small>
+                  </template>
+                  <template #description>
+                    <div>
+                      合计 {{ money(item.snapshot?.totalAmount) }} ·
+                      物料 {{ money(item.snapshot?.materialAmount) }} ·
+                      运费 {{ money(item.snapshot?.freightAmount) }} ·
+                      其他费用 {{ money(item.snapshot?.otherCostAmount) }}
+                    </div>
+                    <div v-if="item.snapshot?.paymentTerms" class="table-subtitle">
+                      付款条件：{{ item.snapshot.paymentTerms }}
+                    </div>
+                    <div v-if="item.snapshot?.validUntil" class="table-subtitle">
+                      报价有效期至：{{ item.snapshot.validUntil }}
+                    </div>
+                  </template>
+                </a-list-item-meta>
+              </a-list-item>
+            </template>
+          </a-list>
+        </section>
       </template>
       <template #footer>
         <div class="drawer-footer">
@@ -531,6 +602,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { message } from "ant-design-vue";
 import {
   CheckOutlined,
@@ -546,9 +618,21 @@ import {
 import * as api from "../api";
 import { usePortalStore } from "../store";
 import { Empty } from "ant-design-vue";
+import {
+  contractStatusText,
+  daysLeft,
+  deadlineText,
+  fileSize,
+  formatDate,
+  formatTime,
+  money,
+  quoteStatus,
+} from "../utils/quote";
 
 type EditableLine = api.QuoteLine & { unitPrice: number; taxRate: number };
 const store = usePortalStore();
+const route = useRoute();
+const router = useRouter();
 const loading = ref(false);
 const saving = ref(false);
 const editorOpen = ref(false);
@@ -576,6 +660,29 @@ const shipmentForm = reactive({
   expectedArrival: "",
   remark: "",
 });
+const myShipments = ref<api.ProcurementShipment[]>([]);
+const revisions = ref<api.QuoteRevision[]>([]);
+const revisionLoading = ref(false);
+const shipmentColumns = [
+  { title: "送货单号", dataIndex: "deliveryNo" },
+  { title: "承运方", dataIndex: "carrier" },
+  { title: "预计到货", dataIndex: "expectedArrival" },
+  { title: "状态", dataIndex: "status" },
+  { title: "提交时间", dataIndex: "createdAt" },
+];
+const orderShipments = computed(() =>
+  selected.value?.contract?.orderId
+    ? myShipments.value.filter(
+        (item) => item.orderId === selected.value?.contract?.orderId,
+      )
+    : [],
+);
+const revisionRows = computed(() =>
+  revisions.value.map((item) => ({
+    ...item,
+    submittedAt: item.submittedAt,
+  })),
+);
 const filterOptions = [
   { label: "进行中", value: "OPEN" },
   { label: "待报价", value: "PENDING" },
@@ -638,11 +745,34 @@ onMounted(load);
 async function load() {
   loading.value = true;
   try {
-    inquiries.value = await api.listInquiries();
+    const [items, shipments] = await Promise.all([
+      api.listInquiries(),
+      api.listMyShipments(),
+    ]);
+    inquiries.value = items;
+    myShipments.value = shipments;
+    const inquiryId = typeof route.query.inquiry === "string" ? route.query.inquiry : undefined;
+    if (inquiryId) {
+      const target = items.find((item) => item.id === inquiryId);
+      if (target) openEditor(target);
+      if (route.query.inquiry) {
+        await router.replace({ path: "/inquiries" });
+      }
+    }
   } catch (e) {
     message.error(e instanceof Error ? e.message : "加载失败");
   } finally {
     loading.value = false;
+  }
+}
+async function loadRevisions(inquiryId: string) {
+  revisionLoading.value = true;
+  try {
+    revisions.value = await api.listQuoteRevisions(inquiryId);
+  } catch {
+    revisions.value = [];
+  } finally {
+    revisionLoading.value = false;
   }
 }
 function openEditor(item: api.PortalInquiry) {
@@ -669,6 +799,7 @@ function openEditor(item: api.PortalInquiry) {
     validUntil: item.quote?.validUntil || "",
   });
   editorOpen.value = true;
+  loadRevisions(item.id);
 }
 function payload() {
   return {
@@ -791,35 +922,13 @@ async function askQuestion() {
 }
 async function downloadAttachment(attachment: api.QuoteAttachment) {
   if (!selected.value) return;
-  const response = await fetch(
-    api.quoteAttachmentDownloadUrl(selected.value.id, attachment.id),
-    {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem(api.SUPPLIER_TOKEN_KEY) || ""}`,
-      },
-    },
+  window.location.href = api.quoteAttachmentDownloadUrl(
+    selected.value.id,
+    attachment.id,
   );
-  if (!response.ok) return message.error("下载失败");
-  const url = URL.createObjectURL(await response.blob());
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = attachment.fileName;
-  link.click();
-  URL.revokeObjectURL(url);
 }
 async function downloadContractDocument(doc: api.ContractDocument) {
-  const response = await fetch(api.contractDocumentDownloadUrl(doc.id), {
-    headers: {
-      Authorization: `Bearer ${localStorage.getItem(api.SUPPLIER_TOKEN_KEY) || ""}`,
-    },
-  });
-  if (!response.ok) return message.error("下载失败");
-  const url = URL.createObjectURL(await response.blob());
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = doc.fileName;
-  link.click();
-  URL.revokeObjectURL(url);
+  window.location.href = api.contractDocumentDownloadUrl(doc.id);
 }
 async function acknowledge() {
   if (!selected.value?.contract) return;
@@ -854,6 +963,7 @@ async function submitShipment() {
     });
     message.success("发货信息已回传");
     shipmentSent.value = true;
+    myShipments.value = await api.listMyShipments();
     shipmentForm.deliveryNo = "";
     shipmentForm.carrier = "";
     shipmentForm.expectedArrival = "";
@@ -887,54 +997,4 @@ function completion(item: api.PortalInquiry) {
       )
     : 0;
 }
-function daysLeft(deadline?: string) {
-  return deadline
-    ? Math.ceil(
-        (new Date(`${deadline}T23:59:59`).getTime() - Date.now()) / 86400000,
-      )
-    : 999;
-}
-function deadlineText(deadline?: string) {
-  const d = daysLeft(deadline);
-  return !deadline
-    ? "未设截止"
-    : d < 0
-      ? "已截止"
-      : d === 0
-        ? "今天截止"
-        : `${d} 天后截止`;
-}
-function quoteStatus(item: api.PortalInquiry) {
-  if (item.awardStatus === "AWARDED") return { color: "green", text: "已中标" };
-  if (item.awardStatus === "NOT_AWARDED")
-    return { color: "default", text: "未中标" };
-  if (item.quote?.source === "INTERNAL_ENTRY" && !item.quote.confirmed)
-    return { color: "orange", text: "采购代录 · 待确认" };
-  if (item.quote?.status === "SUBMITTED")
-    return { color: "blue", text: "已提交 · 待定标" };
-  if (item.quote?.status === "DRAFT" || item.quote?.status === "WITHDRAWN")
-    return { color: "orange", text: "草稿" };
-  return { color: "default", text: "待报价" };
-}
-function contractStatusText(value: string) {
-  return (
-    (
-      {
-        DRAFT: "随订单待生效",
-        PENDING_APPROVAL: "审批中",
-        ACTIVE: "已生效",
-        REJECTED: "已驳回",
-        SUPERSEDED: "已变更",
-      } as Record<string, string>
-    )[value] || value
-  );
-}
-const money = (v: number) =>
-  new Intl.NumberFormat("zh-CN", { style: "currency", currency: "CNY" }).format(
-    Number(v || 0),
-  );
-const formatDate = (v: string) =>
-  new Intl.DateTimeFormat("zh-CN").format(new Date(v));
-const fileSize = (v: number) =>
-  v > 1048576 ? `${(v / 1048576).toFixed(1)} MB` : `${Math.ceil(v / 1024)} KB`;
 </script>

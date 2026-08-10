@@ -13,6 +13,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 public final class SupplierPortalDtos {
@@ -28,7 +29,8 @@ public final class SupplierPortalDtos {
       @NotBlank @Size(min = 8, max = 100) String password,
       @Size(max = 80) String registrationCode,
       LocalDate licenseValidTo,
-      LocalDate qualificationValidTo
+      LocalDate qualificationValidTo,
+      @Size(max = 100) String website
   ) {}
 
   public record LoginRequest(
@@ -206,5 +208,56 @@ public final class SupplierPortalDtos {
       @Size(max = 80) String carrier,
       LocalDate expectedArrival,
       @Size(max = 500) String remark
+  ) {}
+
+  public record PortalChangeRequest(
+      @NotBlank String changeType,
+      String proposedName,
+      String proposedCreditCode,
+      String proposedBankName,
+      String proposedBankAccount,
+      String proposedSettlementTerms,
+      @NotBlank @Size(max = 1000) String reason
+  ) {}
+
+  public record PortalChangeRequestResponse(
+      UUID id,
+      String changeType,
+      String proposedName,
+      String proposedCreditCode,
+      String proposedBankName,
+      String proposedBankAccount,
+      String proposedSettlementTerms,
+      String reason,
+      String status,
+      String requestedByName,
+      String reviewedByName,
+      String reviewComment,
+      OffsetDateTime reviewedAt,
+      OffsetDateTime createdAt
+  ) {}
+
+  public record QuoteRevisionResponse(
+      UUID id,
+      int versionNo,
+      String submissionSource,
+      String submittedByName,
+      OffsetDateTime submittedAt,
+      Map<String, Object> snapshot
+  ) {}
+
+  public record PerformanceReviewResponse(
+      UUID id,
+      String reviewPeriod,
+      BigDecimal onTimeRate,
+      BigDecimal qualityRate,
+      BigDecimal invoiceMatchRate,
+      BigDecimal responseScore,
+      BigDecimal totalScore,
+      String grade,
+      String reviewerName,
+      String improvementAction,
+      String status,
+      OffsetDateTime createdAt
   ) {}
 }

@@ -13,6 +13,7 @@ import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 public final class ProcurementControlDtos {
@@ -54,7 +55,10 @@ public final class ProcurementControlDtos {
 
   public record SelectSupplierQuote(@NotBlank String operatorName, @NotBlank String reason) {}
 
-  public record InviteSuppliers(@NotEmpty List<@NotNull UUID> supplierIds) {}
+  public record InviteSuppliers(
+      @NotEmpty List<@NotNull UUID> supplierIds,
+      Map<UUID, String> contactEmails
+  ) {}
 
   public record UpdateInquiryDeadline(@NotNull LocalDate deadline) {}
 

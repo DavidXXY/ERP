@@ -99,7 +99,7 @@ class LocalApplicationContextTest {
         "select max(cast(version as integer)) from flyway_schema_history where success = true",
         Integer.class
     );
-    assertThat(version).isEqualTo(119);
+    assertThat(version).isEqualTo(120);
     assertThat(jdbc.queryForObject(
         "select count(*) from information_schema.tables where lower(table_name) = 'procurement_supplier_categories'",
         Integer.class)).isEqualTo(1);
@@ -109,6 +109,9 @@ class LocalApplicationContextTest {
     assertThat(jdbc.queryForObject(
         "select count(*) from information_schema.columns where lower(table_name) = 'project_projects' and lower(column_name) = 'parent_project_id'",
         Integer.class)).isEqualTo(1);
+    assertThat(jdbc.queryForObject(
+        "select count(*) from information_schema.columns where lower(table_name) = 'procurement_supplier_change_requests' and lower(column_name) in ('proposed_name', 'proposed_credit_code', 'request_source')",
+        Integer.class)).isEqualTo(3);
     assertThat(jdbc.queryForObject(
         "select count(*) from information_schema.tables where lower(table_name) = 'shedlock'", Integer.class))
         .isEqualTo(1);

@@ -364,6 +364,31 @@
             placeholder="选择一个或多个已准入供应商"
           />
         </a-form-item>
+        <div v-if="invitedSupplierIds.length > 0" class="invite-emails">
+          <div class="invite-email-head">
+            <span>邀请通知邮箱</span>
+            <small
+              >未注册供应商填写后，注册码将通过邮件送达；留空则继续人工发送。</small
+            >
+          </div>
+          <div
+            v-for="id in invitedSupplierIds"
+            :key="id"
+            class="invite-email-row"
+          >
+            <span class="invite-email-name">{{
+              suppliers.find((item) => item.id === id)?.name || id
+            }}</span>
+            <a-input
+              v-model:value="inviteEmails[id]"
+              type="email"
+              :placeholder="
+                suppliers.find((item) => item.id === id)?.contactName ||
+                '请输入通知邮箱'
+              "
+            />
+          </div>
+        </div>
         <a-alert
           type="info"
           show-icon
@@ -554,6 +579,7 @@ const clarificationAnswers = reactive<Record<string, string>>({});
 const selectedInquiry = ref<api.ProcurementInquiry | null>(null);
 const selectedQuote = ref<api.SupplierQuotation | null>(null);
 const invitedSupplierIds = ref<string[]>([]);
+const inviteEmails = reactive<Record<string, string>>({});
 const quoteLineForm = ref<
   Array<{
     requestId: string;
@@ -770,6 +796,7 @@ async function saveQuote() {
 function openInvite(inquiry: api.ProcurementInquiry) {
   selectedInquiry.value = inquiry;
   invitedSupplierIds.value = [];
+  Object.keys(inviteEmails).forEach((key) => delete inviteEmails[key]);
   inviteOpen.value = true;
 }
 
@@ -781,6 +808,7 @@ async function saveInvitations() {
   const result = await api.inviteInquirySuppliers(
     selectedInquiry.value.id,
     invitedSupplierIds.value,
+    { ...inviteEmails },
   );
   inviteOpen.value = false;
   const codeEntries = Object.entries(result.registrationCodes || {});

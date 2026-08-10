@@ -422,11 +422,18 @@ public class ProcurementControlService {
     }
     OffsetDateTime now = OffsetDateTime.now();
     Map<UUID, String> registrationCodes = new LinkedHashMap<>();
+    Map<UUID, String> contactEmails = request.contactEmails() == null
+        ? Map.of() : request.contactEmails();
     for (UUID supplierId : request.supplierIds().stream().distinct().toList()) {
       Supplier supplier = suppliers.findById(supplierId)
           .orElseThrow(() -> new BusinessException("供应商不存在"));
       requireEligibleSupplier(supplier);
       if (invitations.findByInquiryIdAndSupplierId(inquiryId, supplierId).isEmpty()) {
+        String contactEmail = contactEmails.get(supplierId);
+        if (contactEmail != null && !contactEmail.isBlank()
+            && !contactEmail.contains("@")) {
+          throw new BusinessException("供应商 " + supplier.getName() + " 的通知邮箱格式不正确");
+        }
         ProcurementInquiryInvitation invitation = new ProcurementInquiryInvitation();
         invitation.setInquiryId(inquiryId);
         invitation.setSupplierId(supplierId);
@@ -443,6 +450,25 @@ public class ProcurementControlService {
             "询价单 " + inquiry.getCode() + " 邀请贵司参与报价，请在截止前响应。",
             "INQUIRY", inquiryId);
         registrationCodes.put(supplierId, registrationCode);
+        if (contactEmail != null && !contactEmail.isBlank()) {
+          Boolean delivered = portalNotifier.deliverInvitation(
+              supplierId, contactEmail.trim(), registrationCode,
+              inquiry.getCode(),
+              inquiry.getDeadline() == null ? null : inquiry.getDeadline().toString());
+          if (delivered == null) {
+            invitation.setDeliveryStatus("PENDING");
+          } else if (delivered) {
+            invitation.setDeliveryStatus("DELIVERED");
+            invitation.setDeliveryAttemptCount(invitation.getDeliveryAttemptCount() + 1);
+            invitation.setLastDeliveryAt(OffsetDateTime.now());
+          } else {
+            invitation.setDeliveryStatus("FAILED");
+            invitation.setDeliveryAttemptCount(invitation.getDeliveryAttemptCount() + 1);
+            invitation.setLastDeliveryAt(OffsetDateTime.now());
+            invitation.setDeliveryError("SMTP 发送失败或未启用");
+          }
+          invitations.save(invitation);
+        }
       }
     }
     Map<String, Object> result = inquiryView(inquiry);

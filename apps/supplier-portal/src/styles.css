@@ -80,3 +80,58 @@ button, input, textarea { font: inherit; }
 @media (max-width: 1000px) { .metrics-grid { grid-template-columns: repeat(2, 1fr); } .dashboard-grid { grid-template-columns: 1fr; } .inquiry-card { grid-template-columns: minmax(0, 1fr) 220px; } .inquiry-action { grid-column: 1 / -1; } }
 @media (max-width: 760px) { .auth-shell { grid-template-columns: 1fr; } .auth-context { min-height: 260px; padding: 28px 22px; } .auth-context h1 { font-size: 34px; margin: 12px 0; } .auth-lead { margin: 0; } .trust-row { display: none; } .auth-form-panel { padding: 28px 20px; } .portal-sider { position: fixed !important; z-index: 40; } .portal-sider.ant-layout-sider-collapsed { transform: translateX(-72px); } .sider-close { display: inline-flex; margin-left: auto; color: #d6e5df !important; } .sider-backdrop { display: block; position: fixed; inset: 0; z-index: 35; border: 0; background: rgba(5, 22, 17, .38); padding: 0; } .portal-header { padding: 0 12px; } .mobile-menu { display: inline-flex; } .company-identity { flex: 1; margin-left: 6px; } .portal-header > .ant-dropdown-trigger span:not(.anticon) { display: none; } .portal-content { padding: 20px 14px 40px; } .page-heading { min-height: 0; margin-bottom: 18px; } .page-heading h1 { font-size: 24px; } .page-heading > div p:last-child { max-width: 260px; } .metrics-grid { grid-template-columns: 1fr 1fr; gap: 8px; } .metric { padding: 13px; min-height: 78px; } .metric-icon { display: none; } .metric strong { font-size: 20px; } .form-grid-2, .form-grid-3 { grid-template-columns: 1fr; } .document-grid { grid-template-columns: 1fr; } .inquiry-card { grid-template-columns: 1fr; gap: 18px; } .inquiry-action { grid-column: auto; } .inquiry-action .ant-btn { width: 100%; } .section-block, .form-section, .quote-section { padding: 18px 14px; } .filter-row { align-items: flex-start; flex-direction: column; } .filter-row .ant-segmented { width: 100%; overflow-x: auto; } .quote-drawer .ant-drawer-body { padding: 14px; } .quote-deadline { grid-template-columns: 24px 1fr; } .quote-deadline .ant-progress { grid-column: 1 / -1; margin-top: 10px; } .drawer-footer { flex-wrap: wrap; } .footer-spacer { display: none; } .drawer-footer .ant-btn { flex: 1; } }
 @media (max-width: 420px) { .metrics-grid { grid-template-columns: 1fr; } .page-heading { flex-wrap: wrap; } .document-card { grid-template-columns: 42px minmax(0, 1fr); } .document-card > .ant-tag { grid-column: 2; justify-self: start; } }
+
+/* 注册蜜罐字段：对真实用户不可见，仅机器人会填写 */
+.hp-field {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* 合作绩效卡片 */
+.performance-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
+}
+.performance-card {
+  border: 1px solid #f0f0f0;
+  border-radius: 10px;
+  padding: 16px;
+  background: #fafafa;
+}
+.performance-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.performance-score {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.performance-score strong {
+  font-size: 30px;
+  color: #1f5c46;
+}
+.performance-score small {
+  color: #8c8c8c;
+}
+.performance-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  font-size: 13px;
+  color: #595959;
+}
+@media (max-width: 760px) {
+  .performance-grid {
+    grid-template-columns: 1fr;
+  }
+}

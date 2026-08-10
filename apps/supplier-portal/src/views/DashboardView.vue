@@ -36,6 +36,39 @@
         </div>
       </aside>
     </section>
+    <section v-if="performanceReviews.length > 0" class="section-block performance">
+      <div class="section-title">
+        <div>
+          <h2>合作绩效</h2>
+          <p>采购方按周期对交付、质量与配合度进行的评价，供贵司改进参考。</p>
+        </div>
+      </div>
+      <div class="performance-grid">
+        <article v-for="item in performanceReviews.slice(0, 3)" :key="item.id" class="performance-card">
+          <div class="performance-head">
+            <strong>{{ item.reviewPeriod }}</strong>
+            <a-tag :color="item.totalScore >= 90 ? 'green' : item.totalScore >= 75 ? 'blue' : 'orange'"
+              >{{ item.grade }}</a-tag
+            >
+          </div>
+          <div class="performance-score">
+            <strong>{{ item.totalScore }}</strong><small>综合得分</small>
+          </div>
+          <div class="performance-metrics">
+            <span>准时率 {{ item.onTimeRate }}%</span>
+            <span>质量合格 {{ item.qualityRate }}%</span>
+            <span>单据匹配 {{ item.invoiceMatchRate }}%</span>
+            <span>响应评分 {{ item.responseScore }}</span>
+          </div>
+          <p v-if="item.improvementAction" class="table-subtitle">
+            改进建议：{{ item.improvementAction }}
+          </p>
+          <small class="table-subtitle">
+            {{ item.reviewerName }} · {{ formatDate(item.createdAt) }}
+          </small>
+        </article>
+      </div>
+    </section>
   </div>
 </template>
 
@@ -46,9 +79,11 @@ import { message } from "ant-design-vue";
 import { CheckCircleOutlined, ClockCircleOutlined, FileDoneOutlined, ReloadOutlined, RightOutlined, SafetyCertificateOutlined, SendOutlined } from "@ant-design/icons-vue";
 import * as api from "../api";
 import { usePortalStore } from "../store";
+import { daysLeft, deadlineText, formatDate } from "../utils/quote";
 
 const store = usePortalStore(); const router = useRouter(); const loading = ref(false);
 const inquiries = ref<api.PortalInquiry[]>([]); const documents = ref<api.PortalDocument[]>([]);
+const performanceReviews = ref<api.PerformanceReview[]>([]);
 const pending = computed(() => inquiries.value.filter((i) => i.status === "OPEN" && i.quote?.status !== "SUBMITTED"));
 const pendingCount = computed(() => pending.value.length);
 const submittedCount = computed(() => inquiries.value.filter((i) => i.quote?.status === "SUBMITTED").length);
@@ -56,7 +91,19 @@ const awardedCount = computed(() => inquiries.value.filter((i) => i.awardStatus 
 const admissionText = computed(() => ({ APPROVED: "已通过", REJECTED: "已退回", PENDING: "审核中" })[store.session?.supplier.admissionStatus || "PENDING"]);
 const readiness = computed(() => [Boolean(store.session?.supplier.registeredAddress), documents.value.length > 0, store.session?.account.status === "ACTIVE", store.session?.supplier.admissionStatus === "APPROVED"].filter(Boolean).length * 25);
 onMounted(load);
-async function load() { loading.value = true; try { [inquiries.value, documents.value] = await Promise.all([api.listInquiries(), api.listDocuments()]); } catch (e) { message.error(e instanceof Error ? e.message : "加载失败"); } finally { loading.value = false; } }
-function daysLeft(deadline?: string) { return deadline ? Math.ceil((new Date(`${deadline}T23:59:59`).getTime() - Date.now()) / 86400000) : 999; }
-function deadlineText(deadline?: string) { const days = daysLeft(deadline); return !deadline ? "未设截止" : days < 0 ? "已截止" : days === 0 ? "今天截止" : `${days} 天后截止`; }
+async function load() {
+  loading.value = true;
+  try {
+    [inquiries.value, documents.value, performanceReviews.value] =
+      await Promise.all([
+        api.listInquiries(),
+        api.listDocuments(),
+        api.listPerformanceReviews(),
+      ]);
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : "加载失败");
+  } finally {
+    loading.value = false;
+  }
+}
 </script>

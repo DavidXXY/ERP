@@ -217,6 +217,9 @@ public class ProcurementGovernanceService {
     change.setProposedBankName(request.proposedBankName());
     change.setProposedBankAccount(request.proposedBankAccount());
     change.setProposedSettlementTerms(request.proposedSettlementTerms());
+    change.setProposedName(request.proposedName());
+    change.setProposedCreditCode(request.proposedCreditCode());
+    change.setRequestSource("INTERNAL");
     change.setReason(request.reason());
     change.setRequestedByName(currentName());
     change.setStatus("PENDING");
@@ -249,6 +252,10 @@ public class ProcurementGovernanceService {
       if (!blank(change.getProposedBankAccount())) supplier.setBankAccount(change.getProposedBankAccount());
       if (!blank(change.getProposedSettlementTerms())) {
         supplier.setSettlementTerms(change.getProposedSettlementTerms());
+      }
+      if (!blank(change.getProposedName())) supplier.setName(change.getProposedName());
+      if (!blank(change.getProposedCreditCode())) {
+        supplier.setUnifiedSocialCreditCode(change.getProposedCreditCode().trim().toUpperCase());
       }
       suppliers.save(supplier);
     }

@@ -172,6 +172,65 @@ export type PortalNotification = {
   createdAt: string;
 };
 
+export type QuoteRevision = {
+  id: string;
+  versionNo: number;
+  submissionSource: string;
+  submittedByName?: string;
+  submittedAt?: string;
+  snapshot: {
+    totalAmount?: number;
+    materialAmount?: number;
+    freightAmount?: number;
+    otherCostAmount?: number;
+    paymentTerms?: string;
+    remark?: string;
+    validUntil?: string;
+    versionNo?: number;
+    lines?: Array<{
+      requestId?: string;
+      requestCode?: string;
+      partName?: string;
+      quantity?: number;
+      unitPrice?: number;
+      taxRate?: number;
+      deliveryDate?: string;
+    }>;
+  };
+};
+
+export type PortalChangeRequest = {
+  id: string;
+  changeType: string;
+  proposedName?: string;
+  proposedCreditCode?: string;
+  proposedBankName?: string;
+  proposedBankAccount?: string;
+  proposedSettlementTerms?: string;
+  reason: string;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  requestedByName?: string;
+  reviewedByName?: string;
+  reviewComment?: string;
+  reviewedAt?: string;
+  createdAt: string;
+};
+
+export type PerformanceReview = {
+  id: string;
+  reviewPeriod: string;
+  onTimeRate: number;
+  qualityRate: number;
+  invoiceMatchRate: number;
+  responseScore: number;
+  totalScore: number;
+  grade: string;
+  reviewerName?: string;
+  improvementAction?: string;
+  status: string;
+  createdAt: string;
+};
+
 export type ProcurementShipment = {
   id: string;
   orderId: string;
@@ -235,10 +294,14 @@ export const uploadDocument = (data: FormData) =>
   request<PortalDocument>({ url: "/documents", method: "POST", data });
 export const deleteDocument = (id: string) =>
   request<void>({ url: `/documents/${id}`, method: "DELETE" });
+const withToken = (url: string) => {
+  const token = localStorage.getItem(SUPPLIER_TOKEN_KEY);
+  return token ? `${url}?token=${encodeURIComponent(token)}` : url;
+};
 export const documentDownloadUrl = (id: string) =>
-  `${http.defaults.baseURL}/documents/${id}/download`;
+  withToken(`${http.defaults.baseURL}/documents/${id}/download`);
 export const contractDocumentDownloadUrl = (id: string) =>
-  `${http.defaults.baseURL}/contract-documents/${id}/download`;
+  withToken(`${http.defaults.baseURL}/contract-documents/${id}/download`);
 export const listNotifications = () =>
   request<PortalNotification[]>({ url: "/notifications" });
 export const unreadNotificationCount = () =>
@@ -313,10 +376,24 @@ export const deleteQuoteAttachment = (inquiryId: string, id: string) =>
     method: "DELETE",
   });
 export const quoteAttachmentDownloadUrl = (inquiryId: string, id: string) =>
-  `${http.defaults.baseURL}/inquiries/${inquiryId}/attachments/${id}/download`;
+  withToken(
+    `${http.defaults.baseURL}/inquiries/${inquiryId}/attachments/${id}/download`,
+  );
 export const askClarification = (id: string, question: string) =>
   request<Clarification>({
     url: `/inquiries/${id}/clarifications`,
     method: "POST",
     data: { question },
   });
+export const listQuoteRevisions = (inquiryId: string) =>
+  request<QuoteRevision[]>({ url: `/inquiries/${inquiryId}/quote/revisions` });
+export const listChangeRequests = () =>
+  request<PortalChangeRequest[]>({ url: "/change-requests" });
+export const createChangeRequest = (data: Record<string, unknown>) =>
+  request<PortalChangeRequest>({
+    url: "/change-requests",
+    method: "POST",
+    data,
+  });
+export const listPerformanceReviews = () =>
+  request<PerformanceReview[]>({ url: "/performance" });

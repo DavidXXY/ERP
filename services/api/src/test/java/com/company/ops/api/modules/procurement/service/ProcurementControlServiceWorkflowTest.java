@@ -128,7 +128,7 @@ class ProcurementControlServiceWorkflowTest {
     when(inquiries.findById(inquiryId)).thenReturn(Optional.of(inquiry));
 
     assertThatThrownBy(() -> service.inviteSuppliers(inquiryId,
-        new InviteSuppliers(java.util.List.of(UUID.randomUUID()))))
+        new InviteSuppliers(java.util.List.of(UUID.randomUUID()), null)))
         .isInstanceOf(BusinessException.class)
         .hasMessageContaining("截止日期");
   }

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyString;
 
 import com.company.ops.api.common.service.CodeGenerator;
 import com.company.ops.api.common.storage.FileStorageService;
@@ -32,13 +33,21 @@ import com.company.ops.api.modules.procurement.repository.SupplierPortalAccountR
 import com.company.ops.api.modules.procurement.repository.SupplierPortalDocumentRepository;
 import com.company.ops.api.modules.procurement.repository.SupplierPortalNotificationRepository;
 import com.company.ops.api.modules.procurement.repository.SupplierQuoteAttachmentRepository;
+import com.company.ops.api.modules.procurement.repository.SupplierChangeRequestRepository;
 import com.company.ops.api.modules.procurement.repository.SupplierQuotationLineRepository;
 import com.company.ops.api.modules.procurement.repository.SupplierQuotationRepository;
 import com.company.ops.api.modules.procurement.repository.SupplierQuotationRevisionRepository;
+import com.company.ops.api.modules.procurement.repository.SupplierPerformanceReviewRepository;
 import com.company.ops.api.modules.procurement.repository.SupplierRepository;
 import com.company.ops.api.modules.procurement.security.SupplierPortalPrincipal;
+import com.company.ops.api.modules.procurement.domain.SupplierChangeRequest;
+import com.company.ops.api.modules.procurement.domain.SupplierPerformanceReview;
+import com.company.ops.api.modules.procurement.domain.SupplierQuotationRevision;
+import com.company.ops.api.modules.procurement.dto.SupplierPortalDtos.RegisterRequest;
+import com.company.ops.api.modules.procurement.dto.SupplierPortalDtos.PortalChangeRequest;
 import com.company.ops.api.modules.system.security.JwtService;
 import com.company.ops.api.modules.system.security.LoginAttemptService;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -72,6 +81,8 @@ class SupplierPortalServiceTest {
   @Mock private PurchaseOrderRepository orders;
   @Mock private SupplierPortalNotificationRepository notifications;
   @Mock private ProcurementShipmentRepository shipments;
+  @Mock private SupplierChangeRequestRepository supplierChanges;
+  @Mock private SupplierPerformanceReviewRepository performanceReviews;
   @Mock private SupplierPortalNotifier notifier;
   @Mock private PasswordEncoder passwordEncoder;
   @Mock private JwtService jwtService;
@@ -292,6 +303,118 @@ class SupplierPortalServiceTest {
     assertThat(view.get("awardStatus")).isEqualTo("NOT_AWARDED");
     assertThat(view.get("awardedAt")).isNull();
     assertThat(view.get("contract")).isNull();
+  }
+
+  @Test
+  void registrationRejectsHoneypotFieldBeforeCreatingAccount() {
+    assertThatThrownBy(() -> service.register(new RegisterRequest(
+        "机器人供应商", "91310000TEST000002", null, "联系人", "bot@example.com",
+        "13800000000", "password123", null, null, null, "http://spam.example"), "1.2.3.4"))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("稍后重试");
+    verify(accounts, org.mockito.Mockito.never()).save(any());
+  }
+
+  @Test
+  void registrationCountsFailedAttemptWhenEmailAlreadyRegistered() {
+    Fixture fixture = fixture();
+    when(accounts.existsByEmailIgnoreCase("dup@example.com")).thenReturn(true);
+
+    assertThatThrownBy(() -> service.register(new RegisterRequest(
+        "重复供应商", "91310000TEST000002", null, "联系人", "dup@example.com",
+        "13800000000", "password123", null, null, null, null), "1.2.3.4"))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("已经注册");
+    verify(loginAttempts).assertAllowed("supplier-reg|dup@example.com|1.2.3.4");
+    verify(loginAttempts).failed("supplier-reg|dup@example.com|1.2.3.4");
+  }
+
+  @Test
+  void supplierCanSubmitInformationChangeRequest() {
+    Fixture fixture = fixture();
+    when(suppliers.findById(fixture.supplier.getId())).thenReturn(Optional.of(fixture.supplier));
+    when(supplierChanges.existsBySupplierIdAndStatus(fixture.supplier.getId(), "PENDING"))
+        .thenReturn(false);
+    SupplierChangeRequest saved = new SupplierChangeRequest();
+    saved.setId(UUID.randomUUID());
+    saved.setSupplierId(fixture.supplier.getId());
+    saved.setChangeType("BANK_INFO");
+    saved.setProposedBankName("招商银行上海分行");
+    saved.setReason("开户网点变更");
+    saved.setRequestedByName("供应商联系人");
+    saved.setRequestSource("PORTAL");
+    saved.setStatus("PENDING");
+    when(supplierChanges.save(any(SupplierChangeRequest.class)))
+        .thenAnswer(invocation -> invocation.getArgument(0));
+
+    var result = service.createChangeRequest(fixture.principal,
+        new PortalChangeRequest("BANK_INFO", null, null, "招商银行上海分行",
+            "6222000000000000", null, "开户网点变更"));
+
+    assertThat(result.status()).isEqualTo("PENDING");
+    assertThat(result.requestedByName()).isEqualTo("供应商联系人");
+    assertThat(result.proposedBankName()).isEqualTo("招商银行上海分行");
+  }
+
+  @Test
+  void pendingChangeRequestBlocksSecondSubmission() {
+    Fixture fixture = fixture();
+    when(suppliers.findById(fixture.supplier.getId())).thenReturn(Optional.of(fixture.supplier));
+    when(supplierChanges.existsBySupplierIdAndStatus(fixture.supplier.getId(), "PENDING"))
+        .thenReturn(true);
+
+    assertThatThrownBy(() -> service.createChangeRequest(fixture.principal,
+        new PortalChangeRequest("NAME", "新企业名称", null, null, null, null, "企业改名")))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("待审批");
+  }
+
+  @Test
+  void portalListsOwnQuoteRevisionSnapshots() throws Exception {
+    Fixture fixture = fixture();
+    SupplierQuotation quote = quote(fixture, "SUPPLIER_PORTAL", "SUBMITTED");
+    SupplierQuotationRevision revision = new SupplierQuotationRevision();
+    revision.setId(UUID.randomUUID());
+    revision.setQuoteId(quote.getId());
+    revision.setVersionNo(1);
+    revision.setSubmissionSource("SUPPLIER_PORTAL");
+    revision.setSubmittedByName("供应商联系人");
+    revision.setSubmittedAt(OffsetDateTime.now());
+    revision.setSnapshotJson("{\"versionNo\":1}");
+    when(invitations.findByInquiryIdAndSupplierId(fixture.inquiry.getId(), fixture.supplier.getId()))
+        .thenReturn(Optional.of(fixture.invitation));
+    when(quotes.findByInquiryIdAndSupplierId(fixture.inquiry.getId(), fixture.supplier.getId()))
+        .thenReturn(Optional.of(quote));
+    when(revisions.findByQuoteIdOrderByVersionNoDesc(quote.getId())).thenReturn(List.of(revision));
+    org.mockito.Mockito.doReturn(Map.of("versionNo", 1))
+        .when(objectMapper).readValue(anyString(), any(TypeReference.class));
+
+    var result = service.listQuoteRevisions(fixture.principal, fixture.inquiry.getId());
+
+    assertThat(result).hasSize(1);
+    assertThat(result.get(0).versionNo()).isEqualTo(1);
+    assertThat(result.get(0).snapshot().get("versionNo")).isEqualTo(1);
+  }
+
+  @Test
+  void portalSeesOwnPerformanceReviews() {
+    Fixture fixture = fixture();
+    SupplierPerformanceReview review = new SupplierPerformanceReview();
+    review.setId(UUID.randomUUID());
+    review.setSupplierId(fixture.supplier.getId());
+    review.setReviewPeriod("2026-Q2");
+    review.setGrade("B");
+    review.setTotalScore(java.math.BigDecimal.valueOf(88));
+    review.setReviewerName("采购经理");
+    review.setStatus("ACTIVE");
+    when(performanceReviews.findBySupplierIdOrderByReviewPeriodDesc(fixture.supplier.getId()))
+        .thenReturn(List.of(review));
+
+    var result = service.listPerformanceReviews(fixture.principal);
+
+    assertThat(result).hasSize(1);
+    assertThat(result.get(0).reviewPeriod()).isEqualTo("2026-Q2");
+    assertThat(result.get(0).totalScore()).isEqualByComparingTo("88");
   }
 
   private Fixture fixture() {

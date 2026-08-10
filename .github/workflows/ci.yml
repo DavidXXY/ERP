@@ -42,6 +42,7 @@ jobs:
       - run: npm run build
       - run: npm run supplier:lint
       - run: npm run supplier:typecheck
+      - run: npm run supplier:test
       - run: npm run supplier:build
       - name: Enforce bundle budget
         run: node scripts/check-bundle-size.js

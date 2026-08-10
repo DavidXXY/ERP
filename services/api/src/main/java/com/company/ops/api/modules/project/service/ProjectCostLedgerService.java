@@ -82,6 +82,46 @@ public class ProjectCostLedgerService {
   }
 
   @Transactional
+  public ProjectCostEntry update(
+      UUID projectId,
+      UUID costId,
+      ProjectCostCategory category,
+      String description,
+      BigDecimal costAmount,
+      LocalDate incurredDate
+  ) {
+    Project project = lockProject(projectId);
+    ProjectCostEntry entry = entries.findByIdAndProjectId(costId, projectId)
+        .orElseThrow(() -> new BusinessException("成本明细不存在"));
+    if (entry.getSourceType() != ProjectCostSource.MANUAL) {
+      throw new BusinessException("来源单据生成的成本不能直接修改，请通过来源单据更正");
+    }
+    validateProjectedBudget(project, entry, costAmount);
+    apply(entry, projectId, category, entry.getSourceType(), entry.getSourceNo(), description, costAmount, incurredDate);
+    entries.saveAndFlush(entry);
+    refreshLocked(project);
+    return entry;
+  }
+
+  @Transactional
+  public void delete(UUID projectId, UUID costId) {
+    Project project = lockProject(projectId);
+    ProjectCostEntry entry = entries.findByIdAndProjectId(costId, projectId)
+        .orElseThrow(() -> new BusinessException("成本明细不存在"));
+    if (entry.getSourceType() != ProjectCostSource.MANUAL) {
+      throw new BusinessException("来源单据生成的成本不能直接删除，请通过来源单据更正");
+    }
+    if (amount(entry.getAmount()).signum() > 0
+        && (project.getExecutionStatus() == ProjectExecutionStatus.CANCELLED
+            || project.getExecutionStatus() == ProjectExecutionStatus.CLOSED)) {
+      throw new BusinessException("已取消或已结项项目不能删除成本");
+    }
+    entries.delete(entry);
+    entries.flush();
+    refreshLocked(project);
+  }
+
+  @Transactional
   public BigDecimal reconcile(UUID projectId) {
     Project project = lockProject(projectId);
     refreshLocked(project);

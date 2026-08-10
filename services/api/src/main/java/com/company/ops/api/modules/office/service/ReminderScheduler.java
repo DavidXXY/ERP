@@ -6,11 +6,17 @@ import com.company.ops.api.modules.crm.repository.ReceivableRepository;
 import com.company.ops.api.modules.crm.repository.ServiceContractRepository;
 import com.company.ops.api.modules.inventory.repository.InventoryPartRepository;
 import com.company.ops.api.modules.maintenance.domain.EquipmentStatus;
+import com.company.ops.api.modules.project.domain.ProjectApprovalStatus;
+import com.company.ops.api.modules.project.domain.ProjectExecutionStatus;
+import com.company.ops.api.modules.project.domain.ProjectStage;
+import com.company.ops.api.modules.project.repository.ProjectRepository;
 import com.company.ops.api.modules.maintenance.repository.EmployeeCertificateRepository;
 import com.company.ops.api.modules.maintenance.repository.EquipmentAssetRepository;
 import com.company.ops.api.modules.office.domain.SystemNotification;
 import com.company.ops.api.modules.office.repository.SystemNotificationRepository;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.UUID;
 import java.util.Set;
 import java.util.HashSet;
@@ -24,7 +30,8 @@ public class ReminderScheduler {
   private final EquipmentAssetRepository equipment; private final EmployeeCertificateRepository certificates;
   private final ServiceContractRepository contracts; private final ReceivableRepository receivables;
   private final InventoryPartRepository parts; private final SystemNotificationRepository notifications; private final OfficeService officeService;
-  public ReminderScheduler(EquipmentAssetRepository equipment,EmployeeCertificateRepository certificates,ServiceContractRepository contracts,ReceivableRepository receivables,InventoryPartRepository parts,SystemNotificationRepository notifications,OfficeService officeService){this.equipment=equipment;this.certificates=certificates;this.contracts=contracts;this.receivables=receivables;this.parts=parts;this.notifications=notifications;this.officeService=officeService;}
+  private final ProjectRepository projects;
+  public ReminderScheduler(EquipmentAssetRepository equipment,EmployeeCertificateRepository certificates,ServiceContractRepository contracts,ReceivableRepository receivables,InventoryPartRepository parts,SystemNotificationRepository notifications,OfficeService officeService,ProjectRepository projects){this.equipment=equipment;this.certificates=certificates;this.contracts=contracts;this.receivables=receivables;this.parts=parts;this.notifications=notifications;this.officeService=officeService;this.projects=projects;}
   @Scheduled(cron="${ops.reminders.cron:0 15 1 * * *}") @Transactional
   @SchedulerLock(name = "officeReminderRefresh", lockAtLeastFor = "PT1M", lockAtMostFor = "PT30M")
   public int refresh(){LocalDate today=LocalDate.now();int count=0;
@@ -40,6 +47,17 @@ public class ReminderScheduler {
     }
     var resolved=existing.stream().filter(key->key.startsWith("LOW_STOCK:")&&!activeLowStock.contains(key)).toList();
     if(!resolved.isEmpty())notifications.deleteByDedupKeyIn(resolved);
+    for(var item:projects.findByPlannedEndDateBetweenOrderByPlannedEndDateAsc(today,today.plusDays(30))){
+      if(item.getExecutionStatus()==ProjectExecutionStatus.CLOSED||item.getExecutionStatus()==ProjectExecutionStatus.CANCELLED)continue;
+      count+=create(existing,"PROJECT_PLANNED_END:"+item.getId()+":"+item.getPlannedEndDate(),"PROJECT","项目计划结束日期临近",item.getCode()+" · "+item.getName()+" · 计划结束 "+item.getPlannedEndDate(),"PROJECT",item.getId());
+    }
+    for(var item:projects.findByWarrantyEndDateBetweenOrderByWarrantyEndDateAsc(today,today.plusDays(30))){
+      if(item.getStage()==ProjectStage.CLOSED)continue;
+      count+=create(existing,"PROJECT_WARRANTY_END:"+item.getId()+":"+item.getWarrantyEndDate(),"PROJECT","项目质保即将到期",item.getCode()+" · "+item.getName()+" · 质保截止 "+item.getWarrantyEndDate(),"PROJECT",item.getId());
+    }
+    for(var item:projects.findByApprovalStatusAndCreatedAtBefore(ProjectApprovalStatus.PENDING,today.atStartOfDay().minusDays(3).atOffset(ZoneOffset.ofHours(8)))){
+      count+=create(existing,"PROJECT_PENDING_APPROVAL:"+item.getId(),"PROJECT","立项审批待处理",item.getCode()+" · "+item.getName()+" · 已提交超过 3 天","PROJECT",item.getId());
+    }
     count+=officeService.scanApprovalSla();
     return count;}
   private int create(Set<String> existing,String key,String type,String title,String content,String relatedType,UUID relatedId){if(!existing.add(key))return 0;SystemNotification item=new SystemNotification();item.setDedupKey(key);item.setType(type);item.setTitle(title);item.setContent(content);item.setRelatedType(relatedType);item.setRelatedId(relatedId);item.setRead(false);notifications.save(item);return 1;}

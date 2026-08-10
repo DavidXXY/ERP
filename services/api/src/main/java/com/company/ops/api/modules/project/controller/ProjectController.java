@@ -9,6 +9,12 @@ import com.company.ops.api.modules.project.dto.CreateProjectCostRequest;
 import com.company.ops.api.modules.project.dto.CreateProjectRequest;
 import com.company.ops.api.modules.project.dto.ProcessProjectApprovalRequest;
 import com.company.ops.api.modules.project.dto.PrepareChildProjectRequest;
+import com.company.ops.api.modules.project.dto.CloseoutReviewRequest;
+import com.company.ops.api.modules.project.dto.ProcessCloseoutReviewRequest;
+import com.company.ops.api.modules.project.dto.ProjectCloseoutReviewResponse;
+import com.company.ops.api.modules.project.dto.RollbackProjectStageRequest;
+import com.company.ops.api.modules.project.dto.UpdateProjectCostRequest;
+import com.company.ops.api.modules.project.dto.UpdateProjectRequest;
 import com.company.ops.api.modules.project.dto.ProjectDetailResponse;
 import com.company.ops.api.modules.project.dto.ProjectProfitabilityResponse;
 import com.company.ops.api.modules.project.dto.ProjectManagerOption;
@@ -188,6 +194,58 @@ public class ProjectController {
     return ApiResponse.ok(projectService.createCost(id, request));
   }
 
+  @PutMapping("/{id}/costs/{costId}")
+  @PreAuthorize("hasAuthority('project:cost:create')")
+  public ApiResponse<ProjectDetailResponse> updateCost(
+      @PathVariable UUID id,
+      @PathVariable UUID costId,
+      @Valid @RequestBody UpdateProjectCostRequest request
+  ) {
+    return ApiResponse.ok(projectService.updateCost(id, costId, request));
+  }
+
+  @DeleteMapping("/{id}/costs/{costId}")
+  @PreAuthorize("hasAuthority('project:cost:create')")
+  public ApiResponse<ProjectDetailResponse> deleteCost(
+      @PathVariable UUID id,
+      @PathVariable UUID costId
+  ) {
+    return ApiResponse.ok(projectService.deleteCost(id, costId));
+  }
+
+  @PostMapping("/{id}/stage/rollback")
+  @PreAuthorize("hasAuthority('project:stage:update')")
+  public ApiResponse<ProjectDetailResponse> rollbackStage(
+      @PathVariable UUID id,
+      @Valid @RequestBody RollbackProjectStageRequest request
+  ) {
+    return ApiResponse.ok(projectService.rollbackStage(id, request));
+  }
+
+  @PostMapping("/{id}/closeout/request")
+  @PreAuthorize("hasAuthority('project:stage:update')")
+  public ApiResponse<ProjectCloseoutReviewResponse> requestCloseout(
+      @PathVariable UUID id,
+      @Valid @RequestBody CloseoutReviewRequest request
+  ) {
+    return ApiResponse.ok(projectService.requestCloseout(id, request));
+  }
+
+  @PostMapping("/{id}/closeout/review")
+  @PreAuthorize("hasAuthority('project:approve')")
+  public ApiResponse<ProjectCloseoutReviewResponse> reviewCloseout(
+      @PathVariable UUID id,
+      @Valid @RequestBody ProcessCloseoutReviewRequest request
+  ) {
+    return ApiResponse.ok(projectService.reviewCloseout(id, request));
+  }
+
+  @GetMapping("/{id}/closeout-review")
+  @PreAuthorize("hasAuthority('project:view')")
+  public ApiResponse<ProjectCloseoutReviewResponse> getCloseoutReview(@PathVariable UUID id) {
+    return ApiResponse.ok(projectService.getCloseoutReview(id));
+  }
+
   @PostMapping("/{id}/execution-status")
   @PreAuthorize("hasAuthority('project:stage:update')")
   public ApiResponse<ProjectDetailResponse> changeExecutionStatus(
@@ -195,6 +253,15 @@ public class ProjectController {
       @Valid @RequestBody ChangeProjectExecutionStatusRequest request
   ) {
     return ApiResponse.ok(projectService.changeExecutionStatus(id, request));
+  }
+
+  @PutMapping("/{id}")
+  @PreAuthorize("hasAnyAuthority('project:create', 'project:approve', 'project:stage:update')")
+  public ApiResponse<ProjectDetailResponse> updateProject(
+      @PathVariable UUID id,
+      @Valid @RequestBody UpdateProjectRequest request
+  ) {
+    return ApiResponse.ok(projectService.updateProject(id, request));
   }
 
   @DeleteMapping("/{id}")

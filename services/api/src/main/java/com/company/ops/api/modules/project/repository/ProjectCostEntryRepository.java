@@ -17,4 +17,6 @@ public interface ProjectCostEntryRepository extends JpaRepository<ProjectCostEnt
 
   @Query("select coalesce(sum(c.amount), 0) from ProjectCostEntry c where c.projectId = :projectId")
   BigDecimal sumAmountByProjectId(@Param("projectId") UUID projectId);
+
+  Optional<ProjectCostEntry> findByIdAndProjectId(UUID id, UUID projectId);
 }

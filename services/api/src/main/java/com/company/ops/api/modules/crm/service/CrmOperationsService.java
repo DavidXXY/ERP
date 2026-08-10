@@ -1251,6 +1251,7 @@ public class CrmOperationsService {
         ),
         null,
         contract.getId(),
+        null,
         null
     ));
   }

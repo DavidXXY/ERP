@@ -7,13 +7,20 @@ import com.company.ops.api.modules.crm.domain.Customer;
 import com.company.ops.api.modules.crm.domain.ServiceContract;
 import com.company.ops.api.modules.crm.domain.ContractKind;
 import com.company.ops.api.modules.crm.domain.ContractStatus;
+import com.company.ops.api.modules.crm.domain.QuoteCostRequest;
+import com.company.ops.api.modules.crm.domain.QuoteCostStatus;
 import com.company.ops.api.modules.crm.repository.CustomerRepository;
+import com.company.ops.api.modules.crm.repository.QuoteCostRequestRepository;
 import com.company.ops.api.modules.crm.repository.ReceivableRepository;
 import com.company.ops.api.modules.crm.repository.ServiceContractRepository;
+import com.company.ops.api.modules.collaboration.domain.ProjectHandover;
+import com.company.ops.api.modules.collaboration.repository.ProjectHandoverRepository;
 import com.company.ops.api.modules.office.domain.SystemNotification;
 import com.company.ops.api.modules.office.repository.SystemNotificationRepository;
 import com.company.ops.api.modules.project.domain.Project;
 import com.company.ops.api.modules.project.domain.ProjectApprovalStatus;
+import com.company.ops.api.modules.project.domain.CloseoutReviewStatus;
+import com.company.ops.api.modules.project.domain.ProjectCloseoutReview;
 import com.company.ops.api.modules.project.domain.ProjectBudgetItem;
 import com.company.ops.api.modules.project.domain.ProjectCostCategory;
 import com.company.ops.api.modules.project.domain.ProjectCostEntry;
@@ -27,6 +34,12 @@ import com.company.ops.api.modules.project.dto.CreateProjectCostRequest;
 import com.company.ops.api.modules.project.dto.CreateProjectRequest;
 import com.company.ops.api.modules.project.dto.ProcessProjectApprovalRequest;
 import com.company.ops.api.modules.project.dto.PrepareChildProjectRequest;
+import com.company.ops.api.modules.project.dto.CloseoutReviewRequest;
+import com.company.ops.api.modules.project.dto.ProcessCloseoutReviewRequest;
+import com.company.ops.api.modules.project.dto.ProjectCloseoutReviewResponse;
+import com.company.ops.api.modules.project.dto.RollbackProjectStageRequest;
+import com.company.ops.api.modules.project.dto.UpdateProjectCostRequest;
+import com.company.ops.api.modules.project.dto.UpdateProjectRequest;
 import com.company.ops.api.modules.project.dto.ProjectBudgetItemRequest;
 import com.company.ops.api.modules.project.dto.ProjectBudgetItemResponse;
 import com.company.ops.api.modules.project.dto.ProjectCostEntryResponse;
@@ -36,6 +49,7 @@ import com.company.ops.api.modules.project.dto.ProjectManagerOption;
 import com.company.ops.api.modules.project.dto.ProjectResponse;
 import com.company.ops.api.modules.project.dto.ProjectStageRecordResponse;
 import com.company.ops.api.modules.project.repository.ProjectBudgetItemRepository;
+import com.company.ops.api.modules.project.repository.ProjectCloseoutReviewRepository;
 import com.company.ops.api.modules.project.repository.ProjectCostEntryRepository;
 import com.company.ops.api.modules.project.repository.ProjectRepository;
 import com.company.ops.api.modules.project.repository.ProjectStageRecordRepository;
@@ -45,6 +59,7 @@ import com.company.ops.api.modules.system.domain.SystemUser;
 import com.company.ops.api.modules.system.repository.SystemUserRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -75,6 +90,9 @@ public class ProjectService {
   private final ProjectCostLedgerService costLedger;
   private final ProjectStageRecordRepository stageRecordRepository;
   private final CustomerRepository customerRepository;
+  private final QuoteCostRequestRepository quoteCostRepository;
+  private final ProjectHandoverRepository handoverRepository;
+  private final ProjectCloseoutReviewRepository closeoutReviewRepository;
   private final DataScopeService dataScopeService;
   private final ServiceContractRepository contractRepository;
   private final ReceivableRepository receivableRepository;
@@ -88,6 +106,9 @@ public class ProjectService {
   public ProjectService(
       ServiceContractRepository contractRepository,
       ReceivableRepository receivableRepository,
+      QuoteCostRequestRepository quoteCostRepository,
+      ProjectHandoverRepository handoverRepository,
+      ProjectCloseoutReviewRepository closeoutReviewRepository,
       ProjectRepository projectRepository,
       ProjectBudgetItemRepository budgetRepository,
       ProjectCostEntryRepository costRepository,
@@ -106,6 +127,9 @@ public class ProjectService {
     this.costLedger = costLedger;
     this.stageRecordRepository = stageRecordRepository;
     this.customerRepository = customerRepository;
+    this.quoteCostRepository = quoteCostRepository;
+    this.handoverRepository = handoverRepository;
+    this.closeoutReviewRepository = closeoutReviewRepository;
     this.dataScopeService = dataScopeService;
     this.contractRepository = contractRepository;
     this.receivableRepository = receivableRepository;
@@ -200,9 +224,13 @@ public class ProjectService {
     if (request.plannedEndDate().isBefore(request.plannedStartDate())) {
       throw new BusinessException("计划结束日期不能早于开始日期");
     }
-    validateBudgetItems(request.budgetItems());
+    List<ProjectBudgetItemRequest> budgetItems = request.budgetItems();
+    if (budgetItems.isEmpty() && request.quoteId() != null) {
+      budgetItems = budgetItemsFromQuote(request.quoteId(), request.customerId());
+    }
+    validateBudgetItems(budgetItems);
 
-    BigDecimal budgetAmount = request.budgetItems().stream()
+    BigDecimal budgetAmount = budgetItems.stream()
         .map(ProjectBudgetItemRequest::plannedAmount)
         .reduce(BigDecimal.ZERO, BigDecimal::add);
     ServiceContract contract = null;
@@ -248,7 +276,7 @@ public class ProjectService {
     project.setWarrantyEndDate(request.warrantyEndDate());
     Project saved = projectRepository.save(project);
 
-    List<ProjectBudgetItem> items = request.budgetItems().stream().map(item -> {
+    List<ProjectBudgetItem> items = budgetItems.stream().map(item -> {
       ProjectBudgetItem entity = new ProjectBudgetItem();
       entity.setProjectId(saved.getId());
       entity.setCategory(item.category());
@@ -384,32 +412,35 @@ public class ProjectService {
   }
 
   @Transactional
-  public ProjectDetailResponse prepareChildProject(UUID id, PrepareChildProjectRequest request) {
+  public ProjectDetailResponse updateProject(UUID id, UpdateProjectRequest request) {
     Project project = requireVisibleProject(id);
-    if (project.getParentProjectId() == null) {
-      throw new BusinessException("只有框架子项目需要完善立项资料");
-    }
     if (project.getApprovalStatus() == ProjectApprovalStatus.APPROVED) {
-      throw new BusinessException("已审批项目不能通过立项准备修改");
+      throw new BusinessException("已审批项目不能直接修改，请通过预算变更或合同变更流程调整");
     }
     if (request.plannedEndDate().isBefore(request.plannedStartDate())) {
       throw new BusinessException("计划结束日期不能早于开始日期");
-    }
-    ServiceContract contract = project.getContractId() == null ? null
-        : contractRepository.findById(project.getContractId()).orElse(null);
-    if (contract != null && (request.plannedStartDate().isBefore(contract.getStartDate())
-        || request.plannedEndDate().isAfter(contract.getEndDate()))) {
-      throw new BusinessException("子项目计划周期必须在子订单有效期内");
     }
     validateBudgetItems(request.budgetItems());
     BigDecimal budgetAmount = request.budgetItems().stream()
         .map(ProjectBudgetItemRequest::plannedAmount)
         .reduce(BigDecimal.ZERO, BigDecimal::add);
-    if (budgetAmount.compareTo(BigDecimal.ZERO) <= 0) {
-      throw new BusinessException("子项目至少需要一项有效预算");
+
+    ServiceContract contract = project.getContractId() == null ? null
+        : contractRepository.findById(project.getContractId()).orElse(null);
+    if (contract != null) {
+      if (request.plannedStartDate().isBefore(contract.getStartDate())
+          || request.plannedEndDate().isAfter(contract.getEndDate())) {
+        throw new BusinessException("项目计划周期必须在合同有效期内");
+      }
+      if (contract.getContractKind() != ContractKind.FRAMEWORK
+          && amount(contract.getAmount()).compareTo(amount(request.contractAmount())) != 0) {
+        throw new BusinessException("项目合同金额必须与关联合同金额一致");
+      }
     }
 
+    project.setName(request.name());
     project.setSiteAddress(request.siteAddress().trim());
+    project.setContractAmount(amount(request.contractAmount()));
     project.setPlannedStartDate(request.plannedStartDate());
     project.setPlannedEndDate(request.plannedEndDate());
     project.setWarrantyEndDate(request.warrantyEndDate());
@@ -431,6 +462,29 @@ public class ProjectService {
       return entity;
     }).toList());
     return toDetail(project);
+  }
+
+  @Transactional
+  public ProjectDetailResponse prepareChildProject(UUID id, PrepareChildProjectRequest request) {
+    Project project = requireVisibleProject(id);
+    if (project.getParentProjectId() == null) {
+      throw new BusinessException("只有框架子项目需要完善立项资料");
+    }
+    BigDecimal budgetAmount = request.budgetItems().stream()
+        .map(ProjectBudgetItemRequest::plannedAmount)
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
+    if (budgetAmount.compareTo(BigDecimal.ZERO) <= 0) {
+      throw new BusinessException("子项目至少需要一项有效预算");
+    }
+    return updateProject(id, new UpdateProjectRequest(
+        project.getName(),
+        request.siteAddress(),
+        project.getContractAmount(),
+        request.plannedStartDate(),
+        request.plannedEndDate(),
+        request.warrantyEndDate(),
+        request.budgetItems()
+    ));
   }
 
   @Transactional
@@ -457,7 +511,25 @@ public class ProjectService {
     project.setApproverUserId(principal == null ? null : principal.id());
     project.setApproverName(principal == null ? "system" : principal.displayName());
     project.setApprovedAt(request.decision() == ProjectApprovalStatus.APPROVED ? OffsetDateTime.now() : null);
-    return toDetail(projectRepository.save(project));
+    Project saved = projectRepository.save(project);
+    notifyApprovalDecision(saved, request.decision(), request.comment());
+    return toDetail(saved);
+  }
+
+  private void notifyApprovalDecision(Project project, ProjectApprovalStatus decision, String comment) {
+    String title = decision == ProjectApprovalStatus.APPROVED
+        ? "立项审批已通过" : "立项审批被驳回";
+    String content = project.getCode() + " · " + project.getName() + " "
+        + (decision == ProjectApprovalStatus.APPROVED
+            ? "已通过审批，可进入执行" : "已被驳回，请完善资料后重新提交")
+        + (comment == null || comment.isBlank() ? "" : "；审批意见：" + comment);
+    Set<UUID> recipients = new LinkedHashSet<>();
+    if (project.getManagerUserId() != null) recipients.add(project.getManagerUserId());
+    if (project.getSalesOwnerUserId() != null) recipients.add(project.getSalesOwnerUserId());
+    for (UUID userId : recipients) {
+      saveTargetedProjectNotification(project, userId, title, content,
+          "PROJECT_APPROVAL_DECISION:" + project.getId() + ":" + userId + ":" + decision);
+    }
   }
 
   @Transactional
@@ -476,17 +548,22 @@ public class ProjectService {
       throw new BusinessException("进入质保阶段前必须填写质保截止日期");
     }
     if (request.targetStage() == ProjectStage.CLOSED) {
+      requireCloseoutApproved(project);
       validateFrameworkHierarchyClosed(project);
       validateCloseout(project);
       project.setExecutionStatus(ProjectExecutionStatus.CLOSED);
       project.setStatusComment(request.comment());
       project.setStatusChangedAt(OffsetDateTime.now());
+      project.setActualEndDate(LocalDate.now());
     }
 
     ProjectStage fromStage = project.getStage();
     int progress = progressForStage(request.targetStage());
     project.setStage(request.targetStage());
     project.setProgress(progress);
+    if (request.targetStage() == ProjectStage.CONSTRUCTION && project.getActualStartDate() == null) {
+      project.setActualStartDate(LocalDate.now());
+    }
     projectRepository.save(project);
 
     ProjectStageRecord record = new ProjectStageRecord();
@@ -534,6 +611,114 @@ public class ProjectService {
     project.setStatusComment(request.comment());
     project.setStatusChangedAt(OffsetDateTime.now());
     return toDetail(projectRepository.save(project));
+  }
+
+  @Transactional
+  public ProjectDetailResponse updateCost(UUID id, UUID costId, UpdateProjectCostRequest request) {
+    Project project = requireManageableProject(id);
+    requireApproved(project);
+    if (project.getExecutionStatus() != ProjectExecutionStatus.ACTIVE) {
+      throw new BusinessException("只有执行中的项目可以更正成本");
+    }
+    costLedger.update(project.getId(), costId, request.category(), request.description(),
+        request.amount(), request.incurredDate());
+    return toDetail(project);
+  }
+
+  @Transactional
+  public ProjectDetailResponse deleteCost(UUID id, UUID costId) {
+    Project project = requireManageableProject(id);
+    requireApproved(project);
+    if (project.getExecutionStatus() != ProjectExecutionStatus.ACTIVE) {
+      throw new BusinessException("只有执行中的项目可以删除成本");
+    }
+    costLedger.delete(project.getId(), costId);
+    return toDetail(project);
+  }
+
+  @Transactional
+  public ProjectDetailResponse rollbackStage(UUID id, RollbackProjectStageRequest request) {
+    Project project = requireManageableProject(id);
+    requireApproved(project);
+    if (project.getExecutionStatus() != ProjectExecutionStatus.ACTIVE) {
+      throw new BusinessException("只有执行中的项目可以回退阶段");
+    }
+    ProjectStage target = previousStage(project.getStage());
+    if (target == null) {
+      throw new BusinessException("当前阶段不能回退");
+    }
+    ProjectStage fromStage = project.getStage();
+    int progress = progressForStage(target);
+    project.setStage(target);
+    project.setProgress(progress);
+    projectRepository.save(project);
+
+    ProjectStageRecord record = new ProjectStageRecord();
+    record.setProjectId(project.getId());
+    record.setFromStage(fromStage);
+    record.setToStage(target);
+    record.setProgress(progress);
+    record.setComment(request.comment() + "（阶段回退）");
+    record.setOperatorName(currentOperatorName());
+    record.setChangedAt(OffsetDateTime.now());
+    stageRecordRepository.save(record);
+    return toDetail(project);
+  }
+
+  @Transactional
+  public ProjectCloseoutReviewResponse requestCloseout(UUID id, CloseoutReviewRequest request) {
+    Project project = requireManageableProject(id);
+    requireApproved(project);
+    if (project.getStage() != ProjectStage.WARRANTY) {
+      throw new BusinessException("只有质保阶段的项目可以提交结项申请");
+    }
+    if (project.getExecutionStatus() != ProjectExecutionStatus.ACTIVE) {
+      throw new BusinessException("只有执行中的项目可以提交结项申请");
+    }
+    validateCloseout(project);
+    closeoutReviewRepository.findFirstByProjectIdOrderByCreatedAtDesc(id)
+        .filter(review -> review.getStatus() == CloseoutReviewStatus.PENDING)
+        .ifPresent(review -> { throw new BusinessException("已有待复核的结项申请，请先完成复核"); });
+
+    ProjectCloseoutReview review = new ProjectCloseoutReview();
+    review.setProjectId(id);
+    review.setStatus(CloseoutReviewStatus.PENDING);
+    review.setRequestComment(request.comment());
+    review.setRequestedBy(currentOperatorName());
+    review.setRequestedAt(OffsetDateTime.now());
+    return toCloseoutReview(closeoutReviewRepository.save(review));
+  }
+
+  @Transactional
+  public ProjectCloseoutReviewResponse reviewCloseout(UUID id, ProcessCloseoutReviewRequest request) {
+    Project project = requireVisibleProject(id);
+    ProjectCloseoutReview review = closeoutReviewRepository.findFirstByProjectIdOrderByCreatedAtDesc(id)
+        .orElseThrow(() -> new BusinessException("尚未提交结项申请"));
+    if (review.getStatus() != CloseoutReviewStatus.PENDING) {
+      throw new BusinessException("该结项申请已复核");
+    }
+    if (request.decision() != CloseoutReviewStatus.APPROVED
+        && request.decision() != CloseoutReviewStatus.REJECTED) {
+      throw new BusinessException("请选择通过或驳回");
+    }
+    review.setStatus(request.decision());
+    review.setReviewComment(request.comment());
+    review.setReviewedBy(currentOperatorName());
+    review.setReviewedAt(OffsetDateTime.now());
+    ProjectCloseoutReview saved = closeoutReviewRepository.save(review);
+    if (request.decision() == CloseoutReviewStatus.APPROVED) {
+      validateCloseout(project);
+      notifyCloseoutReview(project, saved);
+    }
+    return toCloseoutReview(saved);
+  }
+
+  @Transactional(readOnly = true)
+  public ProjectCloseoutReviewResponse getCloseoutReview(UUID id) {
+    requireVisibleProject(id);
+    return closeoutReviewRepository.findFirstByProjectIdOrderByCreatedAtDesc(id)
+        .map(this::toCloseoutReview)
+        .orElse(null);
   }
 
   @Transactional
@@ -652,7 +837,9 @@ public class ProjectService {
         amount(project.getContractAmount()).subtract(actualCost),
         budgetAmount.subtract(actualCost),
         project.getProgress(),
-        project.getWarrantyEndDate()
+        project.getWarrantyEndDate(),
+        project.getActualStartDate(),
+        project.getActualEndDate()
     );
   }
 
@@ -751,6 +938,19 @@ public class ProjectService {
       case INITIAL_ACCEPTANCE -> ProjectStage.FINAL_ACCEPTANCE;
       case FINAL_ACCEPTANCE -> ProjectStage.WARRANTY;
       case WARRANTY -> ProjectStage.CLOSED;
+      case CLOSED -> null;
+    };
+  }
+
+  private ProjectStage previousStage(ProjectStage current) {
+    return switch (current) {
+      case INITIATED, ENTRY -> null;
+      case BIDDING -> ProjectStage.INITIATED;
+      case CONSTRUCTION -> ProjectStage.ENTRY;
+      case COMMISSIONING -> ProjectStage.CONSTRUCTION;
+      case INITIAL_ACCEPTANCE -> ProjectStage.COMMISSIONING;
+      case FINAL_ACCEPTANCE -> ProjectStage.INITIAL_ACCEPTANCE;
+      case WARRANTY -> ProjectStage.FINAL_ACCEPTANCE;
       case CLOSED -> null;
     };
   }
@@ -967,7 +1167,68 @@ public class ProjectService {
     return principal == null ? "system" : principal.displayName();
   }
 
+  private void requireCloseoutApproved(Project project) {
+    ProjectCloseoutReview review = closeoutReviewRepository
+        .findFirstByProjectIdOrderByCreatedAtDesc(project.getId()).orElse(null);
+    if (review == null || review.getStatus() != CloseoutReviewStatus.APPROVED) {
+      throw new BusinessException("请先提交结项申请并完成结项复核，再关闭项目");
+    }
+  }
+
+  private ProjectCloseoutReviewResponse toCloseoutReview(ProjectCloseoutReview review) {
+    return new ProjectCloseoutReviewResponse(
+        review.getId(),
+        review.getProjectId(),
+        review.getStatus(),
+        review.getRequestComment(),
+        review.getReviewComment(),
+        review.getRequestedBy(),
+        review.getRequestedAt(),
+        review.getReviewedBy(),
+        review.getReviewedAt()
+    );
+  }
+
+  private void notifyCloseoutReview(Project project, ProjectCloseoutReview review) {
+    Set<UUID> recipients = new LinkedHashSet<>();
+    if (project.getManagerUserId() != null) recipients.add(project.getManagerUserId());
+    if (project.getSalesOwnerUserId() != null) recipients.add(project.getSalesOwnerUserId());
+    String content = project.getCode() + " · " + project.getName()
+        + " 结项申请已通过复核，可在质保阶段推进关闭项目";
+    for (UUID userId : recipients) {
+      saveTargetedProjectNotification(project, userId, "结项复核已通过", content,
+          "PROJECT_CLOSEOUT_APPROVED:" + project.getId() + ":" + userId + ":" + review.getId());
+    }
+  }
+
+  private List<ProjectBudgetItemRequest> budgetItemsFromQuote(UUID quoteId, UUID customerId) {
+    QuoteCostRequest quote = quoteCostRepository.findById(quoteId)
+        .orElseThrow(() -> new BusinessException("售前成本核算不存在"));
+    if (quote.getStatus() != QuoteCostStatus.APPROVED) {
+      throw new BusinessException("只有已审批通过的售前成本核算可以带入预算");
+    }
+    if (!customerId.equals(quote.getCustomerId())) {
+      throw new BusinessException("售前成本核算与项目客户不一致");
+    }
+    BigDecimal other = amount(quote.getEquipmentCost())
+        .add(amount(quote.getRiskReserve()))
+        .add(amount(quote.getOtherCost()));
+    return List.of(
+        new ProjectBudgetItemRequest(ProjectCostCategory.LABOR, amount(quote.getLaborCost()), "售前成本核算 · 人工"),
+        new ProjectBudgetItemRequest(ProjectCostCategory.MATERIAL, amount(quote.getMaterialCost()), "售前成本核算 · 材料"),
+        new ProjectBudgetItemRequest(ProjectCostCategory.SUBCONTRACT, amount(quote.getSubcontractCost()), "售前成本核算 · 外包"),
+        new ProjectBudgetItemRequest(ProjectCostCategory.TRAVEL, amount(quote.getTravelCost()), "售前成本核算 · 差旅"),
+        new ProjectBudgetItemRequest(ProjectCostCategory.OTHER, other, "售前成本核算 · 设备/风险/其他")
+    );
+  }
+
   private void validateCloseout(Project project) {
+    if (handoverRepository.existsByProjectId(project.getId())) {
+      ProjectHandover handover = handoverRepository.findByProjectId(project.getId()).orElse(null);
+      if (handover == null || !"ACCEPTED".equals(handover.getStatus())) {
+        throw new BusinessException("项目交接尚未完成，不能结项");
+      }
+    }
     long openWorkOrders = nativeCount(
         "SELECT COUNT(*) FROM work_orders WHERE project_id = ?1 AND status NOT IN ('ACCEPTED', 'CANCELLED')",
         project.getId());

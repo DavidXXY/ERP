@@ -980,6 +980,17 @@
             {{ detail.project.managerUserId ? "变更负责人" : "分配项目经理" }}
           </a-button>
           <a-button
+            v-if="
+              detail.project.approvalStatus !== 'APPROVED' &&
+              (auth.can('project:create') ||
+                auth.can('project:approve') ||
+                auth.can('project:stage:update'))
+            "
+            @click="openEdit"
+          >
+            编辑并重新提交
+          </a-button>
+          <a-button
             v-if="auth.can('project:cost:create') && canExecute(detail.project)"
             @click="openCost"
           >
@@ -993,6 +1004,38 @@
             @click="openStage"
           >
             推进阶段
+          </a-button>
+          <a-button
+            v-if="
+              auth.can('project:stage:update') &&
+              canExecute(detail.project) &&
+              canRollbackStage(detail.project)
+            "
+            @click="rollbackStageOpen = true"
+          >
+            退回上一阶段
+          </a-button>
+          <a-button
+            v-if="
+              auth.can('project:stage:update') &&
+              detail.project.stage === 'WARRANTY' &&
+              canExecute(detail.project) &&
+              closeoutReview?.status !== 'APPROVED' &&
+              closeoutReview?.status !== 'PENDING'
+            "
+            @click="closeoutRequestOpen = true"
+          >
+            提交结项申请
+          </a-button>
+          <a-button
+            v-if="
+              auth.can('project:approve') &&
+              detail.project.stage === 'WARRANTY' &&
+              closeoutReview?.status === 'PENDING'
+            "
+            @click="closeoutReviewOpen = true"
+          >
+            结项复核
           </a-button>
           <a-button
             v-if="
@@ -1041,9 +1084,37 @@
               >{{ detail.project.plannedStartDate }} 至
               {{ detail.project.plannedEndDate }}</a-descriptions-item
             >
+            <a-descriptions-item label="实际周期"
+              >{{ detail.project.actualStartDate || "未开始" }} 至
+              {{ detail.project.actualEndDate || "-" }}</a-descriptions-item
+            >
             <a-descriptions-item label="质保截止">{{
               detail.project.warrantyEndDate || "-"
             }}</a-descriptions-item>
+            <a-descriptions-item label="结项复核">
+              <a-tag v-if="!closeoutReview" color="default">未申请</a-tag>
+              <a-tag
+                v-else
+                :color="
+                  closeoutReview.status === 'APPROVED'
+                    ? 'green'
+                    : closeoutReview.status === 'REJECTED'
+                      ? 'red'
+                      : 'orange'
+                "
+                >{{
+                  closeoutReview.status === "APPROVED"
+                    ? "已通过"
+                    : closeoutReview.status === "REJECTED"
+                      ? "已驳回"
+                      : "待复核"
+                }}</a-tag
+              >
+              <span v-if="closeoutReview?.requestedBy" class="table-subtitle"
+                >{{ closeoutReview.requestedBy }} ·
+                {{ closeoutReview.requestComment || "无申请说明" }}</span
+              >
+            </a-descriptions-item>
             <a-descriptions-item label="合同金额（含税，元）">{{
               formatMoney(detail.project.contractAmount)
             }}</a-descriptions-item>
@@ -1154,6 +1225,19 @@
                   <template v-else-if="column.key === 'amount'"
                     ><strong>{{ formatMoney(record.amount) }}</strong></template
                   >
+                  <template v-else-if="column.key === 'action'">
+                    <a-button
+                      v-if="
+                        record.sourceType === 'MANUAL' &&
+                        canExecute(detail!.project)
+                      "
+                      type="link"
+                      size="small"
+                      @click="openEditCost(record)"
+                      >更正</a-button
+                    >
+                    <span v-else class="table-subtitle">来源单据锁定</span>
+                  </template>
                 </template>
                 <template #emptyText>暂无成本明细</template>
               </a-table>
@@ -1325,11 +1409,93 @@
       </a-form>
     </a-modal>
 
+    <a-modal
+      v-model:open="rollbackStageOpen"
+      title="退回上一阶段"
+      :confirm-loading="saving"
+      @ok="handleRollbackStage"
+    >
+      <a-alert
+        v-if="detail"
+        class="section-alert"
+        type="warning"
+        show-icon
+        :message="`${stageLabel(detail.project.stage)} → ${stageLabel(previousStage(detail.project.stage) || detail.project.stage)}`"
+        description="阶段回退会记录履历；验收不通过或资料需要补充时使用。"
+      />
+      <a-form layout="vertical" class="section-gap">
+        <a-form-item label="回退原因" required>
+          <a-textarea v-model:value="rollbackStageForm.comment" :rows="3" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <a-modal
+      v-model:open="closeoutRequestOpen"
+      title="提交结项申请"
+      :confirm-loading="saving"
+      @ok="handleCloseoutRequest"
+    >
+      <a-alert
+        v-if="detail"
+        class="section-alert"
+        type="info"
+        show-icon
+        :message="`${detail.project.code} · ${detail.project.name}`"
+        description="提交前会校验工单、采购、应收应付与项目交接是否完结；复核通过后才能关闭项目。"
+      />
+      <a-form layout="vertical" class="section-gap">
+        <a-form-item label="结项说明">
+          <a-textarea
+            v-model:value="closeoutRequestForm.comment"
+            :rows="3"
+            placeholder="说明质保、验收与收尾情况"
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <a-modal
+      v-model:open="closeoutReviewOpen"
+      title="结项复核"
+      :confirm-loading="saving"
+      @ok="handleCloseoutReview"
+    >
+      <a-alert
+        v-if="detail && closeoutReview"
+        class="section-alert"
+        type="info"
+        show-icon
+        :message="`${detail.project.code} · ${detail.project.name}`"
+        :description="`申请说明：${closeoutReview.requestComment || '无'}（${closeoutReview.requestedBy || '-'}）`"
+      />
+      <a-form layout="vertical" class="section-gap">
+        <a-form-item label="复核结论" required>
+          <a-radio-group
+            v-model:value="closeoutReviewForm.decision"
+            button-style="solid"
+          >
+            <a-radio-button value="APPROVED">通过</a-radio-button>
+            <a-radio-button value="REJECTED">驳回</a-radio-button>
+          </a-radio-group>
+        </a-form-item>
+        <a-form-item label="复核意见" required>
+          <a-textarea v-model:value="closeoutReviewForm.comment" :rows="3" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
     <ProjectModals
       v-model:create-open="createOpen"
       v-model:approval-open="approvalOpen"
       v-model:stage-open="stageOpen"
       v-model:cost-open="costOpen"
+      v-model:edit-cost-open="editCostOpen"
+      v-model:edit-open="editOpen"
+      :edit-cost-entry="editCostEntry"
+      :edit-project="editDetail"
+      :quote-options="quoteOptions"
+      :closeout-review="closeoutReview"
       :saving="saving"
       :customer-options="customerOptions"
       :parent-project-options="parentProjectOptions"
@@ -1371,6 +1537,11 @@ import {
   getProjectManagerAssignmentCapability,
   processProjectApproval,
   changeProjectExecutionStatus,
+  rollbackProjectStage,
+  requestProjectCloseout,
+  reviewProjectCloseout,
+  getProjectCloseoutReview,
+  type ProjectCloseoutReview,
 } from "@/api/project";
 import { listUsersApi, type UserResponse } from "@/api/system";
 import {
@@ -1423,6 +1594,20 @@ const createOpen = ref(false);
 const defaultParentProjectId = ref<string>();
 const defaultCustomerId = ref<string>();
 const detailOpen = ref(false);
+const editOpen = ref(false);
+const editDetail = ref<ProjectDetail | null>(null);
+const editCostOpen = ref(false);
+const editCostEntry = ref<ProjectCostEntry | null>(null);
+const closeoutReview = ref<ProjectCloseoutReview | null>(null);
+const rollbackStageOpen = ref(false);
+const closeoutRequestOpen = ref(false);
+const closeoutReviewOpen = ref(false);
+const rollbackStageForm = reactive({ comment: "" });
+const closeoutRequestForm = reactive({ comment: "" });
+const closeoutReviewForm = reactive({
+  decision: "APPROVED" as "APPROVED" | "REJECTED",
+  comment: "",
+});
 const approvalOpen = ref(false);
 const projectApprovalOpen = ref(false);
 const lifecycleOpen = ref(false);
@@ -1459,6 +1644,19 @@ type ProjectStageOverviewRow = {
   latestRecord: ProjectStageRecord | null;
 };
 const preSalesRows = ref<QuotePlan[]>([]);
+const quoteOptions = computed(() =>
+  preSalesRows.value
+    .filter(
+      (item) =>
+        item.status === "COST_APPROVED" &&
+        item.costRequest?.status === "APPROVED",
+    )
+    .map((item) => ({
+      label: `${item.customerName} · ${item.serviceScope || "售前支持"} · ${formatMoney(item.amount)}`,
+      value: item.costRequest!.id,
+      costRequest: item.costRequest,
+    })),
+);
 const selectedPreSales = ref<QuotePlan | null>(null);
 const preSalesCostForm = reactive(initialPreSalesCostForm());
 const preSalesApprovalForm = reactive(initialPreSalesApprovalForm());
@@ -1550,6 +1748,7 @@ const costColumns = [
   { title: "成本说明", dataIndex: "description" },
   { title: "发生日期", dataIndex: "incurredDate", width: 120 },
   { title: "成本金额（含税，元）", key: "amount", width: 190 },
+  { title: "操作", key: "action", width: 110 },
 ];
 const stageRecordColumns = [
   { title: "阶段变化", key: "change", width: 220 },
@@ -2015,6 +2214,7 @@ async function handleProjectUpdated() {
         ...detailCache.value,
         [projectId]: refreshed,
       };
+      if (detailOpen.value) await refreshCloseoutReview();
     }
   }
   await loadData();
@@ -2101,6 +2301,7 @@ function openStage() {
   stageOpen.value = true;
 }
 function openCost() {
+  editCostEntry.value = null;
   costOpen.value = true;
 }
 
@@ -2237,12 +2438,104 @@ async function openDetail(project: Project) {
   detailOpen.value = true;
   detailLoading.value = true;
   try {
-    detail.value = await getProject(project.id);
-    detailCache.value = { ...detailCache.value, [project.id]: detail.value };
+    const [fetched, review] = await Promise.all([
+      getProject(project.id),
+      getProjectCloseoutReview(project.id).catch(() => null),
+    ]);
+    detail.value = fetched;
+    closeoutReview.value = review;
+    detailCache.value = { ...detailCache.value, [project.id]: fetched };
   } catch (error) {
     message.error(error instanceof Error ? error.message : "项目详情加载失败");
   } finally {
     detailLoading.value = false;
+  }
+}
+
+async function refreshCloseoutReview() {
+  if (!detail.value) return;
+  closeoutReview.value = await getProjectCloseoutReview(
+    detail.value.project.id,
+  ).catch(() => null);
+}
+
+function openEdit() {
+  if (!detail.value) return;
+  editDetail.value = detail.value;
+  editOpen.value = true;
+}
+
+function openEditCost(entry: ProjectCostEntry) {
+  editCostEntry.value = entry;
+  editCostOpen.value = true;
+}
+
+async function handleRollbackStage() {
+  if (!detail.value || !rollbackStageForm.comment.trim()) {
+    message.warning("请填写回退原因");
+    return;
+  }
+  saving.value = true;
+  try {
+    const updated = await rollbackProjectStage(detail.value.project.id, {
+      comment: rollbackStageForm.comment.trim(),
+    });
+    detail.value = updated;
+    rollbackStageOpen.value = false;
+    rollbackStageForm.comment = "";
+    message.success("项目阶段已回退，履历已记录");
+    await handleProjectUpdated();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "项目阶段回退失败");
+  } finally {
+    saving.value = false;
+  }
+}
+
+async function handleCloseoutRequest() {
+  if (!detail.value) return;
+  saving.value = true;
+  try {
+    closeoutReview.value = await requestProjectCloseout(
+      detail.value.project.id,
+      { comment: closeoutRequestForm.comment.trim() || undefined },
+    );
+    closeoutRequestOpen.value = false;
+    closeoutRequestForm.comment = "";
+    message.success("结项申请已提交，等待复核");
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "结项申请提交失败");
+  } finally {
+    saving.value = false;
+  }
+}
+
+async function handleCloseoutReview() {
+  if (!detail.value) return;
+  if (!closeoutReviewForm.comment.trim()) {
+    message.warning("请填写复核意见");
+    return;
+  }
+  saving.value = true;
+  try {
+    closeoutReview.value = await reviewProjectCloseout(
+      detail.value.project.id,
+      {
+        decision: closeoutReviewForm.decision,
+        comment: closeoutReviewForm.comment.trim(),
+      },
+    );
+    closeoutReviewOpen.value = false;
+    closeoutReviewForm.comment = "";
+    message.success(
+      closeoutReview.value.status === "APPROVED"
+        ? "结项复核已通过，可推进关闭项目"
+        : "结项申请已驳回",
+    );
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "结项复核失败");
+  } finally {
+    saving.value = false;
   }
 }
 async function removeProject(project: Project) {
@@ -2285,6 +2578,24 @@ function canExecute(project: Project) {
 }
 function canAdvance(project: Project) {
   return canExecute(project) && project.stage !== "CLOSED";
+}
+function previousStage(stage: ProjectStage) {
+  return (
+    {
+      INITIATED: null,
+      BIDDING: "INITIATED",
+      ENTRY: null,
+      CONSTRUCTION: "ENTRY",
+      COMMISSIONING: "CONSTRUCTION",
+      INITIAL_ACCEPTANCE: "COMMISSIONING",
+      FINAL_ACCEPTANCE: "INITIAL_ACCEPTANCE",
+      WARRANTY: "FINAL_ACCEPTANCE",
+      CLOSED: null,
+    } as Record<ProjectStage, ProjectStage | null>
+  )[stage];
+}
+function canRollbackStage(project: Project) {
+  return canExecute(project) && Boolean(previousStage(project.stage));
 }
 function canAssignManager(project: Project) {
   return (

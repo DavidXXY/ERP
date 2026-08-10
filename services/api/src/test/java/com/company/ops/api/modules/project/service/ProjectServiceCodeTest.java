@@ -14,8 +14,10 @@ import com.company.ops.api.modules.crm.domain.ServiceContract;
 import com.company.ops.api.modules.crm.domain.ContractStatus;
 import com.company.ops.api.modules.crm.domain.ContractKind;
 import com.company.ops.api.modules.crm.repository.CustomerRepository;
+import com.company.ops.api.modules.crm.repository.QuoteCostRequestRepository;
 import com.company.ops.api.modules.crm.repository.ReceivableRepository;
 import com.company.ops.api.modules.crm.repository.ServiceContractRepository;
+import com.company.ops.api.modules.collaboration.repository.ProjectHandoverRepository;
 import com.company.ops.api.modules.office.domain.SystemNotification;
 import com.company.ops.api.modules.office.repository.SystemNotificationRepository;
 import com.company.ops.api.modules.project.domain.Project;
@@ -25,6 +27,7 @@ import com.company.ops.api.modules.project.domain.ProjectType;
 import com.company.ops.api.modules.project.dto.CreateProjectRequest;
 import com.company.ops.api.modules.project.dto.ProjectBudgetItemRequest;
 import com.company.ops.api.modules.project.repository.ProjectBudgetItemRepository;
+import com.company.ops.api.modules.project.repository.ProjectCloseoutReviewRepository;
 import com.company.ops.api.modules.project.repository.ProjectCostEntryRepository;
 import com.company.ops.api.modules.project.repository.ProjectRepository;
 import com.company.ops.api.modules.project.repository.ProjectStageRecordRepository;
@@ -47,6 +50,9 @@ class ProjectServiceCodeTest {
 
   @Mock private ServiceContractRepository contractRepository;
   @Mock private ReceivableRepository receivableRepository;
+  @Mock private QuoteCostRequestRepository quoteCostRepository;
+  @Mock private ProjectHandoverRepository handoverRepository;
+  @Mock private ProjectCloseoutReviewRepository closeoutReviewRepository;
   @Mock private ProjectRepository projectRepository;
   @Mock private ProjectBudgetItemRepository budgetRepository;
   @Mock private ProjectCostEntryRepository costRepository;
@@ -115,7 +121,7 @@ class ProjectServiceCodeTest {
     projectService.createProject(new CreateProjectRequest(
         base.customerId(), base.code(), "一期子项目", base.projectType(), base.managerUserId(),
         base.managerName(), base.siteAddress(), base.contractAmount(), base.plannedStartDate(),
-        base.plannedEndDate(), base.budgetItems(), base.warrantyEndDate(), null, parentId));
+        base.plannedEndDate(), base.budgetItems(), base.warrantyEndDate(), null, parentId, null));
 
     ArgumentCaptor<Project> captor = ArgumentCaptor.forClass(Project.class);
     verify(projectRepository).save(captor.capture());
@@ -231,6 +237,7 @@ class ProjectServiceCodeTest {
         List.of(new ProjectBudgetItemRequest(ProjectCostCategory.LABOR, new BigDecimal("50000"), "人工预算")),
         null,
         contractId,
+        null,
         null
     );
   }

@@ -50,5 +50,7 @@ public record ProjectResponse(
     BigDecimal grossMargin,
     BigDecimal budgetVariance,
     int progress,
-    LocalDate warrantyEndDate
+    LocalDate warrantyEndDate,
+    LocalDate actualStartDate,
+    LocalDate actualEndDate
 ) {}

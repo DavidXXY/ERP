@@ -82,6 +82,8 @@ export type Project = {
   budgetVariance: number;
   progress: number;
   warrantyEndDate?: string;
+  actualStartDate?: string;
+  actualEndDate?: string;
 };
 
 export type ProjectBudgetInput = {
@@ -104,6 +106,29 @@ export type CreateProjectPayload = {
   warrantyEndDate?: string;
   contractId?: string;
   parentProjectId?: string;
+  quoteId?: string;
+};
+
+export type UpdateProjectPayload = {
+  name: string;
+  siteAddress: string;
+  contractAmount: number;
+  plannedStartDate: string;
+  plannedEndDate: string;
+  warrantyEndDate?: string;
+  budgetItems: ProjectBudgetInput[];
+};
+
+export type ProjectCloseoutReview = {
+  id: string;
+  projectId: string;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  requestComment?: string;
+  reviewComment?: string;
+  requestedBy?: string;
+  requestedAt?: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
 };
 
 export type ProjectBudgetItem = ProjectBudgetInput & {
@@ -267,6 +292,14 @@ export function createProject(payload: CreateProjectPayload) {
   });
 }
 
+export function updateProject(id: string, payload: UpdateProjectPayload) {
+  return request<ProjectDetail>({
+    method: "PUT",
+    url: `/projects/${id}`,
+    data: payload,
+  });
+}
+
 export function getProject(id: string) {
   return request<ProjectDetail>({ method: "GET", url: `/projects/${id}` });
 }
@@ -354,6 +387,67 @@ export function createProjectCost(
     method: "POST",
     url: `/projects/${id}/costs`,
     data: payload,
+  });
+}
+
+export function updateProjectCost(
+  id: string,
+  costId: string,
+  payload: {
+    category: ProjectCostCategory;
+    description: string;
+    amount: number;
+    incurredDate: string;
+  },
+) {
+  return request<ProjectDetail>({
+    method: "PUT",
+    url: `/projects/${id}/costs/${costId}`,
+    data: payload,
+  });
+}
+
+export function deleteProjectCost(id: string, costId: string) {
+  return request<ProjectDetail>({
+    method: "DELETE",
+    url: `/projects/${id}/costs/${costId}`,
+  });
+}
+
+export function rollbackProjectStage(id: string, payload: { comment: string }) {
+  return request<ProjectDetail>({
+    method: "POST",
+    url: `/projects/${id}/stage/rollback`,
+    data: payload,
+  });
+}
+
+export function requestProjectCloseout(
+  id: string,
+  payload: { comment?: string },
+) {
+  return request<ProjectCloseoutReview>({
+    method: "POST",
+    url: `/projects/${id}/closeout/request`,
+    data: payload,
+  });
+}
+
+export function reviewProjectCloseout(
+  id: string,
+  payload: { decision: "APPROVED" | "REJECTED"; comment: string },
+) {
+  return request<ProjectCloseoutReview>({
+    method: "POST",
+    url: `/projects/${id}/closeout/review`,
+    data: payload,
+  });
+}
+
+export function getProjectCloseoutReview(id: string) {
+  return request<ProjectCloseoutReview | null>({
+    method: "GET",
+    url: `/projects/${id}/closeout-review`,
   });
 }
 

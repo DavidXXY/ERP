@@ -25,5 +25,6 @@ public record CreateProjectRequest(
     @NotNull List<@Valid ProjectBudgetItemRequest> budgetItems,
     LocalDate warrantyEndDate,
     UUID contractId, // null　则不关联合同
-    UUID parentProjectId
+    UUID parentProjectId,
+    UUID quoteId // null 则不引用售前成本核算；预算为空时自动带入
 ) {}

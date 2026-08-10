@@ -354,7 +354,7 @@ public class SupplierPortalService {
     applyQuote(quote, request, inputs, principal, submit);
     SupplierQuotation saved = quotes.save(quote);
     List<SupplierQuotationLine> existingLines = quoteLines.findByQuoteIdOrderByCreatedAtAsc(saved.getId());
-    if (!existingLines.isEmpty()) quoteLines.deleteAll(existingLines);
+    if (!existingLines.isEmpty()) quoteLines.deleteAllInBatch(existingLines);
     List<SupplierQuotationLine> persisted = request.lines().stream().map(line -> {
       SupplierQuotationLine entity = new SupplierQuotationLine();
       entity.setQuoteId(saved.getId());

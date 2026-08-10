@@ -3,9 +3,11 @@ package com.company.ops.api.modules.system.interceptor;
 import com.company.ops.api.modules.system.service.AuditLogWriter;
 import com.company.ops.api.modules.system.service.AuditLogWriter.AuditEvent;
 import com.company.ops.api.common.tenant.TenantContext;
+import com.company.ops.api.modules.procurement.security.SupplierPortalPrincipal;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
@@ -36,7 +38,7 @@ public class AuditInterceptor implements HandlerInterceptor {
     String username = null;
     Authentication auth = SecurityContextHolder.getContext().getAuthentication();
     if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal())) {
-      username = auth.getName();
+      username = principalName(auth);
     }
 
     String clientIp = clientIpResolver.resolve(request);
@@ -46,6 +48,17 @@ public class AuditInterceptor implements HandlerInterceptor {
         truncate(request.getQueryString(), 1000), operationType(request.getMethod()),
         module(request.getRequestURI()), objectId(request.getRequestURI()), response.getStatus(),
         duration, clientIp));
+  }
+
+  private String principalName(Authentication auth) {
+    Object principal = auth.getPrincipal();
+    if (principal instanceof SupplierPortalPrincipal portal) {
+      return truncate(portal.email(), 80);
+    }
+    if (principal instanceof UserDetails userDetails) {
+      return truncate(userDetails.getUsername(), 80);
+    }
+    return truncate(auth.getName(), 80);
   }
 
   private String operationType(String method) {

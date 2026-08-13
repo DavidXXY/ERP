@@ -50,6 +50,24 @@
           :options="statusOptions"
           style="width: 140px"
         />
+        <a-select
+          v-model:value="salesFilter"
+          allow-clear
+          show-search
+          option-filter-prop="label"
+          placeholder="全部销售人员"
+          :options="salesOptions"
+          style="width: 170px"
+        />
+        <a-select
+          v-model:value="departmentFilter"
+          allow-clear
+          show-search
+          option-filter-prop="label"
+          placeholder="全部部门"
+          :options="departmentOptions"
+          style="width: 150px"
+        />
         <a-input
           v-model:value="keyword"
           allow-clear
@@ -285,6 +303,7 @@ import {
   type ReceivableStatus,
 } from "@/api/crm";
 import { useAuthStore } from "@/stores/auth";
+import { loadOwnerDepartmentMap, ownerDepartment } from "./crm-department";
 import {
   formatMoney,
   receivableStatusColor,
@@ -294,6 +313,7 @@ import { downloadCsv, receivableRowToCsv } from "./crm-export";
 
 const auth = useAuthStore();
 const items = ref<Receivable[]>([]);
+const departmentMap = ref<Map<string, string>>(new Map());
 const loading = ref(false);
 const saving = ref(false);
 const invoiceOpen = ref(false);
@@ -303,6 +323,8 @@ const invoiceFormRef = ref();
 const receiptFormRef = ref();
 const keyword = ref("");
 const statusFilter = ref<ReceivableStatus>();
+const salesFilter = ref<string>();
+const departmentFilter = ref<string>();
 const invoiceForm = reactive({ remark: "" });
 
 const requestedReceiptIds = ref<string[]>([]);
@@ -318,6 +340,20 @@ const statusOptions = [
   { label: "已核销", value: "SETTLED" },
   { label: "逾期", value: "OVERDUE" },
 ];
+const salesOptions = computed(() => {
+  const names = new Set<string>();
+  items.value.forEach((item) => {
+    if (item.salesOwnerName) names.add(item.salesOwnerName);
+  });
+  return Array.from(names)
+    .sort((a, b) => a.localeCompare(b, "zh-CN"))
+    .map((name) => ({ label: name, value: name }));
+});
+const departmentOptions = computed(() =>
+  Array.from(new Set(departmentMap.value.values()))
+    .sort((a, b) => a.localeCompare(b, "zh-CN"))
+    .map((name) => ({ label: name, value: name })),
+);
 const receivableColumns = [
   { title: "应收单 / 客户", key: "receivable", width: 220 },
   { title: "合同名称 / 编号", key: "contract", width: 260 },
@@ -334,6 +370,10 @@ const filteredItems = computed(() => {
       `${item.code} ${item.contractCode} ${item.contractName} ${item.customerName}`.toLowerCase();
     return (
       (!statusFilter.value || item.status === statusFilter.value) &&
+      (!salesFilter.value || item.salesOwnerName === salesFilter.value) &&
+      (!departmentFilter.value ||
+        ownerDepartment(item.salesOwnerName, departmentMap.value) ===
+          departmentFilter.value) &&
       (!term || text.includes(term))
     );
   });
@@ -348,7 +388,12 @@ onMounted(loadData);
 async function loadData() {
   loading.value = true;
   try {
-    items.value = await listReceivables();
+    const [rows, deptMap] = await Promise.all([
+      listReceivables(),
+      loadOwnerDepartmentMap(),
+    ]);
+    items.value = rows;
+    departmentMap.value = deptMap;
   } catch (error) {
     message.error(error instanceof Error ? error.message : "合同应收加载失败");
   } finally {

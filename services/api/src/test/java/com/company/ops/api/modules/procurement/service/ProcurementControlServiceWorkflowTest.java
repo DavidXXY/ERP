@@ -4,10 +4,13 @@ import static com.company.ops.api.modules.procurement.dto.ProcurementControlDtos
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.company.ops.api.common.exception.BusinessException;
+import com.company.ops.api.common.storage.FileStorageService;
 import com.company.ops.api.modules.inventory.repository.InventoryPartRepository;
 import com.company.ops.api.modules.inventory.repository.StockMovementRepository;
 import com.company.ops.api.modules.ledger.service.LedgerService;
@@ -17,6 +20,7 @@ import com.company.ops.api.modules.project.repository.ProjectRepository;
 import com.company.ops.api.modules.system.security.DataScopeService;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -43,6 +47,8 @@ class ProcurementControlServiceWorkflowTest {
   @Mock private ProcurementCostAllocationRepository costs;
   @Mock private ProcurementReturnOrderRepository returns;
   @Mock private SupplierInvoiceRepository invoices;
+  @Mock private SupplierInvoiceSubmissionRepository invoiceSubmissions;
+  @Mock private FileStorageService storage;
   @Mock private PurchaseRequestApprovalRecordRepository requestApprovals;
   @Mock private ProjectRepository projects;
   @Mock private ProcurementArrivalService arrivals;
@@ -162,6 +168,63 @@ class ProcurementControlServiceWorkflowTest {
         inquiryId, new UpdateInquiryDeadline(LocalDate.now().minusDays(1))))
         .isInstanceOf(BusinessException.class)
         .hasMessageContaining("不能早于今天");
+  }
+
+  @Test
+  void dismissedAppealKeepsInspectionAndNotifiesSupplier() {
+    GoodsReceipt receipt = receipt();
+    receipt.setInspectionStatus("REJECTED");
+    receipt.setAppealStatus("PENDING");
+    receipt.setAppealReason("数量有误");
+    PurchaseOrder order = order(receipt.getOrderId(), PurchaseOrderStatus.RECEIVED);
+    when(receipts.findById(receipt.getId())).thenReturn(Optional.of(receipt));
+    when(orders.findById(receipt.getOrderId())).thenReturn(Optional.of(order));
+    when(receipts.save(any(GoodsReceipt.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+    Map<String, Object> result = service.resolveAppeal(receipt.getId(),
+        new ResolveAppealRequest("DISMISSED", "维持原判"));
+
+    assertThat(result.get("appealStatus")).isEqualTo("DISMISSED");
+    assertThat(receipt.getAppealResolution()).isEqualTo("DISMISSED");
+    assertThat(receipt.getInspectionStatus()).isEqualTo("REJECTED");
+    verify(portalNotifier).notify(isNull(), eq("INSPECTION"), eq("质检申诉未成立"),
+        any(), eq("ORDER"), eq(order.getId()));
+  }
+
+  @Test
+  void reopenAppealResetsInspectionAndNotifiesSupplier() {
+    GoodsReceipt receipt = receipt();
+    receipt.setInspectionStatus("PARTIAL");
+    receipt.setQualifiedQty(BigDecimal.valueOf(1));
+    receipt.setRejectedQty(BigDecimal.ONE);
+    receipt.setInspectorName("质检员");
+    receipt.setAppealStatus("PENDING");
+    PurchaseOrder order = order(receipt.getOrderId(), PurchaseOrderStatus.RECEIVED);
+    when(receipts.findById(receipt.getId())).thenReturn(Optional.of(receipt));
+    when(orders.findById(receipt.getOrderId())).thenReturn(Optional.of(order));
+    when(receipts.save(any(GoodsReceipt.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+    Map<String, Object> result = service.resolveAppeal(receipt.getId(),
+        new ResolveAppealRequest("REOPEN", "补充返工记录，重新质检"));
+
+    assertThat(result.get("appealStatus")).isEqualTo("REOPENED");
+    assertThat(receipt.getAppealResolution()).isEqualTo("REOPENED");
+    assertThat(receipt.getInspectionStatus()).isEqualTo("PENDING");
+    assertThat(receipt.getQualifiedQty()).isNull();
+    verify(portalNotifier).notify(isNull(), eq("INSPECTION"), eq("质检申诉已受理"),
+        any(), eq("ORDER"), eq(order.getId()));
+  }
+
+  @Test
+  void resolvedAppealCannotBeResolvedAgain() {
+    GoodsReceipt receipt = receipt();
+    receipt.setAppealStatus("DISMISSED");
+    when(receipts.findById(receipt.getId())).thenReturn(Optional.of(receipt));
+
+    assertThatThrownBy(() -> service.resolveAppeal(receipt.getId(),
+        new ResolveAppealRequest("REOPEN", "")))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("已处理");
   }
 
   private GoodsReceipt receipt() {

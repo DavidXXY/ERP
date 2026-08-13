@@ -349,6 +349,7 @@ public final class CrmOperationsDtos {
       UUID contractId,
       String contractCode,
       String contractName,
+      String salesOwnerName,
       String code,
       String sourceNo,
       BigDecimal amount,
@@ -402,6 +403,7 @@ public final class CrmOperationsDtos {
       String customerName,
       String contractCode,
       String projectName,
+      String salesOwnerName,
       BigDecimal amount,
       LocalDate endDate,
       long daysRemaining,
@@ -434,6 +436,12 @@ public final class CrmOperationsDtos {
       @Size(max = 64) String sourceNo,
       @DecimalMin("0") BigDecimal amount,
       LocalDate dueDate
+  ) {
+  }
+
+  public record OwnerDepartmentResponse(
+      String ownerName,
+      String department
   ) {
   }
 

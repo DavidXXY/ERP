@@ -425,6 +425,38 @@
               <template v-else-if="column.key === 'date'">{{
                 dateTime(record.createdAt)
               }}</template>
+              <template v-else-if="column.key === 'status'">
+                <a-tag :color="shipmentStatusColor(record.status)">{{
+                  shipmentStatusText(record.status)
+                }}</a-tag>
+                <div
+                  v-if="record.reviewComment"
+                  class="shipment-review"
+                >
+                  <template v-if="record.status === 'REJECTED'"
+                    >退回原因：</template
+                  >{{ record.reviewComment }}
+                </div>
+              </template>
+              <template v-else-if="column.key === 'actions'">
+                <template v-if="record.status === 'PENDING'">
+                  <a-popconfirm
+                    v-if="canConfirmShipment"
+                    title="确认该送货单已到货？"
+                    @confirm="handleConfirmShipment(record)"
+                  >
+                    <a-button type="link" size="small">确认到货</a-button>
+                  </a-popconfirm>
+                  <a-button
+                    v-if="canConfirmShipment"
+                    type="link"
+                    size="small"
+                    danger
+                    @click="openReject(record)"
+                    >退回</a-button
+                  >
+                </template>
+              </template>
             </template>
           </a-table>
         </a-tab-pane>
@@ -720,6 +752,25 @@
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <a-modal
+      v-model:open="rejectOpen"
+      title="退回发货信息"
+      :confirm-loading="rejectSaving"
+      @ok="submitReject"
+    >
+      <a-alert
+        type="warning"
+        show-icon
+        message="退回后供应商可在门户看到原因，并修改或删除该发货记录。"
+        style="margin-bottom: 12px"
+      />
+      <a-form layout="vertical">
+        <a-form-item label="退回原因">
+          <a-textarea v-model:value="rejectComment" :rows="3" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </BusinessDetailPage>
 </template>
 
@@ -735,6 +786,7 @@ import BusinessDetailPage, {
 import { useAuthStore } from "@/stores/auth";
 import {
   approvePurchaseOrder,
+  confirmOrderShipment,
   createOrderChange,
   decideOrderChange,
   deleteOrderDocument,
@@ -792,6 +844,10 @@ const route = useRoute(),
   changeDecideOpen = ref(false),
   loadingDocuments = ref(false),
   uploadingDocument = ref(false),
+  rejectOpen = ref(false),
+  rejectSaving = ref(false),
+  rejectComment = ref(""),
+  rejectTarget = ref<ProcurementShipment | null>(null),
   documentType = ref("ORIGINAL"),
   activeTab = ref(
     typeof route.query.tab === "string" ? route.query.tab : "overview",
@@ -832,6 +888,9 @@ const paidAmount = computed(() =>
     payables.value.reduce((s, i) => s + Number(i.outstandingAmount || 0), 0),
   );
 const canManageDocuments = computed(() =>
+  auth.can("procurement:purchase:create"),
+);
+const canConfirmShipment = computed(() =>
   auth.can("procurement:purchase:create"),
 );
 const metrics = computed<DetailMetric[]>(() =>
@@ -955,8 +1014,10 @@ const shipmentColumns = [
   { title: "送货单号", dataIndex: "deliveryNo", width: 180 },
   { title: "承运方", dataIndex: "carrier", width: 140 },
   { title: "预计到货", key: "arrival", width: 130 },
+  { title: "状态", key: "status", width: 130 },
   { title: "备注", dataIndex: "remark" },
   { title: "回传时间", key: "date", width: 180 },
+  { title: "操作", key: "actions", width: 140 },
 ];
 onMounted(loadData);
 async function loadData() {
@@ -1228,6 +1289,63 @@ function approvalLabel(v?: string) {
     )[v || ""] || "-"
   );
 }
+function shipmentStatusText(v?: string) {
+  return (
+    (
+      {
+        PENDING: "待确认",
+        CONFIRMED: "已确认到货",
+        REJECTED: "已退回",
+      } as Record<string, string>
+    )[v || ""] || v || "-"
+  );
+}
+function shipmentStatusColor(v?: string) {
+  return (
+    (
+      {
+        PENDING: "orange",
+        CONFIRMED: "green",
+        REJECTED: "red",
+      } as Record<string, string>
+    )[v || ""] || "default"
+  );
+}
+async function handleConfirmShipment(shipment: ProcurementShipment) {
+  if (!order.value) return;
+  try {
+    await confirmOrderShipment(order.value.id, shipment.id, {
+      action: "CONFIRMED",
+    });
+    message.success("已确认到货，并通知供应商");
+    await loadShipments(order.value.id);
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : "确认失败");
+  }
+}
+function openReject(shipment: ProcurementShipment) {
+  rejectTarget.value = shipment;
+  rejectComment.value = "";
+  rejectOpen.value = true;
+}
+async function submitReject() {
+  if (!rejectTarget.value || !order.value) return;
+  rejectSaving.value = true;
+  try {
+    await confirmOrderShipment(order.value.id, rejectTarget.value.id, {
+      action: "REJECTED",
+      comment: rejectComment.value.trim() || undefined,
+    });
+    message.success("已退回发货信息，并通知供应商");
+    rejectOpen.value = false;
+    rejectTarget.value = null;
+    await loadShipments(order.value.id);
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : "退回失败");
+  } finally {
+    rejectSaving.value = false;
+  }
+}
 function inspectionLabel(v?: string) {
   return (
     (
@@ -1249,6 +1367,13 @@ function inspectionLabel(v?: string) {
   display: block;
   color: #8c96a5;
   font-size: 12px;
+}
+.shipment-review {
+  margin-top: 4px;
+  color: #cf1322;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 .danger {
   color: #cf1322;

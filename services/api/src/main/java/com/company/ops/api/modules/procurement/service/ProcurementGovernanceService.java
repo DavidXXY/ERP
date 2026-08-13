@@ -14,6 +14,7 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.YearMonth;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -36,6 +37,7 @@ public class ProcurementGovernanceService {
   private final ProcurementInquiryRepository inquiries;
   private final SupplierQuotationRepository quotes;
   private final SupplierQuotationLineRepository quoteLines;
+  private final SupplierPortalNotifier portalNotifier;
 
   public ProcurementGovernanceService(
       ProcurementContractRepository contracts,
@@ -52,7 +54,8 @@ public class ProcurementGovernanceService {
       ProcurementService procurementService,
       ProcurementInquiryRepository inquiries,
       SupplierQuotationRepository quotes,
-      SupplierQuotationLineRepository quoteLines
+      SupplierQuotationLineRepository quoteLines,
+      SupplierPortalNotifier portalNotifier
   ) {
     this.contracts = contracts;
     this.supplierChanges = supplierChanges;
@@ -69,6 +72,7 @@ public class ProcurementGovernanceService {
     this.inquiries = inquiries;
     this.quotes = quotes;
     this.quoteLines = quoteLines;
+    this.portalNotifier = portalNotifier;
   }
 
   @Transactional(readOnly = true)
@@ -161,6 +165,12 @@ public class ProcurementGovernanceService {
     contract.setApprovedAt(OffsetDateTime.now());
     ProcurementContract saved = contracts.save(contract);
     log("CONTRACT", id, decision, request.comment());
+    if ("APPROVED".equals(decision) && saved.getSupplierId() != null) {
+      portalNotifier.notify(saved.getSupplierId(), "CONTRACT",
+          "合同已生效，请确认中标",
+          "采购合同 " + saved.getContractNo() + " 已审批通过并生效，请在门户确认中标并跟进采购订单。",
+          "ORDER", saved.getOrderId());
+    }
     return saved;
   }
 
@@ -191,6 +201,13 @@ public class ProcurementGovernanceService {
     amendment.setApprovalStatus("PENDING");
     ProcurementContract saved = contracts.save(amendment);
     log("CONTRACT", saved.getId(), "AMENDED", request.changeReason());
+    if (saved.getSupplierId() != null) {
+      portalNotifier.notify(saved.getSupplierId(), "CONTRACT",
+          "采购合同发起变更",
+          "合同 " + saved.getContractNo() + "（v" + saved.getVersionNo()
+              + "）已发起变更，待采购方审批通过后生效，请在门户查看最新合同与订单。",
+          "ORDER", saved.getOrderId());
+    }
     return saved;
   }
 
@@ -265,6 +282,11 @@ public class ProcurementGovernanceService {
     change.setReviewedAt(OffsetDateTime.now());
     SupplierChangeRequest saved = supplierChanges.save(change);
     log("SUPPLIER", change.getSupplierId(), decision, request.comment());
+    portalNotifier.notify(change.getSupplierId(), "CHANGE_REQUEST",
+        "资料变更申请" + ("APPROVED".equals(decision) ? "已通过" : "已驳回"),
+        "您的企业资料变更申请（" + saved.getChangeType() + "）已"
+            + ("APPROVED".equals(decision) ? "审批通过并更新主档。" : "驳回" + (blank(request.comment()) ? "。" : "：" + request.comment())),
+        "CHANGE_REQUEST", saved.getId());
     return saved;
   }
 
@@ -318,6 +340,8 @@ public class ProcurementGovernanceService {
         .add(response.multiply(BigDecimal.valueOf(.1))).setScale(2, RoundingMode.HALF_UP);
     SupplierPerformanceReview review = reviews.findBySupplierIdAndReviewPeriod(
         request.supplierId(), request.reviewPeriod()).orElse(new SupplierPerformanceReview());
+    boolean revisingAfterAppeal = review.getId() != null
+        && "REOPENED".equals(review.getAppealStatus());
     review.setSupplierId(request.supplierId());
     review.setReviewPeriod(request.reviewPeriod());
     review.setOnTimeRate(onTimeRate);
@@ -330,8 +354,82 @@ public class ProcurementGovernanceService {
         : total.compareTo(BigDecimal.valueOf(70)) >= 0 ? "C" : "D");
     review.setReviewerName(currentName());
     review.setImprovementAction(request.improvementAction());
+    if (revisingAfterAppeal) {
+      review.setAppealStatus("NONE");
+      review.setAppealReason(null);
+      review.setAppealedAt(null);
+      review.setAppealResolution("REOPENED");
+    }
     SupplierPerformanceReview saved = reviews.save(review);
     log("SUPPLIER", request.supplierId(), "PERFORMANCE_REVIEW", request.reviewPeriod() + "：" + total);
+    if (revisingAfterAppeal) {
+      portalNotifier.notify(request.supplierId(), "PERFORMANCE",
+          request.reviewPeriod() + " 绩效评价已更新",
+          "您对 " + request.reviewPeriod() + " 期绩效的申诉已受理，更新后综合得分 "
+              + total.stripTrailingZeros().toPlainString() + "，等级 " + saved.getGrade()
+              + "，可在门户工作台查看。",
+          "PERFORMANCE", saved.getId());
+    } else {
+      portalNotifier.notify(request.supplierId(), "PERFORMANCE",
+          request.reviewPeriod() + " 合作绩效已发布",
+          "本期绩效综合得分 " + total.stripTrailingZeros().toPlainString() + "，等级 "
+              + saved.getGrade() + "，可在门户工作台查看明细与改进建议。",
+          "PERFORMANCE", saved.getId());
+    }
+    return saved;
+  }
+
+  @Transactional(readOnly = true)
+  public List<SupplierPerformanceReview> listReviewAppeals(String status) {
+    if (status != null && !status.isBlank()) {
+      return reviews.findByAppealStatusOrderByAppealedAtDesc(status);
+    }
+    return reviews.findAllByOrderByReviewPeriodDescCreatedAtDesc().stream()
+        .filter(item -> !"NONE".equals(item.getAppealStatus()))
+        .toList();
+  }
+
+  @Transactional
+  public SupplierPerformanceReview resolvePerformanceAppeal(
+      UUID reviewId,
+      ResolvePerformanceAppealRequest request
+  ) {
+    SupplierPerformanceReview review = reviews.findById(reviewId)
+        .orElseThrow(() -> new BusinessException("绩效评价不存在"));
+    if (!"PENDING".equals(review.getAppealStatus())) {
+      throw new BusinessException("该绩效评价没有待处理的申诉");
+    }
+    String action = request.action();
+    if (!Set.of("DISMISSED", "REOPEN").contains(action)) {
+      throw new BusinessException("处理结果仅支持 DISMISSED（申诉不成立）或 REOPEN（打回重新核定）");
+    }
+    Supplier supplier = suppliers.findById(review.getSupplierId()).orElse(null);
+    String supplierName = supplier == null ? "供应商" : supplier.getName();
+    review.setAppealResolution(action);
+    review.setAppealReviewComment(request.comment() == null ? null : request.comment().trim());
+    review.setAppealReviewedBy(currentName());
+    review.setAppealReviewedAt(OffsetDateTime.now());
+    if ("DISMISSED".equals(action)) {
+      review.setAppealStatus("DISMISSED");
+      SupplierPerformanceReview saved = reviews.save(review);
+      portalNotifier.notify(saved.getSupplierId(), "PERFORMANCE",
+          saved.getReviewPeriod() + " 绩效申诉处理结果",
+          "您对 " + saved.getReviewPeriod() + " 期绩效评价的申诉经复核不成立，维持原评价"
+              + (saved.getAppealReviewComment() == null ? "。" : "：" + saved.getAppealReviewComment()),
+          "PERFORMANCE", saved.getId());
+      log("SUPPLIER", saved.getSupplierId(), "PERFORMANCE_APPEAL_DISMISSED",
+          saved.getReviewPeriod() + "：" + saved.getTotalScore());
+      return saved;
+    }
+    review.setAppealStatus("REOPENED");
+    SupplierPerformanceReview saved = reviews.save(review);
+    portalNotifier.notify(saved.getSupplierId(), "PERFORMANCE",
+        saved.getReviewPeriod() + " 绩效申诉已受理",
+        supplierName + " 的申诉已受理，采购方将重新核定 " + saved.getReviewPeriod()
+            + " 期绩效，请留意门户更新。",
+        "PERFORMANCE", saved.getId());
+    log("SUPPLIER", saved.getSupplierId(), "PERFORMANCE_APPEAL_REOPEN",
+        saved.getReviewPeriod() + "：" + saved.getTotalScore());
     return saved;
   }
 

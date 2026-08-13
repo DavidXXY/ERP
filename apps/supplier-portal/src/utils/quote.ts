@@ -1,9 +1,10 @@
 export type QuoteStatusView = { color: string; text: string };
 
-export const money = (v?: number | string | null) =>
-  new Intl.NumberFormat("zh-CN", { style: "currency", currency: "CNY" }).format(
-    Number(v || 0),
-  );
+export const money = (v?: number | string | null, currency = "CNY") =>
+  new Intl.NumberFormat("zh-CN", {
+    style: "currency",
+    currency: currency || "CNY",
+  }).format(Number(v || 0));
 
 export const fileSize = (v: number) =>
   v > 1048576 ? `${(v / 1048576).toFixed(1)} MB` : `${Math.ceil(v / 1024)} KB`;
@@ -93,3 +94,46 @@ export const expiryMessage = (label: string, validTo?: string): string | null =>
   if (days === 0) return `${label}将于今天到期，请尽快更新`;
   return `${label}将于 ${validTo} 到期（剩 ${days} 天），请提前更新`;
 };
+
+export const UPLOAD_ALLOWED_EXTENSIONS = [
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".webp",
+  ".pdf",
+  ".doc",
+  ".docx",
+  ".xls",
+  ".xlsx",
+];
+export const UPLOAD_MAX_BYTES = 20 * 1024 * 1024;
+
+/** 上传前本地预校验：返回错误文案，通过返回 null。 */
+export const validateUploadFile = (file: File): string | null => {
+  if (file.size > UPLOAD_MAX_BYTES) {
+    return "文件不能超过 20MB";
+  }
+  const ext = "." + (file.name.split(".").pop() || "").toLowerCase();
+  if (!UPLOAD_ALLOWED_EXTENSIONS.includes(ext)) {
+    return "仅支持图片、PDF、Word 和 Excel 文件";
+  }
+  return null;
+};
+
+export const shipmentStatusText = (value: string) =>
+  (
+    {
+      PENDING: "待确认",
+      CONFIRMED: "已确认到货",
+      REJECTED: "已退回",
+    } as Record<string, string>
+  )[value] || value;
+
+export const shipmentStatusColor = (value: string) =>
+  (
+    {
+      PENDING: "orange",
+      CONFIRMED: "green",
+      REJECTED: "red",
+    } as Record<string, string>
+  )[value] || "default";

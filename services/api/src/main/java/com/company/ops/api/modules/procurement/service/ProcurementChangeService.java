@@ -32,15 +32,18 @@ public class ProcurementChangeService {
   private final PurchaseOrderChangeRepository changes;
   private final PurchaseOrderRepository orders;
   private final CodeGenerator codeGenerator;
+  private final SupplierPortalNotifier portalNotifier;
 
   public ProcurementChangeService(
       PurchaseOrderChangeRepository changes,
       PurchaseOrderRepository orders,
-      CodeGenerator codeGenerator
+      CodeGenerator codeGenerator,
+      SupplierPortalNotifier portalNotifier
   ) {
     this.changes = changes;
     this.orders = orders;
     this.codeGenerator = codeGenerator;
+    this.portalNotifier = portalNotifier;
   }
 
   @Transactional
@@ -90,7 +93,13 @@ public class ProcurementChangeService {
     change.setStatus("PENDING");
     change.setCreatedByName(currentName());
     change.setOrderVersionBefore(order.getOrderVersion());
-    return toResponse(changes.save(change), order.getCode());
+    PurchaseOrderChange saved = changes.save(change);
+    portalNotifier.notify(order.getSupplierId(), "ORDER_CHANGE",
+        "采购订单变更待确认",
+        "采购订单 " + order.getCode() + " 发起" + changeTypeLabel(changeType)
+            + "，请登录供应商门户查看并确认（同意或提出异议）。",
+        "ORDER", order.getId());
+    return toResponse(saved, order.getCode());
   }
 
   @Transactional
@@ -115,7 +124,9 @@ public class ProcurementChangeService {
     change.setDecisionComment(request.comment());
     if ("REJECTED".equals(decision)) {
       change.setStatus("REJECTED");
-      return toResponse(changes.save(change), null);
+      PurchaseOrderChange saved = changes.save(change);
+      notifyDecision(saved);
+      return toResponse(saved, null);
     }
     PurchaseOrder order = orders.findByIdForUpdate(change.getOrderId())
         .orElseThrow(() -> new BusinessException("采购订单不存在"));
@@ -139,7 +150,27 @@ public class ProcurementChangeService {
     change.setStatus("APPROVED");
     change.setOrderVersionAfter(order.getOrderVersion());
     change.setAppliedAt(OffsetDateTime.now());
-    return toResponse(changes.save(change), order.getCode());
+    PurchaseOrderChange saved = changes.save(change);
+    notifyDecision(saved);
+    return toResponse(saved, order.getCode());
+  }
+
+  private void notifyDecision(PurchaseOrderChange change) {
+    orders.findById(change.getOrderId()).ifPresent(order ->
+        portalNotifier.notify(order.getSupplierId(), "ORDER_CHANGE",
+            "采购订单变更" + ("APPROVED".equals(change.getStatus()) ? "已通过" : "已驳回"),
+            "采购订单 " + order.getCode() + " 的变更单 " + change.getChangeNo()
+                + ("APPROVED".equals(change.getStatus()) ? "已审批通过并应用到订单。" : "已被驳回，请在门户查看原因。"),
+            "ORDER", order.getId()));
+  }
+
+  private String changeTypeLabel(String changeType) {
+    return switch (changeType) {
+      case "QTY" -> "数量变更";
+      case "PRICE" -> "价格变更";
+      case "DATE" -> "交期变更";
+      default -> "多项变更";
+    };
   }
 
   private OrderChangeResponse toResponse(PurchaseOrderChange change, String orderCode) {

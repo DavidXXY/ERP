@@ -8,5 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface SupplierChangeRequestRepository extends JpaRepository<SupplierChangeRequest, UUID> {
   List<SupplierChangeRequest> findAllByOrderByCreatedAtDesc();
   List<SupplierChangeRequest> findBySupplierIdOrderByCreatedAtDesc(UUID supplierId);
+
+  long countByStatus(String status);
   boolean existsBySupplierIdAndStatus(UUID supplierId, String status);
 }

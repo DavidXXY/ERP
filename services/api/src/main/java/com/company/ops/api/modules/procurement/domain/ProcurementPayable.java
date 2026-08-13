@@ -8,6 +8,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
@@ -40,6 +41,30 @@ public class ProcurementPayable extends BaseEntity {
 
   @Column(name = "due_date", nullable = false)
   private LocalDate dueDate;
+
+  @Column(name = "paid_at")
+  private LocalDate paidAt;
+
+  @Column(name = "payment_note", length = 500)
+  private String paymentNote;
+
+  @Column(name = "payment_receipt_object_key", length = 255)
+  private String paymentReceiptObjectKey;
+
+  @Column(name = "payment_receipt_file_name", length = 255)
+  private String paymentReceiptFileName;
+
+  @Column(name = "payment_receipt_content_type", length = 120)
+  private String paymentReceiptContentType;
+
+  @Column(name = "payment_receipt_size_bytes")
+  private Long paymentReceiptSizeBytes;
+
+  @Column(name = "payment_receipt_uploaded_by", length = 80)
+  private String paymentReceiptUploadedBy;
+
+  @Column(name = "payment_receipt_uploaded_at")
+  private OffsetDateTime paymentReceiptUploadedAt;
 
   @Enumerated(EnumType.STRING)
   @Column(nullable = false, length = 32)
@@ -124,4 +149,21 @@ public class ProcurementPayable extends BaseEntity {
   public void setStatus(PayableStatus status) {
     this.status = status;
   }
+
+  public LocalDate getPaidAt() { return paidAt; }
+  public void setPaidAt(LocalDate paidAt) { this.paidAt = paidAt; }
+  public String getPaymentNote() { return paymentNote; }
+  public void setPaymentNote(String paymentNote) { this.paymentNote = paymentNote; }
+  public String getPaymentReceiptObjectKey() { return paymentReceiptObjectKey; }
+  public void setPaymentReceiptObjectKey(String key) { paymentReceiptObjectKey = key; }
+  public String getPaymentReceiptFileName() { return paymentReceiptFileName; }
+  public void setPaymentReceiptFileName(String name) { paymentReceiptFileName = name; }
+  public String getPaymentReceiptContentType() { return paymentReceiptContentType; }
+  public void setPaymentReceiptContentType(String type) { paymentReceiptContentType = type; }
+  public Long getPaymentReceiptSizeBytes() { return paymentReceiptSizeBytes; }
+  public void setPaymentReceiptSizeBytes(Long size) { paymentReceiptSizeBytes = size; }
+  public String getPaymentReceiptUploadedBy() { return paymentReceiptUploadedBy; }
+  public void setPaymentReceiptUploadedBy(String name) { paymentReceiptUploadedBy = name; }
+  public OffsetDateTime getPaymentReceiptUploadedAt() { return paymentReceiptUploadedAt; }
+  public void setPaymentReceiptUploadedAt(OffsetDateTime time) { paymentReceiptUploadedAt = time; }
 }

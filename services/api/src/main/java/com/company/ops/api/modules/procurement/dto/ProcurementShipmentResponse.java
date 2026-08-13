@@ -16,5 +16,8 @@ public record ProcurementShipmentResponse(
     String remark,
     String status,
     String createdByName,
-    OffsetDateTime createdAt
+    OffsetDateTime createdAt,
+    String reviewComment,
+    String reviewedBy,
+    OffsetDateTime reviewedAt
 ) {}

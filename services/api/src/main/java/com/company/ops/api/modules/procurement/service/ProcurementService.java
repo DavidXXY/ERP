@@ -30,6 +30,7 @@ import com.company.ops.api.modules.procurement.domain.ProcurementOrderDocument;
 import com.company.ops.api.modules.procurement.domain.ProcurementShipment;
 import com.company.ops.api.modules.procurement.domain.MaterialCategory;
 import com.company.ops.api.modules.procurement.domain.SupplierRiskStatus;
+import com.company.ops.api.modules.procurement.dto.ConfirmShipmentRequest;
 import com.company.ops.api.modules.procurement.dto.CreatePurchaseOrderRequest;
 import com.company.ops.api.modules.procurement.dto.CreatePurchaseRequestRequest;
 import com.company.ops.api.modules.procurement.dto.CreateSupplierRequest;
@@ -41,6 +42,7 @@ import com.company.ops.api.modules.procurement.dto.ProcessPurchaseRequestApprova
 import com.company.ops.api.modules.procurement.dto.ProcurementCostAllocationResponse;
 import com.company.ops.api.modules.procurement.dto.ProcurementCostTargetOptionResponse;
 import com.company.ops.api.modules.procurement.dto.ProcurementCostTargetOptionsResponse;
+import com.company.ops.api.modules.procurement.dto.ProcurementControlDtos.RecordPaymentRequest;
 import com.company.ops.api.modules.procurement.dto.ProcurementMatchingResponse;
 import com.company.ops.api.modules.procurement.dto.ProcurementPayableResponse;
 import com.company.ops.api.modules.procurement.dto.PurchaseOrderResponse;
@@ -122,6 +124,13 @@ public class ProcurementService {
       Set.of(".jpg", ".jpeg", ".png", ".webp", ".pdf", ".doc", ".docx", ".xls", ".xlsx"),
       "采购合同附件不能超过20MB",
       "仅支持图片、PDF、Word 和 Excel 文件",
+      true);
+
+  private static final FileStorageService.FilePolicy PAYMENT_RECEIPT_POLICY = new FileStorageService.FilePolicy(
+      10L * 1024 * 1024,
+      Set.of(".jpg", ".jpeg", ".png", ".webp", ".pdf"),
+      "付款回单附件不能超过10MB",
+      "仅支持图片和 PDF 文件",
       true);
 
   private final CodeGenerator codeGenerator;
@@ -951,6 +960,44 @@ public class ProcurementService {
         .map(item -> toShipmentResponse(item, supplier)).toList();
   }
 
+  @Transactional
+  public ProcurementShipmentResponse confirmShipment(
+      UUID orderId,
+      UUID shipmentId,
+      ConfirmShipmentRequest request
+  ) {
+    ProcurementShipment shipment = shipmentRepository.findById(shipmentId)
+        .orElseThrow(() -> new BusinessException("发货记录不存在"));
+    if (!shipment.getOrderId().equals(orderId)) {
+      throw new BusinessException("发货记录不属于该采购订单");
+    }
+    if (!"PENDING".equals(shipment.getStatus())) {
+      throw new BusinessException("该发货记录已处理，不能重复确认");
+    }
+    PurchaseOrder order = orderRepository.findById(orderId)
+        .orElseThrow(() -> new BusinessException("采购订单不存在"));
+    String comment = request.comment() == null ? null : request.comment().trim();
+    shipment.setStatus(request.action());
+    shipment.setReviewComment(comment);
+    shipment.setReviewedBy(currentName());
+    shipment.setReviewedAt(OffsetDateTime.now());
+    ProcurementShipment saved = shipmentRepository.save(shipment);
+    String deliveryNo = saved.getDeliveryNo() == null ? "—" : saved.getDeliveryNo();
+    if ("CONFIRMED".equals(request.action())) {
+      portalNotifier.notify(order.getSupplierId(), "SHIPMENT",
+          "发货已确认到货",
+          "采购订单 " + order.getCode() + " 的送货单 " + deliveryNo + " 已确认到货，感谢配合。",
+          "SHIPMENT", orderId);
+    } else {
+      portalNotifier.notify(order.getSupplierId(), "SHIPMENT",
+          "发货信息被退回",
+          "采购订单 " + order.getCode() + " 的送货单 " + deliveryNo + " 未确认"
+              + (comment == null || comment.isBlank() ? "。" : "，原因：" + comment),
+          "SHIPMENT", orderId);
+    }
+    return toShipmentResponse(saved, supplierRepository.findById(order.getSupplierId()).orElse(null));
+  }
+
   private ProcurementShipmentResponse toShipmentResponse(
       ProcurementShipment item,
       Supplier supplier
@@ -959,7 +1006,8 @@ public class ProcurementService {
         item.getId(), item.getOrderId(), null, item.getSupplierId(),
         supplier == null ? null : supplier.getName(),
         item.getDeliveryNo(), item.getCarrier(), item.getExpectedArrival(),
-        item.getRemark(), item.getStatus(), item.getCreatedBy(), item.getCreatedAt());
+        item.getRemark(), item.getStatus(), item.getCreatedBy(), item.getCreatedAt(),
+        item.getReviewComment(), item.getReviewedBy(), item.getReviewedAt());
   }
 
   @Transactional(readOnly = true)
@@ -1081,7 +1129,14 @@ public class ProcurementService {
       purchaseRequest.setStatus(PurchaseRequestStatus.RECEIVED);
       requestRepository.save(purchaseRequest);
     }
-    return toPurchaseOrderResponse(orderRepository.save(order), supplier, purchaseRequest);
+    PurchaseOrderResponse result = toPurchaseOrderResponse(orderRepository.save(order), supplier, purchaseRequest);
+    if (order.getSupplierId() != null) {
+      portalNotifier.notify(order.getSupplierId(), "ORDER",
+          "采购订单已关闭",
+          "采购订单 " + order.getCode() + " 已完成并关闭，如有未结事项请联系采购员。",
+          "ORDER", order.getId());
+    }
+    return result;
   }
 
   @Transactional
@@ -1181,6 +1236,69 @@ public class ProcurementService {
     return payables.stream()
         .map(item -> toPayableResponse(item, suppliers.get(item.getSupplierId()), orders.get(item.getOrderId())))
         .toList();
+  }
+
+  @Transactional
+  public ProcurementPayableResponse recordPayment(
+      UUID payableId,
+      RecordPaymentRequest request,
+      MultipartFile file
+  ) {
+    ProcurementPayable payable = payableRepository.findById(payableId)
+        .orElseThrow(() -> new BusinessException("应付单不存在"));
+    if (payable.getStatus() == PayableStatus.CANCELLED) {
+      throw new BusinessException("已取消的应付单不能登记付款");
+    }
+    BigDecimal outstanding = amount(payable.getAmount()).subtract(amount(payable.getPaidAmount()));
+    if (request.paidAmount() == null || request.paidAmount().signum() <= 0) {
+      throw new BusinessException("请填写大于零的付款金额");
+    }
+    if (request.paidAmount().compareTo(outstanding) > 0) {
+      throw new BusinessException("付款金额不能超过待付金额 " + outstanding.stripTrailingZeros().toPlainString());
+    }
+    FileStorageService.StoredFile stored = null;
+    try {
+      if (file != null && !file.isEmpty()) {
+        stored = storage.store(file, "payment-receipts", PAYMENT_RECEIPT_POLICY);
+        payable.setPaymentReceiptObjectKey(stored.objectKey());
+        payable.setPaymentReceiptFileName(stored.originalName());
+        payable.setPaymentReceiptContentType(stored.contentType());
+        payable.setPaymentReceiptSizeBytes(stored.sizeBytes());
+      }
+      payable.setPaidAmount(amount(payable.getPaidAmount()).add(request.paidAmount()));
+      payable.setPaidAt(request.paidAt());
+      payable.setPaymentNote(request.paymentNote() == null ? null : request.paymentNote().trim());
+      payable.setPaymentReceiptUploadedBy(currentName());
+      payable.setPaymentReceiptUploadedAt(OffsetDateTime.now());
+      BigDecimal totalPaid = amount(payable.getPaidAmount());
+      payable.setStatus(totalPaid.compareTo(payable.getAmount()) >= 0
+          ? PayableStatus.PAID : PayableStatus.PARTIAL_PAID);
+      ProcurementPayable saved = payableRepository.save(payable);
+      Supplier supplier = supplierRepository.findById(saved.getSupplierId()).orElse(null);
+      PurchaseOrder order = orderRepository.findById(saved.getOrderId()).orElse(null);
+      String receiptTip = file != null && !file.isEmpty()
+          ? "，付款回单附件可在门户财务页面下载。" : "。";
+      portalNotifier.notify(saved.getSupplierId(), "PAYABLE",
+          "付款已登记",
+          "应付单 " + saved.getCode() + " 已登记付款 "
+              + request.paidAmount().stripTrailingZeros().toPlainString() + " 元"
+              + receiptTip,
+          "PAYABLE", saved.getId());
+      return toPayableResponse(saved, supplier, order);
+    } catch (RuntimeException exception) {
+      if (stored != null) storage.delete(stored.relativePath());
+      throw exception;
+    }
+  }
+
+  @Transactional(readOnly = true)
+  public Resource loadPaymentReceipt(UUID payableId) {
+    ProcurementPayable payable = payableRepository.findById(payableId)
+        .orElseThrow(() -> new BusinessException("应付单不存在"));
+    if (payable.getPaymentReceiptObjectKey() == null) {
+      throw new BusinessException("该应付单尚未上传付款回单");
+    }
+    return storage.loadInNamespace("payment-receipts", payable.getPaymentReceiptObjectKey());
   }
 
   @Transactional(readOnly = true)
@@ -1438,7 +1556,10 @@ public class ProcurementService {
         order == null ? null : order.getCostTargetName(),
         receipt.getInspectionStatus(), receipt.getQualifiedQty(), receipt.getRejectedQty(),
         receipt.getInspectorName(), receipt.getInspectionComment(), receipt.getInspectedAt(),
-        receipt.getClientRequestId(), receipt.getAsnNo(), receipt.getCarrier()
+        receipt.getClientRequestId(), receipt.getAsnNo(), receipt.getCarrier(),
+        receipt.getAppealStatus(), receipt.getAppealReason(), receipt.getAppealedAt(),
+        receipt.getAppealResolution(), receipt.getAppealReviewComment(),
+        receipt.getAppealReviewedBy(), receipt.getAppealReviewedAt()
     );
   }
 
@@ -1461,6 +1582,13 @@ public class ProcurementService {
         amount(payable.getPaidAmount()),
         outstanding,
         payable.getDueDate(),
+        payable.getPaidAt(),
+        payable.getPaymentNote(),
+        payable.getPaymentReceiptFileName(),
+        payable.getPaymentReceiptContentType(),
+        payable.getPaymentReceiptSizeBytes(),
+        payable.getPaymentReceiptUploadedBy(),
+        payable.getPaymentReceiptUploadedAt(),
         order == null ? null : order.getCostType(),
         order == null ? null : costTargetId(
             order.getCostType(), order.getProjectId(), order.getDepartmentId()

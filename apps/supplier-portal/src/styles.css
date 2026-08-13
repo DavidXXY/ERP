@@ -4,6 +4,7 @@ html, body, #app { min-height: 100%; margin: 0; }
 body { min-width: 320px; background: #f4f7f5; }
 button, input, textarea { font: inherit; }
 .auth-shell { min-height: 100vh; display: grid; grid-template-columns: minmax(360px, 1.05fr) minmax(420px, .95fr); background: #f8faf9; }
+.auth-link-row { text-align: center; margin-top: 10px; }
 .auth-context { background: #12372a; color: white; padding: clamp(32px, 6vw, 88px); display: flex; flex-direction: column; justify-content: space-between; min-height: 100vh; }
 .brand-mark { font-size: 17px; font-weight: 700; display: flex; gap: 10px; align-items: center; }
 .auth-context h1 { font-size: clamp(38px, 4.2vw, 64px); line-height: 1.14; letter-spacing: 0; margin: 16px 0 22px; max-width: 700px; }
@@ -75,6 +76,10 @@ button, input, textarea { font: inherit; }
 .quote-deadline { background: #12372a; color: white; padding: 18px 22px; display: grid; grid-template-columns: 28px minmax(180px, 1fr) minmax(160px, .7fr); align-items: center; margin-bottom: 16px; } .quote-deadline div { display: flex; flex-direction: column; } .quote-deadline span { color: #bad0c7; }
 .quote-alert { margin-bottom: 16px; } .quote-section { margin-bottom: 16px; }
 .quote-table-wrap { overflow-x: auto; } .quote-table { border-collapse: collapse; width: 100%; min-width: 720px; } .quote-table th { color: #6e7a74; text-align: left; background: #f3f6f4; font-size: 12px; padding: 10px; } .quote-table td { border-bottom: 1px solid #e7ece9; padding: 12px 10px; } .quote-table td:first-child { min-width: 180px; } .quote-table td strong, .quote-table td small { display: block; } .quote-table td small { color: #7b8580; }
+.quote-save-state { color: #7b8580; font-size: 12px; }
+.paste-hint { margin: 0 0 8px; color: #7b8580; font-size: 12px; }
+.quote-table-wrap.pasteable { outline: 1px dashed transparent; }
+.quote-table-wrap.pasteable:focus-within { outline-color: #1677ff; }
 .quote-total { background: #12372a; color: white; padding: 20px 24px; display: flex; justify-content: space-between; align-items: center; } .quote-total span { display: flex; flex-direction: column; } .quote-total small { color: #bad0c7; } .quote-total strong { font-size: 25px; }
 .drawer-footer { display: flex; align-items: center; gap: 10px; width: 100%; } .footer-spacer { flex: 1; }
 @media (max-width: 1000px) { .metrics-grid { grid-template-columns: repeat(2, 1fr); } .dashboard-grid { grid-template-columns: 1fr; } .inquiry-card { grid-template-columns: minmax(0, 1fr) 220px; } .inquiry-action { grid-column: 1 / -1; } }
@@ -103,6 +108,11 @@ button, input, textarea { font: inherit; }
   border-radius: 10px;
   padding: 16px;
   background: #fafafa;
+  cursor: pointer;
+  transition: box-shadow 0.2s;
+}
+.performance-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 .performance-head {
   display: flex;
@@ -130,8 +140,52 @@ button, input, textarea { font: inherit; }
   font-size: 13px;
   color: #595959;
 }
+.link-btn {
+  border: none;
+  background: none;
+  color: #1677ff;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0;
+}
+.perf-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.perf-head small {
+  display: block;
+  color: #8c8c8c;
+  margin-top: 2px;
+}
+.perf-dim {
+  margin-bottom: 8px;
+}
+.perf-tip {
+  margin-top: 12px;
+}
+.timeline-title {
+  font-weight: 500;
+}
+.timeline-desc {
+  color: #595959;
+  font-size: 13px;
+}
+.timeline-time {
+  color: #8c8c8c;
+  font-size: 12px;
+}
 @media (max-width: 760px) {
   .performance-grid {
     grid-template-columns: 1fr;
+  }
+  .perf-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .perf-head .ant-tag {
+    align-self: flex-start;
   }
 }

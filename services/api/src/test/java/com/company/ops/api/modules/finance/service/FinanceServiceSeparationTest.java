@@ -21,6 +21,7 @@ import com.company.ops.api.modules.procurement.repository.ProcurementPayableRepo
 import com.company.ops.api.modules.procurement.repository.PurchaseOrderRepository;
 import com.company.ops.api.modules.procurement.repository.SupplierInvoiceRepository;
 import com.company.ops.api.modules.procurement.repository.SupplierRepository;
+import com.company.ops.api.modules.procurement.service.SupplierPortalNotifier;
 import com.company.ops.api.modules.system.security.UserPrincipal;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -48,6 +49,7 @@ class FinanceServiceSeparationTest {
   @Mock private PaymentRecordRepository payments;
   @Mock private SupplierInvoiceRepository invoices;
   @Mock private LedgerService ledger;
+  @Mock private SupplierPortalNotifier portalNotifier;
   @Mock private CodeGenerator codes;
   @InjectMocks private FinanceService service;
 

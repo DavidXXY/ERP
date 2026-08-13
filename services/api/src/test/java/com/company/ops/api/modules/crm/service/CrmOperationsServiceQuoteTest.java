@@ -46,6 +46,7 @@ import com.company.ops.api.modules.ledger.service.LedgerService;
 import com.company.ops.api.modules.project.domain.Project;
 import com.company.ops.api.modules.project.repository.ProjectRepository;
 import com.company.ops.api.modules.project.service.ProjectService;
+import com.company.ops.api.modules.qualification.repository.QualificationEmployeeRepository;
 import com.company.ops.api.modules.system.security.DataScopeService;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -100,6 +101,8 @@ class CrmOperationsServiceQuoteTest {
   private CodeGenerator codeGenerator;
   @Mock
   private DataScopeService dataScopeService;
+  @Mock
+  private QualificationEmployeeRepository qualificationEmployeeRepository;
 
   @InjectMocks
   private CrmOperationsService crmOperationsService;

@@ -35,6 +35,7 @@ import com.company.ops.api.modules.procurement.repository.ProcurementPayableRepo
 import com.company.ops.api.modules.procurement.repository.PurchaseOrderRepository;
 import com.company.ops.api.modules.procurement.repository.SupplierRepository;
 import com.company.ops.api.modules.procurement.repository.SupplierInvoiceRepository;
+import com.company.ops.api.modules.procurement.service.SupplierPortalNotifier;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
@@ -72,6 +73,7 @@ public class FinanceService {
   private final PaymentRecordRepository paymentRepository;
   private final SupplierInvoiceRepository supplierInvoiceRepository;
   private final LedgerService ledgerService;
+  private final SupplierPortalNotifier portalNotifier;
 
   public FinanceService(ReceivableRepository receivableRepository,
       CustomerRepository customerRepository,
@@ -83,6 +85,7 @@ public class FinanceService {
       PaymentRecordRepository paymentRepository,
       SupplierInvoiceRepository supplierInvoiceRepository,
       LedgerService ledgerService,
+      SupplierPortalNotifier portalNotifier,
                               CodeGenerator codeGenerator) {
     this.codeGenerator = codeGenerator;
     this.receivableRepository = receivableRepository;
@@ -95,6 +98,7 @@ public class FinanceService {
     this.paymentRepository = paymentRepository;
     this.supplierInvoiceRepository = supplierInvoiceRepository;
     this.ledgerService = ledgerService;
+    this.portalNotifier = portalNotifier;
   }
 
   @Transactional(readOnly = true)
@@ -307,6 +311,12 @@ public class FinanceService {
             new PostingLine("1002", "银行存款", BigDecimal.ZERO, savedPayment.getAmount(), request.bankReference())
         ));
     Supplier supplier = supplierRepository.findById(application.getSupplierId()).orElse(null);
+    portalNotifier.notify(application.getSupplierId(), "PAYABLE",
+        "货款已付款到账",
+        "应付单 " + payable.getCode() + " 已付款 "
+            + savedPayment.getAmount().stripTrailingZeros().toPlainString()
+            + "（付款单 " + savedPayment.getCode() + "），可在门户开票与对账页查看。",
+        "ORDER", payable.getOrderId());
     return toPaymentResponse(savedPayment, application, payable, supplier);
   }
 
@@ -338,6 +348,7 @@ public class FinanceService {
         receivable.getContractId(),
         contract == null ? receivable.getSourceNo() : contract.getCode(),
         contract == null ? "未关联合同" : contract.getProjectName(),
+        customer == null || customer.getOwnerName() == null ? "" : customer.getOwnerName(),
         receivable.getCode(),
         receivable.getSourceNo(),
         amount(receivable.getAmount()),

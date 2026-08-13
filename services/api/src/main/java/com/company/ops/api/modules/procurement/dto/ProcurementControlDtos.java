@@ -98,6 +98,16 @@ public final class ProcurementControlDtos {
       String comment
   ) {}
 
+  public record ReviewInvoiceSubmissionRequest(
+      @NotBlank String action,
+      @Size(max = 500) String comment
+  ) {}
+
+  public record ResolveAppealRequest(
+      @NotBlank String action,
+      @Size(max = 500) String comment
+  ) {}
+
   public record ResolveReturn(
       @PositiveOrZero BigDecimal replacementQty,
       @PositiveOrZero BigDecimal creditAmount,
@@ -105,5 +115,11 @@ public final class ProcurementControlDtos {
       String correctiveAction,
       String supplierResponse,
       @NotBlank String handlerName
+  ) {}
+
+  public record RecordPaymentRequest(
+      @NotNull @Positive BigDecimal paidAmount,
+      @NotNull LocalDate paidAt,
+      @Size(max = 500) String paymentNote
   ) {}
 }

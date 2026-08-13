@@ -56,7 +56,8 @@ public class SecurityConfig {
         .authorizeHttpRequests(auth -> auth
             .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
             .requestMatchers("/api/auth/login", "/api/auth/wechat/login", "/api/auth/wechat/bind").permitAll()
-            .requestMatchers("/api/supplier-portal/auth/register", "/api/supplier-portal/auth/login").permitAll()
+            .requestMatchers("/api/supplier-portal/auth/register", "/api/supplier-portal/auth/login",
+                "/api/supplier-portal/auth/forgot-password", "/api/supplier-portal/auth/reset-password").permitAll()
             .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
             .requestMatchers("/api-docs/**").permitAll()
             .requestMatchers("/qualification-files/**").authenticated()

@@ -51,7 +51,7 @@ public class SupplierPortalNotifier {
       notification.setRelatedId(relatedId);
       notification.setRead(false);
       notifications.save(notification);
-      emails.send(account.getEmail(), title, content);
+      emails.sendAsync(account.getEmail(), title, content);
     }
   }
 

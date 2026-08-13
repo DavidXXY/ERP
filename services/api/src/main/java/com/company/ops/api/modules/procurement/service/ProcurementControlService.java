@@ -1,6 +1,7 @@
 package com.company.ops.api.modules.procurement.service;
 
 import com.company.ops.api.common.exception.BusinessException;
+import com.company.ops.api.common.storage.FileStorageService;
 import com.company.ops.api.modules.inventory.domain.InventoryPart;
 import com.company.ops.api.modules.inventory.domain.StockMovement;
 import com.company.ops.api.modules.inventory.domain.StockMovementType;
@@ -13,6 +14,7 @@ import com.company.ops.api.modules.procurement.dto.ProcurementControlDtos.*;
 import com.company.ops.api.modules.procurement.dto.CreateConsolidatedInquiryRequest;
 import com.company.ops.api.modules.procurement.dto.ProcurementPurchasePoolResponse;
 import com.company.ops.api.modules.procurement.dto.ReceivePurchaseOrderRequest;
+import com.company.ops.api.modules.procurement.dto.SupplierPortalDtos.InvoiceSubmissionResponse;
 import com.company.ops.api.modules.procurement.repository.*;
 import com.company.ops.api.modules.project.domain.Project;
 import com.company.ops.api.modules.project.repository.ProjectRepository;
@@ -35,6 +37,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.stream.Collectors;
+import org.springframework.core.io.Resource;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -56,6 +59,8 @@ public class ProcurementControlService {
   private final ProcurementCostAllocationRepository costs;
   private final ProcurementReturnOrderRepository returns;
   private final SupplierInvoiceRepository invoices;
+  private final SupplierInvoiceSubmissionRepository invoiceSubmissions;
+  private final FileStorageService storage;
   private final PurchaseRequestApprovalRecordRepository requestApprovals;
   private final ProjectRepository projects;
   private final ProcurementArrivalService arrivals;
@@ -79,6 +84,8 @@ public class ProcurementControlService {
       ProcurementCostAllocationRepository costs,
       ProcurementReturnOrderRepository returns,
       SupplierInvoiceRepository invoices,
+      SupplierInvoiceSubmissionRepository invoiceSubmissions,
+      FileStorageService storage,
       PurchaseRequestApprovalRecordRepository requestApprovals,
       ProjectRepository projects,
       ProcurementArrivalService arrivals,
@@ -101,6 +108,8 @@ public class ProcurementControlService {
     this.costs = costs;
     this.returns = returns;
     this.invoices = invoices;
+    this.invoiceSubmissions = invoiceSubmissions;
+    this.storage = storage;
     this.requestApprovals = requestApprovals;
     this.projects = projects;
     this.arrivals = arrivals;
@@ -630,6 +639,14 @@ public class ProcurementControlService {
       returnOrder.setStatus("OPEN");
       returns.save(returnOrder);
     }
+    String inspectionLabel = "PASSED".equals(receipt.getInspectionStatus()) ? "合格"
+        : "REJECTED".equals(receipt.getInspectionStatus()) ? "不合格" : "部分合格";
+    portalNotifier.notify(order.getSupplierId(), "INSPECTION",
+        "质检结果：" + inspectionLabel,
+        "到货单 " + receipt.getCode() + " 质检" + inspectionLabel
+            + "（合格 " + plainQty(receipt.getQualifiedQty())
+            + " / 不合格 " + plainQty(receipt.getRejectedQty()) + "），可在门户查看并发起申诉。",
+        "ORDER", order.getId());
     Map<String, Object> result = new LinkedHashMap<>();
     result.put("receipt", receipt);
     result.put("order", order);
@@ -742,7 +759,13 @@ public class ProcurementControlService {
     invoice.setClientRequestId(request.clientRequestId());
     invoice.setAttachmentDocumentId(request.attachmentDocumentId());
     invoice.setRemark(request.remark());
-    return invoices.save(invoice);
+    SupplierInvoice saved = invoices.save(invoice);
+    portalNotifier.notify(order.getSupplierId(), "INVOICE",
+        "采购方已登记发票",
+        "订单 " + order.getCode() + " 已登记发票 " + saved.getInvoiceNo()
+            + "（金额 " + saved.getAmount().stripTrailingZeros().toPlainString() + "），可在门户开票与对账页查看。",
+        "ORDER", order.getId());
+    return saved;
   }
 
   @Transactional
@@ -776,12 +799,208 @@ public class ProcurementControlService {
               new PostingLine("2202", "应付账款", BigDecimal.ZERO, saved.getAmount(), saved.getCode())
           ));
     }
+    portalNotifier.notify(saved.getSupplierId(), "INVOICE",
+        "发票审核" + ("APPROVED".equals(decision) ? "通过" : "驳回"),
+        "发票 " + saved.getInvoiceNo() + " 已" + ("APPROVED".equals(decision) ? "审核通过并入账。" : "审核驳回，请在门户查看原因。"),
+        "ORDER", saved.getOrderId() == null ? null : saved.getOrderId());
     return saved;
   }
 
   @Transactional(readOnly = true)
   public List<SupplierInvoice> listInvoices() {
     return invoices.findAllByOrderByInvoiceDateDesc();
+  }
+
+
+  @Transactional(readOnly = true)
+  public List<InvoiceSubmissionResponse> listInvoiceSubmissions(String status) {
+    List<SupplierInvoiceSubmission> items = isBlank(status)
+        ? invoiceSubmissions.findAllByOrderByCreatedAtDesc()
+        : invoiceSubmissions.findByStatusOrderByCreatedAtDesc(status);
+    return items.stream()
+        .map(item -> invoiceSubmissionView(item,
+            orderCode(item.getOrderId()), supplierName(item.getSupplierId())))
+        .toList();
+  }
+
+  @Transactional(readOnly = true)
+  public InvoiceSubmissionResponse invoiceSubmission(UUID id) {
+    SupplierInvoiceSubmission submission = invoiceSubmissions.findById(id)
+        .orElseThrow(() -> new BusinessException("开票资料不存在"));
+    return invoiceSubmissionView(submission,
+        orderCode(submission.getOrderId()), supplierName(submission.getSupplierId()));
+  }
+
+  @Transactional(readOnly = true)
+  public Resource loadInvoiceSubmissionFile(UUID id) {
+    SupplierInvoiceSubmission submission = invoiceSubmissions.findById(id)
+        .orElseThrow(() -> new BusinessException("开票资料不存在"));
+    return storage.loadInNamespace("supplier-invoices", submission.getObjectKey());
+  }
+
+  @Transactional
+  public InvoiceSubmissionResponse reviewInvoiceSubmission(
+      UUID id,
+      ReviewInvoiceSubmissionRequest request
+  ) {
+    SupplierInvoiceSubmission submission = invoiceSubmissions.findById(id)
+        .orElseThrow(() -> new BusinessException("开票资料不存在"));
+    if (!"PENDING".equals(submission.getStatus())) {
+      throw new BusinessException("该开票资料已审核");
+    }
+    String action = request.action().toUpperCase();
+    if (!"APPROVED".equals(action) && !"REJECTED".equals(action)) {
+      throw new BusinessException("审核结果只能为 APPROVED 或 REJECTED");
+    }
+    if ("APPROVED".equals(action)) {
+      if (invoices.existsByInvoiceNo(submission.getInvoiceNo())) {
+        throw new BusinessException("发票号码 " + submission.getInvoiceNo() + " 已登记，无法审核通过");
+      }
+      CreateInvoice createRequest = new CreateInvoice(
+          submission.getOrderId(),
+          submission.getInvoiceNo(),
+          submission.getAmount(),
+          submission.getTaxRate(),
+          submission.getInvoiceDate(),
+          submission.getRemark(),
+          null,
+          null,
+          "SUBMISSION:" + submission.getId(),
+          null);
+      createInvoice(createRequest);
+      submission.setStatus("APPROVED");
+      submission.setReviewComment(request.comment());
+      submission.setReviewedBy(currentName());
+      submission.setReviewedAt(OffsetDateTime.now());
+      invoiceSubmissions.save(submission);
+      return invoiceSubmissionView(submission,
+          orderCode(submission.getOrderId()), supplierName(submission.getSupplierId()));
+    }
+    submission.setStatus("REJECTED");
+    submission.setReviewComment(request.comment());
+    submission.setReviewedBy(currentName());
+    submission.setReviewedAt(OffsetDateTime.now());
+    invoiceSubmissions.save(submission);
+    portalNotifier.notify(submission.getSupplierId(), "INVOICE",
+        "开票资料被退回",
+        "您提交的发票 " + submission.getInvoiceNo() + " 未通过审核："
+            + (isBlank(request.comment()) ? "请登录门户查看详情" : request.comment()),
+        "ORDER", submission.getOrderId());
+    return invoiceSubmissionView(submission,
+        orderCode(submission.getOrderId()), supplierName(submission.getSupplierId()));
+  }
+
+  @Transactional(readOnly = true)
+  public List<Map<String, Object>> listAppeals(String status) {
+    List<GoodsReceipt> items = isBlank(status)
+        ? receipts.findAllByAppealStatusNotOrderByAppealedAtDesc("NONE")
+        : receipts.findByAppealStatusOrderByAppealedAtDesc(status);
+    return items.stream()
+        .map(item -> {
+          PurchaseOrder order = orders.findById(item.getOrderId()).orElse(null);
+          return appealView(item, order,
+              order == null || order.getSupplierId() == null ? null
+                  : suppliers.findById(order.getSupplierId()).orElse(null));
+        })
+        .toList();
+  }
+
+  @Transactional
+  public Map<String, Object> resolveAppeal(UUID receiptId, ResolveAppealRequest request) {
+    GoodsReceipt receipt = receipts.findById(receiptId)
+        .orElseThrow(() -> new BusinessException("到货记录不存在"));
+    if (!"PENDING".equals(receipt.getAppealStatus())) {
+      throw new BusinessException("该申诉已处理");
+    }
+    String action = request.action().toUpperCase();
+    if (!"DISMISSED".equals(action) && !"REOPEN".equals(action)) {
+      throw new BusinessException("处理结果只能为 DISMISSED 或 REOPEN");
+    }
+    PurchaseOrder order = orders.findById(receipt.getOrderId())
+        .orElseThrow(() -> new BusinessException("采购订单不存在"));
+    if ("REOPEN".equals(action)) {
+      receipt.setInspectionStatus("PENDING");
+      receipt.setQualifiedQty(null);
+      receipt.setRejectedQty(BigDecimal.ZERO);
+      receipt.setInspectorName(null);
+      receipt.setInspectionComment(null);
+      receipt.setInspectedAt(null);
+      receipt.setAppealStatus("REOPENED");
+      receipt.setAppealResolution("REOPENED");
+      receipt.setAppealReviewComment(request.comment());
+      receipt.setAppealReviewedBy(currentName());
+      receipt.setAppealReviewedAt(OffsetDateTime.now());
+      receipts.save(receipt);
+      portalNotifier.notify(order.getSupplierId(), "INSPECTION",
+          "质检申诉已受理",
+          "订单 " + order.getCode() + " 的质检申诉已受理，收货记录将重新质检，请在门户查看最新结果。"
+              + (isBlank(request.comment()) ? "" : "采购方说明：" + request.comment()),
+          "ORDER", order.getId());
+      return appealView(receipt, order, suppliers.findById(order.getSupplierId()).orElse(null));
+    }
+    receipt.setAppealStatus("DISMISSED");
+    receipt.setAppealResolution("DISMISSED");
+    receipt.setAppealReviewComment(request.comment());
+    receipt.setAppealReviewedBy(currentName());
+    receipt.setAppealReviewedAt(OffsetDateTime.now());
+    receipts.save(receipt);
+    portalNotifier.notify(order.getSupplierId(), "INSPECTION",
+        "质检申诉未成立",
+        "订单 " + order.getCode() + " 的质检申诉未成立，维持原质检结果。"
+            + (isBlank(request.comment()) ? "" : "采购方意见：" + request.comment()),
+        "ORDER", order.getId());
+    return appealView(receipt, order, suppliers.findById(order.getSupplierId()).orElse(null));
+  }
+
+  private Map<String, Object> appealView(GoodsReceipt receipt, PurchaseOrder order, Supplier supplier) {
+    Map<String, Object> view = new LinkedHashMap<>();
+    view.put("id", receipt.getId());
+    view.put("code", receipt.getCode());
+    view.put("orderId", receipt.getOrderId());
+    view.put("orderCode", order == null ? null : order.getCode());
+    view.put("supplierId", order == null ? null : order.getSupplierId());
+    view.put("supplierName", supplier == null ? null : supplier.getName());
+    view.put("partName", order == null ? null : order.getPartName());
+    view.put("quantity", receipt.getQuantity());
+    view.put("qualifiedQty", receipt.getQualifiedQty());
+    view.put("rejectedQty", receipt.getRejectedQty());
+    view.put("inspectionStatus", receipt.getInspectionStatus());
+    view.put("inspectorName", receipt.getInspectorName());
+    view.put("inspectionComment", receipt.getInspectionComment());
+    view.put("inspectedAt", receipt.getInspectedAt());
+    view.put("appealStatus", receipt.getAppealStatus());
+    view.put("appealReason", receipt.getAppealReason());
+    view.put("appealedAt", receipt.getAppealedAt());
+    view.put("appealResolution", receipt.getAppealResolution());
+    view.put("appealReviewComment", receipt.getAppealReviewComment());
+    view.put("appealReviewedBy", receipt.getAppealReviewedBy());
+    view.put("appealReviewedAt", receipt.getAppealReviewedAt());
+    view.put("receivedDate", receipt.getReceivedDate());
+    return view;
+  }
+
+  private String orderCode(UUID orderId) {
+    return orderId == null ? null
+        : orders.findById(orderId).map(PurchaseOrder::getCode).orElse(null);
+  }
+
+  private String supplierName(UUID supplierId) {
+    return supplierId == null ? null
+        : suppliers.findById(supplierId).map(Supplier::getName).orElse(null);
+  }
+
+  private InvoiceSubmissionResponse invoiceSubmissionView(
+      SupplierInvoiceSubmission item,
+      String orderCode,
+      String supplierName
+  ) {
+    return new InvoiceSubmissionResponse(
+        item.getId(), item.getOrderId(), orderCode, supplierName,
+        item.getInvoiceNo(), item.getAmount(), item.getTaxRate(),
+        item.getInvoiceDate(), item.getRemark(), item.getFileName(),
+        item.getContentType(), item.getSizeBytes(), item.getStatus(),
+        item.getReviewComment(), item.getReviewedBy(), item.getReviewedAt(),
+        item.getCreatedAt());
   }
 
   private void postQualifiedReceipt(PurchaseOrder order, GoodsReceipt receipt, InspectReceipt request) {
@@ -825,6 +1044,12 @@ public class ProcurementControlService {
     payable.setDueDate(request.payableDueDate());
     payable.setStatus(PayableStatus.PENDING);
     payables.save(payable);
+    portalNotifier.notify(order.getSupplierId(), "PAYABLE",
+        "应付单已生成",
+        "订单 " + order.getCode() + " 合格入库 " + receipt.getCode()
+            + "，应付金额 " + amount.stripTrailingZeros().toPlainString()
+            + "（到期日 " + (request.payableDueDate() == null ? "未设置" : request.payableDueDate()) + "），可在门户对账查看。",
+        "ORDER", order.getId());
 
     ProcurementCostAllocation cost = new ProcurementCostAllocation();
     cost.setOrderId(order.getId());
@@ -1098,6 +1323,10 @@ public class ProcurementControlService {
 
   private static BigDecimal valueOr(BigDecimal value, BigDecimal fallback) {
     return value == null ? fallback : value;
+  }
+
+  private static String plainQty(BigDecimal value) {
+    return value == null ? "0" : value.stripTrailingZeros().toPlainString();
   }
 
   private static String defaultText(String value, String fallback) {

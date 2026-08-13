@@ -18,4 +18,10 @@ public interface GoodsReceiptRepository extends JpaRepository<GoodsReceipt, UUID
 
   @Query("select r.orderId, max(r.receivedDate) from GoodsReceipt r group by r.orderId")
   List<Object[]> findLatestReceivedDateByOrder();
+
+  List<GoodsReceipt> findByAppealStatusOrderByAppealedAtDesc(String appealStatus);
+
+  List<GoodsReceipt> findAllByAppealStatusNotOrderByAppealedAtDesc(String appealStatus);
+
+  long countByAppealStatus(String appealStatus);
 }

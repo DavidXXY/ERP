@@ -35,6 +35,24 @@
           :options="riskOptions"
           style="width: 150px"
         />
+        <a-select
+          v-model:value="salesFilter"
+          allow-clear
+          show-search
+          option-filter-prop="label"
+          placeholder="全部销售人员"
+          :options="salesOptions"
+          style="width: 170px"
+        />
+        <a-select
+          v-model:value="departmentFilter"
+          allow-clear
+          show-search
+          option-filter-prop="label"
+          placeholder="全部部门"
+          :options="departmentOptions"
+          style="width: 150px"
+        />
         <a-tag color="blue">当前 {{ filteredRenewals.length }} 份</a-tag>
       </a-space>
 
@@ -100,20 +118,38 @@ import { message } from "ant-design-vue";
 import { useRouter } from "vue-router";
 import { listRenewals, type Renewal } from "@/api/crm";
 import { useAuthStore } from "@/stores/auth";
+import { loadOwnerDepartmentMap, ownerDepartment } from "./crm-department";
 import { formatMoney } from "./crm-options";
 
 const renewals = ref<Renewal[]>([]);
 const auth = useAuthStore();
 const router = useRouter();
+const departmentMap = ref<Map<string, string>>(new Map());
 const loading = ref(false);
 const keyword = ref("");
 const riskFilter = ref<Renewal["renewalRisk"]>();
+const salesFilter = ref<string>();
+const departmentFilter = ref<string>();
 const riskOptions = [
   { label: "已到期", value: "EXPIRED" },
   { label: "高风险", value: "HIGH" },
   { label: "需跟进", value: "MEDIUM" },
   { label: "低风险", value: "LOW" },
 ];
+const salesOptions = computed(() => {
+  const names = new Set<string>();
+  renewals.value.forEach((item) => {
+    if (item.salesOwnerName) names.add(item.salesOwnerName);
+  });
+  return Array.from(names)
+    .sort((a, b) => a.localeCompare(b, "zh-CN"))
+    .map((name) => ({ label: name, value: name }));
+});
+const departmentOptions = computed(() =>
+  Array.from(new Set(departmentMap.value.values()))
+    .sort((a, b) => a.localeCompare(b, "zh-CN"))
+    .map((name) => ({ label: name, value: name })),
+);
 const columns = [
   { title: "合同 / 客户", key: "contract", width: 230 },
   { title: "合同项目", key: "project", width: 280 },
@@ -130,6 +166,10 @@ const filteredRenewals = computed(() => {
       `${item.contractCode} ${item.projectName} ${item.customerName}`.toLowerCase();
     return (
       (!riskFilter.value || item.renewalRisk === riskFilter.value) &&
+      (!salesFilter.value || item.salesOwnerName === salesFilter.value) &&
+      (!departmentFilter.value ||
+        ownerDepartment(item.salesOwnerName, departmentMap.value) ===
+          departmentFilter.value) &&
       (!term || text.includes(term))
     );
   });
@@ -155,7 +195,12 @@ onMounted(loadData);
 async function loadData() {
   loading.value = true;
   try {
-    renewals.value = await listRenewals();
+    const [rows, deptMap] = await Promise.all([
+      listRenewals(),
+      loadOwnerDepartmentMap(),
+    ]);
+    renewals.value = rows;
+    departmentMap.value = deptMap;
   } catch (error) {
     message.error(error instanceof Error ? error.message : "续约清单加载失败");
   } finally {

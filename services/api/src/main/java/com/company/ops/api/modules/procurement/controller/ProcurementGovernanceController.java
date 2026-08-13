@@ -85,6 +85,21 @@ public class ProcurementGovernanceController {
     return ApiResponse.ok(service.calculateReview(request));
   }
 
+  @GetMapping("/supplier-reviews/appeals")
+  @PreAuthorize("hasAuthority('procurement:view')")
+  public ApiResponse<List<SupplierPerformanceReview>> reviewAppeals(
+      @RequestParam(required = false) String status) {
+    return ApiResponse.ok(service.listReviewAppeals(status));
+  }
+
+  @PostMapping("/supplier-reviews/{id}/appeal/resolve")
+  @PreAuthorize("hasAuthority('procurement:order:receive')")
+  public ApiResponse<SupplierPerformanceReview> resolvePerformanceAppeal(
+      @PathVariable UUID id,
+      @Valid @RequestBody ResolvePerformanceAppealRequest request) {
+    return ApiResponse.ok(service.resolvePerformanceAppeal(id, request));
+  }
+
   @GetMapping("/collaboration-events")
   @PreAuthorize("hasAuthority('procurement:view')")
   public ApiResponse<List<ProcurementCollaborationEvent>> collaborationEvents() {

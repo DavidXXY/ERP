@@ -53,6 +53,24 @@
         /></a-col>
       </a-row>
 
+      <div class="portal-collab-bar" :class="{ 'is-empty': collabTotal === 0 }">
+        <span class="portal-collab-title"
+          ><TeamOutlined /> 门户协同待办</span
+        >
+        <template v-if="collabItems.length > 0">
+          <a-tag
+            v-for="item in collabItems"
+            :key="item.label"
+            :color="item.color"
+            class="collab-tag"
+            @click="router.push(item.to)"
+          >
+            {{ item.label }} {{ item.count }}
+          </a-tag>
+        </template>
+        <span v-else class="collab-empty">暂无门户协同待办</span>
+      </div>
+
       <a-tabs :active-key="activeTab" @update:activeKey="handleTabChange">
         <a-tab-pane key="requests" tab="采购申请">
           <div class="table-toolbar">
@@ -536,6 +554,25 @@
                 }}</a-tag>
                 <a-tag v-if="isOverdue(record)" color="red">已逾期</a-tag>
               </template>
+              <template v-else-if="column.key === 'actions'">
+                <a-space>
+                  <a-button
+                    v-if="
+                      record.status !== 'CANCELLED' &&
+                      record.outstandingAmount > 0
+                    "
+                    type="link"
+                    @click="openPayment(record)"
+                    >登记付款</a-button
+                  >
+                  <a
+                    v-if="record.paymentReceiptFileName"
+                    class="download-link"
+                    @click.prevent="downloadReceipt(record)"
+                    >回单</a
+                  >
+                </a-space>
+              </template>
             </template>
             <template #emptyText>采购收货后，应付单会自动生成</template>
           </a-table>
@@ -967,6 +1004,76 @@
         </a-row>
       </a-form>
     </a-modal>
+
+    <a-modal
+      v-model:open="paymentOpen"
+      title="登记付款"
+      width="640px"
+      :confirm-loading="savingPayment"
+      @ok="handleRecordPayment"
+    >
+      <a-alert
+        v-if="paymentTarget"
+        class="section-alert"
+        type="info"
+        :message="`${paymentTarget.code} · ${paymentTarget.supplierName} · 应付 ${formatMoney(paymentTarget.amount)} · 待付 ${formatMoney(paymentTarget.outstandingAmount)}`"
+      />
+      <a-form
+        ref="paymentFormRef"
+        :model="paymentForm"
+        :rules="paymentRules"
+        layout="vertical"
+      >
+        <a-row :gutter="16">
+          <a-col :xs="24" :md="12"
+            ><a-form-item label="本次付款金额" name="paidAmount"
+              ><a-input-number
+                v-model:value="paymentForm.paidAmount"
+                :min="0.01"
+                :max="paymentTarget?.outstandingAmount"
+                :precision="2"
+                class="full-input" /></a-form-item
+          ></a-col>
+          <a-col :xs="24" :md="12"
+            ><a-form-item label="付款日期" name="paidAt"
+              ><a-input
+                v-model:value="paymentForm.paidAt"
+                type="date" /></a-form-item
+          ></a-col>
+          <a-col :xs="24"
+            ><a-form-item label="付款说明"
+              ><a-input
+                v-model:value="paymentForm.paymentNote"
+                placeholder="选填，例如银行转账、承兑汇票等" /></a-form-item
+          ></a-col>
+          <a-col :xs="24"
+            ><a-form-item label="付款回单附件（选填，供应商可在门户下载）">
+              <a-upload
+                :before-upload="handleReceiptFile"
+                :show-upload-list="false"
+                :accept="'image/*,.pdf'"
+              >
+                <a-button>
+                  <template #icon><UploadOutlined /></template>
+                  {{
+                    paymentReceiptFile
+                      ? paymentReceiptFile.name
+                      : "选择回单文件"
+                  }}
+                </a-button>
+              </a-upload>
+              <a-button
+                v-if="paymentReceiptFile"
+                class="download-link"
+                type="link"
+                @click="paymentReceiptFile = undefined"
+                >移除</a-button
+              >
+            </a-form-item>
+          </a-col>
+        </a-row>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
@@ -977,12 +1084,16 @@ import { useRoute, useRouter } from "vue-router";
 import PlusOutlined from "@ant-design/icons-vue/PlusOutlined";
 import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
 import ShoppingCartOutlined from "@ant-design/icons-vue/ShoppingCartOutlined";
+import TeamOutlined from "@ant-design/icons-vue/TeamOutlined";
+import UploadOutlined from "@ant-design/icons-vue/UploadOutlined";
 import {
+  getPortalCollaborationSummary,
   cancelPurchaseOrder,
   approvePurchaseOrder,
   createPurchaseOrder,
   createPurchaseRequest,
   createSupplier,
+  downloadPaymentReceipt,
   listGoodsReceipts,
   listProcurementCostAllocations,
   listProcurementCostTargets,
@@ -995,6 +1106,7 @@ import {
   listSuppliers,
   listSupplierCategories,
   processPurchaseRequestApproval,
+  recordPayablePayment,
   updatePurchaseRequest,
   registerPurchaseArrival,
   submitPurchaseOrder,
@@ -1041,6 +1153,37 @@ type ReceiptForm = {
 
 const auth = useAuthStore();
 const activeTab = ref("requests");
+const collab = ref<{
+  pendingAccounts: number;
+  pendingAdmissions: number;
+  pendingDocuments: number;
+  pendingQuoteConfirmations: number;
+  pendingChangeResponses: number;
+  pendingChangeDecisions: number;
+  pendingInvoiceSubmissions: number;
+  pendingAppeals: number;
+  pendingSupplierChanges: number;
+  pendingPerformanceAppeals: number;
+} | null>(null);
+const collabItems = computed(() => {
+  const data = collab.value;
+  if (!data) return [];
+  return [
+    { label: "门户账号待审", count: data.pendingAccounts, to: "/procurement/suppliers", color: "orange" },
+    { label: "准入待审", count: data.pendingAdmissions, to: "/procurement/suppliers", color: "orange" },
+    { label: "资质文件待审", count: data.pendingDocuments, to: "/procurement/suppliers", color: "orange" },
+    { label: "报价待供应商确认", count: data.pendingQuoteConfirmations, to: "/procurement/inquiries", color: "blue" },
+    { label: "变更待供应商响应", count: data.pendingChangeResponses, to: "/procurement/orders", color: "blue" },
+    { label: "变更待采购决策", count: data.pendingChangeDecisions, to: "/procurement/orders", color: "geekblue" },
+    { label: "开票资料待审", count: data.pendingInvoiceSubmissions, to: "/procurement/invoices", color: "purple" },
+    { label: "质检申诉待处理", count: data.pendingAppeals, to: "/procurement/receipts", color: "red" },
+    { label: "供应商变更待审", count: data.pendingSupplierChanges, to: "/procurement/suppliers", color: "orange" },
+    { label: "绩效申诉待处理", count: data.pendingPerformanceAppeals, to: "/procurement/suppliers", color: "red" },
+  ].filter((item) => item.count > 0);
+});
+const collabTotal = computed(() =>
+  collabItems.value.reduce((sum, item) => sum + item.count, 0),
+);
 function handleExportRequests() {
   const headers = [
     "申请编号",
@@ -1161,13 +1304,18 @@ const savingRequest = ref(false);
 const savingApproval = ref(false);
 const savingOrder = ref(false);
 const savingReceipt = ref(false);
+const savingPayment = ref(false);
 const supplierFormRef = ref();
 const requestFormRef = ref();
 const approvalFormRef = ref();
 const orderFormRef = ref();
 const receiptFormRef = ref();
+const paymentFormRef = ref();
 const selectedRequest = ref<PurchaseRequest | null>(null);
 const selectedOrder = ref<PurchaseOrder | null>(null);
+const paymentTarget = ref<ProcurementPayable | null>(null);
+const paymentOpen = ref(false);
+const paymentReceiptFile = ref<File>();
 const supplierForm = reactive<CreateSupplierPayload>(initialSupplierForm());
 const supplierCategories = ref<SupplierCategory[]>([]);
 const requestForm =
@@ -1175,6 +1323,11 @@ const requestForm =
 const approvalForm = reactive<ApprovalForm>(initialApprovalForm());
 const orderForm = reactive<CreatePurchaseOrderPayload>(initialOrderForm());
 const receiptForm = reactive<ReceiptForm>(initialReceiptForm());
+const paymentForm = reactive<{
+  paidAmount: number;
+  paidAt: string;
+  paymentNote: string;
+}>({ paidAmount: 0, paidAt: addDays(0), paymentNote: "" });
 
 // Filter options
 const requestStatusOptions = [
@@ -1262,6 +1415,7 @@ const payableColumns = [
   },
   { title: "到期日", dataIndex: "dueDate", width: 120 },
   { title: "状态", key: "status", width: 160 },
+  { title: "操作", key: "actions", width: 160, fixed: "right" },
 ];
 const supplierColumns = [
   { title: "供应商", key: "name", width: 300 },
@@ -1317,6 +1471,10 @@ const receiptRules = {
   payableDueDate: [{ required: true, message: "请选择应付到期日" }],
   deliveryNo: [{ required: true, message: "请输入送货单号" }],
   receiverName: [{ required: true, message: "请输入收货人" }],
+};
+const paymentRules = {
+  paidAmount: [{ required: true, message: "请输入付款金额" }],
+  paidAt: [{ required: true, message: "请选择付款日期" }],
 };
 
 const pendingApprovalCount = computed(
@@ -1448,6 +1606,7 @@ async function loadData() {
       allocationData,
       inquiryData,
       categoryData,
+      collabData,
     ] = await Promise.all([
       listSuppliers(),
       listPurchaseRequests(),
@@ -1461,6 +1620,9 @@ async function loadData() {
       listProcurementCostAllocations(),
       listProcurementInquiries(),
       listSupplierCategories(),
+      auth.can("procurement:view")
+        ? getPortalCollaborationSummary().catch(() => null)
+        : Promise.resolve(null),
     ]);
     suppliers.value = supplierData.content || supplierData;
     purchaseRequests.value = requestData.content || requestData;
@@ -1472,6 +1634,7 @@ async function loadData() {
     costAllocations.value = allocationData;
     procurementInquiries.value = inquiryData;
     supplierCategories.value = categoryData;
+    collab.value = collabData;
   } catch (error) {
     errorMessage.value =
       error instanceof Error ? error.message : "采购数据加载失败";
@@ -1767,6 +1930,50 @@ async function handleReceive() {
   }
 }
 
+function openPayment(record: ProcurementPayable) {
+  paymentTarget.value = record;
+  Object.assign(paymentForm, {
+    paidAmount: Number(record.outstandingAmount),
+    paidAt: addDays(0),
+    paymentNote: "",
+  });
+  paymentReceiptFile.value = undefined;
+  paymentOpen.value = true;
+}
+
+function handleReceiptFile(file: File) {
+  paymentReceiptFile.value = file;
+  return false;
+}
+
+async function handleRecordPayment() {
+  if (!paymentTarget.value) return;
+  await paymentFormRef.value?.validate();
+  savingPayment.value = true;
+  try {
+    await recordPayablePayment(
+      paymentTarget.value.id,
+      {
+        paidAmount: Number(paymentForm.paidAmount),
+        paidAt: paymentForm.paidAt,
+        paymentNote: paymentForm.paymentNote.trim() || undefined,
+      },
+      paymentReceiptFile.value,
+    );
+    paymentOpen.value = false;
+    message.success("付款已登记，供应商门户可查看付款进度与回单");
+    await loadData();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "付款登记失败");
+  } finally {
+    savingPayment.value = false;
+  }
+}
+
+function downloadReceipt(record: ProcurementPayable) {
+  downloadPaymentReceipt(record);
+}
+
 function initialSupplierForm(): CreateSupplierPayload {
   return {
     code: "",
@@ -1985,3 +2192,36 @@ function payableColor(status: PayableStatus) {
 function handleOrderFilter() {}
 function handleOrderPageChange() {}
 </script>
+
+<style scoped>
+.portal-collab-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  border: 1px solid #d9d9d9;
+  border-radius: 8px;
+  background: #fafafa;
+}
+.portal-collab-bar.is-empty {
+  display: none;
+}
+.portal-collab-title {
+  color: #595959;
+  font-weight: 600;
+  margin-right: 4px;
+}
+.collab-tag {
+  cursor: pointer;
+  user-select: none;
+}
+.collab-tag:hover {
+  filter: brightness(0.92);
+}
+.collab-empty {
+  color: #8c8c8c;
+  font-size: 13px;
+}
+</style>

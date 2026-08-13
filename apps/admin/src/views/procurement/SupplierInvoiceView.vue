@@ -1,5 +1,82 @@
 <template>
   <div class="page-stack">
+    <a-card title="供应商开票资料" class="submission-card">
+      <template #extra>
+        <a-button :loading="loading" @click="load">刷新</a-button>
+      </template>
+
+      <a-space class="table-toolbar">
+        <a-segmented
+          v-model:value="submissionFilter"
+          :options="submissionFilterOptions"
+        />
+        <span class="table-count">
+          {{ filteredSubmissions.length }} 条
+        </span>
+      </a-space>
+
+      <a-table
+        :data-source="filteredSubmissions"
+        :columns="submissionColumns"
+        row-key="id"
+        :loading="loading"
+        :pagination="{ pageSize: 10 }"
+        :scroll="{ x: 1050 }"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'submission'">
+            <strong>{{ record.invoiceNo }}</strong>
+            <span class="table-subtitle">{{ record.fileName }}</span>
+          </template>
+          <template v-else-if="column.key === 'supplier'">
+            {{ record.supplierName || "—" }}
+          </template>
+          <template v-else-if="column.key === 'order'">
+            {{ record.orderCode || record.orderId.slice(0, 8) }}
+          </template>
+          <template v-else-if="column.key === 'amount'">
+            <strong>{{ money(record.amount) }}</strong>
+            <span class="table-subtitle">{{ record.taxRate }}%</span>
+          </template>
+          <template v-else-if="column.key === 'file'">
+            <a
+              class="download-link"
+              @click.prevent="downloadSubmission(record)"
+              >下载附件</a
+            >
+          </template>
+          <template v-else-if="column.key === 'status'">
+            <a-tag :color="submissionStatusColor(record.status)">
+              {{ submissionStatusText(record.status) }}
+            </a-tag>
+            <span v-if="record.reviewComment" class="table-subtitle">
+              {{ record.reviewComment }}
+            </span>
+          </template>
+          <template v-else-if="column.key === 'action'">
+            <a-space v-if="record.status === 'PENDING'">
+              <a-button
+                v-if="auth.can('procurement:request:approve')"
+                type="link"
+                @click="openReview(record, 'APPROVED')"
+              >
+                审核通过
+              </a-button>
+              <a-button
+                v-if="auth.can('procurement:request:approve')"
+                type="link"
+                danger
+                @click="openReview(record, 'REJECTED')"
+              >
+                退回
+              </a-button>
+            </a-space>
+            <span v-else>—</span>
+          </template>
+        </template>
+      </a-table>
+    </a-card>
+
     <a-card title="采购发票">
       <template #extra>
         <a-button :loading="loading" @click="load">刷新</a-button>
@@ -139,6 +216,33 @@
         </a-form-item>
       </a-form>
     </a-modal>
+    <a-modal
+      v-model:open="reviewOpen"
+      :title="`${reviewTarget ? reviewTarget.invoiceNo : '—'} · ${reviewAction === 'APPROVED' ? '审核通过' : '退回'}`"
+      :confirm-loading="reviewing"
+      @ok="confirmReview"
+    >
+      <a-alert
+        v-if="reviewAction === 'APPROVED'"
+        type="info"
+        show-icon
+        message="审核通过后，将按订单应付情况完成四单匹配并登记为正式发票，进入采购发票审核流程。"
+        style="margin-bottom: 14px"
+      />
+      <a-form layout="vertical">
+        <a-form-item
+          :label="reviewAction === 'REJECTED' ? '退回原因' : '审核备注'"
+          :required="reviewAction === 'REJECTED'"
+        >
+          <a-textarea
+            v-model:value="reviewComment"
+            :rows="3"
+            maxlength="500"
+            :placeholder="reviewAction === 'REJECTED' ? '请填写退回原因，将通知供应商' : '可选'"
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
@@ -154,6 +258,24 @@ const invoiceOpen = ref(false);
 const invoices = ref<api.SupplierInvoice[]>([]);
 const orders = ref<api.PurchaseOrder[]>([]);
 const payables = ref<api.ProcurementPayable[]>([]);
+const submissions = ref<api.InvoiceSubmission[]>([]);
+const submissionFilter = ref("PENDING");
+const submissionFilterOptions = [
+  { label: "待审核", value: "PENDING" },
+  { label: "已登记", value: "APPROVED" },
+  { label: "已退回", value: "REJECTED" },
+  { label: "全部", value: "ALL" },
+];
+const filteredSubmissions = computed(() =>
+  submissionFilter.value === "ALL"
+    ? submissions.value
+    : submissions.value.filter((item) => item.status === submissionFilter.value),
+);
+const reviewOpen = ref(false);
+const reviewing = ref(false);
+const reviewTarget = ref<api.InvoiceSubmission>();
+const reviewAction = ref<"APPROVED" | "REJECTED">("APPROVED");
+const reviewComment = ref("");
 
 const today = () => new Date().toISOString().slice(0, 10);
 const invoiceForm = reactive({
@@ -165,6 +287,18 @@ const invoiceForm = reactive({
   invoiceDate: today(),
   clientRequestId: "",
 });
+const submissionColumns = [
+  { title: "发票", key: "submission", width: 200 },
+  { title: "供应商", key: "supplier", width: 160 },
+  { title: "采购订单", key: "order", width: 180 },
+  { title: "金额（含税）", key: "amount", width: 140 },
+  { title: "开票日期", dataIndex: "invoiceDate", width: 110 },
+  { title: "附件", key: "file", width: 100 },
+  { title: "状态", key: "status", width: 150 },
+  { title: "提交时间", dataIndex: "createdAt", width: 110 },
+  { title: "操作", key: "action", width: 170, fixed: "right" as const },
+];
+
 const invoiceColumns = [
   { title: "发票", key: "invoice", width: 190 },
   { title: "采购订单", key: "order", width: 210 },
@@ -198,14 +332,17 @@ onMounted(load);
 async function load() {
   loading.value = true;
   try {
-    const [invoiceResult, orderResult, payableResult] = await Promise.all([
-      api.listSupplierInvoices(),
-      api.listPurchaseOrders({ page: 0, size: 999 }),
-      api.listProcurementPayables(),
-    ]);
+    const [invoiceResult, orderResult, payableResult, submissionResult] =
+      await Promise.all([
+        api.listSupplierInvoices(),
+        api.listPurchaseOrders({ page: 0, size: 999 }),
+        api.listProcurementPayables(),
+        api.listInvoiceSubmissions(),
+      ]);
     invoices.value = invoiceResult;
     orders.value = orderResult.content;
     payables.value = payableResult;
+    submissions.value = submissionResult;
   } catch (error) {
     message.error(error instanceof Error ? error.message : "加载失败");
   } finally {
@@ -242,6 +379,49 @@ async function reviewInvoice(
   await load();
 }
 
+function submissionStatusText(value: string) {
+  return { PENDING: "待审核", APPROVED: "已登记", REJECTED: "已退回" }[value] || value || "—";
+}
+function submissionStatusColor(value: string) {
+  return { PENDING: "orange", APPROVED: "green", REJECTED: "red" }[value] || "default";
+}
+function openReview(
+  submission: api.InvoiceSubmission,
+  action: "APPROVED" | "REJECTED",
+) {
+  reviewTarget.value = submission;
+  reviewAction.value = action;
+  reviewComment.value = "";
+  reviewOpen.value = true;
+}
+async function confirmReview() {
+  if (!reviewTarget.value) return;
+  if (reviewAction.value === "REJECTED" && !reviewComment.value.trim()) {
+    message.warning("请填写退回原因");
+    return;
+  }
+  reviewing.value = true;
+  try {
+    await api.reviewInvoiceSubmission(reviewTarget.value.id, {
+      action: reviewAction.value,
+      comment: reviewComment.value.trim() || undefined,
+    });
+    reviewOpen.value = false;
+    message.success(
+      reviewAction.value === "APPROVED"
+        ? "已通过并登记为正式发票"
+        : "已退回给供应商",
+    );
+    await load();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "审核失败");
+  } finally {
+    reviewing.value = false;
+  }
+}
+function downloadSubmission(submission: api.InvoiceSubmission) {
+  window.location.href = api.invoiceSubmissionDownloadUrl(submission.id);
+}
 function orderLabel(orderId: string) {
   const order = orders.value.find((item) => item.id === orderId);
   return order ? `${order.code} · ${order.supplierName}` : orderId.slice(0, 8);

@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
@@ -78,5 +79,10 @@ public final class ProcurementGovernanceDtos {
       UUID projectId,
       UUID departmentId,
       String reason
+  ) {}
+
+  public record ResolvePerformanceAppealRequest(
+      @NotBlank String action,
+      @Size(max = 1000) String comment
   ) {}
 }

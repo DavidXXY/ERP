@@ -10,4 +10,6 @@ public interface SupplierPerformanceReviewRepository extends JpaRepository<Suppl
   List<SupplierPerformanceReview> findAllByOrderByReviewPeriodDescCreatedAtDesc();
   List<SupplierPerformanceReview> findBySupplierIdOrderByReviewPeriodDesc(UUID supplierId);
   Optional<SupplierPerformanceReview> findBySupplierIdAndReviewPeriod(UUID supplierId, String period);
+  List<SupplierPerformanceReview> findByAppealStatusOrderByAppealedAtDesc(String appealStatus);
+  long countByAppealStatus(String appealStatus);
 }

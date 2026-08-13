@@ -53,6 +53,22 @@
           placeholder="搜索报价编号、客户或服务范围"
         />
         <a-select v-model:value="statusFilter" :options="statusOptions" />
+        <a-select
+          v-model:value="ownerFilter"
+          allow-clear
+          show-search
+          option-filter-prop="label"
+          placeholder="全部销售负责人"
+          :options="ownerOptions"
+        />
+        <a-select
+          v-model:value="departmentFilter"
+          allow-clear
+          show-search
+          option-filter-prop="label"
+          placeholder="全部部门"
+          :options="departmentOptions"
+        />
       </div>
 
       <!-- desktop-table -->
@@ -1036,6 +1052,7 @@ import {
 } from "./crm-options";
 import { deleteQuote } from "@/api/crm";
 import { listUsersApi, type UserResponse } from "@/api/system";
+import { loadOwnerDepartmentMap, ownerDepartment } from "./crm-department";
 import ApprovalProgressFlow, {
   type ApprovalProgressStep,
 } from "@/components/ApprovalProgressFlow.vue";
@@ -1046,6 +1063,7 @@ const router = useRouter();
 const quotes = ref<QuotePlan[]>([]);
 const opportunities = ref<Opportunity[]>([]);
 const users = ref<UserResponse[]>([]);
+const departmentMap = ref<Map<string, string>>(new Map());
 const revisions = ref<QuoteRevision[]>([]);
 const loading = ref(false);
 const saving = ref(false);
@@ -1071,6 +1089,8 @@ const revisionQuote = ref<QuotePlan | null>(null);
 const selectedCostRequest = ref<QuoteCostRequest | null>(null);
 const keyword = ref("");
 const statusFilter = ref<QuoteStatus | "ALL">("ALL");
+const ownerFilter = ref<string>();
+const departmentFilter = ref<string>();
 const form = reactive(initialForm());
 const approvalForm = reactive(initialApprovalForm());
 const customerResultForm = reactive(initialCustomerResultForm());
@@ -1203,12 +1223,37 @@ const userOptions = computed(() => {
     ? [{ label: selected, value: selected }, ...options]
     : options;
 });
+const ownerOptions = computed(() => {
+  const names = new Set<string>();
+  users.value.forEach((item) => {
+    const name = item.displayName;
+    if (name) names.add(name);
+  });
+  quotes.value.forEach((item) => {
+    const name = quoteOwnerName(item);
+    if (name && name !== "未关联负责人") names.add(name);
+  });
+  return Array.from(names)
+    .sort((a, b) => a.localeCompare(b, "zh-CN"))
+    .map((name) => ({ label: name, value: name }));
+});
+const departmentOptions = computed(() =>
+  Array.from(new Set(departmentMap.value.values()))
+    .sort((a, b) => a.localeCompare(b, "zh-CN"))
+    .map((name) => ({ label: name, value: name })),
+);
 const filteredQuotes = computed(() => {
   const normalized = keyword.value.trim().toLowerCase();
   return quotes.value
     .filter((item) => {
       const matchesStatus =
         statusFilter.value === "ALL" || item.status === statusFilter.value;
+      const matchesOwner =
+        !ownerFilter.value || quoteOwnerName(item) === ownerFilter.value;
+      const matchesDepartment =
+        !departmentFilter.value ||
+        ownerDepartment(quoteOwnerName(item), departmentMap.value) ===
+          departmentFilter.value;
       const matchesKeyword =
         !normalized ||
         [
@@ -1218,7 +1263,9 @@ const filteredQuotes = computed(() => {
           item.serviceScope,
           quoteOwnerName(item),
         ].some((value) => value?.toLowerCase().includes(normalized));
-      return matchesStatus && matchesKeyword;
+      return (
+        matchesStatus && matchesOwner && matchesDepartment && matchesKeyword
+      );
     })
     .sort((a, b) => {
       const convertedOrder =
@@ -1430,14 +1477,16 @@ onMounted(async () => {
 async function loadData() {
   loading.value = true;
   try {
-    const [quoteRows, opportunityRows, userPage] = await Promise.all([
+    const [quoteRows, opportunityRows, userPage, deptMap] = await Promise.all([
       listQuotes(),
       listOpportunities(),
       listUsersApi(0, 999).catch(() => ({ content: [] as UserResponse[] })),
+      loadOwnerDepartmentMap(),
     ]);
     quotes.value = quoteRows;
     opportunities.value = opportunityRows;
     users.value = userPage.content;
+    departmentMap.value = deptMap;
   } catch (error) {
     message.error(error instanceof Error ? error.message : "报价加载失败");
   } finally {

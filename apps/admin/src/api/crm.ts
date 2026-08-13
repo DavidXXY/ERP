@@ -433,6 +433,7 @@ export type Receivable = {
   contractId?: string;
   contractCode: string;
   contractName: string;
+  salesOwnerName?: string;
   code?: string;
   sourceNo: string;
   amount: number;
@@ -469,6 +470,7 @@ export type Renewal = {
   customerName: string;
   contractCode: string;
   projectName: string;
+  salesOwnerName?: string;
   amount: number;
   endDate: string;
   daysRemaining: number;
@@ -493,6 +495,11 @@ export type CustomerProfile = {
   outstandingAmount: number;
   overdueAmount: number;
   nearestContractEndDate?: string;
+};
+
+export type OwnerDepartment = {
+  ownerName: string;
+  department: string;
 };
 
 export type CreateCustomerPayload = {
@@ -531,6 +538,13 @@ export function listCustomers() {
   return request<CustomerSummary[]>({
     method: "GET",
     url: "/crm/customers",
+  });
+}
+
+export function listOwnerDepartments() {
+  return request<OwnerDepartment[]>({
+    method: "GET",
+    url: "/crm/departments",
   });
 }
 

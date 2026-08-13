@@ -5,6 +5,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
@@ -33,6 +34,27 @@ public class SupplierPerformanceReview extends BaseEntity {
   @Column(nullable = false, length = 32)
   private String status = "ACTIVE";
 
+  @Column(name = "appeal_status", nullable = false, length = 20)
+  private String appealStatus = "NONE";
+
+  @Column(name = "appeal_reason", length = 1000)
+  private String appealReason;
+
+  @Column(name = "appealed_at")
+  private OffsetDateTime appealedAt;
+
+  @Column(name = "appeal_resolution", length = 32)
+  private String appealResolution;
+
+  @Column(name = "appeal_review_comment", length = 1000)
+  private String appealReviewComment;
+
+  @Column(name = "appeal_reviewed_by", length = 80)
+  private String appealReviewedBy;
+
+  @Column(name = "appeal_reviewed_at")
+  private OffsetDateTime appealReviewedAt;
+
   public UUID getSupplierId() { return supplierId; }
   public void setSupplierId(UUID value) { supplierId = value; }
   public String getReviewPeriod() { return reviewPeriod; }
@@ -55,4 +77,19 @@ public class SupplierPerformanceReview extends BaseEntity {
   public void setImprovementAction(String value) { improvementAction = value; }
   public String getStatus() { return status; }
   public void setStatus(String value) { status = value; }
+
+  public String getAppealStatus() { return appealStatus; }
+  public void setAppealStatus(String value) { appealStatus = value; }
+  public String getAppealReason() { return appealReason; }
+  public void setAppealReason(String value) { appealReason = value; }
+  public OffsetDateTime getAppealedAt() { return appealedAt; }
+  public void setAppealedAt(OffsetDateTime value) { appealedAt = value; }
+  public String getAppealResolution() { return appealResolution; }
+  public void setAppealResolution(String value) { appealResolution = value; }
+  public String getAppealReviewComment() { return appealReviewComment; }
+  public void setAppealReviewComment(String value) { appealReviewComment = value; }
+  public String getAppealReviewedBy() { return appealReviewedBy; }
+  public void setAppealReviewedBy(String value) { appealReviewedBy = value; }
+  public OffsetDateTime getAppealReviewedAt() { return appealReviewedAt; }
+  public void setAppealReviewedAt(OffsetDateTime value) { appealReviewedAt = value; }
 }

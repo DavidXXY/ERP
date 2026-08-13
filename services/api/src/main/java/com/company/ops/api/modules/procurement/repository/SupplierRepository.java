@@ -14,5 +14,7 @@ public interface SupplierRepository extends JpaRepository<Supplier, UUID> {
 
   long countByCategoryIgnoreCase(String category);
 
+  long countByAdmissionStatus(String admissionStatus);
+
   Optional<Supplier> findFirstByUnifiedSocialCreditCodeIgnoreCase(String unifiedSocialCreditCode);
 }

@@ -29,8 +29,17 @@
         <a-menu-item key="/dashboard"
           ><DashboardOutlined /><span>工作台</span></a-menu-item
         >
+        <a-menu-item key="/notifications"
+          ><BellOutlined /><span>通知中心</span></a-menu-item
+        >
         <a-menu-item key="/inquiries"
           ><FileSearchOutlined /><span>询价与报价</span></a-menu-item
+        >
+        <a-menu-item key="/orders"
+          ><ProfileOutlined /><span>采购订单</span></a-menu-item
+        >
+        <a-menu-item key="/finance"
+          ><AccountBookOutlined /><span>开票与对账</span></a-menu-item
         >
         <a-menu-item key="/profile"
           ><BankOutlined /><span>企业资料</span></a-menu-item
@@ -85,6 +94,11 @@
                   size="small"
                   @click="readAll"
                   >全部已读</a-button
+                >
+              </div>
+              <div class="notif-footer">
+                <a-button type="link" size="small" @click="router.push('/notifications')"
+                  >查看全部通知</a-button
                 >
               </div>
               <div v-if="notifications.length === 0" class="notif-empty">
@@ -173,15 +187,18 @@ import {
   DownOutlined,
   FileSearchOutlined,
   FolderOpenOutlined,
+  AccountBookOutlined,
   LockOutlined,
   LogoutOutlined,
   MenuOutlined,
+  ProfileOutlined,
   SafetyCertificateOutlined,
   UserOutlined,
 } from "@ant-design/icons-vue";
 import { message } from "ant-design-vue";
 import { usePortalStore } from "../store";
 import * as api from "../api";
+import { notificationRoute } from "../notifyTarget";
 
 const route = useRoute();
 const router = useRouter();
@@ -199,6 +216,7 @@ const admission = computed(() => {
 });
 
 let notifTimer: number | undefined;
+let refreshTimer: number | undefined;
 onMounted(async () => {
   if (!store.session) {
     try {
@@ -210,20 +228,31 @@ onMounted(async () => {
   }
   await loadNotifications();
   notifTimer = window.setInterval(loadNotifications, 60000);
+  // 会话续期：生产环境令牌 30 分钟过期，每 5 分钟静默换取新令牌避免使用中被踢下线
+  refreshTimer = window.setInterval(refreshSession, 5 * 60 * 1000);
 });
 onUnmounted(() => {
   if (notifTimer) window.clearInterval(notifTimer);
+  if (refreshTimer) window.clearInterval(refreshTimer);
 });
 async function loadNotifications() {
   try {
-    const [items, count] = await Promise.all([
+    const [page, count] = await Promise.all([
       api.listNotifications(),
       api.unreadNotificationCount(),
     ]);
-    notifications.value = items;
+    notifications.value = page.items;
     unread.value = count;
   } catch {
     /* 忽略通知加载失败 */
+  }
+}
+async function refreshSession() {
+  try {
+    const session = await api.getSession();
+    store.setSession(session);
+  } catch {
+    /* 令牌失效由响应拦截器统一跳转登录 */
   }
 }
 function formatTime(value?: string) {
@@ -237,21 +266,7 @@ async function openNotification(item: api.PortalNotification) {
     unread.value = Math.max(0, unread.value - 1);
   }
   notifOpen.value = false;
-  const inquiryRelated = new Set([
-    "INQUIRY",
-    "CLARIFICATION_ANSWER",
-    "AWARD",
-    "NOT_AWARDED",
-  ]);
-  if (inquiryRelated.has(item.relatedType || "")) {
-    if (item.relatedId) {
-      router.push({ path: "/inquiries", query: { inquiry: item.relatedId } });
-    } else {
-      router.push("/inquiries");
-    }
-  } else if (item.relatedType === "ORDER_DOCUMENT") {
-    router.push("/inquiries");
-  }
+  await router.push(notificationRoute(item));
 }
 async function readAll() {
   try {
@@ -310,5 +325,10 @@ async function logout() {
   text-align: center;
   padding: 28px 0;
   color: #8c8c8c;
+}
+.notif-footer {
+  border-top: 1px solid #f0f0f0;
+  text-align: center;
+  padding: 2px 0;
 }
 </style>

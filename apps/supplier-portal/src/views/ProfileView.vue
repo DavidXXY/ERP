@@ -14,6 +14,23 @@
       show-icon
       :message="profile.admissionReviewComment"
     />
+    <section class="form-section admission-progress">
+      <div class="section-title">
+        <div>
+          <h2>准入进度</h2>
+          <p>完成资料与资质上传后，由采购方审核并准入。</p>
+        </div>
+      </div>
+      <a-steps :current="admissionStep" size="small" responsive>
+        <a-step title="提交注册" :status="admissionStep > 0 ? 'finish' : 'process'" />
+        <a-step title="完善资料" :status="profile.admissionStatus === 'REJECTED' ? 'error' : admissionStep > 1 ? 'finish' : 'wait'" />
+        <a-step title="采购方审核" :status="admissionStep > 2 ? 'finish' : profile.admissionStatus === 'PENDING' && admissionStep >= 2 ? 'process' : 'wait'" />
+        <a-step
+          title="准入通过"
+          :status="profile.admissionStatus === 'APPROVED' ? 'finish' : profile.admissionStatus === 'REJECTED' ? 'error' : 'wait'"
+        />
+      </a-steps>
+    </section>
     <a-spin :spinning="loading">
       <a-form
         :model="profile"
@@ -268,6 +285,16 @@ const statusColor = computed(
       profile.admissionStatus
     ],
 );
+const admissionStep = computed(() => {
+  const status = profile.admissionStatus;
+  if (status === "APPROVED") return 3;
+  if (status === "REJECTED") return 1;
+  const complete =
+    Boolean(profile.name) &&
+    Boolean(profile.unifiedSocialCreditCode) &&
+    Boolean(profile.registeredAddress);
+  return complete ? 2 : 1;
+});
 const expiryWarnings = computed(() => {
   return [
     expiryMessage("营业执照", profile.licenseValidTo),

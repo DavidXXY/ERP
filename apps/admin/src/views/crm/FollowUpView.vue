@@ -36,6 +36,24 @@
           :options="typeOptions"
           style="width: 140px"
         />
+        <a-select
+          v-model:value="ownerFilter"
+          allow-clear
+          show-search
+          option-filter-prop="label"
+          placeholder="全部负责人"
+          :options="ownerOptions"
+          style="width: 170px"
+        />
+        <a-select
+          v-model:value="departmentFilter"
+          allow-clear
+          show-search
+          option-filter-prop="label"
+          placeholder="全部部门"
+          :options="departmentOptions"
+          style="width: 150px"
+        />
         <a-input
           v-model:value="keyword"
           allow-clear
@@ -229,18 +247,22 @@ import {
   followUpTypeOptions,
 } from "./crm-options";
 import { listUsersApi, type UserResponse } from "@/api/system";
+import { loadOwnerDepartmentMap, ownerDepartment } from "./crm-department";
 
 const auth = useAuthStore();
 const items = ref<FollowUp[]>([]);
 const customers = ref<any[]>([]);
 const opportunities = ref<any[]>([]);
 const users = ref<UserResponse[]>([]);
+const departmentMap = ref<Map<string, string>>(new Map());
 const loading = ref(false);
 const saving = ref(false);
 const createOpen = ref(false);
 const formRef = ref();
 const activeTab = ref("pending");
 const typeFilter = ref<string>();
+const ownerFilter = ref<string>();
+const departmentFilter = ref<string>();
 const keyword = ref("");
 const typeOptions = [...followUpTypeOptions];
 
@@ -294,18 +316,57 @@ const userOptions = computed(() => {
     ? [{ label: selected, value: selected }, ...options]
     : options;
 });
+const ownerOptions = computed(() => {
+  const names = new Set<string>();
+  users.value.forEach((item) => {
+    const name = item.displayName;
+    if (name) names.add(name);
+  });
+  items.value.forEach((item) => {
+    if (item.ownerName) names.add(item.ownerName);
+  });
+  return Array.from(names)
+    .sort((a, b) => a.localeCompare(b, "zh-CN"))
+    .map((name) => ({ label: name, value: name }));
+});
+const departmentOptions = computed(() =>
+  Array.from(new Set(departmentMap.value.values()))
+    .sort((a, b) => a.localeCompare(b, "zh-CN"))
+    .map((name) => ({ label: name, value: name })),
+);
 const filteredItems = computed(() => {
   const term = keyword.value.trim().toLowerCase();
   return items.value.filter((item) => {
     const t = typeFilter.value;
     if (t && item.type !== t) return false;
+    if (ownerFilter.value && item.ownerName !== ownerFilter.value) return false;
+    if (
+      departmentFilter.value &&
+      ownerDepartment(item.ownerName, departmentMap.value) !==
+        departmentFilter.value
+    )
+      return false;
     const text =
       `${item.customerName} ${item.subject} ${item.content}`.toLowerCase();
     return !term || text.includes(term);
   });
 });
 const pendingItems = computed(() =>
-  items.value.filter((i) => i.nextAction && i.nextAction),
+  items.value.filter((i) => {
+    if (!i.nextAction) return false;
+    const t = typeFilter.value;
+    if (t && i.type !== t) return false;
+    if (ownerFilter.value && i.ownerName !== ownerFilter.value) return false;
+    if (
+      departmentFilter.value &&
+      ownerDepartment(i.ownerName, departmentMap.value) !==
+        departmentFilter.value
+    )
+      return false;
+    const term = keyword.value.trim().toLowerCase();
+    const text = `${i.customerName} ${i.subject} ${i.content}`.toLowerCase();
+    return !term || text.includes(term);
+  }),
 );
 const pendingGroups = computed(() => {
   const map = new Map<
@@ -362,17 +423,19 @@ onMounted(loadData);
 async function loadData() {
   loading.value = true;
   try {
-    const [followUps, customerRows, opportunityRows, userPage] =
+    const [followUps, customerRows, opportunityRows, userPage, deptMap] =
       await Promise.all([
         listFollowUps(),
         listCustomers(),
         listOpportunities(),
         listUsersApi(0, 999).catch(() => ({ content: [] as UserResponse[] })),
+        loadOwnerDepartmentMap(),
       ]);
     items.value = followUps;
     customers.value = customerRows;
     opportunities.value = opportunityRows;
     users.value = userPage.content;
+    departmentMap.value = deptMap;
   } catch (error) {
     message.error(error instanceof Error ? error.message : "数据加载失败");
   } finally {

@@ -66,6 +66,15 @@
           style="width: 170px"
         />
         <a-select
+          v-model:value="departmentFilter"
+          allow-clear
+          show-search
+          option-filter-prop="label"
+          placeholder="全部部门"
+          :options="departmentOptions"
+          style="width: 150px"
+        />
+        <a-select
           v-model:value="dateFilterMode"
           :options="dateFilterModeOptions"
           style="width: 110px"
@@ -271,6 +280,7 @@ import {
   type ServiceContract,
 } from "@/api/crm";
 import { listUsersApi, type UserResponse } from "@/api/system";
+import { loadOwnerDepartmentMap, ownerDepartment } from "./crm-department";
 import {
   contractStatusColor,
   contractStatusLabel,
@@ -287,7 +297,9 @@ const keyword = ref("");
 const statusFilter = ref<ContractStatus>();
 const kindFilter = ref<ServiceContract["contractKind"]>();
 const salesFilter = ref<string>();
+const departmentFilter = ref<string>();
 const users = ref<UserResponse[]>([]);
+const departmentMap = ref<Map<string, string>>(new Map());
 const dateFilterMode = ref<"RANGE" | "MONTH" | "YEAR">("RANGE");
 const dateRangeStart = ref("");
 const dateRangeEnd = ref("");
@@ -334,6 +346,9 @@ const filteredContracts = computed(() => {
       (!statusFilter.value || item.status === statusFilter.value) &&
       (!kindFilter.value || item.contractKind === kindFilter.value) &&
       (!salesFilter.value || item.salesOwnerName === salesFilter.value) &&
+      (!departmentFilter.value ||
+        ownerDepartment(item.salesOwnerName, departmentMap.value) ===
+          departmentFilter.value) &&
       matchesContractDate(item) &&
       (!term || text.includes(term))
     );
@@ -352,6 +367,11 @@ const salesOptions = computed(() => {
     .sort((a, b) => a.localeCompare(b, "zh-CN"))
     .map((name) => ({ label: name, value: name }));
 });
+const departmentOptions = computed(() =>
+  Array.from(new Set(departmentMap.value.values()))
+    .sort((a, b) => a.localeCompare(b, "zh-CN"))
+    .map((name) => ({ label: name, value: name })),
+);
 const totalAmount = computed(() =>
   topLevelContracts.value.reduce(
     (sum, item) => sum + contractDisplayAmount(item),
@@ -513,14 +533,18 @@ async function doExport() {
 async function loadData() {
   loading.value = true;
   try {
-    const [contractRows, receivableRows, userPage] = await Promise.all([
-      listContracts(),
-      listReceivables().catch(() => [] as Receivable[]),
-      listUsersApi(0, 999).catch(() => ({ content: [] as UserResponse[] })),
-    ]);
+    const [contractRows, receivableRows, userPage, deptMap] = await Promise.all(
+      [
+        listContracts(),
+        listReceivables().catch(() => [] as Receivable[]),
+        listUsersApi(0, 999).catch(() => ({ content: [] as UserResponse[] })),
+        loadOwnerDepartmentMap(),
+      ],
+    );
     contracts.value = contractRows;
     receivables.value = receivableRows;
     users.value = userPage.content;
+    departmentMap.value = deptMap;
   } catch (error) {
     message.error(error instanceof Error ? error.message : "合同加载失败");
   } finally {

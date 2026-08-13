@@ -2,6 +2,7 @@ package com.company.ops.api.modules.procurement.controller;
 
 import com.company.ops.api.common.api.ApiResponse;
 import com.company.ops.api.common.api.PageResponse;
+import com.company.ops.api.modules.procurement.dto.ConfirmShipmentRequest;
 import com.company.ops.api.modules.procurement.dto.CreatePurchaseOrderRequest;
 import com.company.ops.api.modules.procurement.dto.CreatePurchaseRequestRequest;
 import com.company.ops.api.modules.procurement.dto.CreateSupplierRequest;
@@ -262,6 +263,34 @@ public class ProcurementController {
     return ApiResponse.ok(procurementService.listPayables());
   }
 
+  @PostMapping(value = "/payables/{id}/payment", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  @PreAuthorize("hasAuthority('procurement:payable:view')")
+  public ApiResponse<ProcurementPayableResponse> recordPayment(
+      @PathVariable UUID id,
+      @Valid @RequestPart("metadata") ProcurementControlDtos.RecordPaymentRequest request,
+      @RequestPart(value = "file", required = false) MultipartFile file
+  ) {
+    return ApiResponse.ok(procurementService.recordPayment(id, request, file));
+  }
+
+  @GetMapping("/payables/{id}/receipt")
+  @PreAuthorize("hasAuthority('procurement:payable:view')")
+  public ResponseEntity<Resource> downloadPaymentReceipt(@PathVariable UUID id) {
+    ProcurementPayableResponse payable = procurementService.listPayables().stream()
+        .filter(item -> item.id().equals(id))
+        .findFirst()
+        .orElseThrow(() -> new com.company.ops.api.common.exception.BusinessException("应付单不存在"));
+    if (payable.paymentReceiptFileName() == null) {
+      throw new com.company.ops.api.common.exception.BusinessException("该应付单尚未上传付款回单");
+    }
+    return ResponseEntity.ok()
+        .contentType(MediaType.parseMediaType(payable.paymentReceiptContentType() == null
+            ? MediaType.APPLICATION_OCTET_STREAM_VALUE : payable.paymentReceiptContentType()))
+        .header(HttpHeaders.CONTENT_DISPOSITION,
+            ContentDisposition.attachment().filename(payable.paymentReceiptFileName(), StandardCharsets.UTF_8).build().toString())
+        .body(procurementService.loadPaymentReceipt(id));
+  }
+
   @PostMapping(value = "/orders/{id}/documents", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   @ResponseStatus(HttpStatus.CREATED)
   @PreAuthorize("hasAuthority('procurement:purchase:create')")
@@ -313,6 +342,16 @@ public class ProcurementController {
       @PathVariable UUID id
   ) {
     return ApiResponse.ok(procurementService.listOrderShipments(id));
+  }
+
+  @PostMapping("/orders/{id}/shipments/{shipmentId}/confirm")
+  @PreAuthorize("hasAuthority('procurement:purchase:create')")
+  public ApiResponse<ProcurementShipmentResponse> confirmOrderShipment(
+      @PathVariable UUID id,
+      @PathVariable UUID shipmentId,
+      @Valid @RequestBody ConfirmShipmentRequest request
+  ) {
+    return ApiResponse.ok(procurementService.confirmShipment(id, shipmentId, request));
   }
 
   // ---------- 订单变更单 ----------

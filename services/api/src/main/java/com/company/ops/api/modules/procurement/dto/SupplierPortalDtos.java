@@ -2,6 +2,7 @@ package com.company.ops.api.modules.procurement.dto;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
@@ -35,7 +36,30 @@ public final class SupplierPortalDtos {
 
   public record LoginRequest(
       @NotBlank @Email @Size(max = 160) String email,
-      @NotBlank @Size(max = 100) String password
+      @NotBlank @Size(max = 100) String password,
+      @Size(max = 6) String mfaCode
+  ) {}
+
+  public record MfaStatusResponse(
+      boolean enabled,
+      int recoveryCodeCount
+  ) {}
+
+  public record MfaSetupResponse(
+      String secret,
+      String provisioningUri
+  ) {}
+
+  public record MfaSetupRequest(
+      @NotBlank String currentPassword
+  ) {}
+
+  public record MfaEnableRequest(
+      @NotBlank String code
+  ) {}
+
+  public record MfaDisableRequest(
+      @NotBlank String currentPassword
   ) {}
 
   public record UpdateProfileRequest(
@@ -100,13 +124,15 @@ public final class SupplierPortalDtos {
   public record SessionResponse(
       String token,
       AccountResponse account,
-      SupplierProfileResponse supplier
+      SupplierProfileResponse supplier,
+      OffsetDateTime lastLoginAt,
+      String lastLoginIp
   ) {}
 
   public record SaveQuoteLineRequest(
       @NotNull UUID requestId,
-      @NotNull @Positive BigDecimal unitPrice,
-      @NotNull @PositiveOrZero BigDecimal taxRate,
+      @DecimalMin("0") BigDecimal unitPrice,
+      @DecimalMin("0") @DecimalMax("100") BigDecimal taxRate,
       LocalDate deliveryDate,
       @Size(max = 500) String remark
   ) {}
@@ -119,6 +145,29 @@ public final class SupplierPortalDtos {
       @PositiveOrZero BigDecimal freightAmount,
       @PositiveOrZero BigDecimal otherCostAmount,
       LocalDate validUntil
+  ) {}
+
+  public record RespondOrderChangeRequest(
+      @NotBlank String response,
+      @Size(max = 500) String comment
+  ) {}
+
+  public record ReceiptAppealRequest(
+      @NotBlank @Size(max = 500) String reason
+  ) {}
+
+  public record PerformanceAppealRequest(
+      @NotBlank @Size(max = 1000) String reason
+  ) {}
+
+  public record ForgotPasswordRequest(
+      @NotBlank @Email @Size(max = 160) String email
+  ) {}
+
+  public record ResetPasswordRequest(
+      @NotBlank @Email @Size(max = 160) String email,
+      @NotBlank @Size(min = 6, max = 6) String code,
+      @NotBlank @Size(min = 8, max = 100) String newPassword
   ) {}
 
   public record InviteSuppliersRequest(@NotEmpty List<@NotNull UUID> supplierIds) {}
@@ -203,11 +252,50 @@ public final class SupplierPortalDtos {
       OffsetDateTime createdAt
   ) {}
 
+  public record SubmitInvoiceRequest(
+      @NotNull UUID orderId,
+      @NotBlank @Size(max = 100) String invoiceNo,
+      @NotNull @Positive @DecimalMax("9999999999.99") BigDecimal amount,
+      @NotNull @PositiveOrZero @DecimalMax("100") BigDecimal taxRate,
+      @NotNull LocalDate invoiceDate,
+      @Size(max = 500) String remark
+  ) {}
+
+  public record InvoiceSubmissionResponse(
+      UUID id,
+      UUID orderId,
+      String orderCode,
+      String supplierName,
+      String invoiceNo,
+      BigDecimal amount,
+      BigDecimal taxRate,
+      LocalDate invoiceDate,
+      String remark,
+      String fileName,
+      String contentType,
+      long sizeBytes,
+      String status,
+      String reviewComment,
+      String reviewedBy,
+      OffsetDateTime reviewedAt,
+      OffsetDateTime createdAt
+  ) {}
+
   public record CreateShipmentRequest(
-      @Size(max = 80) String deliveryNo,
+      @NotBlank @Size(max = 80) String deliveryNo,
       @Size(max = 80) String carrier,
       LocalDate expectedArrival,
       @Size(max = 500) String remark
+  ) {}
+
+  public record ShipmentAttachmentResponse(
+      UUID id,
+      UUID shipmentId,
+      String fileName,
+      String contentType,
+      long sizeBytes,
+      String sha256,
+      OffsetDateTime createdAt
   ) {}
 
   public record PortalChangeRequest(
@@ -258,6 +346,13 @@ public final class SupplierPortalDtos {
       String reviewerName,
       String improvementAction,
       String status,
+      String appealStatus,
+      String appealReason,
+      OffsetDateTime appealedAt,
+      String appealResolution,
+      String appealReviewComment,
+      String appealReviewedBy,
+      OffsetDateTime appealReviewedAt,
       OffsetDateTime createdAt
   ) {}
 }

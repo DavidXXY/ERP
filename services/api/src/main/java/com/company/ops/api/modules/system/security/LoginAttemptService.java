@@ -59,16 +59,20 @@ public class LoginAttemptService {
   }
 
   public void assertAllowed(String key) {
+    assertAllowed(key, "登录失败次数过多，请稍后重试");
+  }
+
+  public void assertAllowed(String key, String message) {
     Long distributedCount = redisCount(key);
     if (distributedCount != null && distributedCount >= maxAttempts) {
-      throw new RateLimitException("登录失败次数过多，请稍后重试");
+      throw new RateLimitException(message);
     }
     cleanupLocal();
     Attempt attempt = attempts.get(key);
     if (attempt == null) return;
     Instant now = clock.instant();
     if (attempt.expiresAt().isAfter(now) && attempt.count() >= maxAttempts) {
-      throw new RateLimitException("登录失败次数过多，请稍后重试");
+      throw new RateLimitException(message);
     }
     if (!attempt.expiresAt().isAfter(now)) attempts.remove(key, attempt);
   }

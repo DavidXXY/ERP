@@ -170,6 +170,12 @@ function relatedRoute(item: NotificationRecord) {
   if (type.includes("RECEIVABLE")) return "/finance/receivables";
   if (type.includes("PART") || type.includes("INVENTORY"))
     return "/inventory/parts";
+  if (type.includes("QUOTE") || type.includes("INQUIRY"))
+    return "/procurement/inquiries";
+  if (type.includes("INVOICE")) return "/procurement/invoices";
+  if (type.includes("APPEAL") || type.includes("RECEIPT"))
+    return "/procurement/receipts";
+  if (type.includes("PROCUREMENT")) return "/procurement/workbench";
   return "";
 }
 async function goRelated(item: NotificationRecord) {
@@ -190,6 +196,7 @@ function typeLabel(type?: string) {
         CONTRACT: "合同",
         PROJECT: "项目",
         FINANCE: "财务",
+        PROCUREMENT: "采购",
         INVENTORY: "库存",
         OUTSOURCE: "外包",
       } as Record<string, string>
@@ -203,6 +210,7 @@ function typeColor(type?: string) {
   if (type.includes("APPROVAL")) return "blue";
   if (type.includes("SLA") || type.includes("ESCALATED")) return "red";
   if (type === "FINANCE") return "green";
+  if (type.includes("PROCUREMENT")) return "blue";
   if (type === "INVENTORY") return "orange";
   return "default";
 }

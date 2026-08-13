@@ -343,14 +343,98 @@
             :message="`综合履约评分 ${overallScore} 分`"
             description="评分根据准时交付、质检通过、发票匹配和资料完整度自动计算。"
           />
+          <a-divider style="margin: 16px 0" />
+          <h4 style="margin-bottom: 8px">周期绩效评价</h4>
+          <a-table
+            :data-source="reviews"
+            :columns="reviewColumns"
+            row-key="id"
+            size="small"
+            :pagination="false"
+            :scroll="{ x: 900 }"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'appeal'">
+                <a-tag v-if="record.appealStatus === 'PENDING'" color="orange"
+                  >申诉待处理</a-tag
+                >
+                <a-tag
+                  v-else-if="record.appealStatus === 'REOPENED'"
+                  color="blue"
+                  >已受理 · 待重新核定</a-tag
+                >
+                <a-tag
+                  v-else-if="record.appealStatus === 'DISMISSED'"
+                  color="red"
+                  >申诉不成立</a-tag
+                >
+                <a-tag
+                  v-else-if="
+                    !record.appealStatus || record.appealStatus === 'NONE'
+                  "
+                  color="green"
+                  >正常</a-tag
+                >
+                <span
+                  v-if="record.appealReviewComment"
+                  class="table-subtitle"
+                  >{{ record.appealReviewComment }}</span
+                >
+              </template>
+              <template v-else-if="column.key === 'action'">
+                <a-button
+                  v-if="record.appealStatus === 'PENDING'"
+                  type="link"
+                  @click="openAppealReview(record)"
+                  >处理申诉</a-button
+                >
+                <span v-else>—</span>
+              </template>
+            </template>
+            <template #emptyText>尚未生成周期绩效评价</template>
+          </a-table>
         </a-tab-pane>
       </a-tabs>
     </a-card>
+
+    <a-modal
+      v-model:open="appealReviewOpen"
+      title="处理绩效申诉"
+      :confirm-loading="savingAppeal"
+      @ok="handleAppealReview"
+    >
+      <template v-if="appealTarget">
+        <a-alert
+          class="section-gap"
+          type="warning"
+          show-icon
+          :message="`${appealTarget.reviewPeriod} 期绩效评价申诉`"
+          :description="appealTarget.appealReason"
+        />
+        <a-form layout="vertical">
+          <a-form-item label="处理结果">
+            <a-radio-group v-model:value="appealForm.action">
+              <a-radio value="DISMISSED">申诉不成立（维持原评价）</a-radio>
+              <a-radio value="REOPEN">申诉成立（重新核定评价）</a-radio>
+            </a-radio-group>
+          </a-form-item>
+          <a-form-item label="处理意见">
+            <a-textarea
+              v-model:value="appealForm.comment"
+              :rows="3"
+              placeholder="请说明处理依据，意见将同步给供应商"
+              :maxlength="1000"
+              show-count
+            />
+          </a-form-item>
+        </a-form>
+      </template>
+    </a-modal>
   </BusinessDetailPage>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { message } from "ant-design-vue";
 import BusinessDetailPage, {
@@ -363,14 +447,17 @@ import {
   listProcurementPayables,
   listProcurementReturns,
   listPurchaseOrders,
+  listSupplierReviews,
   listSupplierInvoices,
   listSuppliers,
+  resolvePerformanceAppeal,
   type GoodsReceipt,
   type ProcurementPayable,
   type ProcurementReturnOrder,
   type PurchaseOrder,
   type Supplier,
   type SupplierInvoice,
+  type SupplierPerformanceReview,
   type SupplierQuotation,
 } from "@/api/procurement";
 
@@ -385,6 +472,7 @@ const receipts = ref<GoodsReceipt[]>([]);
 const payables = ref<ProcurementPayable[]>([]);
 const invoices = ref<SupplierInvoice[]>([]);
 const returns = ref<ProcurementReturnOrder[]>([]);
+const reviews = ref<SupplierPerformanceReview[]>([]);
 type SupplierQuotationRow = SupplierQuotation & {
   inquiryId: string;
   requestId?: string;
@@ -575,6 +663,52 @@ const payableColumns = [
   { title: "待付", key: "outstanding", width: 120 },
   { title: "到期日", dataIndex: "dueDate", width: 110 },
 ];
+const reviewColumns = [
+  { title: "考核周期", dataIndex: "reviewPeriod", width: 120 },
+  { title: "综合得分", dataIndex: "totalScore", width: 100 },
+  { title: "等级", dataIndex: "grade", width: 70 },
+  { title: "准时 / 质量 / 匹配", key: "rates", width: 220 },
+  { title: "评审人", dataIndex: "reviewerName", width: 120 },
+  { title: "改进建议", dataIndex: "improvementAction" },
+  { title: "申诉状态", key: "appeal", width: 200 },
+  { title: "操作", key: "action", width: 100 },
+];
+const appealReviewOpen = ref(false);
+const savingAppeal = ref(false);
+const appealTarget = ref<SupplierPerformanceReview | null>(null);
+const appealForm = reactive<{ action: "DISMISSED" | "REOPEN"; comment: string }>(
+  { action: "DISMISSED", comment: "" },
+);
+function openAppealReview(record: SupplierPerformanceReview) {
+  appealTarget.value = record;
+  appealForm.action = "DISMISSED";
+  appealForm.comment = "";
+  appealReviewOpen.value = true;
+}
+async function handleAppealReview() {
+  if (!appealTarget.value) return;
+  savingAppeal.value = true;
+  try {
+    const updated = await resolvePerformanceAppeal(appealTarget.value.id, {
+      action: appealForm.action,
+      comment: appealForm.comment.trim() || undefined,
+    });
+    const index = reviews.value.findIndex(
+      (item) => item.id === updated.id,
+    );
+    if (index >= 0) reviews.value[index] = updated;
+    appealReviewOpen.value = false;
+    message.success(
+      appealForm.action === "DISMISSED"
+        ? "申诉已驳回，供应商将收到处理通知"
+        : "申诉已受理，重新核定后将自动通知供应商",
+    );
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "处理失败");
+  } finally {
+    savingAppeal.value = false;
+  }
+}
 onMounted(loadData);
 async function loadData() {
   loading.value = true;
@@ -587,6 +721,7 @@ async function loadData() {
       allInvoices,
       allReturns,
       inquiries,
+      allReviews,
     ] = await Promise.all([
       listSuppliers(0, 999),
       listPurchaseOrders({ page: 0, size: 999 }),
@@ -595,6 +730,7 @@ async function loadData() {
       listSupplierInvoices(),
       listProcurementReturns(),
       listProcurementInquiries(),
+      listSupplierReviews(),
     ]);
     supplier.value =
       supplierPage.content.find((item) => item.id === supplierId.value) || null;
@@ -610,6 +746,9 @@ async function loadData() {
       (item) => item.supplierId === supplierId.value,
     );
     returns.value = allReturns.filter(
+      (item) => item.supplierId === supplierId.value,
+    );
+    reviews.value = allReviews.filter(
       (item) => item.supplierId === supplierId.value,
     );
     quotations.value = inquiries

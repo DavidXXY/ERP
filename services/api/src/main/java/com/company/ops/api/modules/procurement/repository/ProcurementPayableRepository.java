@@ -23,6 +23,7 @@ public interface ProcurementPayableRepository extends JpaRepository<ProcurementP
   List<ProcurementPayable> findByDueDateBetweenOrderByDueDateAsc(LocalDate startDate,LocalDate endDate);
   List<ProcurementPayable> findByOrderId(UUID orderId);
   List<ProcurementPayable> findByOrderIdIn(Collection<UUID> orderIds);
+  List<ProcurementPayable> findBySupplierIdOrderByCreatedAtDesc(UUID supplierId);
   Optional<ProcurementPayable> findByReceiptId(UUID receiptId);
 
   @Lock(LockModeType.PESSIMISTIC_WRITE)
@@ -55,4 +56,26 @@ public interface ProcurementPayableRepository extends JpaRepository<ProcurementP
       + "group by p.supplierId")
   List<Object[]> aggregateBySupplierIdIn(@Param("supplierIds") Collection<UUID> supplierIds,
       @Param("cancelled") PayableStatus cancelled);
+
+  @Query("""
+      select coalesce(count(p), 0) as payableCount,
+             coalesce(sum(p.amount), 0) as payableAmount,
+             coalesce(sum(p.paidAmount), 0) as paidAmount,
+             coalesce(sum(case when p.dueDate < :today
+               and p.status not in (:paidStatus, :cancelledStatus)
+               then p.amount - p.paidAmount else 0 end), 0) as overdueAmount
+      from ProcurementPayable p
+      where p.supplierId = :supplierId
+      """)
+  PayableSupplierTotals aggregateBySupplier(@Param("supplierId") UUID supplierId,
+      @Param("today") LocalDate today,
+      @Param("paidStatus") PayableStatus paidStatus,
+      @Param("cancelledStatus") PayableStatus cancelledStatus);
+
+  interface PayableSupplierTotals {
+    Long getPayableCount();
+    BigDecimal getPayableAmount();
+    BigDecimal getPaidAmount();
+    BigDecimal getOverdueAmount();
+  }
 }

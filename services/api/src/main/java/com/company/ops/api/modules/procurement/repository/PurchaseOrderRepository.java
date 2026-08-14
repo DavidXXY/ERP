@@ -55,4 +55,6 @@ public interface PurchaseOrderRepository extends JpaRepository<PurchaseOrder, UU
       + "group by o.supplierId")
   List<Object[]> aggregateAmountBySupplierIdIn(@Param("supplierIds") Collection<UUID> supplierIds,
       @Param("cancelled") PurchaseOrderStatus cancelled);
+  List<PurchaseOrder> findByRequestIdNotNullAndStatusNot(PurchaseOrderStatus status);
+
 }

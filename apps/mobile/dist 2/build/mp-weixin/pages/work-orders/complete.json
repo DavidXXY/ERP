@@ -1,6 +1,0 @@
-{
-  "navigationBarTitleText": "完工记录",
-  "usingComponents": {
-    "signature-pad": "../../components/SignaturePad"
-  }
-}

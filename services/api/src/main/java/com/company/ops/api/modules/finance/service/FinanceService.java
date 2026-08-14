@@ -69,6 +69,7 @@ import com.company.ops.api.modules.system.security.UserPrincipal;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import static com.company.ops.api.common.util.MoneyUtils.amount;
+import org.springframework.cache.annotation.Cacheable;
 
 @Service
 public class FinanceService {
@@ -127,6 +128,7 @@ public class FinanceService {
   }
 
   @Transactional(readOnly = true)
+  @Cacheable("financeOverview")
   public FinanceOverviewResponse overview() {
     var receivableTotals = receivableRepository.aggregateFinanceOverview(LocalDate.now());
     var payableTotals = payableRepository.aggregateFinanceOverview(

@@ -28,4 +28,6 @@ public interface BusinessControlRecordRepository extends JpaRepository<BusinessC
       String riskLevel, Collection<ControlStatus> statuses, LocalDate date);
   long countByControlTypeAndStatusIn(ControlType type, Collection<ControlStatus> statuses);
   boolean existsByControlCode(String code);
+  List<BusinessControlRecord> findByControlTypeInOrderByCreatedAtDesc(Collection<ControlType> types);
+
 }

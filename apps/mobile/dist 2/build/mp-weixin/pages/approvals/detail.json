@@ -1,6 +1,0 @@
-{
-  "navigationBarTitleText": "审批详情",
-  "usingComponents": {
-    "state-view": "../../components/StateView"
-  }
-}

@@ -44,6 +44,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.cache.annotation.Cacheable;
 
 @Service
 public class FinanceOperationsService {
@@ -75,6 +76,7 @@ public class FinanceOperationsService {
   }
 
   @Transactional(readOnly = true)
+  @Cacheable("financeOperationsOverview")
   public OperationsOverview overview() {
     String tenant = tenant();
     long pending = count("fin_period_end_jobs", "status='PENDING'");
@@ -167,7 +169,7 @@ public class FinanceOperationsService {
 
   @Transactional(readOnly = true)
   public List<BudgetVarianceResponse> budgetVariance() {
-    return controls.findAllByOrderByCreatedAtDesc().stream().filter(item -> BUDGET_TYPES.contains(item.getControlType()))
+    return controls.findByControlTypeInOrderByCreatedAtDesc(BUDGET_TYPES).stream()
         .map(item -> {
           BigDecimal budget = money(item.getBudgetAmount()); BigDecimal actual = money(item.getActualAmount());
           BigDecimal forecast = money(item.getForecastAmount()); BigDecimal latest = actual.max(forecast);
@@ -186,7 +188,7 @@ public class FinanceOperationsService {
     Map<UUID, ReconciliationRef> refs = reconciliationRefs(type, end);
     if ("CUSTOMER".equals(type)) {
       Map<UUID, Customer> partners = customers.findAll().stream().collect(Collectors.toMap(Customer::getId, Function.identity()));
-      return receivables.findAll().stream().filter(item -> !item.getDueDate().isAfter(end))
+      return receivables.findByDueDateLessThanEqualOrderByDueDateAsc(end).stream()
           .collect(Collectors.groupingBy(Receivable::getCustomerId)).entrySet().stream().map(entry -> {
             Customer partner = partners.get(entry.getKey()); BigDecimal balance = entry.getValue().stream()
                 .map(item -> item.getAmount().subtract(item.getSettledAmount())).reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -194,7 +196,7 @@ public class FinanceOperationsService {
           }).sorted(Comparator.comparing(PartnerStatementResponse::partnerName)).toList();
     }
     Map<UUID, Supplier> partners = suppliers.findAll().stream().collect(Collectors.toMap(Supplier::getId, Function.identity()));
-    return payables.findAll().stream().filter(item -> !item.getDueDate().isAfter(end)).filter(item -> item.getStatus() != PayableStatus.CANCELLED)
+    return payables.findByDueDateLessThanEqualAndStatusNotOrderByDueDateAsc(end, PayableStatus.CANCELLED).stream()
         .collect(Collectors.groupingBy(ProcurementPayable::getSupplierId)).entrySet().stream().map(entry -> {
           Supplier partner = partners.get(entry.getKey()); BigDecimal balance = entry.getValue().stream()
               .map(item -> item.getAmount().subtract(item.getPaidAmount())).reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -225,10 +227,10 @@ public class FinanceOperationsService {
 
   public CashScenarioResponse createCashScenario(SaveCashScenarioRequest request) {
     LocalDate horizon = request.asOfDate().plusDays(request.horizonDays());
-    BigDecimal expectedReceipts = receivables.findAll().stream().filter(item -> !item.getDueDate().isBefore(request.asOfDate()) && !item.getDueDate().isAfter(horizon))
+    BigDecimal expectedReceipts = receivables.findByDueDateBetweenOrderByDueDateAsc(request.asOfDate(), horizon).stream()
         .map(item -> item.getAmount().subtract(item.getSettledAmount())).filter(value -> value.signum() > 0).reduce(BigDecimal.ZERO, BigDecimal::add);
-    BigDecimal expectedPayments = payables.findAll().stream().filter(item -> item.getStatus() != PayableStatus.CANCELLED)
-        .filter(item -> !item.getDueDate().isBefore(request.asOfDate()) && !item.getDueDate().isAfter(horizon))
+    BigDecimal expectedPayments = payables.findByDueDateBetweenAndStatusNotOrderByDueDateAsc(
+        request.asOfDate(), horizon, PayableStatus.CANCELLED).stream()
         .map(item -> item.getAmount().subtract(item.getPaidAmount())).filter(value -> value.signum() > 0).reduce(BigDecimal.ZERO, BigDecimal::add);
     BigDecimal forecast = request.openingCash().add(expectedReceipts).add(request.receiptAdjustment())
         .subtract(expectedPayments).subtract(request.paymentAdjustment());

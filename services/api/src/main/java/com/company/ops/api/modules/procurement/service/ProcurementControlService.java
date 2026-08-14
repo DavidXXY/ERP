@@ -44,6 +44,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class ProcurementControlService {
+  private static final java.util.Collection<String> ACTIVE_INQUIRY_STATUSES = List.of("OPEN", "AWARDED");
+
   private final ProcurementInquiryRepository inquiries;
   private final ProcurementInquiryRequestRepository inquiryRequests;
   private final SupplierQuotationRepository quotes;
@@ -131,23 +133,11 @@ public class ProcurementControlService {
 
   @Transactional(readOnly = true)
   public ProcurementPurchasePoolResponse purchasePool() {
-    List<PurchaseRequest> approved = requests.findAllByOrderByCreatedAtDesc().stream()
-        .filter(item -> item.getApprovalStatus() == ApprovalStatus.APPROVED)
-        .filter(item -> item.getStatus() == PurchaseRequestStatus.APPROVED)
-        .toList();
-    Map<UUID, ProcurementInquiry> inquiryMap = inquiries.findAll().stream()
-        .collect(Collectors.toMap(ProcurementInquiry::getId, item -> item));
-    Set<UUID> activeInquiryRequestIds = inquiryRequests.findAll().stream()
-        .filter(link -> {
-          ProcurementInquiry inquiry = inquiryMap.get(link.getInquiryId());
-          return inquiry != null
-              && ("OPEN".equals(inquiry.getStatus()) || "AWARDED".equals(inquiry.getStatus()));
-        })
-        .map(ProcurementInquiryRequest::getRequestId)
-        .collect(Collectors.toSet());
-    Map<UUID, BigDecimal> orderedByRequest = orders.findAll().stream()
-        .filter(order -> order.getRequestId() != null)
-        .filter(order -> order.getStatus() != PurchaseOrderStatus.CANCELLED)
+    List<PurchaseRequest> approved = requests.findByApprovalStatusAndStatusOrderByCreatedAtDesc(
+        ApprovalStatus.APPROVED, PurchaseRequestStatus.APPROVED);
+    Set<UUID> activeInquiryRequestIds = activeInquiryRequestIds();
+    Map<UUID, BigDecimal> orderedByRequest = orders.findByRequestIdNotNullAndStatusNot(
+        PurchaseOrderStatus.CANCELLED).stream()
         .collect(Collectors.groupingBy(
             PurchaseOrder::getRequestId,
             Collectors.reducing(BigDecimal.ZERO, PurchaseOrder::getOrderedQty, this::add)));
@@ -244,9 +234,8 @@ public class ProcurementControlService {
     if (selected.stream().anyMatch(item -> activeRequestIds.contains(item.getId()))) {
       throw new BusinessException("部分采购申请已进入询价，请刷新待采购清单");
     }
-    Map<UUID, BigDecimal> orderedByRequest = orders.findAll().stream()
-        .filter(order -> order.getRequestId() != null)
-        .filter(order -> order.getStatus() != PurchaseOrderStatus.CANCELLED)
+    Map<UUID, BigDecimal> orderedByRequest = orders.findByRequestIdNotNullAndStatusNot(
+        PurchaseOrderStatus.CANCELLED).stream()
         .collect(Collectors.groupingBy(
             PurchaseOrder::getRequestId,
             Collectors.reducing(BigDecimal.ZERO, PurchaseOrder::getOrderedQty, this::add)));
@@ -1352,14 +1341,7 @@ public class ProcurementControlService {
   }
 
   private Set<UUID> activeInquiryRequestIds() {
-    Map<UUID, ProcurementInquiry> inquiryMap = inquiries.findAll().stream()
-        .collect(Collectors.toMap(ProcurementInquiry::getId, item -> item));
-    return inquiryRequests.findAll().stream()
-        .filter(link -> {
-          ProcurementInquiry inquiry = inquiryMap.get(link.getInquiryId());
-          return inquiry != null
-              && ("OPEN".equals(inquiry.getStatus()) || "AWARDED".equals(inquiry.getStatus()));
-        })
+    return inquiryRequests.findByInquiryStatusIn(ACTIVE_INQUIRY_STATUSES).stream()
         .map(ProcurementInquiryRequest::getRequestId)
         .collect(Collectors.toSet());
   }

@@ -878,8 +878,8 @@ public class CrmOperationsService {
     Map<UUID, Customer> customers = customerMap(contracts.stream()
         .map(ServiceContract::getCustomerId)
         .toList());
-    Map<UUID, BigDecimal> outstandingByContract = receivableRepository.findAll().stream()
-        .filter(item -> item.getContractId() != null && item.getStatus() != ReceivableStatus.SETTLED)
+    Map<UUID, BigDecimal> outstandingByContract = receivableRepository
+        .findByContractIdNotNullAndStatusNot(ReceivableStatus.SETTLED).stream()
         .collect(Collectors.toMap(
             Receivable::getContractId,
             this::outstandingAmount,
@@ -951,9 +951,13 @@ public class CrmOperationsService {
   public List<CustomerProfileResponse> listCustomerProfiles() {
     List<Customer> customers = customerRepository.findAllByOrderByCreatedAtDesc().stream()
         .filter(item -> dataScopeService.canViewOwner(item.getOwnerUserId())).toList();
-    List<Opportunity> opportunities = opportunityRepository.findAll();
-    List<ServiceContract> contracts = contractRepository.findAll();
-    List<Receivable> receivables = receivableRepository.findAll();
+    List<UUID> customerIds = customers.stream().map(Customer::getId).toList();
+    List<Opportunity> opportunities = customerIds.isEmpty() ? List.of()
+        : opportunityRepository.findByCustomerIdIn(customerIds);
+    List<ServiceContract> contracts = customerIds.isEmpty() ? List.of()
+        : contractRepository.findByCustomerIdIn(customerIds);
+    List<Receivable> receivables = customerIds.isEmpty() ? List.of()
+        : receivableRepository.findByCustomerIdIn(customerIds);
 
     return customers.stream().map(customer -> {
       List<Opportunity> customerOpportunities = opportunities.stream()

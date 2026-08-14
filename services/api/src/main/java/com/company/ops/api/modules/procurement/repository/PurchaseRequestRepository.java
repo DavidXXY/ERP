@@ -38,4 +38,7 @@ public interface PurchaseRequestRepository extends JpaRepository<PurchaseRequest
   );
 
   boolean existsByCode(String code);
+  List<PurchaseRequest> findByApprovalStatusAndStatusOrderByCreatedAtDesc(
+      ApprovalStatus approvalStatus, PurchaseRequestStatus status);
+
 }

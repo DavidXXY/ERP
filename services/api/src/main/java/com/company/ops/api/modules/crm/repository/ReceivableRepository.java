@@ -62,4 +62,9 @@ public interface ReceivableRepository extends JpaRepository<Receivable, UUID> {
 
   @Query("select r.customerId, coalesce(sum(r.settledAmount), 0) from Receivable r group by r.customerId")
   List<Object[]> aggregateSettledByCustomer();
+  List<Receivable> findByDueDateLessThanEqualOrderByDueDateAsc(LocalDate end);
+  List<Receivable> findByContractIdNotNullAndStatusNot(
+      com.company.ops.api.modules.crm.domain.ReceivableStatus status);
+  List<Receivable> findByCustomerIdIn(Collection<UUID> customerIds);
+
 }

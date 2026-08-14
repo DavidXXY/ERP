@@ -43,7 +43,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class SystemService {
 
-  private CodeGenerator codeGenerator;
+  private final CodeGenerator codeGenerator;
   private final SystemUserRepository userRepository;
   private final SystemRoleRepository roleRepository;
   private final SystemPermissionRepository permissionRepository;
@@ -53,7 +53,6 @@ public class SystemService {
 
   private static final DateTimeFormatter DT_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
-  @Deprecated
   public SystemService(
       CodeGenerator codeGenerator,
       SystemUserRepository userRepository,

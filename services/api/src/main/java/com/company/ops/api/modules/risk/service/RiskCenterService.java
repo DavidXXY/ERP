@@ -52,6 +52,7 @@ import java.util.stream.Collectors;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.cache.annotation.Cacheable;
 
 @Service
 public class RiskCenterService {
@@ -101,6 +102,7 @@ public class RiskCenterService {
   }
 
   @Transactional(readOnly = true)
+  @Cacheable(value = "riskSummary", key = "#days")
   public RiskSummaryResponse summary(int days) {
     List<RiskItemResponse> items = collectItems(workflowMap(), ruleMap());
     List<RiskModuleSummaryResponse> modules = items.stream()

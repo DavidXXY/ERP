@@ -8,4 +8,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface EmployeeEducationRepository extends JpaRepository<EmployeeEducation, UUID> {
     List<EmployeeEducation> findByEmployeeIdOrderByStartDateDesc(UUID employeeId);
     void deleteByEmployeeId(UUID employeeId);
+    List<EmployeeEducation> findByHighestTrue();
+
 }

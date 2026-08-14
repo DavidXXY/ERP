@@ -56,6 +56,7 @@ import java.util.stream.Collectors;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.cache.annotation.Cacheable;
 
 @Service
 public class FinanceAnalyticsService {
@@ -113,6 +114,7 @@ public class FinanceAnalyticsService {
   }
 
   @Transactional(readOnly = true)
+  @Cacheable(value = "financeAnalytics", key = "{#requestedAsOf, #requestedYear, #organizationId, #includeDescendants}")
   public FinanceAnalyticsResponse analytics(LocalDate requestedAsOf, Integer requestedYear,
       UUID organizationId, boolean includeDescendants) {
     LocalDate asOf = requestedAsOf == null ? LocalDate.now() : requestedAsOf;

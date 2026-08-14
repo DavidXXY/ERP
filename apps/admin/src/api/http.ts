@@ -77,10 +77,11 @@ export async function requestAllPages<T>(
     params: { ...config.params, page, size },
   });
   const first = await request<PageResponse<T>>(pageConfig(0));
-  const items = [...first.content];
-  for (let page = 1; page < first.totalPages; page += 1) {
-    const next = await request<PageResponse<T>>(pageConfig(page));
-    items.push(...next.content);
-  }
-  return items;
+  if (first.totalPages <= 1) return first.content;
+  const rest = await Promise.all(
+    Array.from({ length: first.totalPages - 1 }, (_, index) =>
+      request<PageResponse<T>>(pageConfig(index + 1)),
+    ),
+  );
+  return [...first.content, ...rest.flatMap((page) => page.content)];
 }

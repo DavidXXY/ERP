@@ -10,6 +10,7 @@ services/api/target/
 .local-data/
 .local-deploy/
 apps/admin/dist 2/
+apps/mobile/dist 2/
 apps/admin/public/qualification-assets/
 services/api/src/main/resources/qualification-import.json
 .env

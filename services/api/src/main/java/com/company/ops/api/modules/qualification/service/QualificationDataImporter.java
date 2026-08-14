@@ -89,11 +89,15 @@ public class QualificationDataImporter {
 
   private Map<String, QualificationEmployee> importEmployees(JsonNode nodes) {
     Map<String, QualificationEmployee> result = new HashMap<>();
+    Map<String, QualificationEmployee> existingByExternalId = new HashMap<>();
+    for (QualificationEmployee employee : employeeRepository.findAll()) {
+      if (employee.getExternalId() != null) existingByExternalId.put(employee.getExternalId(), employee);
+    }
     for (JsonNode node : nodes) {
       String externalId = text(node, "id");
-      var existing = employeeRepository.findByExternalId(externalId);
-      if (existing.isPresent()) {
-        QualificationEmployee employee = existing.get();
+      QualificationEmployee existingEmployee = externalId == null ? null : existingByExternalId.get(externalId);
+      if (existingEmployee != null) {
+        QualificationEmployee employee = existingEmployee;
         if (employee.getOrganization() == null) {
           SystemOrganization organization = importedOrganization(employee.getDepartment());
           employee.setOrganization(organization);
@@ -120,9 +124,10 @@ public class QualificationDataImporter {
   }
 
   private void importCompanyQualifications(JsonNode nodes) {
+    java.util.Set<String> existingIds = new java.util.HashSet<>(companyRepository.findAllExternalIds());
     for (JsonNode node : nodes) {
       String externalId = text(node, "id");
-      if (companyRepository.findByExternalId(externalId).isPresent()) continue;
+      if (externalId != null && !existingIds.add(externalId)) continue;
       CompanyQualification item = new CompanyQualification();
       item.setExternalId(externalId); item.setSubjectCompany(text(node, "subjectCompany")); item.setName(text(node, "name"));
       item.setCategory(text(node, "category")); item.setLevel(text(node, "level")); item.setCertificateNo(text(node, "certificateNo"));
@@ -138,11 +143,12 @@ public class QualificationDataImporter {
   }
 
   private void importCertificates(JsonNode nodes, Map<String, QualificationEmployee> employees) {
+    java.util.Set<String> existingIds = new java.util.HashSet<>(certificateRepository.findAllExternalIds());
     for (JsonNode node : nodes) {
       QualificationEmployee employee = employees.get(text(node, "employeeId"));
       if (employee == null) continue;
       String externalId = text(node, "id");
-      if (certificateRepository.findByExternalId(externalId).isPresent()) continue;
+      if (externalId != null && !existingIds.add(externalId)) continue;
       PersonnelCertificate item = new PersonnelCertificate();
       item.setExternalId(externalId); item.setEmployee(employee); item.setName(text(node, "name")); item.setType(text(node, "type"));
       item.setCertificateNo(text(node, "certNo")); item.setSpecialty(text(node, "specialty"));
@@ -155,9 +161,10 @@ public class QualificationDataImporter {
   }
 
   private void importPerformances(JsonNode nodes) {
+    java.util.Set<String> existingIds = new java.util.HashSet<>(performanceRepository.findAllExternalIds());
     for (JsonNode node : nodes) {
       String externalId = text(node, "id");
-      if (performanceRepository.findByExternalId(externalId).isPresent()) continue;
+      if (externalId != null && !existingIds.add(externalId)) continue;
       QualificationPerformance item = new QualificationPerformance();
       item.setExternalId(externalId); item.setSubjectCompany(text(node, "subjectCompany")); item.setName(text(node, "name"));
       item.setClientName(text(node, "clientName")); item.setContractNo(text(node, "contractNo"));

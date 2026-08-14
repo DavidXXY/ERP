@@ -11,6 +11,7 @@ import com.company.ops.api.modules.procurement.dto.ProcurementPurchasePoolRespon
 import com.company.ops.api.modules.procurement.dto.ReceivePurchaseOrderRequest;
 import com.company.ops.api.modules.procurement.service.PortalCollaborationService;
 import com.company.ops.api.modules.procurement.service.ProcurementControlService;
+import com.company.ops.api.modules.procurement.service.ProcurementReturnService;
 import jakarta.validation.Valid;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -29,13 +30,16 @@ import org.springframework.web.bind.annotation.RequestParam;
 @RequestMapping("/api/procurement")
 public class ProcurementControlController {
   private final ProcurementControlService service;
+  private final ProcurementReturnService returnService;
   private final PortalCollaborationService collaboration;
 
   public ProcurementControlController(
       ProcurementControlService service,
+      ProcurementReturnService returnService,
       PortalCollaborationService collaboration
   ) {
     this.service = service;
+    this.returnService = returnService;
     this.collaboration = collaboration;
   }
 
@@ -142,7 +146,7 @@ public class ProcurementControlController {
   @GetMapping("/returns")
   @PreAuthorize("hasAuthority('procurement:view')")
   public ApiResponse<List<ProcurementReturnOrder>> returns() {
-    return ApiResponse.ok(service.listReturns());
+    return ApiResponse.ok(returnService.listReturns());
   }
 
   @PostMapping("/returns/{id}/resolve")
@@ -151,7 +155,7 @@ public class ProcurementControlController {
       @PathVariable UUID id,
       @Valid @RequestBody ResolveReturn request
   ) {
-    return ApiResponse.ok(service.resolveReturn(id, request));
+    return ApiResponse.ok(returnService.resolveReturn(id, request));
   }
 
   @PostMapping("/supplier-invoices")

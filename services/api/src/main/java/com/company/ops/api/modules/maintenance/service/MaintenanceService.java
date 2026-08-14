@@ -410,34 +410,8 @@ public class MaintenanceService {
     workOrderRepository.deleteById(id);
   }
 
-  @Transactional(readOnly = true)
-  public List<EquipmentResponse> listEquipment() {
-    return equipmentRepository.findAllByOrderByNextMaintenanceDateAsc().stream()
-        .map(this::toEquipResponse).toList();
-  }
 
-  @Transactional
-  public EquipmentResponse createEquipment(CreateEquipmentRequest r) {
-    String code = trimToNull(r.code());
-    if (code == null) code = codeGenerator.generate("EQUIPMENT");
-    if (equipmentRepository.existsByCode(code)) throw new BusinessException("设备编码已存在");
-    EquipmentAsset asset = new EquipmentAsset();
-    applyEquipment(asset, r, code);
-    return toEquipResponse(equipmentRepository.save(asset));
-  }
 
-  @Transactional
-  public EquipmentResponse updateEquipment(UUID id, CreateEquipmentRequest r) {
-    EquipmentAsset asset = equipmentRepository.findById(id)
-        .orElseThrow(() -> new BusinessException("设备不存在"));
-    String code = trimToNull(r.code());
-    if (code == null) code = asset.getCode();
-    if (!code.equals(asset.getCode()) && equipmentRepository.existsByCode(code)) {
-      throw new BusinessException("设备编码已存在");
-    }
-    applyEquipment(asset, r, code);
-    return toEquipResponse(equipmentRepository.save(asset));
-  }
 
   @Transactional(readOnly = true)
   public List<PlanResponse> listPlans() {
@@ -573,24 +547,6 @@ public class MaintenanceService {
 
   private EquipmentAsset requireEquipment(UUID id) {
     return equipmentRepository.findById(id).orElseThrow(() -> new BusinessException("设备不存在"));
-  }
-
-  private void applyEquipment(EquipmentAsset asset, CreateEquipmentRequest r, String code) {
-    if (!customerRepository.existsById(r.customerId())) throw new BusinessException("客户不存在");
-    asset.setCustomerId(r.customerId());
-    asset.setContractId(r.contractId());
-    asset.setCode(code);
-    asset.setName(r.name().trim());
-    asset.setCategory(r.category().trim());
-    asset.setModel(trimToNull(r.model()));
-    asset.setSerialNo(trimToNull(r.serialNo()));
-    asset.setSiteAddress(r.siteAddress().trim());
-    asset.setInstalledDate(r.installedDate());
-    asset.setWarrantyEndDate(r.warrantyEndDate());
-    asset.setMaintenanceCycleDays(r.maintenanceCycleDays() == null ? 90 : r.maintenanceCycleDays());
-    asset.setNextMaintenanceDate(r.nextMaintenanceDate());
-    asset.setRequiredCertificate(trimToNull(r.requiredCertificate()));
-    asset.setNotes(trimToNull(r.notes()));
   }
 
   private void applyPlan(MaintenancePlan plan, CreatePlanRequest r, EquipmentAsset asset) {
@@ -764,20 +720,6 @@ public class MaintenanceService {
 
   private MaterialResponse toMaterial(WorkOrderMaterial item) {
     return new MaterialResponse(item.getId(), item.getPartId(), item.getPartName(), item.getQuantity(), item.getUnitCost(), item.getAmount());
-  }
-
-  private EquipmentResponse toEquipResponse(EquipmentAsset a) {
-    String cn = a.getCustomerId() == null ? null :
-        customerRepository.findById(a.getCustomerId()).map(Customer::getName).orElse(null);
-    long cnt = workOrderRepository.findAllByOrderByCreatedAtDesc().stream()
-        .filter(o -> a.getId().equals(o.getEquipmentId())).count();
-    return new EquipmentResponse(
-        a.getId(), a.getCode(), a.getName(), a.getCustomerId(), cn,
-        a.getCategory(), a.getModel(), a.getSerialNo(),
-        a.getSiteAddress(), a.getInstalledDate(),
-        a.getWarrantyEndDate(), a.getMaintenanceCycleDays(),
-        a.getLastMaintenanceDate(), a.getNextMaintenanceDate(),
-        a.getStatus(), cnt);
   }
 
   private PlanResponse toPlanResponse(MaintenancePlan plan) {

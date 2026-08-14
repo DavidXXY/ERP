@@ -38,6 +38,9 @@
             autocomplete="current-password"
           />
         </a-form-item>
+        <a-form-item>
+          <a-checkbox v-model:checked="rememberMe">记住密码</a-checkbox>
+        </a-form-item>
         <a-form-item
           v-if="mfaRequired"
           label="动态验证码或恢复码"
@@ -74,7 +77,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from "vue";
+import { onMounted, reactive, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
 
@@ -84,6 +87,44 @@ const router = useRouter();
 const loading = ref(false);
 const errorMessage = ref("");
 const mfaRequired = ref(false);
+const rememberMe = ref(false);
+
+const REMEMBER_KEY = "ops_erp_remember_credentials";
+
+function encodeRemembered(value: string) {
+  return btoa(encodeURIComponent(value));
+}
+
+function decodeRemembered(value: string) {
+  return decodeURIComponent(atob(value));
+}
+
+function loadRememberedCredentials() {
+  try {
+    const raw = localStorage.getItem(REMEMBER_KEY);
+    if (!raw) return;
+    const saved = JSON.parse(raw) as { username?: string; password?: string };
+    if (saved.username) formState.username = decodeRemembered(saved.username);
+    if (saved.password) formState.password = decodeRemembered(saved.password);
+    rememberMe.value = Boolean(saved.username || saved.password);
+  } catch {
+    localStorage.removeItem(REMEMBER_KEY);
+  }
+}
+
+function saveRememberedCredentials() {
+  if (rememberMe.value) {
+    localStorage.setItem(
+      REMEMBER_KEY,
+      JSON.stringify({
+        username: encodeRemembered(formState.username.trim()),
+        password: encodeRemembered(formState.password),
+      }),
+    );
+  } else {
+    localStorage.removeItem(REMEMBER_KEY);
+  }
+}
 
 const formState = reactive({
   username: "",
@@ -105,6 +146,7 @@ async function handleLogin() {
       errorMessage.value = "请输入验证器中的动态验证码，或使用一个恢复码";
       return;
     }
+    saveRememberedCredentials();
     const redirect =
       typeof route.query.redirect === "string"
         ? route.query.redirect
@@ -122,4 +164,6 @@ function resetMfaChallenge() {
   formState.mfaCode = "";
   errorMessage.value = "";
 }
+
+onMounted(loadRememberedCredentials);
 </script>

@@ -29,6 +29,7 @@ import com.company.ops.api.modules.office.dto.OfficeDtos.ProcessApprovalRequest;
 import com.company.ops.api.modules.office.dto.OfficeDtos.SupplierOption;
 import com.company.ops.api.modules.office.dto.OfficeDtos.WorkbenchResponse;
 import com.company.ops.api.modules.office.service.OfficeService;
+import com.company.ops.api.modules.office.service.OfficeDocumentService;
 import com.company.ops.api.modules.office.service.ReminderScheduler;
 import jakarta.validation.Valid;
 import java.nio.charset.StandardCharsets;
@@ -58,8 +59,9 @@ import java.util.ArrayList;
 @RestController @RequestMapping("/api/office")
 public class OfficeController {
   private final OfficeService service;
+  private final OfficeDocumentService documentService;
   private final ReminderScheduler reminderScheduler;
-  public OfficeController(OfficeService service, ReminderScheduler reminderScheduler) { this.service = service; this.reminderScheduler = reminderScheduler; }
+  public OfficeController(OfficeService service, OfficeDocumentService documentService, ReminderScheduler reminderScheduler) { this.service = service; this.documentService = documentService; this.reminderScheduler = reminderScheduler; }
 
   @GetMapping("/overview") @PreAuthorize("hasAuthority('office:view')")
   public ApiResponse<OfficeOverview> overview() { return ApiResponse.ok(service.overview()); }
@@ -118,7 +120,7 @@ public class OfficeController {
   @GetMapping("/suppliers") @PreAuthorize("hasAnyAuthority('office:view', 'office:outsource:create')")
   public ApiResponse<List<SupplierOption>> suppliers() { return ApiResponse.ok(service.suppliers()); }
   @GetMapping("/documents") @PreAuthorize("hasAuthority('office:document:view')")
-  public ApiResponse<List<DocumentResponse>> documents() { return ApiResponse.ok(service.listDocuments()); }
+  public ApiResponse<List<DocumentResponse>> documents() { return ApiResponse.ok(documentService.listDocuments()); }
   @GetMapping("/documents/search") @PreAuthorize("hasAuthority('office:document:view')")
   public ApiResponse<PageResponse<DocumentResponse>> searchDocuments(
       @RequestParam(required = false) String bizType,
@@ -126,32 +128,32 @@ public class OfficeController {
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size) {
     if (size < 1 || size > 100) { size = 20; }
-    return ApiResponse.ok(PageResponse.from(service.listDocuments(bizType, bizId, page, size)));
+    return ApiResponse.ok(PageResponse.from(documentService.listDocuments(bizType, bizId, page, size)));
   }
   @GetMapping("/documents/by-biz")
   @PreAuthorize("hasAuthority('office:document:view') or (hasAuthority('procurement:view') and @officeDocumentSecurity.isProcurementBizType(#bizType))")
   public ApiResponse<List<DocumentResponse>> documentsByBiz(
       @RequestParam String bizType, @RequestParam(required = false) UUID bizId) {
-    return ApiResponse.ok(service.listDocumentsByBiz(bizType, bizId));
+    return ApiResponse.ok(documentService.listDocumentsByBiz(bizType, bizId));
   }
   @GetMapping("/documents/count")
   @PreAuthorize("hasAuthority('office:document:view') or (hasAuthority('procurement:view') and @officeDocumentSecurity.isProcurementBizType(#bizType))")
   public ApiResponse<Long> documentCount(
       @RequestParam String bizType, @RequestParam(required = false) UUID bizId) {
-    return ApiResponse.ok(service.getDocumentCount(bizType, bizId));
+    return ApiResponse.ok(documentService.getDocumentCount(bizType, bizId));
   }
   @PostMapping(value = "/documents", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   @ResponseStatus(HttpStatus.CREATED)
   @PreAuthorize("hasAuthority('office:document:upload') or (hasAuthority('procurement:purchase:create') and @officeDocumentSecurity.isProcurementBizType(#bizType))")
-  public ApiResponse<DocumentResponse> upload(@RequestParam String bizType, @RequestParam(required = false) UUID bizId, @RequestPart MultipartFile file) { return ApiResponse.ok(service.storeDocument(bizType, bizId, file)); }
+  public ApiResponse<DocumentResponse> upload(@RequestParam String bizType, @RequestParam(required = false) UUID bizId, @RequestPart MultipartFile file) { return ApiResponse.ok(documentService.storeDocument(bizType, bizId, file)); }
   @PostMapping(value = "/documents/batch", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   @ResponseStatus(HttpStatus.CREATED)
   @PreAuthorize("hasAuthority('office:document:upload') or (hasAuthority('procurement:purchase:create') and @officeDocumentSecurity.isProcurementBizType(#bizType))")
-  public ApiResponse<List<DocumentResponse>> uploadBatch(@RequestParam String bizType, @RequestParam(required = false) UUID bizId, @RequestPart List<MultipartFile> files) { return ApiResponse.ok(service.storeDocuments(bizType, bizId, files)); }
+  public ApiResponse<List<DocumentResponse>> uploadBatch(@RequestParam String bizType, @RequestParam(required = false) UUID bizId, @RequestPart List<MultipartFile> files) { return ApiResponse.ok(documentService.storeDocuments(bizType, bizId, files)); }
   @GetMapping("/documents/{id}/download")
   @PreAuthorize("hasAuthority('office:document:view') or (hasAuthority('procurement:view') and @officeDocumentSecurity.isProcurementDocument(#id)) or (hasAuthority('office:seal:view') and @officeDocumentSecurity.isSealDocument(#id))")
   public ResponseEntity<Resource> download(@PathVariable UUID id) {
-    DocumentFile item = service.requireDocument(id); Resource resource = service.loadDocument(item);
+    DocumentFile item = documentService.requireDocument(id); Resource resource = documentService.loadDocument(item);
     return ResponseEntity.ok().contentType(item.getContentType() == null ? MediaType.APPLICATION_OCTET_STREAM : MediaType.parseMediaType(item.getContentType()))
         .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment().filename(item.getFileName(), StandardCharsets.UTF_8).build().toString())
         .body(resource);
@@ -159,7 +161,7 @@ public class OfficeController {
   @GetMapping("/documents/{id}/preview")
   @PreAuthorize("hasAuthority('office:document:view') or (hasAuthority('procurement:view') and @officeDocumentSecurity.isProcurementDocument(#id)) or (hasAuthority('office:seal:view') and @officeDocumentSecurity.isSealDocument(#id))")
   public ResponseEntity<Resource> preview(@PathVariable UUID id) {
-    DocumentFile item = service.requireDocument(id); Resource resource = service.loadDocumentForPreview(item);
+    DocumentFile item = documentService.requireDocument(id); Resource resource = documentService.loadDocumentForPreview(item);
     String contentType = item.getContentType() != null && (item.getContentType().startsWith("image/") || item.getContentType().equals("application/pdf"))
         ? item.getContentType() : MediaType.APPLICATION_OCTET_STREAM_VALUE;
     return ResponseEntity.ok().contentType(MediaType.parseMediaType(contentType))
@@ -168,13 +170,13 @@ public class OfficeController {
   }
   @PutMapping("/documents/{id}") @PreAuthorize("hasAuthority('office:document:upload')")
   public ApiResponse<DocumentResponse> updateDocument(@PathVariable UUID id, @RequestParam String fileName) {
-    return ApiResponse.ok(service.updateDocumentName(id, fileName));
+    return ApiResponse.ok(documentService.updateDocumentName(id, fileName));
   }
   @DeleteMapping("/documents/{id}") @PreAuthorize("hasAuthority('office:document:delete')")
-  public ApiResponse<Void> deleteDocument(@PathVariable UUID id) { service.deleteDocument(id); return ApiResponse.ok(); }
+  public ApiResponse<Void> deleteDocument(@PathVariable UUID id) { documentService.deleteDocument(id); return ApiResponse.ok(); }
   @DeleteMapping("/documents/by-biz") @PreAuthorize("hasAuthority('office:document:delete')")
   public ApiResponse<Void> deleteDocumentsByBiz(@RequestParam String bizType, @RequestParam UUID bizId) {
-    service.deleteDocumentsByBiz(bizType, bizId); return ApiResponse.ok();
+    documentService.deleteDocumentsByBiz(bizType, bizId); return ApiResponse.ok();
   }
   @GetMapping("/notifications") @PreAuthorize("hasAuthority('office:notification:view')")
   public ApiResponse<PageResponse<NotificationResponse>> notifications(

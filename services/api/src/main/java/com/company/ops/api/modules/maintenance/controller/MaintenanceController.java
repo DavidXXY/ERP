@@ -5,6 +5,7 @@ import com.company.ops.api.modules.maintenance.dto.MaintenanceDtos.*;
 import com.company.ops.api.modules.maintenance.domain.WorkOrderAttachmentCategory;
 import com.company.ops.api.modules.maintenance.domain.WorkOrderAttachment;
 import com.company.ops.api.modules.maintenance.service.MaintenanceService;
+import com.company.ops.api.modules.maintenance.service.MaintenanceEquipmentService;
 import com.company.ops.api.modules.system.security.UserPrincipal;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -33,9 +34,13 @@ import org.springframework.web.multipart.MultipartFile;
 public class MaintenanceController {
 
   private final MaintenanceService service;
+  private final MaintenanceEquipmentService equipmentService;
 
-  public MaintenanceController(MaintenanceService service) {
+  public MaintenanceController(
+      MaintenanceService service,
+      MaintenanceEquipmentService equipmentService) {
     this.service = service;
+    this.equipmentService = equipmentService;
   }
 
   @GetMapping("/dashboard")
@@ -176,20 +181,20 @@ public class MaintenanceController {
   @GetMapping("/equipment")
   @PreAuthorize("hasAnyAuthority('maintenance:order:manage', 'maintenance:view')")
   public ApiResponse<List<EquipmentResponse>> equipment() {
-    return ApiResponse.ok(service.listEquipment());
+    return ApiResponse.ok(equipmentService.listEquipment());
   }
 
   @PostMapping("/equipment")
   @ResponseStatus(HttpStatus.CREATED)
   @PreAuthorize("hasAnyAuthority('maintenance:equipment:create', 'maintenance:order:manage')")
   public ApiResponse<EquipmentResponse> createEquipment(@Valid @RequestBody CreateEquipmentRequest request) {
-    return ApiResponse.ok(service.createEquipment(request));
+    return ApiResponse.ok(equipmentService.createEquipment(request));
   }
 
   @PutMapping("/equipment/{id}")
   @PreAuthorize("hasAuthority('maintenance:order:manage')")
   public ApiResponse<EquipmentResponse> updateEquipment(@PathVariable UUID id, @Valid @RequestBody CreateEquipmentRequest request) {
-    return ApiResponse.ok(service.updateEquipment(id, request));
+    return ApiResponse.ok(equipmentService.updateEquipment(id, request));
   }
 
   @GetMapping("/plans")

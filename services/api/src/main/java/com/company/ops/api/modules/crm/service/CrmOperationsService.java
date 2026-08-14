@@ -186,70 +186,6 @@ public class CrmOperationsService {
         .toList();
   }
 
-  @Transactional(readOnly = true)
-  public List<OpportunityResponse> listOpportunities() {
-    List<Opportunity> opportunities = deleteGovernanceService.visible("OPPORTUNITY", opportunityRepository.findAllByOrderByUpdatedAtDesc(), Opportunity::getId)
-        .stream().filter(this::canAccessOpportunity).toList();
-    Map<UUID, Customer> customers = customerMap(opportunities.stream()
-        .map(Opportunity::getCustomerId)
-        .toList());
-    return opportunities.stream().map(item -> toOpportunity(item, customers)).toList();
-  }
-
-  @Transactional(readOnly = true)
-  public OpportunityResponse getOpportunity(UUID id) {
-    Opportunity opportunity = opportunityRepository.findById(id)
-        .orElseThrow(() -> new BusinessException("商机不存在"));
-    assertOpportunityAccess(opportunity);
-    if (deleteGovernanceService.isHidden("OPPORTUNITY", id)) throw new BusinessException("商机不存在");
-    return toOpportunity(opportunity, customerMap(nullableId(opportunity.getCustomerId())));
-  }
-
-  @Transactional
-  public OpportunityResponse createOpportunity(CreateOpportunityRequest request) {
-    String oppCode = request.code() != null && !request.code().isBlank()
-        ? request.code().trim()
-        : codeGenerator.generate("OPPORTUNITY");
-    if (opportunityRepository.existsByCode(oppCode)) {
-      throw new BusinessException("商机编码已存在");
-    }
-    validateCustomer(request.customerId());
-
-    Opportunity opportunity = new Opportunity();
-    opportunity.setCustomerId(request.customerId());
-    opportunity.setCode(oppCode);
-    opportunity.setSource(request.source());
-    opportunity.setNeedSummary(request.needSummary());
-    opportunity.setStage(request.stage() == null ? OpportunityStage.LEAD : request.stage());
-    opportunity.setExpectedAmount(defaultAmount(request.expectedAmount()));
-    opportunity.setProbability(request.probability() == null ? 10 : request.probability());
-    opportunity.setNextAction(request.nextAction());
-    opportunity.setNextActionAt(request.nextActionAt());
-    opportunity.setOwnerName(request.ownerName());
-    opportunity.setOwnerUserId(dataScopeService.requireVisibleOwnerId(request.ownerName()));
-    Opportunity saved = opportunityRepository.save(opportunity);
-    return toOpportunity(saved, customerMap(nullableId(saved.getCustomerId())));
-  }
-
-  @Transactional
-  public OpportunityResponse advanceOpportunity(UUID id, AdvanceOpportunityRequest request) {
-    Opportunity opportunity = opportunityRepository.findById(id)
-        .orElseThrow(() -> new BusinessException("商机不存在"));
-    assertOpportunityAccess(opportunity);
-    if (opportunity.getStage() == OpportunityStage.WON || opportunity.getStage() == OpportunityStage.LOST) {
-      throw new BusinessException("已结束商机不能继续推进");
-    }
-    if ((request.stage() == OpportunityStage.NEGOTIATION || request.stage() == OpportunityStage.WON)
-        && !quoteRepository.existsByOpportunityId(opportunity.getId())) {
-      throw new BusinessException("请先为该商机创建报价方案才能继续推进");
-    }
-    opportunity.setStage(request.stage());
-    opportunity.setNextAction(request.nextAction());
-    opportunity.setNextActionAt(request.nextActionAt());
-    opportunity.setProbability(request.probability());
-    Opportunity saved = opportunityRepository.save(opportunity);
-    return toOpportunity(saved, customerMap(nullableId(saved.getCustomerId())));
-  }
 
   @Transactional(readOnly = true)
   public List<QuoteResponse> listQuotes() {
@@ -999,28 +935,6 @@ public class CrmOperationsService {
     }).toList();
   }
 
-  @Transactional
-  public void deleteOpportunity(UUID id) {
-    Opportunity opportunity = opportunityRepository.findById(id)
-        .orElseThrow(() -> new BusinessException("商机不存在"));
-    assertOpportunityAccess(opportunity);
-    if (!deleteGovernanceService.allowPhysicalDelete("OPPORTUNITY", id, opportunity.getCode())) {
-      return;
-    }
-    // Cascade delete related records
-    entityManager.createNativeQuery("DELETE FROM crm_follow_ups WHERE opportunity_id = ?1")
-        .setParameter(1, id).executeUpdate();
-    entityManager.createNativeQuery("DELETE FROM crm_quote_revisions WHERE quote_id IN (SELECT id FROM crm_quote_plans WHERE opportunity_id = ?1)")
-        .setParameter(1, id).executeUpdate();
-    entityManager.createNativeQuery("DELETE FROM crm_quote_approval_records WHERE quote_id IN (SELECT id FROM crm_quote_plans WHERE opportunity_id = ?1)")
-        .setParameter(1, id).executeUpdate();
-    entityManager.createNativeQuery("DELETE FROM crm_quote_cost_requests WHERE quote_id IN (SELECT id FROM crm_quote_plans WHERE opportunity_id = ?1)")
-        .setParameter(1, id).executeUpdate();
-    entityManager.createNativeQuery("DELETE FROM crm_quote_plans WHERE opportunity_id = ?1")
-        .setParameter(1, id).executeUpdate();
-    entityManager.createNativeQuery("DELETE FROM crm_opportunities WHERE id = ?1")
-        .setParameter(1, id).executeUpdate();
-  }
 
   @Transactional
   public void deleteQuote(UUID id) {
@@ -1076,23 +990,6 @@ public class CrmOperationsService {
     followUpRepository.delete(f);
   }
 
-  private OpportunityResponse toOpportunity(Opportunity item, Map<UUID, Customer> customers) {
-    return new OpportunityResponse(
-        item.getId(),
-        item.getCustomerId(),
-        customerName(customers, item.getCustomerId()),
-        item.getCode(),
-        item.getSource(),
-        item.getNeedSummary(),
-        item.getStage(),
-        item.getExpectedAmount(),
-        item.getProbability(),
-        item.getNextAction(),
-        item.getNextActionAt(),
-        item.getOwnerName(),
-        item.getUpdatedAt()
-    );
-  }
 
   private QuoteResponse toQuote(
       QuotePlan item,
@@ -1775,6 +1672,16 @@ public class CrmOperationsService {
     if (!dataScopeService.canViewOwner(customer.getOwnerUserId())) throw new BusinessException("无权访问该客户数据");
   }
 
+  private boolean canAccessOpportunity(Opportunity opportunity) {
+    return opportunity.getCustomerId() != null
+        ? canAccessCustomer(opportunity.getCustomerId())
+        : dataScopeService.canViewOwner(opportunity.getOwnerUserId());
+  }
+
+  private void assertOpportunityAccess(Opportunity opportunity) {
+    if (!canAccessOpportunity(opportunity)) throw new BusinessException("无权访问该商机");
+  }
+
   private void assertContractAccess(UUID contractId) {
     ServiceContract contract = contractRepository.findById(contractId)
         .orElseThrow(() -> new BusinessException("合同不存在"));
@@ -1785,15 +1692,6 @@ public class CrmOperationsService {
     return dataScopeService.currentActorName();
   }
 
-  private boolean canAccessOpportunity(Opportunity opportunity) {
-    return opportunity.getCustomerId() != null
-        ? canAccessCustomer(opportunity.getCustomerId())
-        : dataScopeService.canViewOwner(opportunity.getOwnerUserId());
-  }
-
-  private void assertOpportunityAccess(Opportunity opportunity) {
-    if (!canAccessOpportunity(opportunity)) throw new BusinessException("无权访问该商机");
-  }
 
   private boolean canAccessFollowUp(FollowUp followUp) {
     return followUp.getCustomerId() != null
@@ -2184,25 +2082,6 @@ public class CrmOperationsService {
     createProjectFromApprovedContract(saved);
   }
 
-  @Transactional
-  public OpportunityResponse updateOpportunity(UUID id, CreateOpportunityRequest request) {
-    Opportunity opp = opportunityRepository.findById(id)
-        .orElseThrow(() -> new BusinessException("\u5546\u673a\u4e0d\u5b58\u5728"));
-    assertOpportunityAccess(opp);
-    if (request.customerId() != null) {
-      assertCustomerAccess(request.customerId());
-      opp.setCustomerId(request.customerId());
-    }
-    if (request.needSummary() != null) opp.setNeedSummary(request.needSummary());
-    if (request.expectedAmount() != null) opp.setExpectedAmount(request.expectedAmount());
-    if (request.nextAction() != null) opp.setNextAction(request.nextAction());
-    if (request.nextActionAt() != null) opp.setNextActionAt(request.nextActionAt());
-    if (request.ownerName() != null) {
-      opp.setOwnerName(request.ownerName());
-      opp.setOwnerUserId(dataScopeService.requireVisibleOwnerId(request.ownerName()));
-    }
-    return toOpportunity(opportunityRepository.save(opp), customerMap(nullableId(opp.getCustomerId())));
-  }
 
   @Transactional
   public ContractResponse updateContract(UUID id, UpdateContractRequest request) {

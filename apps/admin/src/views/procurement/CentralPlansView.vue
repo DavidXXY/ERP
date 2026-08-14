@@ -300,7 +300,7 @@ const columns = [
   { title: "年度", key: "year", width: 90 },
   { title: "明细", key: "items", width: 160 },
   { title: "状态", key: "status", width: 100 },
-  { title: "创建人", dataIndex: "createdByName", width: 120 },
+  { title: "负责人", dataIndex: "createdByName", width: 120 },
   { title: "操作", key: "action", width: 170 },
 ];
 const itemColumns = [

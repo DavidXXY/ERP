@@ -29,6 +29,9 @@ public class StockMovement extends BaseEntity {
   @Column(length = 300)
   private String remark;
 
+  @Column(name = "operator_name", length = 80)
+  private String operatorName;
+
   public UUID getPartId() {
     return partId;
   }
@@ -67,5 +70,13 @@ public class StockMovement extends BaseEntity {
 
   public void setRemark(String remark) {
     this.remark = remark;
+  }
+
+  public String getOperatorName() {
+    return operatorName;
+  }
+
+  public void setOperatorName(String operatorName) {
+    this.operatorName = operatorName;
   }
 }

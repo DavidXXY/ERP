@@ -17,11 +17,15 @@ public class SupplierInvoice extends BaseEntity {
   @Column(name="client_request_id",length=80) private String clientRequestId;
   @Column(name="approved_by_name",length=80) private String approvedByName;
   @Column(name="approved_at") private OffsetDateTime approvedAt;
+  @Column(name="handler_name",length=80) private String handlerName;
   @Column(name="attachment_document_id") private UUID attachmentDocumentId;
   @Column(name="tax_status",nullable=false,length=24) private String taxStatus="NORMAL";
   @Column(name="tax_adjustment_reason",length=500) private String taxAdjustmentReason;
   @Column(name="tax_adjusted_at") private OffsetDateTime taxAdjustedAt;
   @Column(name="tax_adjusted_by",length=80) private String taxAdjustedBy;
+  @Column(name="verified_by",length=80) private String verifiedBy;
+  @Column(name="verified_at") private OffsetDateTime verifiedAt;
+  @Column(name="verification_comment",length=500) private String verificationComment;
   public String getCode(){return code;} public void setCode(String v){code=v;} public String getInvoiceNo(){return invoiceNo;} public void setInvoiceNo(String v){invoiceNo=v;}
   public UUID getOrderId(){return orderId;} public void setOrderId(UUID v){orderId=v;} public UUID getSupplierId(){return supplierId;} public void setSupplierId(UUID v){supplierId=v;}
   public BigDecimal getAmount(){return amount;} public void setAmount(BigDecimal v){amount=v;} public BigDecimal getTaxRate(){return taxRate;} public void setTaxRate(BigDecimal v){taxRate=v;}
@@ -36,9 +40,13 @@ public class SupplierInvoice extends BaseEntity {
   public String getClientRequestId(){return clientRequestId;} public void setClientRequestId(String v){clientRequestId=v;}
   public String getApprovedByName(){return approvedByName;} public void setApprovedByName(String v){approvedByName=v;}
   public OffsetDateTime getApprovedAt(){return approvedAt;} public void setApprovedAt(OffsetDateTime v){approvedAt=v;}
+  public String getHandlerName(){return handlerName;} public void setHandlerName(String v){handlerName=v;}
   public UUID getAttachmentDocumentId(){return attachmentDocumentId;} public void setAttachmentDocumentId(UUID v){attachmentDocumentId=v;}
   public String getTaxStatus(){return taxStatus;} public void setTaxStatus(String v){taxStatus=v;}
   public String getTaxAdjustmentReason(){return taxAdjustmentReason;} public void setTaxAdjustmentReason(String v){taxAdjustmentReason=v;}
   public OffsetDateTime getTaxAdjustedAt(){return taxAdjustedAt;} public void setTaxAdjustedAt(OffsetDateTime v){taxAdjustedAt=v;}
   public String getTaxAdjustedBy(){return taxAdjustedBy;} public void setTaxAdjustedBy(String v){taxAdjustedBy=v;}
+  public String getVerifiedBy(){return verifiedBy;} public void setVerifiedBy(String v){verifiedBy=v;}
+  public OffsetDateTime getVerifiedAt(){return verifiedAt;} public void setVerifiedAt(OffsetDateTime v){verifiedAt=v;}
+  public String getVerificationComment(){return verificationComment;} public void setVerificationComment(String v){verificationComment=v;}
 }

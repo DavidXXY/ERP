@@ -59,6 +59,8 @@ public class ProcurementControlService {
   private final ProcurementCostAllocationRepository costs;
   private final ProcurementReturnOrderRepository returns;
   private final SupplierInvoiceRepository invoices;
+  private final SupplierInvoicePayableRepository invoicePayables;
+  private final PayableAdjustmentRepository adjustments;
   private final SupplierInvoiceSubmissionRepository invoiceSubmissions;
   private final FileStorageService storage;
   private final PurchaseRequestApprovalRecordRepository requestApprovals;
@@ -84,6 +86,8 @@ public class ProcurementControlService {
       ProcurementCostAllocationRepository costs,
       ProcurementReturnOrderRepository returns,
       SupplierInvoiceRepository invoices,
+      SupplierInvoicePayableRepository invoicePayables,
+      PayableAdjustmentRepository adjustments,
       SupplierInvoiceSubmissionRepository invoiceSubmissions,
       FileStorageService storage,
       PurchaseRequestApprovalRecordRepository requestApprovals,
@@ -108,6 +112,8 @@ public class ProcurementControlService {
     this.costs = costs;
     this.returns = returns;
     this.invoices = invoices;
+    this.invoicePayables = invoicePayables;
+    this.adjustments = adjustments;
     this.invoiceSubmissions = invoiceSubmissions;
     this.storage = storage;
     this.requestApprovals = requestApprovals;
@@ -618,7 +624,14 @@ public class ProcurementControlService {
     receipt.setInspectedAt(OffsetDateTime.now());
     receipt.setInspectionStatus(request.rejectedQty().signum() == 0 ? "PASSED"
         : request.qualifiedQty().signum() == 0 ? "REJECTED" : "PARTIAL");
-    receipt.setPayableDueDate(request.payableDueDate());
+    LocalDate resolvedDueDate = request.payableDueDate();
+    if (resolvedDueDate == null) {
+      Supplier supplier = suppliers.findById(order.getSupplierId()).orElse(null);
+      int terms = supplier == null || supplier.getPaymentTermsDays() <= 0
+          ? 30 : supplier.getPaymentTermsDays();
+      resolvedDueDate = receipt.getReceivedDate().plusDays(terms);
+    }
+    receipt.setPayableDueDate(resolvedDueDate);
     receipts.save(receipt);
 
     if (request.qualifiedQty().signum() > 0) {
@@ -711,7 +724,98 @@ public class ProcurementControlService {
       replacement.setClientRequestId("RETURN:" + item.getId());
       receipts.save(replacement);
     }
+    if (creditAmount.signum() > 0) {
+      applyReturnAdjustment(order, saved, PayableAdjustmentType.CREDIT, creditAmount);
+    }
+    if (claimAmount.signum() > 0) {
+      applyReturnAdjustment(order, saved, PayableAdjustmentType.CLAIM, claimAmount);
+    }
+    if (creditAmount.signum() > 0 || claimAmount.signum() > 0) {
+      portalNotifier.notify(order.getSupplierId(), "PAYABLE",
+          "退货折让/索赔已冲减应付",
+          "退换货单 " + saved.getCode() + " 已冲减应付 "
+              + creditAmount.add(claimAmount).stripTrailingZeros().toPlainString()
+              + " 元，可在门户对账页查看。",
+          "ORDER", order.getId());
+    }
     return saved;
+  }
+
+  private BigDecimal applyReturnAdjustment(
+      PurchaseOrder order,
+      ProcurementReturnOrder returnOrder,
+      PayableAdjustmentType type,
+      BigDecimal creditAmount
+  ) {
+    BigDecimal remaining = valueOr(creditAmount, BigDecimal.ZERO);
+    if (remaining.signum() <= 0) {
+      return BigDecimal.ZERO;
+    }
+    List<ProcurementPayable> openPayables = payables
+        .findByOrderIdAndStatusNotInOrderByDueDateAsc(
+            order.getId(), List.of(PayableStatus.PAID, PayableStatus.CANCELLED));
+    BigDecimal appliedTotal = BigDecimal.ZERO;
+    for (ProcurementPayable payable : openPayables) {
+      if (remaining.signum() <= 0) {
+        break;
+      }
+      BigDecimal effective = valueOr(payable.getAmount(), BigDecimal.ZERO)
+          .subtract(valueOr(payable.getAdjustedAmount(), BigDecimal.ZERO));
+      BigDecimal outstanding = effective.subtract(valueOr(payable.getPaidAmount(), BigDecimal.ZERO));
+      if (outstanding.signum() <= 0) {
+        continue;
+      }
+      BigDecimal applied = remaining.min(outstanding);
+      remaining = remaining.subtract(applied);
+      appliedTotal = appliedTotal.add(applied);
+      payable.setAdjustedAmount(valueOr(payable.getAdjustedAmount(), BigDecimal.ZERO).add(applied));
+      BigDecimal newEffective = valueOr(payable.getAmount(), BigDecimal.ZERO)
+          .subtract(valueOr(payable.getAdjustedAmount(), BigDecimal.ZERO));
+      if (newEffective.signum() == 0 && valueOr(payable.getPaidAmount(), BigDecimal.ZERO).signum() == 0) {
+        payable.setStatus(PayableStatus.CANCELLED);
+        payable.setCancelReason("退货折让/索赔冲减清零");
+        payable.setCancelledBy(currentName());
+        payable.setCancelledAt(LocalDate.now());
+      }
+      payables.save(payable);
+
+      PayableAdjustment adjustment = new PayableAdjustment();
+      adjustment.setCode(returnAdjustmentCode());
+      adjustment.setPayableId(payable.getId());
+      adjustment.setOrderId(order.getId());
+      adjustment.setSupplierId(order.getSupplierId());
+      adjustment.setAdjustmentType(type);
+      adjustment.setAmount(applied);
+      adjustment.setReason("退换货单 " + returnOrder.getCode()
+          + (type == PayableAdjustmentType.CLAIM ? " 索赔" : " 折让") + "冲减");
+      adjustment.setOperatorName(currentName());
+      adjustment.setAppliedAt(LocalDate.now());
+      adjustment.setSource("RETURN");
+      adjustment.setSourceId(returnOrder.getId());
+      adjustments.save(adjustment);
+      if (type == PayableAdjustmentType.CLAIM) {
+        ledgerService.post("PAYABLE_ADJUSTMENT", adjustment.getCode(), adjustment.getAppliedAt(),
+            "供应商索赔冲减应付 " + adjustment.getCode(), List.of(
+                new PostingLine("2202", "应付账款", applied, BigDecimal.ZERO, payable.getCode()),
+                new PostingLine("6111", "其他业务收入", BigDecimal.ZERO, applied, adjustment.getCode())));
+      } else {
+        ledgerService.post("PAYABLE_ADJUSTMENT", adjustment.getCode(), adjustment.getAppliedAt(),
+            "退货折让冲减应付 " + adjustment.getCode(), List.of(
+                new PostingLine("2202", "应付账款", applied, BigDecimal.ZERO, payable.getCode()),
+                new PostingLine("1405", "库存商品", BigDecimal.ZERO, applied, adjustment.getCode())));
+      }
+    }
+    return appliedTotal;
+  }
+
+  private String returnAdjustmentCode() {
+    String code = "YFTZ-" + System.currentTimeMillis()
+        + "-" + UUID.randomUUID().toString().substring(0, 6);
+    while (adjustments.existsByCode(code)) {
+      code = "YFTZ-" + System.currentTimeMillis()
+          + "-" + UUID.randomUUID().toString().substring(0, 6);
+    }
+    return code;
   }
 
   @Transactional
@@ -727,39 +831,66 @@ public class ProcurementControlService {
     }
     PurchaseOrder order = orders.findById(request.orderId())
         .orElseThrow(() -> new BusinessException("订单不存在"));
-    ProcurementPayable payable = resolvePayable(order, request);
-    BigDecimal eligible = payable == null
+    List<ProcurementPayable> selectedPayables = resolvePayables(order, request);
+    Set<UUID> payableIds = selectedPayables.stream()
+        .map(ProcurementPayable::getId).collect(Collectors.toSet());
+    BigDecimal eligible = payableIds.isEmpty()
         ? payables.findByOrderId(order.getId()).stream()
             .filter(item -> item.getStatus() != PayableStatus.CANCELLED)
-            .map(ProcurementPayable::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add)
-        : payable.getAmount();
-    BigDecimal previous = (payable == null ? invoices.findByOrderId(order.getId())
-        : invoices.findByPayableId(payable.getId())).stream()
+            .map(item -> valueOr(item.getAmount(), BigDecimal.ZERO)
+                .subtract(valueOr(item.getAdjustedAmount(), BigDecimal.ZERO)))
+            .reduce(BigDecimal.ZERO, BigDecimal::add)
+        : selectedPayables.stream()
+            .map(item -> valueOr(item.getAmount(), BigDecimal.ZERO)
+                .subtract(valueOr(item.getAdjustedAmount(), BigDecimal.ZERO)))
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+    List<SupplierInvoice> previousInvoices = new ArrayList<>();
+    if (payableIds.isEmpty()) {
+      previousInvoices.addAll(invoices.findByOrderId(order.getId()));
+    } else {
+      previousInvoices.addAll(invoices.findByPayableIdIn(payableIds));
+      Set<UUID> linkedInvoiceIds = invoicePayables.findByPayableIdIn(payableIds).stream()
+          .map(SupplierInvoicePayable::getInvoiceId).collect(Collectors.toSet());
+      if (!linkedInvoiceIds.isEmpty()) {
+        previousInvoices.addAll(invoices.findAllById(linkedInvoiceIds));
+      }
+    }
+    BigDecimal previous = previousInvoices.stream()
         .filter(item -> !"REJECTED".equals(item.getApprovalStatus()))
         .map(SupplierInvoice::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
     BigDecimal remaining = eligible.subtract(previous).max(BigDecimal.ZERO);
     BigDecimal matched = request.amount().min(remaining);
+    BigDecimal difference = request.amount().subtract(matched);
+    boolean matchedWithinTolerance = difference.abs().compareTo(matchTolerance(request.amount())) <= 0;
 
     SupplierInvoice invoice = new SupplierInvoice();
     invoice.setCode("CGFP-" + System.currentTimeMillis());
     invoice.setInvoiceNo(request.invoiceNo());
     invoice.setOrderId(order.getId());
     invoice.setSupplierId(order.getSupplierId());
-    invoice.setPayableId(payable == null ? null : payable.getId());
+    ProcurementPayable firstPayable = selectedPayables.stream().findFirst().orElse(null);
+    invoice.setPayableId(firstPayable == null ? null : firstPayable.getId());
     invoice.setReceiptId(request.receiptId() != null ? request.receiptId()
-        : payable == null ? null : payable.getReceiptId());
+        : firstPayable == null ? null : firstPayable.getReceiptId());
     invoice.setAmount(request.amount());
     invoice.setMatchedAmount(matched);
     invoice.setTaxRate(request.taxRate());
     invoice.setInvoiceDate(request.invoiceDate());
-    invoice.setDifferenceAmount(request.amount().subtract(matched));
-    invoice.setMatchStatus(request.amount().compareTo(matched) == 0 ? "MATCHED" : "MISMATCH");
+    invoice.setDifferenceAmount(difference);
+    invoice.setMatchStatus(matchedWithinTolerance ? "MATCHED" : "MISMATCH");
     invoice.setApprovalStatus("PENDING");
+    invoice.setHandlerName(currentName());
     invoice.setVerificationStatus("MATCHED".equals(invoice.getMatchStatus()) ? "VERIFIED" : "EXCEPTION");
     invoice.setClientRequestId(request.clientRequestId());
     invoice.setAttachmentDocumentId(request.attachmentDocumentId());
     invoice.setRemark(request.remark());
     SupplierInvoice saved = invoices.save(invoice);
+    for (UUID payableId : payableIds) {
+      SupplierInvoicePayable link = new SupplierInvoicePayable();
+      link.setInvoiceId(saved.getId());
+      link.setPayableId(payableId);
+      invoicePayables.save(link);
+    }
     portalNotifier.notify(order.getSupplierId(), "INVOICE",
         "采购方已登记发票",
         "订单 " + order.getCode() + " 已登记发票 " + saved.getInvoiceNo()
@@ -779,8 +910,16 @@ public class ProcurementControlService {
     if (!"APPROVED".equals(decision) && !"REJECTED".equals(decision)) {
       throw new BusinessException("审核结果只能为 APPROVED 或 REJECTED");
     }
-    if ("APPROVED".equals(decision) && !"MATCHED".equals(invoice.getMatchStatus())) {
-      throw new BusinessException("三单匹配异常的发票不能直接审核通过");
+    boolean exceptionApproval = "APPROVED".equals(decision)
+        && !"MATCHED".equals(invoice.getMatchStatus())
+        && valueOr(invoice.getDifferenceAmount(), BigDecimal.ZERO).abs()
+            .compareTo(matchTolerance(invoice.getAmount())) <= 0;
+    if ("APPROVED".equals(decision) && !"MATCHED".equals(invoice.getMatchStatus())
+        && !exceptionApproval) {
+      throw new BusinessException("三单匹配异常的发票不能审核通过，超出容差的需先处理差异");
+    }
+    if (exceptionApproval && isBlank(request.comment())) {
+      throw new BusinessException("容差内异常审核必须填写审核意见");
     }
     invoice.setApprovalStatus(decision);
     invoice.setApprovedByName(currentName());
@@ -804,6 +943,24 @@ public class ProcurementControlService {
         "发票 " + saved.getInvoiceNo() + " 已" + ("APPROVED".equals(decision) ? "审核通过并入账。" : "审核驳回，请在门户查看原因。"),
         "ORDER", saved.getOrderId() == null ? null : saved.getOrderId());
     return saved;
+  }
+
+  @Transactional
+  public SupplierInvoice verifyInvoice(UUID invoiceId, VerifyInvoice request) {
+    SupplierInvoice invoice = invoices.findById(invoiceId)
+        .orElseThrow(() -> new BusinessException("供应商发票不存在"));
+    if ("PENDING".equals(invoice.getApprovalStatus())) {
+      throw new BusinessException("请先完成发票审核再进行验真");
+    }
+    String decision = request.decision().toUpperCase();
+    if (!"VERIFIED".equals(decision) && !"EXCEPTION".equals(decision)) {
+      throw new BusinessException("验真结果只能为 VERIFIED 或 EXCEPTION");
+    }
+    invoice.setVerificationStatus(decision);
+    invoice.setVerifiedBy(currentName());
+    invoice.setVerifiedAt(OffsetDateTime.now());
+    invoice.setVerificationComment(request.comment());
+    return invoices.save(invoice);
   }
 
   @Transactional(readOnly = true)
@@ -863,6 +1020,7 @@ public class ProcurementControlService {
           submission.getTaxRate(),
           submission.getInvoiceDate(),
           submission.getRemark(),
+          null,
           null,
           null,
           "SUBMISSION:" + submission.getId(),
@@ -1021,6 +1179,7 @@ public class ProcurementControlService {
     movement.setQuantity(request.qualifiedQty());
     movement.setSourceNo(order.getCode());
     movement.setRemark("采购质检合格入库 " + receipt.getCode());
+    movement.setOperatorName(currentName());
     movements.save(movement);
 
     BigDecimal amount = request.qualifiedQty().multiply(order.getUnitPrice());
@@ -1041,14 +1200,15 @@ public class ProcurementControlService {
     payable.setAmount(amount);
     payable.setTaxRate(order.getTaxRate());
     payable.setPaidAmount(BigDecimal.ZERO);
-    payable.setDueDate(request.payableDueDate());
+    payable.setDueDate(receipt.getPayableDueDate());
     payable.setStatus(PayableStatus.PENDING);
+    payable.setHandlerName(currentName());
     payables.save(payable);
     portalNotifier.notify(order.getSupplierId(), "PAYABLE",
         "应付单已生成",
         "订单 " + order.getCode() + " 合格入库 " + receipt.getCode()
             + "，应付金额 " + amount.stripTrailingZeros().toPlainString()
-            + "（到期日 " + (request.payableDueDate() == null ? "未设置" : request.payableDueDate()) + "），可在门户对账查看。",
+            + "（到期日 " + (receipt.getPayableDueDate() == null ? "未设置" : receipt.getPayableDueDate()) + "），可在门户对账查看。",
         "ORDER", order.getId());
 
     ProcurementCostAllocation cost = new ProcurementCostAllocation();
@@ -1070,20 +1230,35 @@ public class ProcurementControlService {
     orders.save(order);
   }
 
-  private ProcurementPayable resolvePayable(PurchaseOrder order, CreateInvoice request) {
+  private List<ProcurementPayable> resolvePayables(PurchaseOrder order, CreateInvoice request) {
+    if (request.payableIds() != null && !request.payableIds().isEmpty()) {
+      List<ProcurementPayable> payables = this.payables.findAllById(request.payableIds());
+      for (ProcurementPayable payable : payables) {
+        if (!payable.getOrderId().equals(order.getId())) {
+          throw new BusinessException("所选应付不属于该采购订单");
+        }
+      }
+      return payables;
+    }
     if (request.payableId() != null) {
       ProcurementPayable payable = payables.findById(request.payableId())
           .orElseThrow(() -> new BusinessException("采购应付不存在"));
       if (!payable.getOrderId().equals(order.getId())) {
         throw new BusinessException("所选应付不属于该采购订单");
       }
-      return payable;
+      return List.of(payable);
     }
     if (request.receiptId() != null) {
-      return payables.findByReceiptId(request.receiptId())
+      ProcurementPayable payable = payables.findByReceiptId(request.receiptId())
           .orElseThrow(() -> new BusinessException("该收货记录尚未形成应付"));
+      return List.of(payable);
     }
-    return null;
+    return List.of();
+  }
+
+  private BigDecimal matchTolerance(BigDecimal amount) {
+    return valueOr(amount, BigDecimal.ZERO).multiply(BigDecimal.valueOf(0.005))
+        .max(BigDecimal.valueOf(0.01));
   }
 
   private void requireEligibleSupplier(Supplier supplier) {

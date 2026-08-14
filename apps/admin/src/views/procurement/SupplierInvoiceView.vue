@@ -98,7 +98,7 @@
         row-key="id"
         :loading="loading"
         :pagination="{ pageSize: 12 }"
-        :scroll="{ x: 1050 }"
+        :scroll="{ x: 1270 }"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'invoice'">
@@ -145,6 +145,36 @@
               }}
             </a-tag>
           </template>
+          <template v-else-if="column.key === 'verify'">
+            <a-tag
+              :color="
+                record.verificationStatus === 'VERIFIED'
+                  ? 'blue'
+                  : record.verificationStatus === 'EXCEPTION'
+                    ? 'volcano'
+                    : 'default'
+              "
+            >
+              {{
+                record.verificationStatus === "VERIFIED"
+                  ? "已验真"
+                  : record.verificationStatus === "EXCEPTION"
+                    ? "验真异常"
+                    : "未验真"
+              }}
+            </a-tag>
+            <span
+              v-if="record.verificationComment"
+              class="table-subtitle"
+              >{{ record.verificationComment }}</span
+            >
+          </template>
+          <template v-else-if="column.key === 'handler'">
+            {{ record.handlerName || "-" }}
+          </template>
+          <template v-else-if="column.key === 'approvedBy'">
+            {{ record.approvedByName || "-" }}
+          </template>
           <template v-else-if="column.key === 'action'">
             <a-space>
               <a-button
@@ -169,6 +199,21 @@
               >
                 驳回
               </a-button>
+              <a-button
+                v-if="
+                  record.approvalStatus === 'APPROVED' &&
+                  record.verificationStatus !== 'VERIFIED' &&
+                  auth.can('procurement:payable:view')
+                "
+                type="link"
+                @click="openVerify(record)"
+              >
+                {{
+                  record.verificationStatus === "EXCEPTION"
+                    ? "重新验真"
+                    : "验真"
+                }}
+              </a-button>
             </a-space>
           </template>
         </template>
@@ -187,11 +232,13 @@
             :options="orderOptions"
           />
         </a-form-item>
-        <a-form-item label="关联应付（支持分批发票）">
+        <a-form-item label="关联应付（支持多选合并开票）">
           <a-select
-            v-model:value="invoiceForm.payableId"
+            v-model:value="invoiceForm.payableIds"
+            mode="multiple"
             allow-clear
             :options="payableOptions"
+            placeholder="可多选同一订单下的多笔应付合并开票"
           />
         </a-form-item>
         <a-form-item label="发票号码">
@@ -244,6 +291,40 @@
       </a-form>
     </a-modal>
   </div>
+
+    <a-modal
+      v-model:open="verifyOpen"
+      :title="`${verifyTarget ? verifyTarget.invoiceNo : '—'} · 发票验真`"
+      :confirm-loading="verifying"
+      @ok="confirmVerify"
+    >
+      <a-alert
+        type="info"
+        show-icon
+        message="发票验真通常在发票审核通过后进行，可在税务平台核对发票号码、金额与销方信息。"
+        style="margin-bottom: 14px"
+      />
+      <a-form layout="vertical">
+        <a-form-item label="验真结果" required>
+          <a-radio-group v-model:value="verifyDecision">
+            <a-radio value="VERIFIED">验真通过</a-radio>
+            <a-radio value="EXCEPTION">验真异常</a-radio>
+          </a-radio-group>
+        </a-form-item>
+        <a-form-item
+          v-if="verifyDecision === 'EXCEPTION'"
+          label="异常说明"
+          required
+        >
+          <a-textarea
+            v-model:value="verifyComment"
+            :rows="2"
+            maxlength="500"
+            placeholder="说明发票验真异常的原因"
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
 </template>
 
 <script setup lang="ts">
@@ -276,12 +357,17 @@ const reviewing = ref(false);
 const reviewTarget = ref<api.InvoiceSubmission>();
 const reviewAction = ref<"APPROVED" | "REJECTED">("APPROVED");
 const reviewComment = ref("");
+const verifyOpen = ref(false);
+const verifying = ref(false);
+const verifyTarget = ref<api.SupplierInvoice>();
+const verifyDecision = ref<"VERIFIED" | "EXCEPTION">("VERIFIED");
+const verifyComment = ref("");
 
 const today = () => new Date().toISOString().slice(0, 10);
 const invoiceForm = reactive({
   orderId: "",
-  payableId: undefined as string | undefined,
-  invoiceNo: "",
+  payableIds: [] as string[],
+  invoiceNo: "", 
   amount: 0,
   taxRate: 13,
   invoiceDate: today(),
@@ -304,9 +390,12 @@ const invoiceColumns = [
   { title: "采购订单", key: "order", width: 210 },
   { title: "发票金额（含税，元）", key: "amount", width: 190 },
   { title: "开票日期", dataIndex: "invoiceDate", width: 120 },
+  { title: "经办人", key: "handler", width: 110 },
+  { title: "审核人", key: "approvedBy", width: 110 },
   { title: "四单匹配", key: "match", width: 220 },
   { title: "审核", key: "approval", width: 100 },
-  { title: "操作", key: "action", width: 180, fixed: "right" as const },
+  { title: "验真", key: "verify", width: 120 },
+  { title: "操作", key: "action", width: 230, fixed: "right" as const },
 ];
 const orderOptions = computed(() =>
   orders.value
@@ -360,7 +449,17 @@ async function saveInvoice() {
     return;
   }
   invoiceForm.clientRequestId = `invoice-${Date.now()}`;
-  await api.createSupplierInvoice({ ...invoiceForm });
+  await api.createSupplierInvoice({
+    orderId: invoiceForm.orderId,
+    invoiceNo: invoiceForm.invoiceNo,
+    amount: invoiceForm.amount,
+    taxRate: invoiceForm.taxRate,
+    invoiceDate: invoiceForm.invoiceDate,
+    payableIds:
+      invoiceForm.payableIds.length > 0 ? invoiceForm.payableIds : undefined,
+    clientRequestId: invoiceForm.clientRequestId,
+  });
+  invoiceForm.payableIds = [];
   invoiceOpen.value = false;
   message.success("发票已登记，等待审核");
   await load();
@@ -425,6 +524,39 @@ function downloadSubmission(submission: api.InvoiceSubmission) {
 function orderLabel(orderId: string) {
   const order = orders.value.find((item) => item.id === orderId);
   return order ? `${order.code} · ${order.supplierName}` : orderId.slice(0, 8);
+}
+
+function openVerify(invoice: api.SupplierInvoice) {
+  verifyTarget.value = invoice;
+  verifyDecision.value = "VERIFIED";
+  verifyComment.value = "";
+  verifyOpen.value = true;
+}
+async function confirmVerify() {
+  if (!verifyTarget.value) return;
+  if (verifyDecision.value === "EXCEPTION" && !verifyComment.value.trim()) {
+    message.warning("请填写验真异常说明");
+    return;
+  }
+  verifying.value = true;
+  try {
+    await api.verifySupplierInvoice(verifyTarget.value.id, {
+      decision: verifyDecision.value,
+      comment:
+        verifyDecision.value === "EXCEPTION"
+          ? verifyComment.value.trim()
+          : verifyComment.value.trim() || undefined,
+    });
+    verifyOpen.value = false;
+    message.success(
+      verifyDecision.value === "VERIFIED" ? "发票验真通过" : "发票验真异常已登记",
+    );
+    await load();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "验真失败");
+  } finally {
+    verifying.value = false;
+  }
 }
 
 function money(value: number) {

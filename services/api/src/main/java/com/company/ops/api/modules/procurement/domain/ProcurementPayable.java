@@ -66,6 +66,21 @@ public class ProcurementPayable extends BaseEntity {
   @Column(name = "payment_receipt_uploaded_at")
   private OffsetDateTime paymentReceiptUploadedAt;
 
+  @Column(name = "handler_name", length = 80)
+  private String handlerName;
+
+  @Column(name = "adjusted_amount", nullable = false, precision = 14, scale = 2)
+  private BigDecimal adjustedAmount = BigDecimal.ZERO;
+
+  @Column(name = "cancel_reason", length = 500)
+  private String cancelReason;
+
+  @Column(name = "cancelled_by", length = 80)
+  private String cancelledBy;
+
+  @Column(name = "cancelled_at")
+  private LocalDate cancelledAt;
+
   @Enumerated(EnumType.STRING)
   @Column(nullable = false, length = 32)
   private PayableStatus status = PayableStatus.PENDING;
@@ -166,4 +181,14 @@ public class ProcurementPayable extends BaseEntity {
   public void setPaymentReceiptUploadedBy(String name) { paymentReceiptUploadedBy = name; }
   public OffsetDateTime getPaymentReceiptUploadedAt() { return paymentReceiptUploadedAt; }
   public void setPaymentReceiptUploadedAt(OffsetDateTime time) { paymentReceiptUploadedAt = time; }
+  public String getHandlerName() { return handlerName; }
+  public void setHandlerName(String name) { handlerName = name; }
+  public BigDecimal getAdjustedAmount() { return adjustedAmount; }
+  public void setAdjustedAmount(BigDecimal adjustedAmount) { this.adjustedAmount = adjustedAmount; }
+  public String getCancelReason() { return cancelReason; }
+  public void setCancelReason(String cancelReason) { this.cancelReason = cancelReason; }
+  public String getCancelledBy() { return cancelledBy; }
+  public void setCancelledBy(String cancelledBy) { this.cancelledBy = cancelledBy; }
+  public LocalDate getCancelledAt() { return cancelledAt; }
+  public void setCancelledAt(LocalDate cancelledAt) { this.cancelledAt = cancelledAt; }
 }

@@ -1,5 +1,6 @@
 package com.company.ops.api.modules.procurement.dto;
 
+import com.company.ops.api.modules.finance.dto.PaymentSplit;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.DecimalMax;
@@ -76,7 +77,7 @@ public final class ProcurementControlDtos {
       @NotNull @PositiveOrZero BigDecimal rejectedQty,
       @NotBlank String inspectorName,
       String comment,
-      @NotNull LocalDate payableDueDate
+      LocalDate payableDueDate // 不填时按供应商账期自动计算
   ) {}
 
   public record CreateInvoice(
@@ -87,6 +88,7 @@ public final class ProcurementControlDtos {
       @NotNull LocalDate invoiceDate,
       String remark,
       UUID payableId,
+      List<UUID> payableIds, // 合并开票：同一订单的多个应付
       UUID receiptId,
       @Size(max = 80) String clientRequestId,
       UUID attachmentDocumentId
@@ -96,6 +98,11 @@ public final class ProcurementControlDtos {
       @NotBlank String decision,
       @NotBlank String reviewerName,
       String comment
+  ) {}
+
+  public record VerifyInvoice(
+      @NotBlank String decision,
+      @Size(max = 500) String comment
   ) {}
 
   public record ReviewInvoiceSubmissionRequest(
@@ -118,8 +125,7 @@ public final class ProcurementControlDtos {
   ) {}
 
   public record RecordPaymentRequest(
-      @NotNull @Positive BigDecimal paidAmount,
-      @NotNull LocalDate paidAt,
+      @NotEmpty List<@Valid PaymentSplit> payments,
       @Size(max = 500) String paymentNote
   ) {}
 }

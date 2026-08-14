@@ -1026,21 +1026,54 @@
       >
         <a-row :gutter="16">
           <a-col :xs="24" :md="12"
-            ><a-form-item label="本次付款金额" name="paidAmount"
-              ><a-input-number
-                v-model:value="paymentForm.paidAmount"
-                :min="0.01"
-                :max="paymentTarget?.outstandingAmount"
-                :precision="2"
-                class="full-input" /></a-form-item
-          ></a-col>
-          <a-col :xs="24" :md="12"
-            ><a-form-item label="付款日期" name="paidAt"
-              ><a-input
-                v-model:value="paymentForm.paidAt"
-                type="date" /></a-form-item
-          ></a-col>
-          <a-col :xs="24"
+            ><a-form-item label="付款方式拆分">
+              <a-alert
+                class="section-alert"
+                type="info"
+                show-icon
+                :message="`已填合计 ${formatMoney(paymentTotal)} / 待付 ${formatMoney(paymentTarget?.outstandingAmount || 0)}（含税，元）`"
+              />
+              <div
+                v-for="(split, index) in paymentForm.splits"
+                :key="index"
+                class="split-row"
+              >
+                <a-input-number
+                  v-model:value="split.amount"
+                  :min="0.01"
+                  :precision="2"
+                  placeholder="金额"
+                  style="width: 130px"
+                />
+                <a-input
+                  v-model:value="split.paidDate"
+                  type="date"
+                  style="width: 145px"
+                />
+                <a-select
+                  v-model:value="split.paymentMethod"
+                  :options="paymentMethodOptions"
+                  style="width: 130px"
+                />
+                <a-input
+                  v-model:value="split.bankReference"
+                  placeholder="银行流水/凭证号"
+                  style="width: 180px"
+                />
+                <a-button
+                  type="link"
+                  danger
+                  :disabled="paymentForm.splits.length <= 1"
+                  @click="removePaymentSplit(index)"
+                  >移除</a-button
+                >
+              </div>
+              <a-button type="dashed" block @click="addPaymentSplit"
+                >+ 添加付款方式</a-button
+              >
+            </a-form-item>
+          </a-col>
+          <a-col :span="24"
             ><a-form-item label="付款说明"
               ><a-input
                 v-model:value="paymentForm.paymentNote"
@@ -1324,10 +1357,34 @@ const approvalForm = reactive<ApprovalForm>(initialApprovalForm());
 const orderForm = reactive<CreatePurchaseOrderPayload>(initialOrderForm());
 const receiptForm = reactive<ReceiptForm>(initialReceiptForm());
 const paymentForm = reactive<{
-  paidAmount: number;
-  paidAt: string;
   paymentNote: string;
-}>({ paidAmount: 0, paidAt: addDays(0), paymentNote: "" });
+  splits: Array<{
+    amount: number;
+    paidDate: string;
+    paymentMethod: string;
+    bankReference: string;
+  }>;
+}>({ paymentNote: "", splits: [] });
+const paymentMethodOptions = [
+  { label: "银行转账", value: "BANK_TRANSFER" },
+  { label: "支票", value: "CHECK" },
+  { label: "现金", value: "CASH" },
+  { label: "其他", value: "OTHER" },
+];
+const paymentTotal = computed(() =>
+  paymentForm.splits.reduce((sum, split) => sum + Number(split.amount || 0), 0),
+);
+function addPaymentSplit() {
+  paymentForm.splits.push({
+    amount: 0,
+    paidDate: addDays(0),
+    paymentMethod: "BANK_TRANSFER",
+    bankReference: "",
+  });
+}
+function removePaymentSplit(index: number) {
+  paymentForm.splits.splice(index, 1);
+}
 
 // Filter options
 const requestStatusOptions = [
@@ -1473,8 +1530,6 @@ const receiptRules = {
   receiverName: [{ required: true, message: "请输入收货人" }],
 };
 const paymentRules = {
-  paidAmount: [{ required: true, message: "请输入付款金额" }],
-  paidAt: [{ required: true, message: "请选择付款日期" }],
 };
 
 const pendingApprovalCount = computed(
@@ -1933,9 +1988,15 @@ async function handleReceive() {
 function openPayment(record: ProcurementPayable) {
   paymentTarget.value = record;
   Object.assign(paymentForm, {
-    paidAmount: Number(record.outstandingAmount),
-    paidAt: addDays(0),
     paymentNote: "",
+    splits: [
+      {
+        amount: Number(record.outstandingAmount),
+        paidDate: addDays(0),
+        paymentMethod: "BANK_TRANSFER",
+        bankReference: "",
+      },
+    ],
   });
   paymentReceiptFile.value = undefined;
   paymentOpen.value = true;
@@ -1949,13 +2010,31 @@ function handleReceiptFile(file: File) {
 async function handleRecordPayment() {
   if (!paymentTarget.value) return;
   await paymentFormRef.value?.validate();
+  if (paymentTotal.value <= 0) {
+    message.error("请填写大于零的付款金额");
+    return;
+  }
+  if (
+    paymentForm.splits.some(
+      (split) =>
+        Number(split.amount || 0) <= 0 ||
+        !split.bankReference.trim() ||
+        !split.paidDate,
+    )
+  ) {
+    message.error("请完整填写每笔拆分的金额、付款日期与流水号");
+    return;
+  }
+  if (paymentTotal.value > Number(paymentTarget.value.outstandingAmount)) {
+    message.error("拆分合计不能超过待付金额");
+    return;
+  }
   savingPayment.value = true;
   try {
     await recordPayablePayment(
       paymentTarget.value.id,
       {
-        paidAmount: Number(paymentForm.paidAmount),
-        paidAt: paymentForm.paidAt,
+        payments: paymentForm.splits,
         paymentNote: paymentForm.paymentNote.trim() || undefined,
       },
       paymentReceiptFile.value,
@@ -2219,6 +2298,14 @@ function handleOrderPageChange() {}
 }
 .collab-tag:hover {
   filter: brightness(0.92);
+}
+
+.split-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
 }
 .collab-empty {
   color: #8c8c8c;

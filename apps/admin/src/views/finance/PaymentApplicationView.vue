@@ -312,34 +312,68 @@
               ><a-input v-model:value="paymentForm.paymentCode" /></a-form-item
           ></a-col>
           <a-col :xs="24" :md="12"
-            ><a-form-item label="实际付款金额（含税，元）" name="amount"
-              ><a-input-number
-                v-model:value="paymentForm.amount"
-                :min="0.01"
-                :max="selectedApplication?.requestedAmount"
-                :precision="2"
-                class="full-input" /></a-form-item
-          ></a-col>
-          <a-col :xs="24" :md="12"
-            ><a-form-item label="付款日期" name="paidDate"
-              ><a-input
-                v-model:value="paymentForm.paidDate"
-                type="date" /></a-form-item
-          ></a-col>
-          <a-col :xs="24" :md="12"
-            ><a-form-item label="付款方式" name="paymentMethod"
-              ><a-select
-                v-model:value="paymentForm.paymentMethod"
-                :options="methodOptions" /></a-form-item
-          ></a-col>
-          <a-col :xs="24" :md="12"
             ><a-form-item label="付款经办人" name="payerName"
               ><a-input v-model:value="paymentForm.payerName" /></a-form-item
           ></a-col>
           <a-col :span="24"
-            ><a-form-item label="银行流水 / 付款凭证号" name="bankReference"
-              ><a-input
-                v-model:value="paymentForm.bankReference" /></a-form-item
+            ><a-form-item label="付款方式拆分">
+              <a-alert
+                class="section-alert"
+                type="info"
+                show-icon
+                :message="`已填合计 ${formatMoney(paymentTotal)} / 申请金额 ${formatMoney(selectedApplication?.requestedAmount || 0)}（含税，元）`"
+              />
+              <div
+                v-for="(split, index) in paymentForm.splits"
+                :key="index"
+                class="split-row"
+              >
+                <a-select
+                  v-if="splitPayableOptions.length > 1"
+                  v-model:value="split.payableId"
+                  :options="splitPayableOptions"
+                  placeholder="应付单"
+                  style="width: 220px"
+                />
+                <a-input-number
+                  v-model:value="split.amount"
+                  :min="0.01"
+                  :precision="2"
+                  placeholder="金额"
+                  style="width: 150px"
+                />
+                <a-input
+                  v-model:value="split.paidDate"
+                  type="date"
+                  style="width: 150px"
+                />
+                <a-select
+                  v-model:value="split.paymentMethod"
+                  :options="methodOptions"
+                  style="width: 140px"
+                />
+                <a-input
+                  v-model:value="split.bankReference"
+                  placeholder="银行流水/凭证号"
+                  style="width: 220px"
+                />
+                <a-input
+                  v-model:value="split.note"
+                  placeholder="备注（选填）"
+                  style="width: 160px"
+                />
+                <a-button
+                  type="link"
+                  danger
+                  :disabled="paymentForm.splits.length <= 1"
+                  @click="removeSplit(index)"
+                  >移除</a-button
+                >
+              </div>
+              <a-button type="dashed" block @click="addSplit"
+                >+ 添加付款方式</a-button
+              >
+            </a-form-item>
           ></a-col>
         </a-row>
       </a-form>
@@ -357,9 +391,11 @@ import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
 import {
   executePayment,
   getPaymentApprovalCapability,
+  listFinancePayables,
   listPaymentApplications,
   listPaymentRecords,
   processPaymentApplication,
+  type FinancePayable,
   type PaymentApplication,
   type PaymentApplicationStatus,
   type PaymentMethod,
@@ -377,6 +413,7 @@ const auth = useAuthStore();
 const router = useRouter();
 const applications = ref<PaymentApplication[]>([]);
 const payments = ref<PaymentRecord[]>([]);
+const payables = ref<FinancePayable[]>([]);
 const selectedApplication = ref<PaymentApplication | null>(null);
 const loading = ref(false);
 const saving = ref(false);
@@ -395,18 +432,34 @@ const approvalForm = reactive<{
 }>({ decision: "APPROVED", comment: "同意付款", approverName: "" });
 const paymentForm = reactive<{
   paymentCode: string;
-  amount: number;
-  paidDate: string;
-  paymentMethod: PaymentMethod;
-  bankReference: string;
   payerName: string;
+  splits: Array<{
+    payableId?: string;
+    amount: number;
+    paidDate: string;
+    paymentMethod: PaymentMethod;
+    bankReference: string;
+    note?: string;
+  }>;
 }>({
   paymentCode: "",
-  amount: 0,
-  paidDate: today(),
-  paymentMethod: "BANK_TRANSFER",
-  bankReference: "",
   payerName: "",
+  splits: [],
+});
+
+const splitPayableOptions = computed(() => {
+  const app = selectedApplication.value;
+  if (!app) return [];
+  const ids = app.payableIds && app.payableIds.length > 0 ? app.payableIds : [app.payableId];
+  return ids
+    .map((id) => {
+      const payable = payables.value.find((item) => item.id === id);
+      return {
+        label: payable ? `${payable.code} · 待付 ${formatMoney(payable.outstandingAmount)}` : id.slice(0, 8),
+        value: id,
+      };
+    })
+    .filter((item, index, arr) => arr.findIndex((x) => x.value === item.value) === index);
 });
 
 const statusOptions = [
@@ -453,19 +506,25 @@ const approvalRules = {
 };
 const paymentRules = {
   paymentCode: [{ required: true, message: "请输入付款单号" }],
-  amount: [
-    {
-      required: true,
-      type: "number",
-      min: 0.01,
-      message: "请输入实际付款金额",
-    },
-  ],
-  paidDate: [{ required: true }],
-  paymentMethod: [{ required: true }],
-  bankReference: [{ required: true, message: "请输入银行流水或付款凭证号" }],
   payerName: [{ required: true, message: "请输入付款经办人" }],
 };
+
+const paymentTotal = computed(() =>
+  paymentForm.splits.reduce((sum, split) => sum + Number(split.amount || 0), 0),
+);
+function addSplit() {
+  paymentForm.splits.push({
+    payableId: selectedApplication.value?.payableId,
+    amount: 0,
+    paidDate: today(),
+    paymentMethod: "BANK_TRANSFER",
+    bankReference: "",
+    note: "",
+  });
+}
+function removeSplit(index: number) {
+  paymentForm.splits.splice(index, 1);
+}
 
 const filteredApplications = computed(() =>
   applications.value.filter((item) => {
@@ -507,9 +566,13 @@ const agedApplications = computed(() =>
   applications.value.filter((item) => riskLevel(item) === "AGED"),
 );
 const duplicateBankReference = computed(() => {
-  const reference = paymentForm.bankReference.trim();
-  if (!reference) return false;
-  return payments.value.some((item) => item.bankReference === reference);
+  const references = paymentForm.splits
+    .map((split) => split.bankReference.trim())
+    .filter(Boolean);
+  if (references.length === 0) return false;
+  return references.some((reference) =>
+    payments.value.some((item) => item.bankReference === reference),
+  );
 });
 const canApproveSelected = computed(
   () =>
@@ -565,10 +628,11 @@ onMounted(loadData);
 async function loadData() {
   loading.value = true;
   try {
-    [applications.value, payments.value, canCurrentUserApprove.value] =
+    [applications.value, payments.value, payables.value, canCurrentUserApprove.value] =
       await Promise.all([
         listPaymentApplications(),
         listPaymentRecords(),
+        listFinancePayables(),
         getPaymentApprovalCapability(),
       ]);
   } catch (error) {
@@ -592,11 +656,17 @@ function openPayment(item: PaymentApplication) {
   selectedApplication.value = item;
   Object.assign(paymentForm, {
     paymentCode: generateCode("FK"),
-    amount: Number(item.requestedAmount || 0),
-    paidDate: today(),
-    paymentMethod: "BANK_TRANSFER",
-    bankReference: "",
     payerName: auth.user?.displayName || "",
+    splits: [
+      {
+        payableId: item.payableId,
+        amount: Number(item.requestedAmount || 0),
+        paidDate: today(),
+        paymentMethod: "BANK_TRANSFER",
+        bankReference: "",
+        note: "",
+      },
+    ],
   });
   paymentOpen.value = true;
 }
@@ -626,15 +696,38 @@ async function handleApproval() {
 async function handlePayment() {
   await paymentFormRef.value?.validate();
   if (!selectedApplication.value) return;
+  if (paymentTotal.value <= 0) {
+    message.error("请填写大于零的付款金额");
+    return;
+  }
+  if (
+    paymentForm.splits.some(
+      (split) =>
+        Number(split.amount || 0) <= 0 ||
+        !split.bankReference.trim() ||
+        !split.paidDate ||
+        (splitPayableOptions.value.length > 1 && !split.payableId),
+    )
+  ) {
+    message.error("请完整填写每笔拆分的应付单、金额、付款日期与流水号");
+    return;
+  }
+  if (paymentTotal.value > Number(selectedApplication.value.requestedAmount)) {
+    message.error("拆分合计不能超过申请金额");
+    return;
+  }
   if (duplicateBankReference.value) {
     message.error("银行流水 / 付款凭证号已存在，请核对后再执行付款");
     return;
   }
   saving.value = true;
   try {
-    await executePayment(selectedApplication.value.id, { ...paymentForm });
+    await executePayment(selectedApplication.value.id, {
+      paymentCode: paymentForm.paymentCode,
+      payments: paymentForm.splits,
+    });
     paymentOpen.value = false;
-    message.success("付款已执行，应付余额已同步更新");
+    message.success("付款已按拆分方式执行，应付余额已同步更新");
     await loadData();
   } catch (error) {
     message.error(error instanceof Error ? error.message : "付款执行失败");
@@ -871,6 +964,14 @@ function paymentApprovalSteps(
   color: #101828;
   font-size: 18px;
   overflow-wrap: anywhere;
+}
+
+.split-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
 }
 
 @media (max-width: 900px) {

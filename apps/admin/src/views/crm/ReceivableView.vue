@@ -357,6 +357,7 @@ const departmentOptions = computed(() =>
 const receivableColumns = [
   { title: "应收单 / 客户", key: "receivable", width: 220 },
   { title: "合同名称 / 编号", key: "contract", width: 260 },
+  { title: "销售负责人", dataIndex: "salesOwnerName", width: 120 },
   { title: "应收 / 回款（含税，元）", key: "amount", width: 280 },
   { title: "开票信息", key: "invoice", width: 180 },
   { title: "到期日", key: "dueDate", width: 130 },

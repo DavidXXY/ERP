@@ -14,10 +14,12 @@ public class DocumentFile extends BaseEntity {
   @Column(name = "object_key", nullable = false, length = 500) private String objectKey;
   @Column(name = "content_type", length = 120) private String contentType;
   @Column(name = "size_bytes") private Long sizeBytes;
+  @Column(name = "uploaded_by", length = 80) private String uploadedBy;
   public String getBizType() { return bizType; } public void setBizType(String v) { bizType = v; }
   public UUID getBizId() { return bizId; } public void setBizId(UUID v) { bizId = v; }
   public String getFileName() { return fileName; } public void setFileName(String v) { fileName = v; }
   public String getObjectKey() { return objectKey; } public void setObjectKey(String v) { objectKey = v; }
   public String getContentType() { return contentType; } public void setContentType(String v) { contentType = v; }
   public Long getSizeBytes() { return sizeBytes; } public void setSizeBytes(Long v) { sizeBytes = v; }
+  public String getUploadedBy() { return uploadedBy; } public void setUploadedBy(String v) { uploadedBy = v; }
 }

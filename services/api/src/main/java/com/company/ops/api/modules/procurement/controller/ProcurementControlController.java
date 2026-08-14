@@ -169,6 +169,15 @@ public class ProcurementControlController {
     return ApiResponse.ok(service.reviewInvoice(id, request));
   }
 
+  @PostMapping("/supplier-invoices/{id}/verify")
+  @PreAuthorize("hasAuthority('procurement:payable:view')")
+  public ApiResponse<SupplierInvoice> verifyInvoice(
+      @PathVariable UUID id,
+      @Valid @RequestBody VerifyInvoice request
+  ) {
+    return ApiResponse.ok(service.verifyInvoice(id, request));
+  }
+
   @GetMapping("/supplier-invoices")
   @PreAuthorize("hasAuthority('procurement:payable:view')")
   public ApiResponse<List<SupplierInvoice>> invoices() {

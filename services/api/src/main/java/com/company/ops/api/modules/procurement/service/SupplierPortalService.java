@@ -1240,11 +1240,25 @@ public class SupplierPortalService {
     ProcurementPayableRepository.PayableSupplierTotals payableTotals =
         payables.aggregateBySupplier(supplierId, LocalDate.now(),
             PayableStatus.PAID, PayableStatus.CANCELLED);
+    List<SupplierInvoice> myInvoices = invoices.findBySupplierIdOrderByCreatedAtDesc(supplierId);
     BigDecimal payableAmount = payableTotals.getPayableAmount();
     BigDecimal paidAmount = payableTotals.getPaidAmount();
+    BigDecimal approvedAmount = myInvoices.stream()
+        .filter(invoice -> "APPROVED".equals(invoice.getApprovalStatus()))
+        .map(SupplierInvoice::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+    BigDecimal differenceAmount = myInvoices.stream()
+        .filter(invoice -> "MISMATCH".equals(invoice.getMatchStatus()))
+        .map(invoice -> value(invoice.getDifferenceAmount()))
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
     Map<String, Object> view = new LinkedHashMap<>();
     view.put("invoiceCount", invoiceTotals.getInvoiceCount());
     view.put("invoiceAmount", invoiceTotals.getInvoiceAmount());
+    view.put("invoiceApprovedAmount", approvedAmount);
+    view.put("invoiceDifferenceAmount", differenceAmount);
+    view.put("pendingInvoiceApprovals", myInvoices.stream()
+        .filter(invoice -> "PENDING".equals(invoice.getApprovalStatus())).count());
+    view.put("matchedInvoiceCount", myInvoices.stream()
+        .filter(invoice -> "MATCHED".equals(invoice.getMatchStatus())).count());
     view.put("payableCount", payableTotals.getPayableCount());
     view.put("payableAmount", payableAmount);
     view.put("paidAmount", paidAmount);
@@ -1507,11 +1521,16 @@ public class SupplierPortalService {
     try (Workbook workbook = new XSSFWorkbook()) {
       Map<String, Object> summary = financeSummary(principal);
       Sheet summarySheet = workbook.createSheet("对账汇总");
-      String[] summaryHeaders = {"累计开票", "应付总额", "已付金额", "待付金额", "逾期未付"};
+      String[] summaryHeaders = {"累计开票", "已审批开票", "发票差异", "待审批发票数", "已匹配发票数",
+          "应付总额", "已付金额", "待付金额", "逾期未付"};
       headerRow(summarySheet, summaryHeaders);
       Row summaryRow = summarySheet.createRow(1);
       int sc = 0;
       cell(summaryRow, sc++, summary.get("invoiceAmount"));
+      cell(summaryRow, sc++, summary.get("invoiceApprovedAmount"));
+      cell(summaryRow, sc++, summary.get("invoiceDifferenceAmount"));
+      cell(summaryRow, sc++, summary.get("pendingInvoiceApprovals"));
+      cell(summaryRow, sc++, summary.get("matchedInvoiceCount"));
       cell(summaryRow, sc++, summary.get("payableAmount"));
       cell(summaryRow, sc++, summary.get("paidAmount"));
       cell(summaryRow, sc++, summary.get("outstandingAmount"));
@@ -1519,7 +1538,8 @@ public class SupplierPortalService {
       autoSize(summarySheet, summaryHeaders.length);
 
       Sheet invoiceSheet = workbook.createSheet("发票记录");
-      String[] invoiceHeaders = {"发票号", "订单", "开票日期", "金额", "状态", "匹配", "创建时间"};
+      String[] invoiceHeaders = {"发票号", "订单", "开票日期", "金额", "状态", "核验", "审批", "匹配",
+          "已匹配金额", "差异金额", "备注", "创建时间"};
       headerRow(invoiceSheet, invoiceHeaders);
       int rowIndex = 1;
       for (Map<String, Object> invoice : listMyInvoices(principal)) {
@@ -1530,28 +1550,70 @@ public class SupplierPortalService {
         cell(row, c++, invoice.get("invoiceDate"));
         cell(row, c++, invoice.get("amount"));
         cell(row, c++, invoice.get("status"));
+        cell(row, c++, invoice.get("verificationStatus"));
+        cell(row, c++, invoice.get("approvalStatus"));
         cell(row, c++, invoice.get("matchStatus"));
+        cell(row, c++, invoice.get("matchedAmount"));
+        cell(row, c++, invoice.get("differenceAmount"));
+        cell(row, c++, invoice.get("remark"));
         cell(row, c++, invoice.get("createdAt"));
       }
       autoSize(invoiceSheet, invoiceHeaders.length);
 
       Sheet payableSheet = workbook.createSheet("应付与付款");
-      String[] payableHeaders = {"应付单号", "订单", "应付金额", "已付金额", "待付金额", "到期日", "状态", "创建时间"};
+      String[] payableHeaders = {"应付单号", "订单", "应付金额", "冲减金额", "实际应付",
+          "已付金额", "待付金额", "待退金额", "到期日", "是否逾期", "付款日期", "付款说明",
+          "回单文件", "状态", "创建时间"};
       headerRow(payableSheet, payableHeaders);
       rowIndex = 1;
+      LocalDate today = LocalDate.now();
       for (Map<String, Object> payable : listMyPayables(principal)) {
         Row row = payableSheet.createRow(rowIndex++);
         int c = 0;
         cell(row, c++, payable.get("code"));
         cell(row, c++, payable.get("orderCode"));
         cell(row, c++, payable.get("amount"));
+        cell(row, c++, payable.get("adjustedAmount"));
+        cell(row, c++, payable.get("effectiveAmount"));
         cell(row, c++, payable.get("paidAmount"));
         cell(row, c++, payable.get("outstandingAmount"));
+        cell(row, c++, payable.get("refundAmount"));
         cell(row, c++, payable.get("dueDate"));
+        BigDecimal outstanding = (BigDecimal) payable.get("outstandingAmount");
+        LocalDate dueDate = (LocalDate) payable.get("dueDate");
+        boolean overdue = outstanding != null && outstanding.signum() > 0
+            && dueDate != null && dueDate.isBefore(today);
+        cell(row, c++, overdue ? "是" : "否");
+        cell(row, c++, payable.get("paidAt"));
+        cell(row, c++, payable.get("paymentNote"));
+        cell(row, c++, payable.get("paymentReceiptFileName"));
         cell(row, c++, payable.get("status"));
         cell(row, c++, payable.get("createdAt"));
       }
       autoSize(payableSheet, payableHeaders.length);
+
+      Sheet submissionSheet = workbook.createSheet("开票资料");
+      String[] submissionHeaders = {"发票号", "订单", "金额", "税率%", "开票日期", "状态",
+          "审核意见", "附件", "提交时间"};
+      headerRow(submissionSheet, submissionHeaders);
+      rowIndex = 1;
+      for (SupplierInvoiceSubmission submission
+          : invoiceSubmissions.findBySupplierIdOrderByCreatedAtDesc(supplierId)) {
+        InvoiceSubmissionResponse view = invoiceSubmissionView(
+            submission, orderCode(submission.getOrderId()), null);
+        Row row = submissionSheet.createRow(rowIndex++);
+        int c = 0;
+        cell(row, c++, view.invoiceNo());
+        cell(row, c++, view.orderCode());
+        cell(row, c++, view.amount());
+        cell(row, c++, view.taxRate());
+        cell(row, c++, view.invoiceDate());
+        cell(row, c++, view.status());
+        cell(row, c++, view.reviewComment());
+        cell(row, c++, view.fileName());
+        cell(row, c++, view.createdAt());
+      }
+      autoSize(submissionSheet, submissionHeaders.length);
       return toBytes(workbook);
     } catch (RuntimeException ex) {
       throw ex;
@@ -1668,13 +1730,19 @@ public class SupplierPortalService {
 
   private Map<String, Object> payableView(ProcurementPayable payable) {
     Map<String, Object> view = new LinkedHashMap<>();
+    BigDecimal adjusted = value(payable.getAdjustedAmount());
+    BigDecimal effective = value(payable.getAmount()).subtract(adjusted);
+    BigDecimal paid = value(payable.getPaidAmount());
     view.put("id", payable.getId());
     view.put("code", payable.getCode());
     view.put("orderCode", orderCode(payable.getOrderId()));
     view.put("amount", payable.getAmount());
+    view.put("adjustedAmount", adjusted);
+    view.put("effectiveAmount", effective);
     view.put("taxRate", payable.getTaxRate());
-    view.put("paidAmount", payable.getPaidAmount());
-    view.put("outstandingAmount", payable.getAmount().subtract(payable.getPaidAmount()));
+    view.put("paidAmount", paid);
+    view.put("outstandingAmount", effective.subtract(paid).max(BigDecimal.ZERO));
+    view.put("refundAmount", paid.subtract(effective).max(BigDecimal.ZERO));
     view.put("dueDate", payable.getDueDate());
     view.put("status", payable.getStatus() == null ? null : payable.getStatus().name());
     view.put("paidAt", payable.getPaidAt());

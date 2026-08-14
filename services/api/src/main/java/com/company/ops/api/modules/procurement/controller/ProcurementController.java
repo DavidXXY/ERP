@@ -27,6 +27,7 @@ import com.company.ops.api.modules.procurement.dto.ReceivePurchaseOrderResult;
 import com.company.ops.api.modules.procurement.dto.ReviewSupplierAdmissionRequest;
 import com.company.ops.api.modules.procurement.domain.PurchaseRequestStatus;
 import com.company.ops.api.modules.procurement.domain.ApprovalStatus;
+import com.company.ops.api.modules.procurement.domain.PayableStatus;
 import com.company.ops.api.modules.procurement.domain.ProcurementCostType;
 import com.company.ops.api.modules.procurement.domain.PurchaseOrderStatus;
 import com.company.ops.api.modules.procurement.dto.ProcurementControlDtos;
@@ -263,6 +264,17 @@ public class ProcurementController {
     return ApiResponse.ok(procurementService.listPayables());
   }
 
+  @GetMapping("/payables/paged")
+  @PreAuthorize("hasAuthority('procurement:payable:view')")
+  public ApiResponse<PageResponse<ProcurementPayableResponse>> listPayables(
+      @PageableDefault(size = 20) Pageable pageable,
+      @RequestParam(required = false) PayableStatus status,
+      @RequestParam(required = false) String keyword
+  ) {
+    return ApiResponse.ok(PageResponse.from(
+        procurementService.listPayables(pageable, status, keyword)));
+  }
+
   @PostMapping(value = "/payables/{id}/payment", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   @PreAuthorize("hasAuthority('procurement:payable:view')")
   public ApiResponse<ProcurementPayableResponse> recordPayment(
@@ -276,10 +288,7 @@ public class ProcurementController {
   @GetMapping("/payables/{id}/receipt")
   @PreAuthorize("hasAuthority('procurement:payable:view')")
   public ResponseEntity<Resource> downloadPaymentReceipt(@PathVariable UUID id) {
-    ProcurementPayableResponse payable = procurementService.listPayables().stream()
-        .filter(item -> item.id().equals(id))
-        .findFirst()
-        .orElseThrow(() -> new com.company.ops.api.common.exception.BusinessException("应付单不存在"));
+    ProcurementPayableResponse payable = procurementService.findPayableResponse(id);
     if (payable.paymentReceiptFileName() == null) {
       throw new com.company.ops.api.common.exception.BusinessException("该应付单尚未上传付款回单");
     }

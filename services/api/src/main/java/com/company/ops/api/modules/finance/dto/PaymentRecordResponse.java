@@ -18,5 +18,7 @@ public record PaymentRecordResponse(
     LocalDate paidDate,
     PaymentMethod paymentMethod,
     String bankReference,
-    String payerName
+    String payerName,
+    String sourceType,
+    String note
 ) {}

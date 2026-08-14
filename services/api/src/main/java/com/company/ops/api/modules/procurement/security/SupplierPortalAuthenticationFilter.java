@@ -47,7 +47,9 @@ public class SupplierPortalAuthenticationFilter extends OncePerRequestFilter {
     if (authorization == null || !authorization.startsWith("Bearer ")) {
       // 大文件下载使用 <a> 链接，无法携带请求头；仅允许 GET 下载端点通过查询参数携带令牌。
       if ("GET".equalsIgnoreCase(request.getMethod())
-          && request.getRequestURI().endsWith("/download")) {
+          && (request.getRequestURI().endsWith("/download")
+              || request.getRequestURI().endsWith("/excel")
+              || request.getRequestURI().endsWith("/pdf"))) {
         String queryToken = request.getParameter("token");
         if (queryToken != null && !queryToken.isBlank()) {
           token = queryToken;

@@ -10,6 +10,9 @@
         <a-button type="primary" ghost :loading="loading" @click="load"
           ><ReloadOutlined /> 刷新</a-button
         >
+        <a-button type="primary" @click="openUpload"
+          ><PlusOutlined /> 上传开票资料</a-button
+        >
         <a-button ghost @click="exportExcel"
           ><FileExcelOutlined /> 导出对账 Excel</a-button
         >
@@ -21,6 +24,16 @@
         <small>累计开票</small>
         <strong>{{ money(summary.invoiceAmount) }}</strong>
         <span>{{ summary.invoiceCount }} 张发票</span>
+      </article>
+      <article class="finance-card">
+        <small>已审批开票</small>
+        <strong class="ok">{{ money(summary.invoiceApprovedAmount) }}</strong>
+        <span>{{ summary.matchedInvoiceCount }} 张已匹配</span>
+      </article>
+      <article class="finance-card">
+        <small>发票差异</small>
+        <strong class="overdue">{{ money(summary.invoiceDifferenceAmount) }}</strong>
+        <span>{{ summary.pendingInvoiceApprovals }} 张待审批</span>
       </article>
       <article class="finance-card">
         <small>应付总额</small>
@@ -50,12 +63,40 @@
           <h2>发票记录</h2>
           <p>采购方登记并核验的供应商发票。</p>
         </div>
+        <a-space wrap>
+          <a-select
+            v-model:value="invoiceStatusFilter"
+            allow-clear
+            placeholder="发票状态"
+            style="width: 130px"
+            :options="invoiceStatusOptions"
+          />
+          <a-select
+            v-model:value="invoiceMatchFilter"
+            allow-clear
+            placeholder="匹配情况"
+            style="width: 130px"
+            :options="invoiceMatchOptions"
+          />
+          <a-input
+            v-model:value="invoiceDateFrom"
+            type="date"
+            style="width: 150px"
+            placeholder="开票开始"
+          />
+          <a-input
+            v-model:value="invoiceDateTo"
+            type="date"
+            style="width: 150px"
+            placeholder="开票结束"
+          />
+        </a-space>
       </div>
       <a-table
-        v-if="invoices.length > 0"
+        v-if="filteredInvoices.length > 0"
         size="small"
         row-key="id"
-        :data-source="invoices"
+        :data-source="filteredInvoices"
         :columns="invoiceColumns"
         :pagination="{ pageSize: 10 }"
         :row-class-name="rowClassName"
@@ -73,12 +114,22 @@
           <h2>应付与付款</h2>
           <p>采购方按收货生成的应付及付款进度。</p>
         </div>
+        <a-space wrap>
+          <a-select
+            v-model:value="payableStatusFilter"
+            allow-clear
+            placeholder="付款状态"
+            style="width: 130px"
+            :options="payableStatusOptions"
+          />
+          <a-checkbox v-model:checked="payableOverdueOnly">仅看逾期</a-checkbox>
+        </a-space>
       </div>
       <a-table
-        v-if="payables.length > 0"
+        v-if="filteredPayables.length > 0"
         size="small"
         row-key="id"
-        :data-source="payables"
+        :data-source="filteredPayables"
         :columns="payableColumns"
         :pagination="{ pageSize: 10 }"
         :row-class-name="rowClassName"
@@ -87,6 +138,36 @@
         v-else
         :image="Empty.PRESENTED_IMAGE_SIMPLE"
         description="暂无应付记录"
+      />
+    </a-card>
+
+    <a-card :bordered="false" class="finance-block" :loading="loading">
+      <div class="section-title">
+        <div>
+          <h2>我的开票资料</h2>
+          <p>贵司提交的开票资料及采购方审核进度，审核通过后进入发票记录。</p>
+        </div>
+        <a-select
+          v-model:value="submissionStatusFilter"
+          allow-clear
+          placeholder="资料状态"
+          style="width: 130px"
+          :options="submissionStatusOptions"
+        />
+      </div>
+      <a-table
+        v-if="filteredSubmissions.length > 0"
+        size="small"
+        row-key="id"
+        :data-source="filteredSubmissions"
+        :columns="submissionColumns"
+        :pagination="{ pageSize: 10 }"
+        :row-class-name="rowClassName"
+      />
+      <a-empty
+        v-else
+        :image="Empty.PRESENTED_IMAGE_SIMPLE"
+        description="暂无开票资料，可点击右上角上传"
       />
     </a-card>
     <a-modal
@@ -212,12 +293,72 @@ const highlightId = ref("");
 const summary = ref<api.FinanceSummary>({
   invoiceCount: 0,
   invoiceAmount: 0,
+  invoiceApprovedAmount: 0,
+  invoiceDifferenceAmount: 0,
+  pendingInvoiceApprovals: 0,
+  matchedInvoiceCount: 0,
   payableCount: 0,
   payableAmount: 0,
   paidAmount: 0,
   outstandingAmount: 0,
   overdueAmount: 0,
 });
+const invoiceStatusFilter = ref<string>();
+const invoiceMatchFilter = ref<string>();
+const invoiceDateFrom = ref("");
+const invoiceDateTo = ref("");
+const payableStatusFilter = ref<string>();
+const payableOverdueOnly = ref(false);
+const submissionStatusFilter = ref<string>();
+const invoiceStatusOptions = [
+  { value: "REGISTERED", label: "已登记" },
+  { value: "VERIFIED", label: "已核验" },
+  { value: "APPROVED", label: "已审批" },
+  { value: "REJECTED", label: "已驳回" },
+];
+const invoiceMatchOptions = [
+  { value: "MATCHED", label: "已匹配" },
+  { value: "MISMATCH", label: "存在差异" },
+  { value: "UNMATCHED", label: "未匹配" },
+];
+const payableStatusOptions = [
+  { value: "PENDING", label: "待付款" },
+  { value: "PARTIAL_PAID", label: "部分付款" },
+  { value: "PAID", label: "已付款" },
+  { value: "CANCELLED", label: "已取消" },
+];
+const submissionStatusOptions = [
+  { value: "PENDING", label: "待审核" },
+  { value: "APPROVED", label: "已登记" },
+  { value: "REJECTED", label: "已退回" },
+];
+const filteredInvoices = computed(() => {
+  return invoices.value.filter((item) => {
+    if (invoiceStatusFilter.value && item.status !== invoiceStatusFilter.value) return false;
+    if (invoiceMatchFilter.value && item.matchStatus !== invoiceMatchFilter.value) return false;
+    if (invoiceDateFrom.value && item.invoiceDate && item.invoiceDate < invoiceDateFrom.value) return false;
+    if (invoiceDateTo.value && item.invoiceDate && item.invoiceDate > invoiceDateTo.value) return false;
+    return true;
+  });
+});
+const filteredPayables = computed(() =>
+  payables.value.filter((item) => {
+    if (payableStatusFilter.value && item.status !== payableStatusFilter.value) return false;
+    if (payableOverdueOnly.value) {
+      if (item.status === "PAID" || item.status === "CANCELLED") return false;
+      if (!item.dueDate || item.dueDate >= today()) return false;
+    }
+    return true;
+  }),
+);
+const filteredSubmissions = computed(() =>
+  submissions.value.filter(
+    (item) => !submissionStatusFilter.value || item.status === submissionStatusFilter.value,
+  ),
+);
+function today() {
+  return new Date().toISOString().slice(0, 10);
+}
 
 function invoiceStatusText(value: string) {
   return (
@@ -333,7 +474,6 @@ const submissionColumns = [
 ];
 
 const invoiceColumns = [
-
   { title: "发票号", dataIndex: "invoiceNo" },
   { title: "订单", dataIndex: "orderCode" },
   { title: "开票日期", dataIndex: "invoiceDate", customRender: ({ text }: { text?: string }) => formatDate(text) },
@@ -344,15 +484,66 @@ const invoiceColumns = [
     customRender: ({ record }: { record: api.PortalInvoice }) =>
       `${invoiceStatusText(record.status)} · ${approvalText(record.approvalStatus)} · ${matchText(record.matchStatus)}`,
   },
+  {
+    title: "已匹配金额",
+    dataIndex: "matchedAmount",
+    customRender: ({ text }: { text?: number }) =>
+      text == null ? "—" : money(text),
+  },
+  {
+    title: "差异金额",
+    dataIndex: "differenceAmount",
+    customRender: ({ text }: { text?: number }) =>
+      text == null || Number(text) === 0 ? "—" : money(Number(text)),
+  },
+  {
+    title: "备注",
+    dataIndex: "remark",
+    customRender: ({ text }: { text?: string }) => text || "—",
+  },
 ];
 
 const payableColumns = [
   { title: "应付单号", dataIndex: "code" },
   { title: "订单", dataIndex: "orderCode" },
   { title: "应付金额", dataIndex: "amount", customRender: ({ text }: { text: number }) => money(text) },
-  { title: "已付金额", dataIndex: "paidAmount", customRender: ({ text }: { text: number }) => money(text) },
-  { title: "待付金额", dataIndex: "outstandingAmount", customRender: ({ text }: { text: number }) => money(text) },
+  {
+    title: "冲减金额",
+    dataIndex: "adjustedAmount",
+    customRender: ({ text }: { text?: number }) =>
+      Number(text || 0) > 0
+        ? h("span", { style: "color:#cf1322" }, money(text || 0))
+        : money(0),
+  },
+  {
+    title: "已付金额",
+    dataIndex: "paidAmount",
+    customRender: ({ text }: { text: number }) => money(text),
+  },
+  {
+    title: "待付金额",
+    dataIndex: "outstandingAmount",
+    customRender: ({ text }: { text: number }) => money(text),
+  },
+  {
+    title: "待退金额",
+    dataIndex: "refundAmount",
+    customRender: ({ text }: { text?: number }) =>
+      Number(text || 0) > 0
+        ? h("span", { style: "color:#cf1322" }, money(text || 0))
+        : money(0),
+  },
   { title: "到期日", dataIndex: "dueDate", customRender: ({ text }: { text?: string }) => formatDate(text) },
+  {
+    title: "付款日期",
+    dataIndex: "paidAt",
+    customRender: ({ text }: { text?: string }) => (text ? formatDate(text) : "—"),
+  },
+  {
+    title: "付款说明",
+    dataIndex: "paymentNote",
+    customRender: ({ text }: { text?: string }) => text || "—",
+  },
   {
     title: "付款回单",
     key: "receipt",
@@ -552,6 +743,9 @@ function exportExcel() {
 }
 .finance-card strong.paid {
   color: #1f5c46;
+}
+.finance-card strong.ok {
+  color: #1677ff;
 }
 .finance-card strong.overdue {
   color: #cf1322;

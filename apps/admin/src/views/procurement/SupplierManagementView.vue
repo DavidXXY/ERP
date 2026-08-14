@@ -255,6 +255,12 @@
               ><a-input v-model:value="form.phone" /></a-form-item
           ></a-col>
           <a-col :xs="24" :md="8"
+            ><a-form-item label="负责采购"
+              ><a-input
+                v-model:value="form.purchaserName"
+                placeholder="内部采购负责人" /></a-form-item
+          ></a-col>
+          <a-col :xs="24" :md="8"
             ><a-form-item label="结算条款"
               ><a-input
                 v-model:value="form.settlementTerms"
@@ -551,6 +557,12 @@
                 <a-col :xs="24" :md="8"
                   ><a-form-item label="联系电话"
                     ><a-input v-model:value="form.phone" /></a-form-item
+                ></a-col>
+                <a-col :xs="24" :md="8"
+                  ><a-form-item label="负责采购"
+                    ><a-input
+                      v-model:value="form.purchaserName"
+                      placeholder="内部采购负责人" /></a-form-item
                 ></a-col>
                 <a-col :xs="24" :md="8"
                   ><a-form-item label="风险状态"
@@ -1385,6 +1397,7 @@ const supplierColumns = [
   { title: "供应商", key: "supplier", width: 260 },
   { title: "工商信息", key: "license", width: 240 },
   { title: "联系人", key: "contact", width: 170 },
+  { title: "负责采购", dataIndex: "purchaserName", width: 120 },
   { title: "签约金额（含税，元）", key: "contractedAmount", width: 190 },
   { title: "应付金额（含税，元）", key: "payableAmount", width: 190 },
   { title: "已付金额（含税，元）", key: "paidAmount", width: 190 },
@@ -1788,7 +1801,10 @@ function portalDocumentTypeText(type: string) {
 }
 
 function openCreate() {
-  Object.assign(form, emptySupplierForm(), { code: generateCode("GYS") });
+  Object.assign(form, emptySupplierForm(), {
+    code: generateCode("GYS"),
+    purchaserName: auth.user?.displayName || "",
+  });
   form.category =
     supplierCategories.value.find((item) => item.enabled)?.name || "";
   createOpen.value = true;
@@ -2059,6 +2075,7 @@ function emptySupplierForm(): CreateSupplierPayload {
     category: "",
     contactName: "",
     phone: "",
+    purchaserName: "",
     settlementTerms: "",
     legalRepresentative: "",
     unifiedSocialCreditCode: "",
@@ -2083,6 +2100,7 @@ function supplierToForm(record: Supplier): CreateSupplierPayload {
     category: record.category || "",
     contactName: record.contactName || "",
     phone: record.phone || "",
+    purchaserName: record.purchaserName || "",
     settlementTerms: record.settlementTerms || "",
     legalRepresentative: record.legalRepresentative || "",
     unifiedSocialCreditCode: record.unifiedSocialCreditCode || "",

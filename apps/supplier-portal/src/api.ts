@@ -383,9 +383,12 @@ export type PortalPayable = {
   code: string;
   orderCode?: string;
   amount: number;
+  adjustedAmount: number;
+  effectiveAmount: number;
   taxRate: number;
   paidAmount: number;
   outstandingAmount: number;
+  refundAmount: number;
   dueDate?: string;
   paidAt?: string;
   paymentNote?: string;
@@ -401,6 +404,10 @@ export type PortalPayable = {
 export type FinanceSummary = {
   invoiceCount: number;
   invoiceAmount: number;
+  invoiceApprovedAmount: number;
+  invoiceDifferenceAmount: number;
+  pendingInvoiceApprovals: number;
+  matchedInvoiceCount: number;
   payableCount: number;
   payableAmount: number;
   paidAmount: number;

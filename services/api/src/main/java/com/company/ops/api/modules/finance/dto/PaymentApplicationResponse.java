@@ -4,6 +4,7 @@ import com.company.ops.api.modules.finance.domain.PaymentApplicationStatus;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 
 public record PaymentApplicationResponse(
@@ -22,5 +23,6 @@ public record PaymentApplicationResponse(
     String approverName,
     OffsetDateTime approvedAt,
     UUID paymentId,
-    String paymentCode
+    String paymentCode,
+    List<UUID> payableIds
 ) {}

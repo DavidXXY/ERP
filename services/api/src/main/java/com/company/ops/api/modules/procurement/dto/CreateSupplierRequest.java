@@ -12,6 +12,7 @@ public record CreateSupplierRequest(
     @NotBlank @Size(max = 60) String category,
     @Size(max = 60) String contactName,
     @Size(max = 30) String phone,
+    @Size(max = 80) String purchaserName,
     @Size(max = 80) String settlementTerms,
     @Size(max = 80) String legalRepresentative,
     @Size(max = 80) String unifiedSocialCreditCode,

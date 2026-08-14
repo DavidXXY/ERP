@@ -32,7 +32,13 @@
           <template v-else-if="column.key === 'paid'"
             >{{ formatMoney(record.paidAmount || 0) }}<br /><span
               class="table-subtitle"
-              >待付 {{ formatMoney(record.outstandingAmount || 0) }}</span
+              >待付 {{ formatMoney(record.outstandingAmount || 0) }}{{
+                Number(record.adjustedAmount || 0) > 0
+                  ? " · 冲减 " + formatMoney(record.adjustedAmount)
+                  : ""
+              }}{{ Number(record.refundAmount || 0) > 0
+                  ? " · 待退 " + formatMoney(record.refundAmount)
+                  : "" }}</span
             ></template
           >
           <template v-else-if="column.key === 'dueDate'">{{
@@ -105,6 +111,12 @@
         <a-descriptions-item label="应付金额（含税，元）">{{
           formatMoney(selectedPayable.amount)
         }}</a-descriptions-item>
+        <a-descriptions-item v-if="Number(selectedPayable.adjustedAmount || 0) > 0" label="累计冲减（含税，元）">{{
+          formatMoney(selectedPayable.adjustedAmount)
+        }}</a-descriptions-item>
+        <a-descriptions-item v-if="Number(selectedPayable.refundAmount || 0) > 0" label="供应商待退（含税，元）">{{
+          formatMoney(selectedPayable.refundAmount)
+        }}</a-descriptions-item>
         <a-descriptions-item label="已付金额（含税，元）">{{
           formatMoney(selectedPayable.paidAmount)
         }}</a-descriptions-item>
@@ -167,7 +179,7 @@ import { useRouter } from "vue-router";
 import { message } from "ant-design-vue";
 import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
 import {
-  listProcurementPayables,
+  listProcurementPayablesPaged,
   type ProcurementPayable,
 } from "@/api/procurement";
 import { statusLabel, statusColor } from "@/utils/status-mapper";
@@ -212,6 +224,7 @@ const payableColumns = [
   { title: "应付金额（含税，元）", key: "amount", width: 190 },
   { title: "已付/待付", key: "paid", width: 200 },
   { title: "到期日", key: "dueDate", width: 120 },
+  { title: "经办人", dataIndex: "handlerName", width: 120 },
   { title: "状态", key: "status", width: 110 },
   { title: "操作", key: "action", width: 100, fixed: "right" },
 ];
@@ -272,10 +285,10 @@ async function loadData() {
   loading.value = true;
   try {
     const [payableRows, applicationRows] = await Promise.all([
-      listProcurementPayables(),
+      listProcurementPayablesPaged({ page: 0, size: 500 }),
       listPaymentApplications(),
     ]);
-    payables.value = payableRows;
+    payables.value = payableRows.content;
     applications.value = applicationRows;
   } catch (e: any) {
     message.error(e.message || "加载失败");

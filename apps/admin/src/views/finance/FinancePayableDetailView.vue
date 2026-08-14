@@ -35,6 +35,28 @@
         "
         >申请付款</a-button
       >
+      <a-button
+        v-if="
+          auth.can('finance:payment:execute') &&
+          payable &&
+          payable.status !== 'PAID' &&
+          payable.status !== 'CANCELLED' &&
+          payable.paidAmount === 0
+        "
+        danger
+        @click="cancelOpen = true"
+        >作废应付</a-button
+      >
+      <a-button
+        v-if="
+          auth.can('finance:payment:execute') &&
+          payable &&
+          payable.status !== 'PAID' &&
+          payable.status !== 'CANCELLED'
+        "
+        @click="openAdjustment"
+        >手动冲减</a-button
+      >
     </template>
     <template #relations>
       <a-steps size="small" :current="currentStep" responsive>
@@ -75,17 +97,33 @@
             <a-descriptions-item label="应付金额（含税，元）">{{
               money(payable.amount)
             }}</a-descriptions-item>
+            <a-descriptions-item
+              v-if="Number(payable.adjustedAmount || 0) > 0"
+              label="累计冲减（含税，元）"
+              >{{ money(payable.adjustedAmount) }}</a-descriptions-item
+            >
+            <a-descriptions-item label="实际应付（含税，元）">{{
+              money(payable.effectiveAmount)
+            }}</a-descriptions-item>
             <a-descriptions-item label="已付金额（含税，元）">{{
               money(payable.paidAmount)
             }}</a-descriptions-item>
             <a-descriptions-item label="待付金额（含税，元）">{{
               money(payable.outstandingAmount)
             }}</a-descriptions-item>
+            <a-descriptions-item
+              v-if="Number(payable.refundAmount || 0) > 0"
+              label="供应商待退（含税，元）"
+              >{{ money(payable.refundAmount) }}</a-descriptions-item
+            >
             <a-descriptions-item label="审批占用">{{
               money(payable.reservedAmount)
             }}</a-descriptions-item>
             <a-descriptions-item label="可申请付款（含税，元）">{{
               money(payable.availableAmount)
+            }}</a-descriptions-item>
+            <a-descriptions-item label="经办人">{{
+              payable.handlerName || "-"
             }}</a-descriptions-item>
             <a-descriptions-item label="付款状态">{{
               statusLabel(payable.status)
@@ -203,25 +241,110 @@
             :sub-title="reconcileDescription"
           />
         </a-tab-pane>
+        <a-tab-pane
+          key="adjustments"
+          :tab="`应付调整 (${adjustments.length})`"
+        >
+          <a-table
+            :columns="adjustmentColumns"
+            :data-source="adjustments"
+            row-key="id"
+            size="small"
+            :pagination="false"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'amount'"
+                ><strong>{{ money(record.amount) }}</strong></template
+              >
+              <template v-else-if="column.key === 'type'">
+                <a-tag :color="adjustmentColor(record.adjustmentType)">{{
+                  adjustmentLabel(record.adjustmentType)
+                }}</a-tag>
+              </template>
+            </template>
+          </a-table>
+        </a-tab-pane>
       </a-tabs>
     </a-card>
+    <a-modal
+      v-model:open="cancelOpen"
+      title="作废应付单"
+      ok-text="确认作废"
+      ok-type="danger"
+      :confirm-loading="saving"
+      @ok="handleCancelPayable"
+    >
+      <a-alert
+        type="warning"
+        show-icon
+        message="作废仅限未付款且无未结申请/发票的应付单，作废后不可恢复。"
+      />
+      <a-form layout="vertical" class="section-gap">
+        <a-form-item label="作废原因" required>
+          <a-textarea v-model:value="cancelReason" :maxlength="500" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
+    <a-modal
+      v-model:open="adjustmentOpen"
+      title="手动冲减应付"
+      ok-text="确认冲减"
+      :confirm-loading="saving"
+      @ok="handleApplyAdjustment"
+    >
+      <a-form layout="vertical">
+        <a-form-item label="调整类型" required>
+          <a-select
+            v-model:value="adjustmentForm.adjustmentType"
+            :options="adjustmentTypeOptions"
+          />
+        </a-form-item>
+        <a-form-item label="冲减金额（含税，元）" required>
+          <a-input-number
+            v-model:value="adjustmentForm.amount"
+            :min="0.01"
+            :max="payable?.outstandingAmount"
+            :precision="2"
+            class="full-input"
+          />
+        </a-form-item>
+        <a-form-item label="调整日期">
+          <a-input
+            v-model:value="adjustmentForm.appliedAt"
+            type="date"
+          />
+        </a-form-item>
+        <a-form-item label="原因说明" required>
+          <a-textarea
+            v-model:value="adjustmentForm.reason"
+            :maxlength="500"
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </BusinessDetailPage>
 </template>
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { message } from "ant-design-vue";
 import BusinessDetailPage, {
   type DetailMetric,
 } from "@/components/BusinessDetailPage.vue";
 import {
+  applyPayableAdjustment,
+  cancelPayable,
   listFinancePayables,
+  listPayableAdjustments,
   listPaymentApplications,
   listPaymentRecords,
   type FinancePayable,
+  type PayableAdjustment,
+  type PayableAdjustmentType,
   type PaymentApplication,
   type PaymentRecord,
 } from "@/api/finance";
+import { useAuthStore } from "@/stores/auth";
 import {
   listGoodsReceipts,
   listPurchaseOrders,
@@ -232,17 +355,34 @@ import {
 } from "@/api/procurement";
 const route = useRoute(),
   router = useRouter();
+const auth = useAuthStore();
 const loading = ref(false),
+  saving = ref(false),
+  cancelOpen = ref(false),
+  adjustmentOpen = ref(false),
+  cancelReason = ref(""),
   payable = ref<FinancePayable | null>(null),
   order = ref<PurchaseOrder | null>(null),
   receipts = ref<GoodsReceipt[]>([]),
   invoices = ref<SupplierInvoice[]>([]),
   applications = ref<PaymentApplication[]>([]),
-  payments = ref<PaymentRecord[]>([]);
+  payments = ref<PaymentRecord[]>([]),
+  adjustments = ref<PayableAdjustment[]>([]);
+const adjustmentForm = reactive<{
+  adjustmentType: PayableAdjustmentType;
+  amount: number;
+  appliedAt: string;
+  reason: string;
+}>({ adjustmentType: "CORRECTION", amount: 0, appliedAt: today(), reason: "" });
 const metrics = computed<DetailMetric[]>(() =>
   payable.value
     ? [
         { label: "应付金额（含税，元）", value: money(payable.value.amount) },
+        {
+          label: "实际应付（含税，元）",
+          value: money(payable.value.effectiveAmount),
+          warning: Number(payable.value.adjustedAmount || 0) > 0,
+        },
         {
           label: "已付金额（含税，元）",
           value: money(payable.value.paidAmount),
@@ -260,6 +400,11 @@ const metrics = computed<DetailMetric[]>(() =>
           label: "待付金额（含税，元）",
           value: money(payable.value.outstandingAmount),
           danger: payable.value.overdue,
+        },
+        {
+          label: "供应商待退（含税，元）",
+          value: money(payable.value.refundAmount),
+          danger: Number(payable.value.refundAmount || 0) > 0,
         },
       ]
     : [],
@@ -316,20 +461,36 @@ const paymentColumns = [
   { title: "银行流水", dataIndex: "bankReference" },
   { title: "付款人", dataIndex: "payerName", width: 120 },
 ];
+const adjustmentColumns = [
+  { title: "调整单号", dataIndex: "code", width: 220 },
+  { title: "类型", key: "type", width: 110 },
+  { title: "冲减金额（含税，元）", key: "amount", width: 190 },
+  { title: "原因", dataIndex: "reason" },
+  { title: "经办人", dataIndex: "operatorName", width: 120 },
+  { title: "日期", dataIndex: "appliedAt", width: 120 },
+  { title: "来源", dataIndex: "source", width: 110 },
+];
+const adjustmentTypeOptions = [
+  { label: "更正", value: "CORRECTION" },
+  { label: "折让", value: "CREDIT" },
+  { label: "索赔", value: "CLAIM" },
+];
 onMounted(loadData);
 async function loadData() {
   loading.value = true;
   try {
     const id = String(route.params.id);
-    const [ps, os, rs, isx, as, pays] = await Promise.all([
+    const [ps, os, rs, isx, as, pays, adjs] = await Promise.all([
       listFinancePayables(),
       listPurchaseOrders({ page: 0, size: 999 }),
       listGoodsReceipts(),
       listSupplierInvoices(),
       listPaymentApplications(),
       listPaymentRecords(),
+      listPayableAdjustments(id),
     ]);
     payable.value = ps.find((i) => i.id === id) || null;
+    adjustments.value = adjs;
     if (payable.value) {
       order.value =
         os.content.find((i) => i.id === payable.value!.orderId) || null;
@@ -342,6 +503,56 @@ async function loadData() {
     message.error(e instanceof Error ? e.message : "应付详情加载失败");
   } finally {
     loading.value = false;
+  }
+}
+function openAdjustment() {
+  Object.assign(adjustmentForm, {
+    adjustmentType: "CORRECTION",
+    amount: Number(payable.value?.outstandingAmount || 0),
+    appliedAt: today(),
+    reason: "",
+  });
+  adjustmentOpen.value = true;
+}
+async function handleCancelPayable() {
+  if (!payable.value) return;
+  if (!cancelReason.value.trim()) {
+    message.error("请填写作废原因");
+    return;
+  }
+  saving.value = true;
+  try {
+    await cancelPayable(payable.value.id, cancelReason.value.trim());
+    cancelOpen.value = false;
+    message.success("应付单已作废");
+    await loadData();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "作废失败");
+  } finally {
+    saving.value = false;
+  }
+}
+async function handleApplyAdjustment() {
+  if (!payable.value) return;
+  if (!adjustmentForm.reason.trim() || Number(adjustmentForm.amount) <= 0) {
+    message.error("请填写冲减金额与原因说明");
+    return;
+  }
+  saving.value = true;
+  try {
+    await applyPayableAdjustment(payable.value.id, {
+      adjustmentType: adjustmentForm.adjustmentType,
+      amount: Number(adjustmentForm.amount),
+      reason: adjustmentForm.reason.trim(),
+      appliedAt: adjustmentForm.appliedAt || undefined,
+    });
+    adjustmentOpen.value = false;
+    message.success("应付已冲减并同步总账");
+    await loadData();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "冲减失败");
+  } finally {
+    saving.value = false;
   }
 }
 function money(v?: number) {
@@ -374,6 +585,30 @@ function applicationStatusLabel(v: string) {
       } as Record<string, string>
     )[v] || v
   );
+}
+function adjustmentLabel(type: string) {
+  return (
+    {
+      CREDIT: "折让",
+      CLAIM: "索赔",
+      CORRECTION: "更正",
+      CANCELLATION: "作废",
+    } as Record<string, string>
+  )[type] || type;
+}
+function adjustmentColor(type: string) {
+  return (
+    {
+      CREDIT: "blue",
+      CLAIM: "orange",
+      CORRECTION: "cyan",
+      CANCELLATION: "red",
+    } as Record<string, string>
+  )[type] || "default";
+}
+function today() {
+  const value = new Date();
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
 }
 </script>
 <style scoped>

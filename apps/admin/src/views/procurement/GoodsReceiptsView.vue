@@ -301,6 +301,7 @@ const receiptColumns = [
   { title: "入库金额（含税，元）", key: "amount", width: 190 },
   { title: "到货日期", dataIndex: "receivedDate", width: 120 },
   { title: "收货人", dataIndex: "receiverName", width: 120 },
+  { title: "验收人", dataIndex: "inspectorName", width: 120 },
   { title: "质检状态", key: "status", width: 150 },
   { title: "操作", key: "action", width: 170, fixed: "right" as const },
 ];

@@ -84,6 +84,7 @@ export type Supplier = {
   category?: string;
   contactName?: string;
   phone?: string;
+  purchaserName?: string;
   settlementTerms?: string;
   legalRepresentative?: string;
   unifiedSocialCreditCode?: string;
@@ -251,6 +252,7 @@ export type CreateSupplierPayload = {
   category: string;
   contactName?: string;
   phone?: string;
+  purchaserName?: string;
   settlementTerms?: string;
   legalRepresentative?: string;
   unifiedSocialCreditCode?: string;
@@ -403,9 +405,13 @@ export type ProcurementPayable = {
   orderCode: string;
   receiptId: string;
   amount: number;
+  adjustedAmount: number;
+  effectiveAmount: number;
   taxRate?: number;
   paidAmount: number;
   outstandingAmount: number;
+  refundAmount: number;
+  overdue?: boolean;
   dueDate: string;
   paidAt?: string;
   paymentNote?: string;
@@ -414,6 +420,7 @@ export type ProcurementPayable = {
   paymentReceiptSizeBytes?: number;
   paymentReceiptUploadedBy?: string;
   paymentReceiptUploadedAt?: string;
+  handlerName?: string;
   costType: ProcurementCostType;
   costTargetId: string;
   costTargetCode: string;
@@ -439,6 +446,7 @@ export type ProcurementCostAllocation = {
 export type ProcurementMatching = {
   orderId: string;
   orderCode?: string;
+  responsibleName?: string;
   supplierName?: string;
   partName: string;
   orderedQty: number;
@@ -714,8 +722,13 @@ export type SupplierInvoice = {
   differenceAmount: number;
   approvalStatus: string;
   verificationStatus: string;
+  verifiedBy?: string;
+  verifiedAt?: string;
+  verificationComment?: string;
   attachmentDocumentId?: string;
   remark?: string;
+  handlerName?: string;
+  approvedByName?: string;
 };
 
 export function listProcurementMaterials() {
@@ -1131,9 +1144,32 @@ export function listProcurementPayables() {
   });
 }
 
+export function listProcurementPayablesPaged(params?: {
+  status?: PayableStatus;
+  keyword?: string;
+  page?: number;
+  size?: number;
+}) {
+  return request<PageResponse<ProcurementPayable>>({
+    method: "GET",
+    url: "/procurement/payables/paged",
+    params,
+  });
+}
+
 export async function recordPayablePayment(
   payableId: string,
-  data: { paidAmount: number; paidAt: string; paymentNote?: string },
+  data: {
+    payments: Array<{
+      payableId?: string;
+      amount: number;
+      paidDate: string;
+      paymentMethod: string;
+      bankReference: string;
+      note?: string;
+    }>;
+    paymentNote?: string;
+  },
   file?: File,
 ) {
   const form = new FormData();
@@ -1470,6 +1506,7 @@ export function createSupplierInvoice(payload: {
   invoiceDate: string;
   remark?: string;
   payableId?: string;
+  payableIds?: string[];
   receiptId?: string;
   clientRequestId?: string;
   attachmentDocumentId?: string;
@@ -1491,6 +1528,19 @@ export function reviewSupplierInvoice(
   return request<SupplierInvoice>({
     method: "POST",
     url: `/procurement/supplier-invoices/${id}/review`,
+    data: payload,
+  });
+}
+export function verifySupplierInvoice(
+  id: string,
+  payload: {
+    decision: "VERIFIED" | "EXCEPTION";
+    comment?: string;
+  },
+) {
+  return request<SupplierInvoice>({
+    method: "POST",
+    url: `/procurement/supplier-invoices/${id}/verify`,
     data: payload,
   });
 }

@@ -8,9 +8,13 @@ import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.RegisterInvoiceRequ
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ReviewInvoiceRequest;
 import com.company.ops.api.modules.crm.service.CrmOperationsService;
 import com.company.ops.api.modules.finance.dto.CreatePaymentApplicationRequest;
+import com.company.ops.api.modules.finance.dto.CancelPayableRequest;
+import com.company.ops.api.modules.finance.dto.CreatePayableAdjustmentRequest;
 import com.company.ops.api.modules.finance.dto.ExecutePaymentRequest;
 import com.company.ops.api.modules.finance.dto.FinanceOverviewResponse;
 import com.company.ops.api.modules.finance.dto.FinancePayableResponse;
+import com.company.ops.api.modules.finance.dto.PayableAdjustmentResponse;
+import com.company.ops.api.modules.finance.dto.PaymentExecutionResult;
 import com.company.ops.api.modules.finance.dto.FinanceReceivableDetailResponse;
 import com.company.ops.api.modules.finance.dto.PaymentApplicationResponse;
 import com.company.ops.api.modules.finance.dto.PaymentRecordResponse;
@@ -212,11 +216,36 @@ public class FinanceController {
 
   @PostMapping("/payment-applications/{id}/payment")
   @PreAuthorize("hasAuthority('finance:payment:execute')")
-  public ApiResponse<PaymentRecordResponse> executePayment(
+  public ApiResponse<PaymentExecutionResult> executePayment(
       @PathVariable UUID id,
       @Valid @RequestBody ExecutePaymentRequest request
   ) {
     return ApiResponse.ok(financeService.executePayment(id, request));
+  }
+
+  @PostMapping("/payables/{id}/cancel")
+  @PreAuthorize("hasAuthority('finance:payment:execute')")
+  public ApiResponse<FinancePayableResponse> cancelPayable(
+      @PathVariable UUID id,
+      @Valid @RequestBody CancelPayableRequest request
+  ) {
+    return ApiResponse.ok(financeService.cancelPayable(id, request));
+  }
+
+  @PostMapping("/payables/{id}/adjustments")
+  @PreAuthorize("hasAuthority('finance:payment:execute')")
+  public ApiResponse<PayableAdjustmentResponse> applyPayableAdjustment(
+      @PathVariable UUID id,
+      @Valid @RequestBody CreatePayableAdjustmentRequest request
+  ) {
+    return ApiResponse.ok(financeService.applyPayableAdjustment(id, request));
+  }
+
+  @GetMapping("/payables/{id}/adjustments")
+  @PreAuthorize("hasAuthority('finance:payable:view')")
+  public ApiResponse<List<PayableAdjustmentResponse>> listPayableAdjustments(
+      @PathVariable UUID id) {
+    return ApiResponse.ok(financeService.listPayableAdjustments(id));
   }
 
   @GetMapping("/payments")

@@ -200,6 +200,7 @@ const outsourceCompleteForm = reactive({ acceptanceNote: "验收合格" });
 const outsourceColumns = [
   { title: "外包单", key: "order", width: 230 },
   { title: "服务商", dataIndex: "supplierName", width: 220 },
+  { title: "申请人", dataIndex: "applicantName", width: 120 },
   { title: "绑定业务", key: "binding", width: 170 },
   { title: "计划日期", dataIndex: "plannedDate", width: 120 },
   { title: "外包金额（含税，元）", key: "amount", width: 190 },

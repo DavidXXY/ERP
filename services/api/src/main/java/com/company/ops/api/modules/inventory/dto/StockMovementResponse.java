@@ -12,5 +12,6 @@ public record StockMovementResponse(
     BigDecimal quantity,
     String sourceNo,
     String remark,
+    String operatorName,
     OffsetDateTime createdAt
 ) {}

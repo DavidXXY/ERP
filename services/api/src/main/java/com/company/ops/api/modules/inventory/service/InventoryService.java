@@ -30,6 +30,7 @@ import com.company.ops.api.modules.inventory.repository.InventoryReturnLineRepos
 import com.company.ops.api.modules.inventory.repository.InventoryReturnOrderRepository;
 import com.company.ops.api.modules.inventory.repository.StockMovementRepository;
 import com.company.ops.api.modules.project.domain.Project;
+import com.company.ops.api.modules.system.security.UserPrincipal;
 import com.company.ops.api.modules.project.domain.ProjectApprovalStatus;
 import com.company.ops.api.modules.project.domain.ProjectCostCategory;
 import com.company.ops.api.modules.project.domain.ProjectCostSource;
@@ -492,6 +493,7 @@ public class InventoryService {
     movement.setQuantity(quantity);
     movement.setSourceNo(sourceNo);
     movement.setRemark(remark);
+    movement.setOperatorName(currentName());
     movementRepository.save(movement);
   }
 
@@ -543,8 +545,15 @@ public class InventoryService {
   private StockMovementResponse toMovementResponse(StockMovement movement) {
     return new StockMovementResponse(
         movement.getId(), movement.getPartId(), movement.getMovementType(), movement.getQuantity(),
-        movement.getSourceNo(), movement.getRemark(), movement.getCreatedAt()
+        movement.getSourceNo(), movement.getRemark(), movement.getOperatorName(), movement.getCreatedAt()
     );
+  }
+
+  private String currentName() {
+    var authentication = org.springframework.security.core.context.SecurityContextHolder
+        .getContext().getAuthentication();
+    return authentication != null && authentication.getPrincipal() instanceof UserPrincipal principal
+        ? principal.displayName() : "系统";
   }
 
   private BigDecimal amount(BigDecimal value) {

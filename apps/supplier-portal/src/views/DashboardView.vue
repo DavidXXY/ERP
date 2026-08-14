@@ -242,6 +242,10 @@ const orders = ref<api.PortalOrderEntry[]>([]);
 const finance = ref<api.FinanceSummary>({
   invoiceCount: 0,
   invoiceAmount: 0,
+  invoiceApprovedAmount: 0,
+  invoiceDifferenceAmount: 0,
+  pendingInvoiceApprovals: 0,
+  matchedInvoiceCount: 0,
   payableCount: 0,
   payableAmount: 0,
   paidAmount: 0,

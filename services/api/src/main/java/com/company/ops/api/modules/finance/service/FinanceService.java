@@ -11,8 +11,11 @@ import com.company.ops.api.modules.crm.repository.CustomerRepository;
 import com.company.ops.api.modules.crm.repository.ReceivableRepository;
 import com.company.ops.api.modules.crm.repository.ServiceContractRepository;
 import com.company.ops.api.modules.finance.domain.PaymentApplication;
+import com.company.ops.api.modules.finance.domain.PaymentApplicationPayable;
 import com.company.ops.api.modules.finance.domain.PaymentApplicationStatus;
 import com.company.ops.api.modules.finance.domain.PaymentRecord;
+import com.company.ops.api.modules.finance.dto.CancelPayableRequest;
+import com.company.ops.api.modules.finance.dto.CreatePayableAdjustmentRequest;
 import com.company.ops.api.modules.finance.dto.CreatePaymentApplicationRequest;
 import com.company.ops.api.modules.finance.dto.ExecutePaymentRequest;
 import com.company.ops.api.modules.finance.dto.FinanceReceivableDetailResponse;
@@ -20,19 +23,28 @@ import com.company.ops.api.modules.finance.dto.FinanceReceivableDetailResponse.C
 import com.company.ops.api.modules.finance.dto.FinanceReceivableDetailResponse.CustomerInvoiceInfo;
 import com.company.ops.api.modules.finance.dto.FinanceOverviewResponse;
 import com.company.ops.api.modules.finance.dto.FinancePayableResponse;
+import com.company.ops.api.modules.finance.dto.PayableAdjustmentResponse;
+import com.company.ops.api.modules.finance.dto.PaymentExecutionResult;
 import com.company.ops.api.modules.finance.dto.PaymentApplicationResponse;
 import com.company.ops.api.modules.finance.dto.PaymentRecordResponse;
+import com.company.ops.api.modules.finance.dto.PaymentSplit;
 import com.company.ops.api.modules.finance.dto.ProcessPaymentApplicationRequest;
+import com.company.ops.api.modules.finance.repository.PaymentApplicationPayableRepository;
 import com.company.ops.api.modules.finance.repository.PaymentApplicationRepository;
 import com.company.ops.api.modules.finance.repository.PaymentRecordRepository;
 import com.company.ops.api.modules.ledger.dto.LedgerDtos.PostingLine;
 import com.company.ops.api.modules.ledger.service.LedgerService;
+import com.company.ops.api.modules.procurement.domain.PayableAdjustment;
+import com.company.ops.api.modules.procurement.domain.PayableAdjustmentType;
 import com.company.ops.api.modules.procurement.domain.PayableStatus;
 import com.company.ops.api.modules.procurement.domain.ProcurementPayable;
 import com.company.ops.api.modules.procurement.domain.PurchaseOrder;
 import com.company.ops.api.modules.procurement.domain.Supplier;
+import com.company.ops.api.modules.procurement.domain.SupplierInvoice;
+import com.company.ops.api.modules.procurement.repository.PayableAdjustmentRepository;
 import com.company.ops.api.modules.procurement.repository.ProcurementPayableRepository;
 import com.company.ops.api.modules.procurement.repository.PurchaseOrderRepository;
+import com.company.ops.api.modules.procurement.repository.SupplierInvoicePayableRepository;
 import com.company.ops.api.modules.procurement.repository.SupplierRepository;
 import com.company.ops.api.modules.procurement.repository.SupplierInvoiceRepository;
 import com.company.ops.api.modules.procurement.service.SupplierPortalNotifier;
@@ -41,8 +53,12 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.EnumSet;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -70,8 +86,11 @@ public class FinanceService {
   private final SupplierRepository supplierRepository;
   private final PurchaseOrderRepository orderRepository;
   private final PaymentApplicationRepository applicationRepository;
+  private final PaymentApplicationPayableRepository applicationPayableRepository;
   private final PaymentRecordRepository paymentRepository;
+  private final PayableAdjustmentRepository adjustmentRepository;
   private final SupplierInvoiceRepository supplierInvoiceRepository;
+  private final SupplierInvoicePayableRepository supplierInvoicePayableRepository;
   private final LedgerService ledgerService;
   private final SupplierPortalNotifier portalNotifier;
 
@@ -82,8 +101,11 @@ public class FinanceService {
       SupplierRepository supplierRepository,
       PurchaseOrderRepository orderRepository,
       PaymentApplicationRepository applicationRepository,
+      PaymentApplicationPayableRepository applicationPayableRepository,
       PaymentRecordRepository paymentRepository,
+      PayableAdjustmentRepository adjustmentRepository,
       SupplierInvoiceRepository supplierInvoiceRepository,
+      SupplierInvoicePayableRepository supplierInvoicePayableRepository,
       LedgerService ledgerService,
       SupplierPortalNotifier portalNotifier,
                               CodeGenerator codeGenerator) {
@@ -95,8 +117,11 @@ public class FinanceService {
     this.supplierRepository = supplierRepository;
     this.orderRepository = orderRepository;
     this.applicationRepository = applicationRepository;
+    this.applicationPayableRepository = applicationPayableRepository;
     this.paymentRepository = paymentRepository;
+    this.adjustmentRepository = adjustmentRepository;
     this.supplierInvoiceRepository = supplierInvoiceRepository;
+    this.supplierInvoicePayableRepository = supplierInvoicePayableRepository;
     this.ledgerService = ledgerService;
     this.portalNotifier = portalNotifier;
   }
@@ -134,15 +159,15 @@ public class FinanceService {
     Page<ProcurementPayable> payables = payableRepository.findAllByOrderByDueDateAsc(pageable);
     Map<UUID, Supplier> suppliers = supplierMap(payables.getContent().stream().map(ProcurementPayable::getSupplierId).toList());
     Map<UUID, PurchaseOrder> orders = orderMap(payables.getContent().stream().map(ProcurementPayable::getOrderId).toList());
-    Map<UUID, BigDecimal> reserved = payables.isEmpty() ? Map.of() : applicationRepository
-        .aggregateRequestedAmountByPayableIdInAndStatusIn(
+    Map<UUID, BigDecimal> reservedTotal = payables.isEmpty() ? Map.of() : applicationPayableRepository
+        .aggregateReservedByPayableIdIn(
             payables.getContent().stream().map(ProcurementPayable::getId).toList(), RESERVED_STATUSES).stream()
         .collect(Collectors.toMap(row -> (UUID) row[0], row -> amount((BigDecimal) row[1])));
     return payables.map(item -> toPayableResponse(
         item,
         suppliers.get(item.getSupplierId()),
         orders.get(item.getOrderId()),
-        reserved.getOrDefault(item.getId(), BigDecimal.ZERO)
+        reservedTotal.getOrDefault(item.getId(), BigDecimal.ZERO)
     ));
   }
 
@@ -188,37 +213,42 @@ public class FinanceService {
     if (applicationRepository.existsByCode(appCode)) {
       throw new BusinessException("付款申请单号已存在");
     }
-    ProcurementPayable payable = payableRepository.findByIdForUpdate(request.payableId())
-        .orElseThrow(() -> new BusinessException("应付单不存在"));
-    if (payable.getStatus() == PayableStatus.PAID || payable.getStatus() == PayableStatus.CANCELLED) {
-      throw new BusinessException("当前应付单不能申请付款");
+    Set<UUID> selected = new LinkedHashSet<>();
+    selected.add(request.payableId());
+    if (request.payableIds() != null) {
+      selected.addAll(request.payableIds());
     }
-    var payableInvoices = supplierInvoiceRepository.findByPayableId(payable.getId());
-    var relevantInvoices = payableInvoices.isEmpty()
-        ? supplierInvoiceRepository.findByOrderId(payable.getOrderId())
-        : payableInvoices;
-    BigDecimal matchedInvoiceAmount = relevantInvoices.stream()
-        .filter(item -> "MATCHED".equals(item.getMatchStatus()))
-        .filter(item -> "APPROVED".equals(item.getApprovalStatus()))
-        .filter(item -> "VERIFIED".equals(item.getVerificationStatus()))
-        .map(item -> amount(item.getMatchedAmount()))
-        .reduce(BigDecimal.ZERO, BigDecimal::add);
-    BigDecimal outstanding = amount(payable.getAmount()).subtract(amount(payable.getPaidAmount()));
-    BigDecimal reserved = reservedAmount(payable.getId());
-    BigDecimal invoiceAvailable = matchedInvoiceAmount
-        .subtract(amount(payable.getPaidAmount())).subtract(reserved);
-    BigDecimal available = outstanding.subtract(reserved).min(invoiceAvailable).max(BigDecimal.ZERO);
-    if (matchedInvoiceAmount.signum() == 0) {
-      throw new BusinessException("当前应付尚无审核通过且验真的匹配发票，不能申请付款");
+    List<ProcurementPayable> payables = payableRepository.findAllById(selected);
+    if (payables.size() != selected.size()) {
+      throw new BusinessException("部分应付单不存在");
     }
-    if (request.requestedAmount().compareTo(available) > 0) {
-      throw new BusinessException("申请金额超过可申请金额" + available);
+    Map<UUID, ProcurementPayable> payableById = payables.stream()
+        .collect(Collectors.toMap(ProcurementPayable::getId, Function.identity()));
+    Supplier supplier = null;
+    BigDecimal totalAvailable = BigDecimal.ZERO;
+    Map<UUID, BigDecimal> availableById = new LinkedHashMap<>();
+    for (UUID payableId : selected) {
+      ProcurementPayable payable = payableById.get(payableId);
+      Supplier current = supplierRepository.findById(payable.getSupplierId()).orElse(null);
+      if (supplier == null) {
+        supplier = current;
+      } else if (current != null && !supplier.getId().equals(current.getId())) {
+        throw new BusinessException("合并付款只能选择同一供应商的应付单");
+      }
+      BigDecimal available = payableAvailable(payable);
+      availableById.put(payableId, available);
+      totalAvailable = totalAvailable.add(available);
     }
+    if (request.requestedAmount().compareTo(totalAvailable) > 0) {
+      throw new BusinessException("申请金额超过可申请金额 " + totalAvailable);
+    }
+    Map<UUID, BigDecimal> allocations = allocateAmounts(
+        new ArrayList<>(selected), availableById, request.requestedAmount());
 
     PaymentApplication application = new PaymentApplication();
     application.setCode(appCode);
-    application.setPayableId(payable.getId());
-    application.setSupplierId(payable.getSupplierId());
+    application.setPayableId(request.payableId());
+    application.setSupplierId(supplier == null ? null : supplier.getId());
     application.setRequestedAmount(request.requestedAmount());
     application.setRequestedDate(request.requestedDate());
     application.setApplicantName(currentName());
@@ -226,8 +256,14 @@ public class FinanceService {
     application.setPurpose(request.purpose());
     application.setStatus(PaymentApplicationStatus.PENDING_APPROVAL);
     PaymentApplication saved = applicationRepository.save(application);
-    Supplier supplier = supplierRepository.findById(saved.getSupplierId()).orElse(null);
-    return toApplicationResponse(saved, payable, supplier, null);
+    for (UUID payableId : selected) {
+      PaymentApplicationPayable link = new PaymentApplicationPayable();
+      link.setApplicationId(saved.getId());
+      link.setPayableId(payableId);
+      link.setAllocatedAmount(allocations.get(payableId));
+      applicationPayableRepository.save(link);
+    }
+    return toApplicationResponse(saved, payableById.get(request.payableId()), supplier, null);
   }
 
   @Transactional
@@ -259,11 +295,7 @@ public class FinanceService {
   }
 
   @Transactional
-  public PaymentRecordResponse executePayment(UUID id, ExecutePaymentRequest request) {
-    String paymentCode = request.paymentCode() != null ? request.paymentCode() : codeGenerator.generate("PAYMENT_RECORD");
-    if (paymentRepository.existsByCode(paymentCode)) {
-      throw new BusinessException("付款流水号已存在");
-    }
+  public PaymentExecutionResult executePayment(UUID id, ExecutePaymentRequest request) {
     PaymentApplication application = applicationRepository.findByIdForUpdate(id)
         .orElseThrow(() -> new BusinessException("付款申请不存在"));
     if (application.getStatus() != PaymentApplicationStatus.APPROVED) {
@@ -273,51 +305,101 @@ public class FinanceService {
         || sameActor(application.getApproverUserId(), application.getApproverName())) {
       throw new BusinessException("付款申请、审批和执行必须由不同人员完成");
     }
-    ProcurementPayable payable = payableRepository.findByIdForUpdate(application.getPayableId())
-        .orElseThrow(() -> new BusinessException("应付单不存在"));
-    BigDecimal outstanding = amount(payable.getAmount()).subtract(amount(payable.getPaidAmount()));
-    if (request.amount().compareTo(application.getRequestedAmount()) > 0) {
+    List<PaymentSplit> splits = request.payments();
+    if (splits == null || splits.isEmpty()) {
+      throw new BusinessException("请至少填写一笔付款");
+    }
+    BigDecimal total = splits.stream()
+        .map(PaymentSplit::amount)
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
+    if (total.compareTo(application.getRequestedAmount()) > 0) {
       throw new BusinessException("实际付款金额不能超过审批通过的申请金额");
     }
-    if (request.amount().compareTo(outstanding) > 0) {
-      throw new BusinessException("付款金额超过应付余额");
+    Map<UUID, PaymentApplicationPayable> links = applicationPayableRepository
+        .findByApplicationId(application.getId()).stream()
+        .collect(Collectors.toMap(PaymentApplicationPayable::getPayableId, Function.identity()));
+    Map<UUID, BigDecimal> perPayable = new LinkedHashMap<>();
+    for (PaymentSplit split : splits) {
+      UUID payableId = split.payableId() != null ? split.payableId() : application.getPayableId();
+      if (!links.isEmpty() && !links.containsKey(payableId)) {
+        throw new BusinessException("该付款申请未包含应付单 " + payableId);
+      }
+      if (links.isEmpty() && !payableId.equals(application.getPayableId())) {
+        throw new BusinessException("该付款申请未包含应付单 " + payableId);
+      }
+      perPayable.merge(payableId, split.amount(), BigDecimal::add);
+    }
+    Map<UUID, ProcurementPayable> payableById = new LinkedHashMap<>();
+    for (UUID payableId : perPayable.keySet()) {
+      ProcurementPayable payable = payableRepository.findByIdForUpdate(payableId)
+          .orElseThrow(() -> new BusinessException("应付单不存在"));
+      payableById.put(payableId, payable);
+      BigDecimal allocated = links.isEmpty()
+          ? application.getRequestedAmount()
+          : links.get(payableId).getAllocatedAmount();
+      if (perPayable.get(payableId).compareTo(allocated) > 0) {
+        throw new BusinessException("应付单 " + payable.getCode()
+            + " 的付款金额超过本申请分配额度 " + allocated);
+      }
+      BigDecimal effective = amount(payable.getAmount()).subtract(amount(payable.getAdjustedAmount()));
+      BigDecimal outstanding = effective.subtract(amount(payable.getPaidAmount()));
+      if (perPayable.get(payableId).compareTo(outstanding) > 0) {
+        throw new BusinessException("应付单 " + payable.getCode() + " 付款金额超过应付余额 " + outstanding);
+      }
     }
 
-    PaymentRecord payment = new PaymentRecord();
-    payment.setCode(paymentCode);
-    payment.setApplicationId(application.getId());
-    payment.setPayableId(payable.getId());
-    payment.setSupplierId(application.getSupplierId());
-    payment.setAmount(request.amount());
-    payment.setPaidDate(request.paidDate());
-    payment.setPaymentMethod(request.paymentMethod());
-    payment.setBankReference(request.bankReference());
-    payment.setPayerName(currentName());
-    payment.setPayerUserId(currentUserId());
-    PaymentRecord savedPayment = paymentRepository.save(payment);
+    String baseCode = request.paymentCode() != null && !request.paymentCode().isBlank()
+        ? request.paymentCode().trim()
+        : codeGenerator.generate("PAYMENT_RECORD");
+    List<PaymentRecordResponse> records = new ArrayList<>();
+    int index = 1;
+    for (PaymentSplit split : splits) {
+      UUID payableId = split.payableId() != null ? split.payableId() : application.getPayableId();
+      ProcurementPayable payable = payableById.get(payableId);
+      String recordCode = splits.size() == 1 ? baseCode : baseCode + "-" + index++;
+      if (paymentRepository.existsByCode(recordCode)) {
+        throw new BusinessException("付款流水号已存在");
+      }
+      PaymentRecord payment = new PaymentRecord();
+      payment.setCode(recordCode);
+      payment.setApplicationId(application.getId());
+      payment.setPayableId(payableId);
+      payment.setSupplierId(application.getSupplierId());
+      payment.setAmount(split.amount());
+      payment.setPaidDate(split.paidDate());
+      payment.setPaymentMethod(split.paymentMethod());
+      payment.setBankReference(split.bankReference());
+      payment.setPayerName(currentName());
+      payment.setPayerUserId(currentUserId());
+      payment.setSourceType("APPLICATION");
+      payment.setNote(split.note());
+      PaymentRecord savedPayment = paymentRepository.save(payment);
 
-    BigDecimal paidAmount = amount(payable.getPaidAmount()).add(request.amount());
-    payable.setPaidAmount(paidAmount);
-    payable.setStatus(paidAmount.compareTo(payable.getAmount()) == 0
-        ? PayableStatus.PAID
-        : PayableStatus.PARTIAL_PAID);
-    payableRepository.save(payable);
+      BigDecimal paidAmount = amount(payable.getPaidAmount()).add(split.amount());
+      payable.setPaidAmount(paidAmount);
+      BigDecimal effective = amount(payable.getAmount()).subtract(amount(payable.getAdjustedAmount()));
+      payable.setStatus(paidAmount.compareTo(effective) >= 0
+          ? PayableStatus.PAID
+          : PayableStatus.PARTIAL_PAID);
+      payableRepository.save(payable);
+      ledgerService.post("PAYMENT", savedPayment.getCode(), savedPayment.getPaidDate(),
+          "支付供应商货款 " + savedPayment.getCode(), List.of(
+              new PostingLine("2202", "应付账款", savedPayment.getAmount(), BigDecimal.ZERO, payable.getCode()),
+              new PostingLine("1002", "银行存款", BigDecimal.ZERO, savedPayment.getAmount(), split.bankReference())
+          ));
+      Supplier supplier = supplierRepository.findById(application.getSupplierId()).orElse(null);
+      records.add(toPaymentResponse(savedPayment, application, payable, supplier));
+    }
     application.setStatus(PaymentApplicationStatus.PAID);
-    application.setPaymentId(savedPayment.getId());
+    application.setPaymentId(records.isEmpty() ? null : records.get(0).id());
     applicationRepository.save(application);
-    ledgerService.post("PAYMENT", savedPayment.getCode(), savedPayment.getPaidDate(),
-        "支付供应商货款 " + savedPayment.getCode(), List.of(
-            new PostingLine("2202", "应付账款", savedPayment.getAmount(), BigDecimal.ZERO, payable.getCode()),
-            new PostingLine("1002", "银行存款", BigDecimal.ZERO, savedPayment.getAmount(), request.bankReference())
-        ));
-    Supplier supplier = supplierRepository.findById(application.getSupplierId()).orElse(null);
     portalNotifier.notify(application.getSupplierId(), "PAYABLE",
         "货款已付款到账",
-        "应付单 " + payable.getCode() + " 已付款 "
-            + savedPayment.getAmount().stripTrailingZeros().toPlainString()
-            + "（付款单 " + savedPayment.getCode() + "），可在门户开票与对账页查看。",
-        "ORDER", payable.getOrderId());
-    return toPaymentResponse(savedPayment, application, payable, supplier);
+        "付款申请 " + application.getCode() + " 已执行付款 "
+            + total.stripTrailingZeros().toPlainString()
+            + " 元（付款单 " + baseCode + "），可在门户开票与对账页查看。",
+        "PAYABLE", application.getPayableId());
+    return new PaymentExecutionResult(baseCode, total, records);
   }
 
   @Transactional(readOnly = true)
@@ -337,7 +419,124 @@ public class FinanceService {
   }
 
   private BigDecimal reservedAmount(UUID payableId) {
-    return amount(applicationRepository.sumRequestedAmountByPayableAndStatusIn(payableId, RESERVED_STATUSES));
+    return amount(applicationPayableRepository
+        .aggregateReservedByPayableIdIn(List.of(payableId), RESERVED_STATUSES).stream()
+        .map(row -> (BigDecimal) row[1])
+        .findFirst().orElse(BigDecimal.ZERO));
+  }
+
+  @Transactional
+  public FinancePayableResponse cancelPayable(UUID payableId, CancelPayableRequest request) {
+    ProcurementPayable payable = payableRepository.findByIdForUpdate(payableId)
+        .orElseThrow(() -> new BusinessException("应付单不存在"));
+    if (payable.getStatus() == PayableStatus.PAID || payable.getStatus() == PayableStatus.CANCELLED) {
+      throw new BusinessException("已付款或已取消的应付单不能作废");
+    }
+    if (amount(payable.getPaidAmount()).signum() > 0) {
+      throw new BusinessException("已部分付款的应付单不能作废，请先处理退款");
+    }
+    List<PaymentApplication> openApplications = applicationRepository
+        .findByPayableIdAndStatusIn(payableId, RESERVED_STATUSES);
+    if (!openApplications.isEmpty()) {
+      throw new BusinessException("存在未结付款申请，不能作废应付单");
+    }
+    List<SupplierInvoice> invoices = supplierInvoiceRepository.findByPayableId(payableId);
+    if (invoices.stream().anyMatch(item -> !"REJECTED".equals(item.getApprovalStatus()))) {
+      throw new BusinessException("已登记发票的应付单不能作废，请先处理发票");
+    }
+    BigDecimal effective = amount(payable.getAmount()).subtract(amount(payable.getAdjustedAmount()));
+    if (effective.signum() > 0) {
+      PayableAdjustment adjustment = new PayableAdjustment();
+      adjustment.setCode(adjustmentCode());
+      adjustment.setPayableId(payable.getId());
+      adjustment.setOrderId(payable.getOrderId());
+      adjustment.setSupplierId(payable.getSupplierId());
+      adjustment.setAdjustmentType(PayableAdjustmentType.CANCELLATION);
+      adjustment.setAmount(effective);
+      adjustment.setReason(request.reason());
+      adjustment.setOperatorName(currentName());
+      adjustment.setAppliedAt(LocalDate.now());
+      adjustment.setSource("CANCELLATION");
+      adjustmentRepository.save(adjustment);
+      payable.setAdjustedAmount(amount(payable.getAdjustedAmount()).add(effective));
+    }
+    payable.setStatus(PayableStatus.CANCELLED);
+    payable.setCancelReason(request.reason());
+    payable.setCancelledBy(currentName());
+    payable.setCancelledAt(LocalDate.now());
+    ProcurementPayable saved = payableRepository.save(payable);
+    Supplier supplier = supplierRepository.findById(saved.getSupplierId()).orElse(null);
+    PurchaseOrder order = orderRepository.findById(saved.getOrderId()).orElse(null);
+    portalNotifier.notify(saved.getSupplierId(), "PAYABLE",
+        "应付单已作废",
+        "应付单 " + saved.getCode() + " 已作废" + (isBlank(request.reason()) ? "。"
+            : "，原因：" + request.reason()),
+        "PAYABLE", saved.getId());
+    return toPayableResponse(saved, supplier, order, BigDecimal.ZERO);
+  }
+
+  @Transactional
+  public PayableAdjustmentResponse applyPayableAdjustment(
+      UUID payableId,
+      CreatePayableAdjustmentRequest request
+  ) {
+    ProcurementPayable payable = payableRepository.findByIdForUpdate(payableId)
+        .orElseThrow(() -> new BusinessException("应付单不存在"));
+    if (payable.getStatus() == PayableStatus.PAID || payable.getStatus() == PayableStatus.CANCELLED) {
+      throw new BusinessException("已付款或已取消的应付单不能调整");
+    }
+    BigDecimal effective = amount(payable.getAmount()).subtract(amount(payable.getAdjustedAmount()));
+    BigDecimal outstanding = effective.subtract(amount(payable.getPaidAmount()));
+    if (request.amount().compareTo(outstanding) > 0) {
+      throw new BusinessException("冲减金额不能超过待付金额 " + outstanding);
+    }
+    LocalDate appliedAt = request.appliedAt() == null ? LocalDate.now() : request.appliedAt();
+    PayableAdjustment adjustment = new PayableAdjustment();
+    adjustment.setCode(adjustmentCode());
+    adjustment.setPayableId(payable.getId());
+    adjustment.setOrderId(payable.getOrderId());
+    adjustment.setSupplierId(payable.getSupplierId());
+    adjustment.setAdjustmentType(request.adjustmentType());
+    adjustment.setAmount(request.amount());
+    adjustment.setReason(request.reason());
+    adjustment.setOperatorName(currentName());
+    adjustment.setAppliedAt(appliedAt);
+    adjustment.setSource("MANUAL");
+    adjustmentRepository.save(adjustment);
+    payable.setAdjustedAmount(amount(payable.getAdjustedAmount()).add(request.amount()));
+    BigDecimal newEffective = amount(payable.getAmount()).subtract(amount(payable.getAdjustedAmount()));
+    if (newEffective.signum() == 0 && amount(payable.getPaidAmount()).signum() == 0) {
+      payable.setStatus(PayableStatus.CANCELLED);
+      payable.setCancelReason(request.reason());
+      payable.setCancelledBy(currentName());
+      payable.setCancelledAt(appliedAt);
+    }
+    ProcurementPayable saved = payableRepository.save(payable);
+    if (request.adjustmentType() == PayableAdjustmentType.CLAIM) {
+      ledgerService.post("PAYABLE_ADJUSTMENT", adjustment.getCode(), appliedAt,
+          "供应商索赔冲减应付 " + adjustment.getCode(), List.of(
+              new PostingLine("2202", "应付账款", request.amount(), BigDecimal.ZERO, payable.getCode()),
+              new PostingLine("6111", "其他业务收入", BigDecimal.ZERO, request.amount(), adjustment.getCode())));
+    } else {
+      ledgerService.post("PAYABLE_ADJUSTMENT", adjustment.getCode(), appliedAt,
+          "采购应付冲减 " + adjustment.getCode(), List.of(
+              new PostingLine("2202", "应付账款", request.amount(), BigDecimal.ZERO, payable.getCode()),
+              new PostingLine("1405", "库存商品", BigDecimal.ZERO, request.amount(), adjustment.getCode())));
+    }
+    portalNotifier.notify(saved.getSupplierId(), "PAYABLE",
+        "应付已冲减",
+        "应付单 " + saved.getCode() + " 冲减 "
+            + request.amount().stripTrailingZeros().toPlainString() + " 元"
+            + (isBlank(request.reason()) ? "。" : "，原因：" + request.reason()),
+        "PAYABLE", saved.getId());
+    return toAdjustmentResponse(adjustment);
+  }
+
+  @Transactional(readOnly = true)
+  public List<PayableAdjustmentResponse> listPayableAdjustments(UUID payableId) {
+    return adjustmentRepository.findByPayableIdOrderByAppliedAtAscCreatedAtAsc(payableId).stream()
+        .map(this::toAdjustmentResponse)
+        .toList();
   }
 
   private ReceivableResponse toReceivableResponse(Receivable receivable, Customer customer, ServiceContract contract) {
@@ -424,13 +623,108 @@ public class FinanceService {
     );
   }
 
+  private BigDecimal payableAvailable(ProcurementPayable payable) {
+    if (payable.getStatus() == PayableStatus.PAID || payable.getStatus() == PayableStatus.CANCELLED) {
+      return BigDecimal.ZERO;
+    }
+    BigDecimal effective = amount(payable.getAmount()).subtract(amount(payable.getAdjustedAmount()));
+    BigDecimal outstanding = effective.subtract(amount(payable.getPaidAmount())).max(BigDecimal.ZERO);
+    BigDecimal reserved = reservedAmount(payable.getId());
+    BigDecimal matchedInvoiceAmount = matchedInvoiceAmount(payable);
+    if (matchedInvoiceAmount.signum() == 0) {
+      throw new BusinessException("应付单 " + payable.getCode()
+          + " 尚无审核通过且验真的匹配发票，不能申请付款");
+    }
+    BigDecimal invoiceAvailable = matchedInvoiceAmount
+        .subtract(amount(payable.getPaidAmount())).subtract(reserved).max(BigDecimal.ZERO);
+    return outstanding.subtract(reserved).min(invoiceAvailable).max(BigDecimal.ZERO);
+  }
+
+  private BigDecimal matchedInvoiceAmount(ProcurementPayable payable) {
+    List<SupplierInvoice> payableInvoices = supplierInvoiceRepository.findByPayableId(payable.getId());
+    if (payableInvoices.isEmpty()) {
+      payableInvoices = supplierInvoicePayableRepository.findByPayableId(payable.getId()).stream()
+          .map(link -> supplierInvoiceRepository.findById(link.getInvoiceId()).orElse(null))
+          .filter(java.util.Objects::nonNull)
+          .toList();
+    }
+    var relevantInvoices = payableInvoices.isEmpty()
+        ? supplierInvoiceRepository.findByOrderId(payable.getOrderId())
+        : payableInvoices;
+    return relevantInvoices.stream()
+        .filter(item -> "MATCHED".equals(item.getMatchStatus()))
+        .filter(item -> "APPROVED".equals(item.getApprovalStatus()))
+        .filter(item -> "VERIFIED".equals(item.getVerificationStatus()))
+        .map(item -> amount(item.getMatchedAmount()))
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
+  }
+
+  private Map<UUID, BigDecimal> allocateAmounts(
+      List<UUID> payableIds,
+      Map<UUID, BigDecimal> availableById,
+      BigDecimal requested
+  ) {
+    Map<UUID, BigDecimal> result = new LinkedHashMap<>();
+    BigDecimal totalAvailable = availableById.values().stream()
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
+    if (payableIds.size() == 1) {
+      result.put(payableIds.get(0), requested);
+      return result;
+    }
+    BigDecimal remaining = requested;
+    for (int i = 0; i < payableIds.size(); i++) {
+      UUID id = payableIds.get(i);
+      if (i == payableIds.size() - 1) {
+        result.put(id, remaining);
+        break;
+      }
+      BigDecimal share = requested.multiply(availableById.get(id))
+          .divide(totalAvailable, 2, RoundingMode.DOWN);
+      result.put(id, share);
+      remaining = remaining.subtract(share);
+    }
+    return result;
+  }
+
+  private String adjustmentCode() {
+    String code = "YFTZ-" + System.currentTimeMillis();
+    while (adjustmentRepository.existsByCode(code)) {
+      code = "YFTZ-" + System.currentTimeMillis() + "-" + UUID.randomUUID().toString().substring(0, 6);
+    }
+    return code;
+  }
+
+  private PayableAdjustmentResponse toAdjustmentResponse(PayableAdjustment adjustment) {
+    return new PayableAdjustmentResponse(
+        adjustment.getId(),
+        adjustment.getCode(),
+        adjustment.getPayableId(),
+        adjustment.getOrderId(),
+        adjustment.getSupplierId(),
+        adjustment.getAdjustmentType(),
+        adjustment.getAmount(),
+        adjustment.getReason(),
+        adjustment.getOperatorName(),
+        adjustment.getAppliedAt(),
+        adjustment.getStatus(),
+        adjustment.getSource(),
+        adjustment.getSourceId()
+    );
+  }
+
+  private static boolean isBlank(String value) {
+    return value == null || value.isBlank();
+  }
+
   private FinancePayableResponse toPayableResponse(
       ProcurementPayable payable,
       Supplier supplier,
       PurchaseOrder order,
       BigDecimal reserved
   ) {
-    BigDecimal outstanding = amount(payable.getAmount()).subtract(amount(payable.getPaidAmount()));
+    BigDecimal effective = amount(payable.getAmount()).subtract(amount(payable.getAdjustedAmount()));
+    BigDecimal outstanding = effective.subtract(amount(payable.getPaidAmount())).max(BigDecimal.ZERO);
+    BigDecimal refund = amount(payable.getPaidAmount()).subtract(effective).max(BigDecimal.ZERO);
     return new FinancePayableResponse(
         payable.getId(),
         payable.getCode(),
@@ -438,15 +732,21 @@ public class FinanceService {
         supplier == null ? null : supplier.getName(),
         payable.getOrderId(),
         order == null ? null : order.getCode(),
+        payable.getHandlerName(),
         amount(payable.getAmount()),
+        amount(payable.getAdjustedAmount()),
+        effective,
         amount(payable.getPaidAmount()),
         outstanding,
+        refund,
         reserved,
-        outstanding.subtract(reserved),
+        outstanding.subtract(reserved).max(BigDecimal.ZERO),
         payable.getDueDate(),
         payable.getStatus(),
         payable.getStatus() != PayableStatus.PAID
             && payable.getStatus() != PayableStatus.CANCELLED
+            && outstanding.signum() > 0
+            && payable.getDueDate() != null
             && payable.getDueDate().isBefore(LocalDate.now())
     );
   }
@@ -457,6 +757,13 @@ public class FinanceService {
       Supplier supplier,
       PaymentRecord payment
   ) {
+    List<UUID> payableIds = applicationPayableRepository
+        .findByApplicationId(application.getId()).stream()
+        .map(PaymentApplicationPayable::getPayableId)
+        .toList();
+    if (payableIds.isEmpty()) {
+      payableIds = List.of(application.getPayableId());
+    }
     return new PaymentApplicationResponse(
         application.getId(),
         application.getCode(),
@@ -473,7 +780,8 @@ public class FinanceService {
         application.getApproverName(),
         application.getApprovedAt(),
         application.getPaymentId(),
-        payment == null ? null : payment.getCode()
+        payment == null ? null : payment.getCode(),
+        payableIds
     );
   }
 
@@ -496,7 +804,9 @@ public class FinanceService {
         payment.getPaidDate(),
         payment.getPaymentMethod(),
         payment.getBankReference(),
-        payment.getPayerName()
+        payment.getPayerName(),
+        payment.getSourceType(),
+        payment.getNote()
     );
   }
 

@@ -211,6 +211,7 @@ export type DocumentRecord = {
   fileName: string;
   contentType?: string;
   sizeBytes: number;
+  uploadedBy?: string;
   createdAt: string;
 };
 export type NotificationRecord = {

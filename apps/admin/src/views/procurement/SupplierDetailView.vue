@@ -82,6 +82,9 @@
                 <a-descriptions-item label="联系电话">{{
                   supplier.phone || "-"
                 }}</a-descriptions-item>
+                <a-descriptions-item label="负责采购">{{
+                  supplier.purchaserName || "-"
+                }}</a-descriptions-item>
                 <a-descriptions-item label="注册地址" :span="2">{{
                   supplier.registeredAddress || "-"
                 }}</a-descriptions-item>

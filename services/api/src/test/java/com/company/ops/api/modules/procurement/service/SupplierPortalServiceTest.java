@@ -63,6 +63,7 @@ import com.company.ops.api.modules.procurement.dto.SupplierPortalDtos.RegisterRe
 import com.company.ops.api.modules.procurement.dto.SupplierPortalDtos.SubmitInvoiceRequest;
 import com.company.ops.api.modules.procurement.dto.SupplierPortalDtos.InvoiceSubmissionResponse;
 import com.company.ops.api.modules.procurement.domain.SupplierInvoiceSubmission;
+import com.company.ops.api.modules.procurement.domain.SupplierInvoice;
 import com.company.ops.api.modules.procurement.dto.SupplierPortalDtos.PortalChangeRequest;
 import com.company.ops.api.modules.system.security.JwtService;
 import com.company.ops.api.modules.system.security.LoginAttemptService;
@@ -895,6 +896,39 @@ class SupplierPortalServiceTest {
   }
 
   @Test
+  void financeSummaryExposesReconciliationMetrics() {
+    Fixture fixture = fixture();
+    SupplierInvoice approved = invoice("FP-A", "APPROVED", "MATCHED",
+        BigDecimal.valueOf(1000), BigDecimal.ZERO);
+    SupplierInvoice mismatched = invoice("FP-B", "APPROVED", "MISMATCH",
+        BigDecimal.valueOf(500), BigDecimal.valueOf(20));
+    SupplierInvoice pending = invoice("FP-C", "PENDING", "UNMATCHED",
+        BigDecimal.valueOf(300), null);
+    when(invoices.findBySupplierIdOrderByCreatedAtDesc(fixture.supplier.getId()))
+        .thenReturn(List.of(pending, mismatched, approved));
+    when(invoices.aggregateBySupplier(fixture.supplier.getId()))
+        .thenReturn(new SupplierInvoiceRepository.InvoiceSupplierTotals() {
+          @Override public Long getInvoiceCount() { return 3L; }
+          @Override public BigDecimal getInvoiceAmount() { return BigDecimal.valueOf(1800); }
+        });
+    when(payables.aggregateBySupplier(any(), any(), any(), any()))
+        .thenReturn(new ProcurementPayableRepository.PayableSupplierTotals() {
+          @Override public Long getPayableCount() { return 2L; }
+          @Override public BigDecimal getPayableAmount() { return BigDecimal.valueOf(1000); }
+          @Override public BigDecimal getPaidAmount() { return BigDecimal.valueOf(400); }
+          @Override public BigDecimal getOverdueAmount() { return BigDecimal.valueOf(100); }
+        });
+
+    Map<String, Object> view = service.financeSummary(fixture.principal);
+
+    assertThat((BigDecimal) view.get("invoiceApprovedAmount")).isEqualByComparingTo("1500");
+    assertThat((BigDecimal) view.get("invoiceDifferenceAmount")).isEqualByComparingTo("20");
+    assertThat(view.get("pendingInvoiceApprovals")).isEqualTo(1L);
+    assertThat(view.get("matchedInvoiceCount")).isEqualTo(1L);
+    assertThat((BigDecimal) view.get("outstandingAmount")).isEqualByComparingTo("600");
+  }
+
+  @Test
   void deletePendingInvoiceSubmissionRemovesFile() {
     Fixture fixture = fixture();
     SupplierInvoiceSubmission submission = new SupplierInvoiceSubmission();
@@ -965,6 +999,23 @@ class SupplierPortalServiceTest {
     quote.setSubmissionStatus(status);
     quote.setVersionNo(1);
     return quote;
+  }
+
+  private SupplierInvoice invoice(
+      String invoiceNo,
+      String approvalStatus,
+      String matchStatus,
+      BigDecimal amount,
+      BigDecimal differenceAmount
+  ) {
+    SupplierInvoice invoice = new SupplierInvoice();
+    invoice.setId(UUID.randomUUID());
+    invoice.setInvoiceNo(invoiceNo);
+    invoice.setApprovalStatus(approvalStatus);
+    invoice.setMatchStatus(matchStatus);
+    invoice.setAmount(amount);
+    invoice.setDifferenceAmount(differenceAmount);
+    return invoice;
   }
 
   private record Fixture(

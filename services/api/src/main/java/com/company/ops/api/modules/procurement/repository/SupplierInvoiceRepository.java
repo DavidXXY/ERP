@@ -12,6 +12,7 @@ public interface SupplierInvoiceRepository extends JpaRepository<SupplierInvoice
   List<SupplierInvoice> findByOrderIdIn(Collection<UUID> orderIds);
   List<SupplierInvoice> findByMatchStatusNot(String matchStatus);
   List<SupplierInvoice> findByPayableId(UUID id);
+  List<SupplierInvoice> findByPayableIdIn(Collection<UUID> payableIds);
   boolean existsByInvoiceNo(String no);
   Optional<SupplierInvoice> findByClientRequestId(String clientRequestId);
 

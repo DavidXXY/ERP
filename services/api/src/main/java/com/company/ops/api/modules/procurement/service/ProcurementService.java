@@ -38,8 +38,10 @@ import com.company.ops.api.modules.procurement.domain.SupplierRiskStatus;
 import com.company.ops.api.modules.procurement.dto.ConfirmShipmentRequest;
 import com.company.ops.api.modules.procurement.dto.CreatePurchaseOrderRequest;
 import com.company.ops.api.modules.procurement.dto.CreatePurchaseRequestRequest;
+import com.company.ops.api.modules.procurement.dto.CreateReplenishmentRequestRequest;
 import com.company.ops.api.modules.procurement.dto.CreateSupplierRequest;
 import com.company.ops.api.modules.procurement.dto.GoodsReceiptResponse;
+import com.company.ops.api.modules.procurement.dto.FrameworkAgreementQuoteResponse;
 import com.company.ops.api.modules.procurement.dto.ImportPurchaseRequestBatchResponse;
 import com.company.ops.api.modules.procurement.dto.OrderDocumentResponse;
 import com.company.ops.api.modules.procurement.dto.ProcurementShipmentResponse;
@@ -570,6 +572,72 @@ public class ProcurementService {
   }
 
   @Transactional
+  public ImportPurchaseRequestBatchResponse createReplenishmentPurchaseRequests(
+      CreateReplenishmentRequestRequest request
+  ) {
+    if (request.lines() == null || request.lines().isEmpty()) {
+      throw new BusinessException("请选择需要补货的物料");
+    }
+    if (request.lines().size() > 500) {
+      throw new BusinessException("一次最多生成500条补货采购申请");
+    }
+    CostTarget costTarget = resolveCostTarget(request.costType(), request.projectId(), request.departmentId());
+    UUID batchId = UUID.randomUUID();
+    String batchCode = codeGenerator.generate("PURCHASE_REQUEST_BATCH");
+    String batchName = "补货建议-" + LocalDate.now();
+    List<PurchaseRequest> entities = new ArrayList<>();
+    BigDecimal batchAmount = BigDecimal.ZERO;
+    for (int index = 0; index < request.lines().size(); index++) {
+      CreateReplenishmentRequestRequest.Line line = request.lines().get(index);
+      InventoryPart part = partRepository.findById(line.partId())
+          .orElseThrow(() -> new BusinessException("物料不存在"));
+      BigDecimal quantity = line.quantity();
+      if (quantity == null || quantity.compareTo(BigDecimal.ZERO) <= 0) {
+        throw new BusinessException("补货数量必须大于0");
+      }
+      BigDecimal unitPrice = amount(line.unitPrice());
+      if (unitPrice.compareTo(BigDecimal.ZERO) == 0) {
+        unitPrice = amount(part.getUnitCost());
+      }
+      BigDecimal totalAmount = quantity.multiply(unitPrice);
+      batchAmount = batchAmount.add(totalAmount);
+      PurchaseRequest item = new PurchaseRequest();
+      item.setBatchId(batchId);
+      item.setBatchCode(batchCode);
+      item.setBatchName(batchName);
+      item.setLineNo(index + 1);
+      item.setCode(codeGenerator.generate("PURCHASE_REQUEST"));
+      item.setRequesterName(currentName());
+      item.setPartId(part.getId());
+      item.setPartName(part.getName());
+      item.setQuantity(quantity);
+      item.setUnitPrice(unitPrice);
+      item.setTaxRate(defaultTaxRate(null));
+      item.setTotalAmount(totalAmount);
+      item.setExpectedDate(line.expectedDate() != null ? line.expectedDate() : request.expectedDate());
+      item.setReason(combineImportReason(request.reason(), line.reason(), null));
+      item.setCostType(request.costType());
+      item.setProjectId(request.projectId());
+      item.setDepartmentId(request.departmentId());
+      item.setCostTargetCode(costTarget.code());
+      item.setCostTargetName(costTarget.name());
+      item.setStatus(PurchaseRequestStatus.SUBMITTED);
+      item.setApprovalStatus(ApprovalStatus.PENDING);
+      item.setApprovalLevel(resolveApprovalLevel(totalAmount));
+      item.setSourceType("REPLENISHMENT");
+      item.setSourceReference("补货建议自动生成");
+      entities.add(item);
+    }
+    validateProjectBudget(request.costType(), request.projectId(), batchAmount, null);
+    List<PurchaseRequest> saved = requestRepository.saveAll(entities);
+    List<PurchaseRequestResponse> items = saved.stream()
+        .map(this::toPurchaseRequestResponse)
+        .toList();
+    return new ImportPurchaseRequestBatchResponse(
+        batchId, batchCode, batchName, items.size(), amount(batchAmount), items);
+  }
+
+  @Transactional
   public PurchaseRequestResponse processRequestApproval(
       UUID id,
       ProcessPurchaseRequestApprovalRequest request
@@ -718,6 +786,30 @@ public class ProcurementService {
         page.getContent().stream().map(PurchaseOrder::getRequestId).filter(java.util.Objects::nonNull).distinct().toList()
     ).stream().collect(Collectors.toMap(PurchaseRequest::getId, Function.identity()));
     return page.map(order -> toPurchaseOrderResponse(order, supplierMap.get(order.getSupplierId()), requestMap.get(order.getRequestId())));
+  }
+
+  @Transactional(readOnly = true)
+  public FrameworkAgreementQuoteResponse quoteFrameworkAgreement(UUID supplierId, UUID partId) {
+    if (supplierId == null || partId == null) {
+      throw new BusinessException("请选择供应商和物料");
+    }
+    LocalDate today = LocalDate.now();
+    for (FrameworkAgreement agreement : frameworkAgreementRepository
+        .findBySupplierIdAndStatusOrderByCreatedAtDesc(supplierId, "ACTIVE")) {
+      if (agreement.getValidFrom() != null && today.isBefore(agreement.getValidFrom())) continue;
+      if (agreement.getValidTo() != null && today.isAfter(agreement.getValidTo())) continue;
+      FrameworkAgreementItem item = frameworkAgreementItemRepository
+          .findByAgreementIdOrderByCreatedAtAsc(agreement.getId()).stream()
+          .filter(line -> line.getPartId().equals(partId))
+          .findFirst()
+          .orElse(null);
+      if (item != null) {
+        return new FrameworkAgreementQuoteResponse(
+            agreement.getId(), agreement.getCode(), agreement.getTitle(),
+            item.getUnitPrice(), item.getTaxRate());
+      }
+    }
+    return null;
   }
 
   @Transactional

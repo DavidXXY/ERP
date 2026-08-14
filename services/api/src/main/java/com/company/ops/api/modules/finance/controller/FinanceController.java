@@ -7,6 +7,8 @@ import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.RecordReceiptReques
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.RegisterInvoiceRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ReviewInvoiceRequest;
 import com.company.ops.api.modules.crm.service.CrmOperationsService;
+import com.company.ops.api.modules.finance.dto.BatchExecutePaymentRequest;
+import com.company.ops.api.modules.finance.dto.BatchPaymentExecutionResult;
 import com.company.ops.api.modules.finance.dto.CreatePaymentApplicationRequest;
 import com.company.ops.api.modules.finance.dto.CancelPayableRequest;
 import com.company.ops.api.modules.finance.dto.CreatePayableAdjustmentRequest;
@@ -221,6 +223,14 @@ public class FinanceController {
       @Valid @RequestBody ExecutePaymentRequest request
   ) {
     return ApiResponse.ok(financeService.executePayment(id, request));
+  }
+
+  @PostMapping("/payment-applications/batch-payment")
+  @PreAuthorize("hasAuthority('finance:payment:execute')")
+  public ApiResponse<BatchPaymentExecutionResult> executePaymentsBatch(
+      @Valid @RequestBody BatchExecutePaymentRequest request
+  ) {
+    return ApiResponse.ok(financeService.executePaymentsBatch(request));
   }
 
   @PostMapping("/payables/{id}/cancel")

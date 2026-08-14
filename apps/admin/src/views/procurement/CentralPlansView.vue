@@ -19,6 +19,12 @@
         >
           <template #icon><PlusOutlined /></template>新建集采计划
         </a-button>
+        <a-button
+          v-if="auth.can('procurement:purchase:create')"
+          :loading="generating"
+          @click="openGenerate"
+          >自动归集已审批申请</a-button
+        >
       </a-space>
 
       <a-alert
@@ -267,6 +273,7 @@ import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
 import { useAuthStore } from "@/stores/auth";
 import {
   convertCentralPlanItem,
+  generateCentralPlanSuggestions,
   listCentralPlans,
   listProcurementCostTargets,
   listProcurementMaterials,
@@ -283,6 +290,7 @@ const router = useRouter();
 const loading = ref(false);
 const saving = ref(false);
 const converting = ref(false);
+const generating = ref(false);
 const plans = ref<CentralPlan[]>([]);
 const parts = ref<ProcurementMaterial[]>([]);
 const departments = ref<ProcurementCostTargetOption[]>([]);
@@ -383,6 +391,42 @@ function openEdit(record: CentralPlan) {
     })),
   });
   formOpen.value = true;
+}
+async function openGenerate() {
+  generating.value = true;
+  try {
+    const year = new Date().getFullYear();
+    const result = await generateCentralPlanSuggestions(year);
+    if (!result.items.length) {
+      message.warning("暂无可归集的采购申请：需已审批通过、未发起询价且未下单");
+      return;
+    }
+    editingId.value = null;
+    Object.assign(form, {
+      name: `${year}年度集采计划（自动归集）`,
+      periodYear: year,
+      remark: `由 ${result.itemCount} 类物料、${result.items.reduce(
+        (sum, item) => sum + item.requestCount,
+        0,
+      )} 条已审批采购申请自动归集生成`,
+      items: result.items.map((item, index) => ({
+        rowKey: index + 1,
+        partId: item.partId,
+        partName: item.partName,
+        plannedQty: item.plannedQty,
+        unitPrice: item.unitPrice,
+        expectedDate: undefined,
+      })),
+    });
+    message.success(
+      `已自动归集 ${result.items.length} 类物料，请核对后保存计划`,
+    );
+    formOpen.value = true;
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : "自动归集失败");
+  } finally {
+    generating.value = false;
+  }
 }
 async function handleSave() {
   if (!form.name.trim()) {

@@ -109,4 +109,19 @@ public final class ProcurementPlanningDtos {
       String createdByName,
       List<CentralPlanItemResponse> items
   ) {}
+
+  public record CentralPlanSuggestionItem(
+      UUID partId,
+      String partName,
+      BigDecimal plannedQty,
+      BigDecimal unitPrice,
+      BigDecimal estimatedAmount,
+      int requestCount
+  ) {}
+
+  public record CentralPlanSuggestionsResponse(
+      Integer periodYear,
+      int itemCount,
+      List<CentralPlanSuggestionItem> items
+  ) {}
 }

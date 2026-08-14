@@ -69,6 +69,13 @@
       </section>
 
       <a-space wrap class="table-toolbar">
+        <a-button
+          v-if="auth.can('finance:payment:execute')"
+          type="primary"
+          :disabled="approvedApplications.length === 0"
+          @click="openBatchPayment"
+          >批量执行付款</a-button
+        >
         <a-input-search
           v-model:value="keyword"
           allow-clear
@@ -379,6 +386,77 @@
         </a-row>
       </a-form>
     </a-modal>
+
+    <a-modal
+      v-model:open="batchPaymentOpen"
+      title="批量执行付款"
+      width="1080px"
+      :confirm-loading="saving"
+      @ok="handleBatchPayment"
+    >
+      <a-alert
+        class="section-alert"
+        type="info"
+        show-icon
+        :message="`已选 ${batchRows.length} 条应付拆分，合计（含税，元）${formatMoney(batchTotal)}。每笔申请独立校验执行，失败不影响其他申请。`"
+      />
+      <a-table
+        size="small"
+        :data-source="batchRows"
+        :columns="batchColumns"
+        :pagination="false"
+        :row-key="(r: BatchRow) => r.id"
+        :scroll="{ x: 1000 }"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'application'"
+            ><strong>{{ record.applicationCode }}</strong
+            ><span class="table-subtitle">{{
+              record.supplierName
+            }}</span></template
+          >
+          <template v-else-if="column.key === 'payable'">{{
+            record.payableCode
+          }}</template>
+          <template v-else-if="column.key === 'amount'"
+            ><a-input-number
+              v-model:value="record.amount"
+              :min="0.01"
+              :precision="2"
+              size="small"
+              style="width: 130px"
+          /></template>
+          <template v-else-if="column.key === 'paidDate'"
+            ><a-input
+              v-model:value="record.paidDate"
+              type="date"
+              size="small"
+              style="width: 140px"
+          /></template>
+          <template v-else-if="column.key === 'method'"
+            ><a-select
+              v-model:value="record.paymentMethod"
+              :options="methodOptions"
+              size="small"
+              style="width: 130px"
+          /></template>
+          <template v-else-if="column.key === 'bankReference'"
+            ><a-input
+              v-model:value="record.bankReference"
+              placeholder="银行流水/凭证号"
+              size="small"
+              style="width: 180px"
+          /></template>
+          <template v-else-if="column.key === 'note'"
+            ><a-input
+              v-model:value="record.note"
+              placeholder="备注（选填）"
+              size="small"
+              style="width: 160px"
+          /></template>
+        </template>
+      </a-table>
+    </a-modal>
   </div>
 </template>
 
@@ -391,6 +469,7 @@ import PayCircleOutlined from "@ant-design/icons-vue/PayCircleOutlined";
 import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
 import {
   executePayment,
+  executePaymentsBatch,
   getPaymentApprovalCapability,
   listFinancePayables,
   listPaymentApplications,
@@ -410,6 +489,20 @@ import ApprovalProgressFlow, {
 
 type ApprovalDecision = "APPROVED" | "REJECTED";
 
+type BatchRow = {
+  id: string;
+  applicationId: string;
+  applicationCode: string;
+  supplierName: string;
+  payableId: string;
+  payableCode: string;
+  amount: number;
+  paidDate: string;
+  paymentMethod: PaymentMethod;
+  bankReference: string;
+  note: string;
+};
+
 const auth = useAuthStore();
 const router = useRouter();
 const applications = ref<PaymentApplication[]>([]);
@@ -421,6 +514,8 @@ const saving = ref(false);
 const canCurrentUserApprove = ref(false);
 const approvalOpen = ref(false);
 const paymentOpen = ref(false);
+const batchPaymentOpen = ref(false);
+const batchRows = ref<BatchRow[]>([]);
 const keyword = ref("");
 const statusFilter = ref<PaymentApplicationStatus>();
 const riskFilter = ref<string>();
@@ -499,6 +594,15 @@ const applicationColumns = [
   { title: "付款单", key: "payment", width: 180 },
   { title: "操作", key: "action", width: 190, fixed: "right" },
 ];
+const batchColumns = [
+  { title: "申请单 / 供应商", key: "application", width: 220 },
+  { title: "应付单", key: "payable", width: 160 },
+  { title: "实付金额（含税，元）", key: "amount", width: 150 },
+  { title: "付款日期", key: "paidDate", width: 160 },
+  { title: "付款方式", key: "method", width: 150 },
+  { title: "流水 / 凭证号", key: "bankReference", width: 200 },
+  { title: "备注", key: "note", width: 180 },
+];
 const paymentColumns = [
   { title: "付款单", key: "payment", width: 230 },
   { title: "应付单 / 供应商", key: "payable", width: 250 },
@@ -535,6 +639,12 @@ function removeSplit(index: number) {
   paymentForm.splits.splice(index, 1);
 }
 
+const approvedApplications = computed(() =>
+  applications.value.filter((item) => item.status === "APPROVED"),
+);
+const batchTotal = computed(() =>
+  batchRows.value.reduce((sum, row) => sum + Number(row.amount || 0), 0),
+);
 const filteredApplications = computed(() =>
   applications.value.filter((item) => {
     const term = keyword.value.trim().toLowerCase();
@@ -744,6 +854,131 @@ async function handlePayment() {
     await loadData();
   } catch (error) {
     message.error(error instanceof Error ? error.message : "付款执行失败");
+  } finally {
+    saving.value = false;
+  }
+}
+
+function openBatchPayment() {
+  const approved = applications.value.filter(
+    (item) => item.status === "APPROVED",
+  );
+  if (approved.length === 0) {
+    message.warning("没有待付款的付款申请");
+    return;
+  }
+  batchRows.value = approved.flatMap((app) => {
+    const payableIds =
+      app.payableIds && app.payableIds.length > 0
+        ? app.payableIds
+        : [app.payableId];
+    const appPayables = payableIds
+      .map((id) => payables.value.find((item) => item.id === id))
+      .filter((item): item is FinancePayable => !!item);
+    const outstandingSum =
+      appPayables.reduce(
+        (sum, item) => sum + Number(item.outstandingAmount || 0),
+        0,
+      ) || 1;
+    let remaining = Math.round(Number(app.requestedAmount || 0) * 100) / 100;
+    return payableIds.map((id, index) => {
+      const payable = payables.value.find((item) => item.id === id);
+      const outstanding = Number(payable?.outstandingAmount || 0);
+      const share =
+        index === payableIds.length - 1
+          ? remaining
+          : Math.round(
+              ((Number(app.requestedAmount || 0) * outstanding) /
+                outstandingSum) *
+                100,
+            ) / 100;
+      remaining = Math.round((remaining - share) * 100) / 100;
+      return {
+        id: `${app.id}-${id}`,
+        applicationId: app.id,
+        applicationCode: app.code || "",
+        supplierName: app.supplierName,
+        payableId: id,
+        payableCode: payable?.code || id.slice(0, 8),
+        amount: share,
+        paidDate: today(),
+        paymentMethod: "BANK_TRANSFER" as PaymentMethod,
+        bankReference: "",
+        note: "",
+      };
+    });
+  });
+  batchPaymentOpen.value = true;
+}
+
+async function handleBatchPayment() {
+  if (batchRows.value.length === 0) return;
+  const rowsByApplication = new Map<string, BatchRow[]>();
+  batchRows.value.forEach((row) => {
+    const rows = rowsByApplication.get(row.applicationId) || [];
+    rows.push(row);
+    rowsByApplication.set(row.applicationId, rows);
+  });
+  const errors: string[] = [];
+  const usedReferences = new Set(
+    payments.value.map((item) => item.bankReference).filter(Boolean),
+  );
+  rowsByApplication.forEach((rows, applicationId) => {
+    const app = applications.value.find((item) => item.id === applicationId);
+    const label = app?.code || applicationId.slice(0, 8);
+    const total = rows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+    if (total <= 0) errors.push(`${label} 付款金额必须大于 0`);
+    if (app && total > Number(app.requestedAmount || 0)) {
+      errors.push(`${label} 付款金额超过申请金额`);
+    }
+    if (rows.some((row) => !row.bankReference.trim())) {
+      errors.push(`${label} 缺少银行流水 / 凭证号`);
+    }
+    if (rows.some((row) => !row.paidDate)) errors.push(`${label} 缺少付款日期`);
+    rows.forEach((row) => {
+      if (usedReferences.has(row.bankReference.trim())) {
+        errors.push(`${label} 流水号 ${row.bankReference} 已存在，请核对`);
+      }
+      usedReferences.add(row.bankReference.trim());
+    });
+  });
+  if (errors.length > 0) {
+    message.error(errors.slice(0, 5).join("；"));
+    return;
+  }
+  saving.value = true;
+  try {
+    const result = await executePaymentsBatch({
+      items: Array.from(rowsByApplication.entries()).map(
+        ([applicationId, rows]) => ({
+          applicationId,
+          payment: {
+            payments: rows.map((row) => ({
+              payableId: row.payableId,
+              amount: row.amount,
+              paidDate: row.paidDate,
+              paymentMethod: row.paymentMethod,
+              bankReference: row.bankReference,
+              note: row.note || undefined,
+            })),
+          },
+        }),
+      ),
+    });
+    const failed = result.items.filter((item) => !item.success);
+    if (failed.length > 0) {
+      message.warning(
+        `批量付款完成：成功 ${result.successCount} 笔，失败 ${result.failedCount} 笔（${failed
+          .map((item) => item.errorMessage)
+          .join("；")}）`,
+      );
+    } else {
+      message.success(`批量付款完成，成功 ${result.successCount} 笔`);
+    }
+    batchPaymentOpen.value = false;
+    await loadData();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "批量付款执行失败");
   } finally {
     saving.value = false;
   }

@@ -5,6 +5,7 @@ import com.company.ops.api.modules.procurement.dto.ProcurementPlanningDtos.Appro
 import com.company.ops.api.modules.procurement.dto.ProcurementPlanningDtos.CentralPlanResponse;
 import com.company.ops.api.modules.procurement.dto.ProcurementPlanningDtos.FrameworkAgreementResponse;
 import com.company.ops.api.modules.procurement.dto.ProcurementPlanningDtos.SaveApprovalRuleRequest;
+import com.company.ops.api.modules.procurement.dto.ProcurementPlanningDtos.CentralPlanSuggestionsResponse;
 import com.company.ops.api.modules.procurement.dto.ProcurementPlanningDtos.SaveCentralPlanRequest;
 import com.company.ops.api.modules.procurement.dto.ProcurementPlanningDtos.SaveFrameworkAgreementRequest;
 import com.company.ops.api.modules.procurement.dto.PurchaseRequestResponse;
@@ -108,6 +109,14 @@ public class ProcurementPlanningController {
   @PreAuthorize("hasAuthority('procurement:view')")
   public ApiResponse<List<CentralPlanResponse>> centralPlans() {
     return ApiResponse.ok(service.listCentralPlans());
+  }
+
+  @PostMapping("/central-plans/generate-suggestions")
+  @PreAuthorize("hasAnyAuthority('procurement:view', 'procurement:request:approve')")
+  public ApiResponse<CentralPlanSuggestionsResponse> generateCentralPlanSuggestions(
+      @RequestParam(required = false) Integer periodYear
+  ) {
+    return ApiResponse.ok(service.generateCentralPlanSuggestions(periodYear));
   }
 
   @PostMapping("/central-plans")

@@ -886,6 +886,12 @@
               show-icon
               message="订单即合同：下单自动生成合同，订单审批通过即生效，供应商门户同步可见"
           /></a-col>
+          <a-col v-if="frameworkQuote" :span="24"
+            ><a-alert
+              type="success"
+              show-icon
+              :message="`已匹配框架协议 ${frameworkQuote.agreementCode}（${frameworkQuote.agreementTitle}），自动带出协议单价 ${frameworkQuote.unitPrice} 元与税率`"
+          /></a-col>
           <a-col :xs="24" :md="8"
             ><a-form-item label="预计到货"
               ><a-input
@@ -1125,6 +1131,7 @@ import {
   createPurchaseRequest,
   createSupplier,
   downloadPaymentReceipt,
+  quoteFrameworkAgreement,
   listGoodsReceipts,
   listProcurementCostAllocations,
   listProcurementCostTargets,
@@ -1144,6 +1151,7 @@ import {
   type ApprovalStatus,
   type CreatePurchaseOrderPayload,
   type CreatePurchaseRequestPayload,
+  type FrameworkAgreementQuote,
   type CreateSupplierPayload,
   type GoodsReceipt,
   type PayableStatus,
@@ -1403,6 +1411,7 @@ const requestForm =
   reactive<CreatePurchaseRequestPayload>(initialRequestForm());
 const approvalForm = reactive<ApprovalForm>(initialApprovalForm());
 const orderForm = reactive<CreatePurchaseOrderPayload>(initialOrderForm());
+const frameworkQuote = ref<FrameworkAgreementQuote | null>(null);
 const receiptForm = reactive<ReceiptForm>(initialReceiptForm());
 const paymentForm = reactive<{
   paymentNote: string;
@@ -1810,6 +1819,7 @@ function openOrder() {
     return;
   }
   Object.assign(orderForm, initialOrderForm());
+  frameworkQuote.value = null;
   orderForm.contractStartDate = addDays(0);
   orderForm.contractEndDate = addDays(365);
   orderOpen.value = true;
@@ -1843,7 +1853,7 @@ function changeCostType(value: string | number) {
   requestForm.departmentId = undefined;
   requestFormRef.value?.clearValidate(["projectId", "departmentId"]);
 }
-function syncOrderRequest(requestId: string) {
+async function syncOrderRequest(requestId: string) {
   const request = purchaseRequests.value.find((item) => item.id === requestId);
   const part = parts.value.find((item) => item.id === request?.partId);
   const awardedInquiries = procurementInquiries.value.filter(
@@ -1876,14 +1886,37 @@ function syncOrderRequest(requestId: string) {
   orderForm.sourceReason = inquiry
     ? `询价单 ${inquiry.code} 已定标${inquiry.selectionReason ? `：${inquiry.selectionReason}` : ""}`
     : "";
+  await refreshFrameworkQuote();
   syncSupplierForOrder(orderForm.supplierId);
 }
 
-function syncSupplierForOrder(supplierId?: string) {
+async function syncSupplierForOrder(supplierId?: string) {
   if (!supplierId) return;
   const supplier = suppliers.value.find((item) => item.id === supplierId);
   if (!orderForm.contractName && supplier?.name) {
     orderForm.contractName = `${supplier.name}采购合同`;
+  }
+  await refreshFrameworkQuote();
+}
+
+async function refreshFrameworkQuote() {
+  const partId = selectedOrderRequest.value?.partId || "";
+  const supplierId = orderForm.supplierId;
+  frameworkQuote.value = null;
+  orderForm.frameworkAgreementId = undefined;
+  if (!supplierId || !partId) return;
+  try {
+    const quote = await quoteFrameworkAgreement(supplierId, partId);
+    if (quote) {
+      frameworkQuote.value = quote;
+      orderForm.frameworkAgreementId = quote.agreementId;
+      if (Number(quote.unitPrice) > 0) {
+        orderForm.unitPrice = Number(quote.unitPrice);
+      }
+      orderForm.taxRate = Number(quote.taxRate ?? orderForm.taxRate ?? 13);
+    }
+  } catch {
+    // 无有效框架协议时保持手工价格
   }
 }
 
@@ -2152,6 +2185,7 @@ function initialOrderForm(): CreatePurchaseOrderPayload {
     paymentTerms: "",
     contractStartDate: undefined,
     contractEndDate: undefined,
+    frameworkAgreementId: undefined,
   };
 }
 function initialReceiptForm(): ReceiptForm {

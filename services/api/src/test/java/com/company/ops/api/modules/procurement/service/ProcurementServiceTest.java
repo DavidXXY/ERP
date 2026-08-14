@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
@@ -15,6 +16,8 @@ import com.company.ops.api.modules.inventory.domain.InventoryPart;
 import com.company.ops.api.modules.inventory.repository.InventoryPartRepository;
 import com.company.ops.api.modules.inventory.repository.StockMovementRepository;
 import com.company.ops.api.modules.procurement.domain.GoodsReceipt;
+import com.company.ops.api.modules.procurement.domain.FrameworkAgreement;
+import com.company.ops.api.modules.procurement.domain.FrameworkAgreementItem;
 import com.company.ops.api.modules.procurement.domain.ApprovalStatus;
 import com.company.ops.api.modules.procurement.domain.MaterialCategory;
 import com.company.ops.api.modules.procurement.domain.ProcurementContract;
@@ -31,6 +34,7 @@ import com.company.ops.api.modules.procurement.domain.SupplierCategory;
 import com.company.ops.api.modules.procurement.domain.SupplierRiskStatus;
 import com.company.ops.api.modules.procurement.dto.CreatePurchaseOrderRequest;
 import com.company.ops.api.modules.procurement.dto.CreatePurchaseRequestRequest;
+import com.company.ops.api.modules.procurement.dto.CreateReplenishmentRequestRequest;
 import com.company.ops.api.modules.procurement.dto.CreateSupplierRequest;
 import com.company.ops.api.modules.procurement.dto.ReceivePurchaseOrderRequest;
 import com.company.ops.api.modules.procurement.dto.ReviewSupplierAdmissionRequest;
@@ -200,6 +204,74 @@ class ProcurementServiceTest {
     assertThat(response.costTargetId()).isEqualTo(department.getId());
     assertThat(response.costTargetCode()).isEqualTo("FINANCE_DEPARTMENT");
     assertThat(response.costTargetName()).isEqualTo("Finance Department");
+  }
+
+  @Test
+  void replenishmentSuggestionsCreateBatchedPurchaseRequests() {
+    InventoryPart part1 = part("Pump A");
+    part1.setUnitCost(new BigDecimal("120"));
+    InventoryPart part2 = part("Valve B");
+    part2.setUnitCost(new BigDecimal("35"));
+    UUID departmentId = UUID.randomUUID();
+    SystemOrganization department = new SystemOrganization();
+    department.setId(departmentId);
+    department.setCode("INVENTORY_DEPARTMENT");
+    department.setName("Inventory Department");
+    department.setType("DEPARTMENT");
+    department.setEnabled(true);
+    when(partRepository.findById(part1.getId())).thenReturn(Optional.of(part1));
+    when(partRepository.findById(part2.getId())).thenReturn(Optional.of(part2));
+    when(organizationRepository.findById(departmentId)).thenReturn(Optional.of(department));
+    when(codeGenerator.generate(any())).thenReturn("PR-REPLENISH");
+    when(requestRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+
+    var response = procurementService.createReplenishmentPurchaseRequests(
+        new CreateReplenishmentRequestRequest(
+            ProcurementCostType.DEPARTMENT, null, departmentId, "月度补货", null,
+            List.of(
+                new CreateReplenishmentRequestRequest.Line(part1.getId(), BigDecimal.TEN, null, "库存不足", null),
+                new CreateReplenishmentRequestRequest.Line(part2.getId(), BigDecimal.valueOf(5), null, null, null)
+            )
+        ));
+
+    assertThat(response.totalLines()).isEqualTo(2);
+    assertThat(response.totalAmount()).isEqualByComparingTo(new BigDecimal("1375"));
+    ArgumentCaptor<List<PurchaseRequest>> captor = ArgumentCaptor.forClass(List.class);
+    verify(requestRepository).saveAll(captor.capture());
+    assertThat(captor.getValue()).allMatch(item -> "REPLENISHMENT".equals(item.getSourceType()));
+    assertThat(captor.getValue()).extracting(PurchaseRequest::getPartName).containsExactly("Pump A", "Valve B");
+    assertThat(captor.getValue()).allMatch(item ->
+        item.getUnitPrice().compareTo(new BigDecimal("120")) == 0
+            || item.getUnitPrice().compareTo(new BigDecimal("35")) == 0);
+  }
+
+  @Test
+  void frameworkAgreementQuoteReturnsActiveAgreementPrice() {
+    UUID supplierId = UUID.randomUUID();
+    InventoryPart part = part("Valve");
+    FrameworkAgreement agreement = new FrameworkAgreement();
+    agreement.setId(UUID.randomUUID());
+    agreement.setCode("KJ-001");
+    agreement.setTitle("年度阀门框架");
+    agreement.setStatus("ACTIVE");
+    agreement.setValidFrom(LocalDate.now().minusMonths(1));
+    agreement.setValidTo(LocalDate.now().plusMonths(6));
+    FrameworkAgreementItem item = new FrameworkAgreementItem();
+    item.setAgreementId(agreement.getId());
+    item.setPartId(part.getId());
+    item.setUnitPrice(new BigDecimal("88"));
+    item.setTaxRate(new BigDecimal("13"));
+    when(frameworkAgreementRepository.findBySupplierIdAndStatusOrderByCreatedAtDesc(supplierId, "ACTIVE"))
+        .thenReturn(List.of(agreement));
+    when(frameworkAgreementItemRepository.findByAgreementIdOrderByCreatedAtAsc(agreement.getId()))
+        .thenReturn(List.of(item));
+
+    var quote = procurementService.quoteFrameworkAgreement(supplierId, part.getId());
+
+    assertThat(quote).isNotNull();
+    assertThat(quote.agreementId()).isEqualTo(agreement.getId());
+    assertThat(quote.unitPrice()).isEqualByComparingTo("88");
+    assertThat(quote.taxRate()).isEqualByComparingTo("13");
   }
 
   @Test

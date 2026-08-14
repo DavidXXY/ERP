@@ -1,6 +1,8 @@
 package com.company.ops.api.modules.finance.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -12,6 +14,7 @@ import com.company.ops.api.modules.crm.repository.ServiceContractRepository;
 import com.company.ops.api.modules.finance.domain.PaymentApplication;
 import com.company.ops.api.modules.finance.domain.PaymentApplicationStatus;
 import com.company.ops.api.modules.finance.domain.PaymentMethod;
+import com.company.ops.api.modules.finance.dto.BatchExecutePaymentRequest;
 import com.company.ops.api.modules.finance.dto.ExecutePaymentRequest;
 import com.company.ops.api.modules.finance.dto.PaymentSplit;
 import com.company.ops.api.modules.finance.dto.ProcessPaymentApplicationRequest;
@@ -19,6 +22,9 @@ import com.company.ops.api.modules.finance.repository.PaymentApplicationReposito
 import com.company.ops.api.modules.finance.repository.PaymentApplicationPayableRepository;
 import com.company.ops.api.modules.finance.repository.PaymentRecordRepository;
 import com.company.ops.api.modules.ledger.service.LedgerService;
+import com.company.ops.api.modules.procurement.domain.PayableStatus;
+import com.company.ops.api.modules.procurement.domain.ProcurementPayable;
+import com.company.ops.api.modules.procurement.domain.Supplier;
 import com.company.ops.api.modules.procurement.repository.PayableAdjustmentRepository;
 import com.company.ops.api.modules.procurement.repository.ProcurementPayableRepository;
 import com.company.ops.api.modules.procurement.repository.PurchaseOrderRepository;
@@ -41,6 +47,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.transaction.PlatformTransactionManager;
 
 @ExtendWith(MockitoExtension.class)
 class FinanceServiceSeparationTest {
@@ -59,6 +66,7 @@ class FinanceServiceSeparationTest {
   @Mock private LedgerService ledger;
   @Mock private SupplierPortalNotifier portalNotifier;
   @Mock private CodeGenerator codes;
+  @Mock private PlatformTransactionManager transactionManager;
   @InjectMocks private FinanceService service;
 
   @AfterEach
@@ -90,6 +98,51 @@ class FinanceServiceSeparationTest {
         "FK-001", List.of(new PaymentSplit(null, BigDecimal.ONE, LocalDate.now(),
             PaymentMethod.BANK_TRANSFER, "BANK-001", null)))))
         .isInstanceOf(BusinessException.class).hasMessageContaining("不同人员");
+  }
+
+  @Test
+  void batchPaymentContinuesAfterPerItemFailure() {
+    UUID executorId = UUID.randomUUID();
+    authenticate(executorId, "出纳");
+    PaymentApplication ok = application(PaymentApplicationStatus.APPROVED);
+    ok.setApplicantUserId(UUID.randomUUID()); ok.setApplicantName("申请人");
+    ok.setApproverUserId(UUID.randomUUID()); ok.setApproverName("审批人");
+    ok.setPayableId(UUID.randomUUID());
+    ok.setSupplierId(UUID.randomUUID());
+    ok.setCode("FK-OK");
+    UUID missingId = UUID.randomUUID();
+    ProcurementPayable payable = new ProcurementPayable();
+    payable.setId(ok.getPayableId());
+    payable.setCode("YF-001");
+    payable.setAmount(BigDecimal.TEN);
+    payable.setStatus(PayableStatus.PARTIAL_PAID);
+    Supplier supplier = new Supplier();
+    supplier.setId(ok.getSupplierId());
+    supplier.setName("测试供应商");
+    when(applications.findByIdForUpdate(ok.getId())).thenReturn(Optional.of(ok));
+    when(applications.findByIdForUpdate(missingId)).thenReturn(Optional.empty());
+    when(applicationPayables.findByApplicationId(ok.getId())).thenReturn(List.of());
+    when(payables.findByIdForUpdate(ok.getPayableId())).thenReturn(Optional.of(payable));
+    when(payments.existsByCode(any())).thenReturn(false);
+    when(payments.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    when(payables.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    when(applications.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    when(suppliers.findById(ok.getSupplierId())).thenReturn(Optional.of(supplier));
+
+    ExecutePaymentRequest payment = new ExecutePaymentRequest("FK-BATCH-001",
+        List.of(new PaymentSplit(null, BigDecimal.ONE, LocalDate.now(),
+            PaymentMethod.BANK_TRANSFER, "BANK-001", null)));
+    var result = service.executePaymentsBatch(new BatchExecutePaymentRequest(List.of(
+        new BatchExecutePaymentRequest.Item(ok.getId(), payment),
+        new BatchExecutePaymentRequest.Item(missingId, payment)
+    )));
+
+    assertThat(result.successCount()).isEqualTo(1);
+    assertThat(result.failedCount()).isEqualTo(1);
+    assertThat(result.items()).anyMatch(item ->
+        item.success() && "FK-BATCH-001".equals(item.paymentCode()));
+    assertThat(result.items()).anyMatch(item ->
+        !item.success() && item.errorMessage().contains("付款申请不存在"));
   }
 
   private PaymentApplication application(PaymentApplicationStatus status) {

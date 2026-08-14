@@ -103,7 +103,9 @@ export async function requestAllPages<T>(
   const worker = async () => {
     while (nextPage < totalPages) {
       const page = nextPage++;
-      pages[page - 1] = (await request<PageResponse<T>>(pageConfig(page))).content;
+      pages[page - 1] = (
+        await request<PageResponse<T>>(pageConfig(page))
+      ).content;
     }
   };
 

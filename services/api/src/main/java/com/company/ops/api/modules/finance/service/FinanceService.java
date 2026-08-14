@@ -14,6 +14,9 @@ import com.company.ops.api.modules.finance.domain.PaymentApplication;
 import com.company.ops.api.modules.finance.domain.PaymentApplicationPayable;
 import com.company.ops.api.modules.finance.domain.PaymentApplicationStatus;
 import com.company.ops.api.modules.finance.domain.PaymentRecord;
+import com.company.ops.api.modules.finance.dto.BatchExecutePaymentRequest;
+import com.company.ops.api.modules.finance.dto.BatchPaymentExecutionResult;
+import com.company.ops.api.modules.finance.dto.BatchPaymentExecutionResult.BatchPaymentItemResult;
 import com.company.ops.api.modules.finance.dto.CancelPayableRequest;
 import com.company.ops.api.modules.finance.dto.CreatePayableAdjustmentRequest;
 import com.company.ops.api.modules.finance.dto.CreatePaymentApplicationRequest;
@@ -63,7 +66,9 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.security.core.context.SecurityContextHolder;
 import com.company.ops.api.modules.system.security.UserPrincipal;
 import org.springframework.data.domain.Page;
@@ -94,6 +99,7 @@ public class FinanceService {
   private final SupplierInvoicePayableRepository supplierInvoicePayableRepository;
   private final LedgerService ledgerService;
   private final SupplierPortalNotifier portalNotifier;
+  private final TransactionTemplate transactions;
 
   public FinanceService(ReceivableRepository receivableRepository,
       CustomerRepository customerRepository,
@@ -109,7 +115,9 @@ public class FinanceService {
       SupplierInvoicePayableRepository supplierInvoicePayableRepository,
       LedgerService ledgerService,
       SupplierPortalNotifier portalNotifier,
+      PlatformTransactionManager transactionManager,
                               CodeGenerator codeGenerator) {
+    this.transactions = new TransactionTemplate(transactionManager);
     this.codeGenerator = codeGenerator;
     this.receivableRepository = receivableRepository;
     this.customerRepository = customerRepository;
@@ -402,6 +410,29 @@ public class FinanceService {
             + " 元（付款单 " + baseCode + "），可在门户开票与对账页查看。",
         "PAYABLE", application.getPayableId());
     return new PaymentExecutionResult(baseCode, total, records);
+  }
+
+  public BatchPaymentExecutionResult executePaymentsBatch(BatchExecutePaymentRequest request) {
+    if (request.items() == null || request.items().isEmpty()) {
+      throw new BusinessException("请至少选择一笔待付款申请");
+    }
+    int successCount = 0;
+    List<BatchPaymentItemResult> items = new ArrayList<>();
+    for (BatchExecutePaymentRequest.Item item : request.items()) {
+      try {
+        PaymentExecutionResult result = transactions.execute(
+            status -> executePayment(item.applicationId(), item.payment()));
+        successCount++;
+        items.add(new BatchPaymentItemResult(
+            item.applicationId(), true, result.paymentCode(), result.totalAmount(), null));
+      } catch (RuntimeException e) {
+        String reason = e instanceof BusinessException
+            ? e.getMessage()
+            : "付款执行失败：" + e.getMessage();
+        items.add(new BatchPaymentItemResult(item.applicationId(), false, null, null, reason));
+      }
+    }
+    return new BatchPaymentExecutionResult(successCount, items.size() - successCount, items);
   }
 
   @Transactional(readOnly = true)

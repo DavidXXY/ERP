@@ -127,4 +127,47 @@ class MaintenanceRealFlowIntegrationTest {
     assertThatThrownBy(() -> service.assign(order.getId(), new AssignWorkOrderRequest(engineerId, "现场工程师")))
         .isInstanceOf(BusinessException.class).hasMessageContaining("待指派或待接单");
   }
+
+  @Test
+  void rejectsDuplicateScheduleForSameEngineerOnSameDay() {
+    String suffix = UUID.randomUUID().toString().substring(0, 8);
+    Customer customer = new Customer();
+    customer.setCode("CFL-" + suffix);
+    customer.setName("冲突检测客户");
+    customer.setIndustry("工程服务");
+    customer.setLevel(CustomerLevel.NORMAL);
+    customer.setOwnerName("测试负责人");
+    customer = customers.save(customer);
+
+    SystemUser engineer = new SystemUser();
+    engineer.setUsername("engineer-conf-" + suffix);
+    engineer.setDisplayName("冲突工程师");
+    engineer.setEnabled(true);
+    engineer = users.save(engineer);
+    UUID engineerId = engineer.getId();
+
+    var equipment1 = service.createEquipment(new CreateEquipmentRequest(
+        customer.getId(), null, null, "设备一", "电气", "C-1", "SN-C1-" + suffix,
+        "上海测试现场", LocalDate.now().minusYears(1), LocalDate.now().plusYears(1),
+        30, LocalDate.now(), null, "冲突测试"));
+    var equipment2 = service.createEquipment(new CreateEquipmentRequest(
+        customer.getId(), null, null, "设备二", "电气", "C-2", "SN-C2-" + suffix,
+        "上海测试现场", LocalDate.now().minusYears(1), LocalDate.now().plusYears(1),
+        30, LocalDate.now(), null, "冲突测试"));
+    var plan1 = service.createPlan(new CreatePlanRequest(
+        equipment1.id(), "巡检一", "检查", WorkOrderType.INSPECTION, WorkOrderPriority.NORMAL, 30, true, LocalDate.now()));
+    var plan2 = service.createPlan(new CreatePlanRequest(
+        equipment2.id(), "巡检二", "检查", WorkOrderType.INSPECTION, WorkOrderPriority.NORMAL, 30, true, LocalDate.now()));
+    assertThat(service.generatePlans(plan1.id()).generated()).isEqualTo(1);
+    assertThat(service.generatePlans(plan2.id()).generated()).isEqualTo(1);
+    var order1 = workOrders.findAllByOrderByCreatedAtDesc().stream()
+        .filter(item -> plan1.id().equals(item.getMaintenancePlanId())).findFirst().orElseThrow();
+    var order2 = workOrders.findAllByOrderByCreatedAtDesc().stream()
+        .filter(item -> plan2.id().equals(item.getMaintenancePlanId())).findFirst().orElseThrow();
+
+    OffsetDateTime scheduledAt = OffsetDateTime.of(LocalDate.now().plusDays(2), java.time.LocalTime.of(9, 0), ZoneOffset.ofHours(8));
+    service.createSchedule(new CreateScheduleRequest(order1.getId(), engineerId, scheduledAt));
+    assertThatThrownBy(() -> service.createSchedule(new CreateScheduleRequest(order2.getId(), engineerId, scheduledAt)))
+        .isInstanceOf(BusinessException.class).hasMessageContaining("已有排班");
+  }
 }

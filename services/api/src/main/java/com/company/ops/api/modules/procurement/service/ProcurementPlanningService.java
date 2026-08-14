@@ -11,13 +11,21 @@ import com.company.ops.api.modules.procurement.domain.CentralPlanItem;
 import com.company.ops.api.modules.procurement.domain.FrameworkAgreement;
 import com.company.ops.api.modules.procurement.domain.FrameworkAgreementItem;
 import com.company.ops.api.modules.procurement.domain.ProcurementApprovalRule;
+import com.company.ops.api.modules.procurement.domain.ApprovalStatus;
+import com.company.ops.api.modules.inventory.domain.InventoryPart;
+import com.company.ops.api.modules.procurement.domain.ProcurementInquiryRequest;
+import com.company.ops.api.modules.procurement.domain.PurchaseOrder;
+import com.company.ops.api.modules.procurement.domain.PurchaseOrderStatus;
 import com.company.ops.api.modules.procurement.domain.PurchaseRequest;
+import com.company.ops.api.modules.procurement.domain.PurchaseRequestStatus;
 import com.company.ops.api.modules.procurement.domain.Supplier;
 import com.company.ops.api.modules.procurement.dto.CreatePurchaseRequestRequest;
 import com.company.ops.api.modules.procurement.dto.ProcurementPlanningDtos.ApprovalRuleResponse;
 import com.company.ops.api.modules.procurement.dto.ProcurementPlanningDtos.CentralPlanItemRequest;
 import com.company.ops.api.modules.procurement.dto.ProcurementPlanningDtos.CentralPlanItemResponse;
 import com.company.ops.api.modules.procurement.dto.ProcurementPlanningDtos.CentralPlanResponse;
+import com.company.ops.api.modules.procurement.dto.ProcurementPlanningDtos.CentralPlanSuggestionItem;
+import com.company.ops.api.modules.procurement.dto.ProcurementPlanningDtos.CentralPlanSuggestionsResponse;
 import com.company.ops.api.modules.procurement.dto.ProcurementPlanningDtos.FrameworkAgreementResponse;
 import com.company.ops.api.modules.procurement.dto.ProcurementPlanningDtos.FrameworkItemRequest;
 import com.company.ops.api.modules.procurement.dto.ProcurementPlanningDtos.FrameworkItemResponse;
@@ -30,13 +38,24 @@ import com.company.ops.api.modules.procurement.repository.CentralPlanRepository;
 import com.company.ops.api.modules.procurement.repository.FrameworkAgreementItemRepository;
 import com.company.ops.api.modules.procurement.repository.FrameworkAgreementRepository;
 import com.company.ops.api.modules.procurement.repository.ProcurementApprovalRuleRepository;
+import com.company.ops.api.modules.procurement.repository.ProcurementInquiryRequestRepository;
+import com.company.ops.api.modules.procurement.repository.PurchaseOrderRepository;
 import com.company.ops.api.modules.procurement.repository.PurchaseRequestRepository;
 import com.company.ops.api.modules.procurement.repository.SupplierRepository;
 import com.company.ops.api.modules.system.security.UserPrincipal;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -54,6 +73,8 @@ public class ProcurementPlanningService {
   private final SupplierRepository suppliers;
   private final InventoryPartRepository parts;
   private final PurchaseRequestRepository requests;
+  private final PurchaseOrderRepository orders;
+  private final ProcurementInquiryRequestRepository inquiryRequests;
   private final CodeGenerator codeGenerator;
   private final ProcurementService procurementService;
 
@@ -66,6 +87,8 @@ public class ProcurementPlanningService {
       SupplierRepository suppliers,
       InventoryPartRepository parts,
       PurchaseRequestRepository requests,
+      PurchaseOrderRepository orders,
+      ProcurementInquiryRequestRepository inquiryRequests,
       CodeGenerator codeGenerator,
       ProcurementService procurementService
   ) {
@@ -77,6 +100,8 @@ public class ProcurementPlanningService {
     this.suppliers = suppliers;
     this.parts = parts;
     this.requests = requests;
+    this.orders = orders;
+    this.inquiryRequests = inquiryRequests;
     this.codeGenerator = codeGenerator;
     this.procurementService = procurementService;
   }
@@ -294,6 +319,55 @@ public class ProcurementPlanningService {
     return toPlanResponse(plans.save(plan));
   }
 
+  @Transactional(readOnly = true)
+  public CentralPlanSuggestionsResponse generateCentralPlanSuggestions(Integer periodYear) {
+    int year = periodYear == null ? LocalDate.now().getYear() : periodYear;
+    List<PurchaseRequest> approved = requests.findByApprovalStatusAndStatusOrderByCreatedAtDesc(
+        ApprovalStatus.APPROVED, PurchaseRequestStatus.APPROVED);
+    Set<UUID> activeInquiryRequestIds = inquiryRequests
+        .findByInquiryStatusIn(List.of("OPEN", "AWARDED")).stream()
+        .map(ProcurementInquiryRequest::getRequestId)
+        .collect(Collectors.toSet());
+    Map<UUID, BigDecimal> orderedByRequest = orders
+        .findByRequestIdNotNullAndStatusNot(PurchaseOrderStatus.CANCELLED).stream()
+        .collect(Collectors.groupingBy(
+            PurchaseOrder::getRequestId,
+            Collectors.reducing(BigDecimal.ZERO, PurchaseOrder::getOrderedQty, BigDecimal::add)));
+    Map<UUID, InventoryPart> partMap = parts.findAllById(
+        approved.stream().map(PurchaseRequest::getPartId)
+            .filter(Objects::nonNull).distinct().toList()
+    ).stream().collect(Collectors.toMap(InventoryPart::getId, Function.identity()));
+    Map<UUID, MutableSuggestion> byPart = new LinkedHashMap<>();
+    for (PurchaseRequest request : approved) {
+      UUID partId = request.getPartId();
+      if (partId == null || activeInquiryRequestIds.contains(request.getId())) continue;
+      BigDecimal ordered = orderedByRequest.getOrDefault(request.getId(), BigDecimal.ZERO);
+      BigDecimal remaining = amount(request.getQuantity()).subtract(ordered);
+      if (remaining.compareTo(BigDecimal.ZERO) <= 0) continue;
+      InventoryPart part = partMap.get(partId);
+      BigDecimal unitPrice = amount(request.getUnitPrice());
+      if (unitPrice.compareTo(BigDecimal.ZERO) == 0 && part != null) {
+        unitPrice = amount(part.getUnitCost());
+      }
+      MutableSuggestion suggestion = byPart.computeIfAbsent(partId, key -> new MutableSuggestion(
+          StringUtils.hasText(request.getPartName())
+              ? request.getPartName().trim()
+              : part == null ? "未命名物料" : part.getName()));
+      suggestion.totalQty = suggestion.totalQty.add(remaining);
+      suggestion.totalAmount = suggestion.totalAmount.add(remaining.multiply(unitPrice));
+      suggestion.requestCount++;
+    }
+    List<CentralPlanSuggestionItem> items = byPart.entrySet().stream()
+        .map(entry -> new CentralPlanSuggestionItem(
+            entry.getKey(), entry.getValue().partName, entry.getValue().totalQty,
+            entry.getValue().totalQty.signum() == 0 ? BigDecimal.ZERO
+                : entry.getValue().totalAmount.divide(entry.getValue().totalQty, 2, RoundingMode.HALF_UP),
+            entry.getValue().totalAmount, entry.getValue().requestCount))
+        .sorted(Comparator.comparing(CentralPlanSuggestionItem::estimatedAmount).reversed())
+        .toList();
+    return new CentralPlanSuggestionsResponse(year, items.size(), items);
+  }
+
   @Transactional
   public PurchaseRequestResponse convertPlanItemToRequest(
       UUID planId, UUID itemId, UUID departmentId, UUID projectId
@@ -343,5 +417,15 @@ public class ProcurementPlanningService {
     var authentication = SecurityContextHolder.getContext().getAuthentication();
     return authentication != null && authentication.getPrincipal() instanceof UserPrincipal principal
         ? principal.displayName() : "系统";
+  }
+  private static class MutableSuggestion {
+    private final String partName;
+    private BigDecimal totalQty = BigDecimal.ZERO;
+    private BigDecimal totalAmount = BigDecimal.ZERO;
+    private int requestCount = 0;
+
+    private MutableSuggestion(String partName) {
+      this.partName = partName;
+    }
   }
 }

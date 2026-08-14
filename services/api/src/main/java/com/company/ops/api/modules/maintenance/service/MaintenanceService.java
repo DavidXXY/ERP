@@ -524,6 +524,13 @@ public class MaintenanceService {
     WorkOrder order = getOrder(r.orderId());
     var user = userRepository.findById(r.engineerId()).orElseThrow(() -> new BusinessException("员工不存在"));
     validateCertificate(order, r.engineerId());
+    LocalDate workDate = r.scheduledAt().toLocalDate();
+    FieldSchedule existing = scheduleRepository.findFirstByWorkOrderIdOrderByScheduledAtDesc(order.getId()).orElse(null);
+    if (existing == null || !existing.getUserId().equals(user.getId()) || !existing.getWorkDate().equals(workDate)) {
+      if (scheduleRepository.existsByUserIdAndWorkDateAndStatusNot(user.getId(), workDate, "CANCELLED")) {
+        throw new BusinessException("该员工 " + workDate + " 已有排班，请调整时间或改派他人");
+      }
+    }
     WorkOrderStatus from = order.getStatus();
     order.setAssigneeId(user.getId());
     order.setEngineerName(user.getDisplayName());

@@ -319,6 +319,15 @@ export type CreatePurchaseOrderPayload = {
   paymentTerms?: string;
   contractStartDate?: string;
   contractEndDate?: string;
+  frameworkAgreementId?: string;
+};
+
+export type FrameworkAgreementQuote = {
+  agreementId: string;
+  agreementCode: string;
+  agreementTitle: string;
+  unitPrice: number;
+  taxRate: number;
 };
 
 export type GoodsReceipt = {
@@ -958,6 +967,27 @@ export function createPurchaseRequest(payload: CreatePurchaseRequestPayload) {
   });
 }
 
+export function createReplenishmentPurchaseRequests(payload: {
+  costType: ProcurementCostType;
+  projectId?: string;
+  departmentId?: string;
+  reason?: string;
+  expectedDate?: string;
+  lines: {
+    partId: string;
+    quantity: number;
+    unitPrice?: number;
+    reason?: string;
+    expectedDate?: string;
+  }[];
+}) {
+  return request<ImportPurchaseRequestBatchResult>({
+    method: "POST",
+    url: "/procurement/requests/replenishment",
+    data: payload,
+  });
+}
+
 export function importPurchaseRequestBatch(data: {
   file: File;
   batchName: string;
@@ -1025,6 +1055,14 @@ export function listPurchaseOrders(params?: {
     method: "GET",
     url: "/procurement/orders",
     params,
+  });
+}
+
+export function quoteFrameworkAgreement(supplierId: string, partId: string) {
+  return request<FrameworkAgreementQuote | null>({
+    method: "GET",
+    url: "/procurement/framework-agreements/quote",
+    params: { supplierId, partId },
   });
 }
 
@@ -1814,6 +1852,27 @@ export type CentralPlan = {
   createdByName?: string;
   items: CentralPlanItem[];
 };
+export type CentralPlanSuggestionItem = {
+  partId: string;
+  partName: string;
+  plannedQty: number;
+  unitPrice: number;
+  estimatedAmount: number;
+  requestCount: number;
+};
+
+export function generateCentralPlanSuggestions(periodYear?: number) {
+  return request<{
+    periodYear: number;
+    itemCount: number;
+    items: CentralPlanSuggestionItem[];
+  }>({
+    method: "POST",
+    url: "/procurement/central-plans/generate-suggestions",
+    params: periodYear ? { periodYear } : {},
+  });
+}
+
 export function listCentralPlans() {
   return request<CentralPlan[]>({
     method: "GET",

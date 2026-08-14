@@ -5,8 +5,10 @@ import com.company.ops.api.common.api.PageResponse;
 import com.company.ops.api.modules.procurement.dto.ConfirmShipmentRequest;
 import com.company.ops.api.modules.procurement.dto.CreatePurchaseOrderRequest;
 import com.company.ops.api.modules.procurement.dto.CreatePurchaseRequestRequest;
+import com.company.ops.api.modules.procurement.dto.CreateReplenishmentRequestRequest;
 import com.company.ops.api.modules.procurement.dto.CreateSupplierRequest;
 import com.company.ops.api.modules.procurement.dto.GoodsReceiptResponse;
+import com.company.ops.api.modules.procurement.dto.FrameworkAgreementQuoteResponse;
 import com.company.ops.api.modules.procurement.dto.ImportPurchaseRequestBatchResponse;
 import com.company.ops.api.modules.procurement.dto.OrderDocumentResponse;
 import com.company.ops.api.modules.procurement.dto.OrderChangeDtos.CreateOrderChangeRequest;
@@ -154,6 +156,15 @@ public class ProcurementController {
     return ApiResponse.ok(procurementService.createPurchaseRequest(request));
   }
 
+  @PostMapping("/requests/replenishment")
+  @ResponseStatus(HttpStatus.CREATED)
+  @PreAuthorize("hasAuthority('procurement:purchase:create')")
+  public ApiResponse<ImportPurchaseRequestBatchResponse> createReplenishmentPurchaseRequests(
+      @Valid @RequestBody CreateReplenishmentRequestRequest request
+  ) {
+    return ApiResponse.ok(procurementService.createReplenishmentPurchaseRequests(request));
+  }
+
   @PostMapping("/requests/import")
   @ResponseStatus(HttpStatus.CREATED)
   @PreAuthorize("hasAuthority('procurement:purchase:create')")
@@ -208,6 +219,14 @@ public class ProcurementController {
     PurchaseOrderStatus s = status != null ? PurchaseOrderStatus.valueOf(status) : null;
     ProcurementCostType c = costType != null ? ProcurementCostType.valueOf(costType) : null;
     return ApiResponse.ok(PageResponse.from(procurementService.listPurchaseOrders(s, c, projectId, search, pageable)));
+  }
+
+  @GetMapping("/framework-agreements/quote")
+  @PreAuthorize("hasAnyAuthority('procurement:purchase:create', 'procurement:view')")
+  public ApiResponse<FrameworkAgreementQuoteResponse> quoteFrameworkAgreement(
+      @RequestParam UUID supplierId, @RequestParam UUID partId
+  ) {
+    return ApiResponse.ok(procurementService.quoteFrameworkAgreement(supplierId, partId));
   }
 
   @PostMapping("/orders")

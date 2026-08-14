@@ -534,6 +534,34 @@ export function executePayment(
   });
 }
 
+export type BatchPaymentExecutionResult = {
+  successCount: number;
+  failedCount: number;
+  items: Array<{
+    applicationId: string;
+    success: boolean;
+    paymentCode?: string;
+    totalAmount?: number;
+    errorMessage?: string;
+  }>;
+};
+
+export function executePaymentsBatch(payload: {
+  items: Array<{
+    applicationId: string;
+    payment: {
+      paymentCode?: string;
+      payments: PaymentSplit[];
+    };
+  }>;
+}) {
+  return request<BatchPaymentExecutionResult>({
+    method: "POST",
+    url: "/finance/payment-applications/batch-payment",
+    data: payload,
+  });
+}
+
 export function cancelPayable(id: string, reason: string) {
   return request<FinancePayable>({
     method: "POST",

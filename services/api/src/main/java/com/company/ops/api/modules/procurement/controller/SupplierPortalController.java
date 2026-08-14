@@ -6,6 +6,7 @@ import com.company.ops.api.common.api.ApiResponse;
 import com.company.ops.api.common.security.ClientIpResolver;
 import com.company.ops.api.modules.procurement.dto.ProcurementShipmentResponse;
 import com.company.ops.api.modules.procurement.security.SupplierPortalPrincipal;
+import com.company.ops.api.modules.procurement.service.SupplierPortalExportService;
 import com.company.ops.api.modules.procurement.service.SupplierPortalService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -30,10 +31,15 @@ import org.springframework.web.multipart.MultipartFile;
 @RequestMapping("/api/supplier-portal")
 public class SupplierPortalController {
   private final SupplierPortalService service;
+  private final SupplierPortalExportService exportService;
   private final ClientIpResolver clientIpResolver;
 
-  public SupplierPortalController(SupplierPortalService service, ClientIpResolver clientIpResolver) {
+  public SupplierPortalController(
+      SupplierPortalService service,
+      SupplierPortalExportService exportService,
+      ClientIpResolver clientIpResolver) {
     this.service = service;
+    this.exportService = exportService;
     this.clientIpResolver = clientIpResolver;
   }
 
@@ -309,7 +315,7 @@ public class SupplierPortalController {
       @AuthenticationPrincipal SupplierPortalPrincipal principal,
       @PathVariable UUID orderId
   ) {
-    byte[] pdf = service.exportOrderPdf(principal, orderId);
+    byte[] pdf = exportService.exportOrderPdf(principal, orderId);
     return ResponseEntity.ok()
         .contentType(MediaType.APPLICATION_PDF)
         .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=order-" + orderId + ".pdf")
@@ -322,7 +328,7 @@ public class SupplierPortalController {
       @AuthenticationPrincipal SupplierPortalPrincipal principal,
       @PathVariable UUID inquiryId
   ) {
-    byte[] pdf = service.exportQuotePdf(principal, inquiryId);
+    byte[] pdf = exportService.exportQuotePdf(principal, inquiryId);
     return ResponseEntity.ok()
         .contentType(MediaType.APPLICATION_PDF)
         .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=quote-" + inquiryId + ".pdf")
@@ -336,7 +342,7 @@ public class SupplierPortalController {
       @AuthenticationPrincipal SupplierPortalPrincipal principal,
       @PathVariable UUID inquiryId
   ) {
-    byte[] excel = service.exportQuoteExcel(principal, inquiryId);
+    byte[] excel = exportService.exportQuoteExcel(principal, inquiryId);
     return ResponseEntity.ok()
         .contentType(MediaType.parseMediaType(
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
@@ -352,7 +358,7 @@ public class SupplierPortalController {
       @AuthenticationPrincipal SupplierPortalPrincipal principal,
       @PathVariable UUID orderId
   ) {
-    byte[] excel = service.exportOrderExcel(principal, orderId);
+    byte[] excel = exportService.exportOrderExcel(principal, orderId);
     return ResponseEntity.ok()
         .contentType(MediaType.parseMediaType(
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))

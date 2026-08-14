@@ -35,6 +35,7 @@ import com.company.ops.api.modules.procurement.domain.PurchaseOrderStatus;
 import com.company.ops.api.modules.procurement.dto.ProcurementControlDtos;
 import com.company.ops.api.modules.procurement.dto.SupplierResponse;
 import com.company.ops.api.modules.procurement.service.ProcurementService;
+import com.company.ops.api.modules.procurement.service.ProcurementOrderDocumentService;
 import jakarta.validation.Valid;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -67,15 +68,18 @@ import org.springframework.web.multipart.MultipartFile;
 public class ProcurementController {
 
   private final ProcurementService procurementService;
+  private final ProcurementOrderDocumentService orderDocumentService;
   private final ProcurementChangeService changeService;
   private final ProcurementExportService exportService;
 
   public ProcurementController(
       ProcurementService procurementService,
+      ProcurementOrderDocumentService orderDocumentService,
       ProcurementChangeService changeService,
       ProcurementExportService exportService
   ) {
     this.procurementService = procurementService;
+    this.orderDocumentService = orderDocumentService;
     this.changeService = changeService;
     this.exportService = exportService;
   }
@@ -327,13 +331,13 @@ public class ProcurementController {
       @RequestPart MultipartFile file,
       @RequestParam(required = false) String docType
   ) {
-    return ApiResponse.ok(procurementService.uploadOrderDocument(id, file, docType));
+    return ApiResponse.ok(orderDocumentService.uploadOrderDocument(id, file, docType));
   }
 
   @GetMapping("/orders/{id}/documents")
   @PreAuthorize("hasAuthority('procurement:view')")
   public ApiResponse<List<OrderDocumentResponse>> listOrderDocuments(@PathVariable UUID id) {
-    return ApiResponse.ok(procurementService.listOrderDocuments(id));
+    return ApiResponse.ok(orderDocumentService.listOrderDocuments(id));
   }
 
   @GetMapping("/orders/{id}/documents/{docId}/download")
@@ -342,7 +346,7 @@ public class ProcurementController {
       @PathVariable UUID id,
       @PathVariable UUID docId
   ) {
-    OrderDocumentResponse metadata = procurementService.listOrderDocuments(id).stream()
+    OrderDocumentResponse metadata = orderDocumentService.listOrderDocuments(id).stream()
         .filter(item -> item.id().equals(docId))
         .findFirst()
         .orElseThrow(() -> new com.company.ops.api.common.exception.BusinessException("采购合同附件不存在"));
@@ -351,7 +355,7 @@ public class ProcurementController {
             ? MediaType.APPLICATION_OCTET_STREAM_VALUE : metadata.contentType()))
         .header(HttpHeaders.CONTENT_DISPOSITION,
             ContentDisposition.attachment().filename(metadata.fileName(), StandardCharsets.UTF_8).build().toString())
-        .body(procurementService.loadOrderDocument(docId));
+        .body(orderDocumentService.loadOrderDocument(docId));
   }
 
   @DeleteMapping("/orders/{id}/documents/{docId}")
@@ -360,7 +364,7 @@ public class ProcurementController {
       @PathVariable UUID id,
       @PathVariable UUID docId
   ) {
-    procurementService.deleteOrderDocument(docId);
+    orderDocumentService.deleteOrderDocument(docId);
     return ApiResponse.ok();
   }
 
@@ -369,7 +373,7 @@ public class ProcurementController {
   public ApiResponse<List<ProcurementShipmentResponse>> listOrderShipments(
       @PathVariable UUID id
   ) {
-    return ApiResponse.ok(procurementService.listOrderShipments(id));
+    return ApiResponse.ok(orderDocumentService.listOrderShipments(id));
   }
 
   @PostMapping("/orders/{id}/shipments/{shipmentId}/confirm")
@@ -379,7 +383,7 @@ public class ProcurementController {
       @PathVariable UUID shipmentId,
       @Valid @RequestBody ConfirmShipmentRequest request
   ) {
-    return ApiResponse.ok(procurementService.confirmShipment(id, shipmentId, request));
+    return ApiResponse.ok(orderDocumentService.confirmShipment(id, shipmentId, request));
   }
 
   // ---------- 订单变更单 ----------

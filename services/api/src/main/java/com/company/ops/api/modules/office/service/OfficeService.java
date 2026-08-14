@@ -2,8 +2,6 @@ package com.company.ops.api.modules.office.service;
 
 import com.company.ops.api.common.exception.BusinessException;
 import com.company.ops.api.common.delete.DeleteGovernanceService;
-import com.company.ops.api.common.storage.FileStorageService;
-import com.company.ops.api.common.storage.FileStorageService.FilePolicy;
 import com.company.ops.api.common.tenant.TenantContext;
 import com.company.ops.api.modules.maintenance.domain.WorkOrder;
 import com.company.ops.api.modules.maintenance.repository.WorkOrderRepository;
@@ -118,13 +116,6 @@ import static com.company.ops.api.common.util.MoneyUtils.amount;
 
 @Service
 public class OfficeService {
-  private static final FilePolicy DOCUMENT_POLICY = new FilePolicy(
-      20L * 1024 * 1024,
-      Set.of(".jpg", ".jpeg", ".png", ".webp", ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".txt", ".zip", ".dwg", ".dxf"),
-      "单个文件不能超过20MB",
-      "仅支持图片、PDF、Word、Excel、TXT、ZIP、DWG 或 DXF 档案",
-      false
-  );
   private final ApprovalRequestRepository approvalRepository;
   private final ApprovalActionRepository actionRepository;
   private final ApprovalRuntimeNodeRepository runtimeNodeRepository;
@@ -147,8 +138,8 @@ public class OfficeService {
   private final LedgerService ledgerService;
   private final SystemAuditLogRepository auditLogRepository;
   private final ApprovalFlowSecurity approvalFlowSecurity;
-  private final FileStorageService storageService;
   private final DeleteGovernanceService deleteGovernanceService;
+  private final OfficeDocumentService documentService;
   @PersistenceContext
   private EntityManager entityManager;
 
@@ -160,8 +151,8 @@ public class OfficeService {
 	                       SupplierRepository supplierRepository, CustomerRepository customerRepository,
 	                       ProjectRepository projectRepository, WorkOrderRepository workOrderRepository,
 	                       ProjectService projectService, SystemUserRepository userRepository, SystemRoleRepository roleRepository, SystemOrganizationRepository organizationRepository, LedgerService ledgerService, SystemAuditLogRepository auditLogRepository, ApprovalFlowSecurity approvalFlowSecurity,
-	                       FileStorageService storageService,
-	                       DeleteGovernanceService deleteGovernanceService) {
+	                       DeleteGovernanceService deleteGovernanceService,
+                       OfficeDocumentService documentService) {
     this.approvalRepository = approvalRepository; this.actionRepository = actionRepository; this.runtimeNodeRepository = runtimeNodeRepository;
     this.expenseRepository = expenseRepository; this.expenseLineRepository = expenseLineRepository; this.outsourceRepository = outsourceRepository;
     this.travelRepository = travelRepository; this.sealRepository = sealRepository;
@@ -173,8 +164,8 @@ public class OfficeService {
 	    this.ledgerService = ledgerService;
 	    this.auditLogRepository = auditLogRepository;
 	    this.approvalFlowSecurity = approvalFlowSecurity;
-	    this.storageService = storageService;
 	    this.deleteGovernanceService = deleteGovernanceService;
+    this.documentService = documentService;
 	  }
 
   @Transactional(readOnly = true)
@@ -633,7 +624,7 @@ public class OfficeService {
     item.setUseDate(request.useDate()); item.setTakeOut(request.takeOut()); item.setExpectedReturnDate(request.expectedReturnDate());
     item.setStatus(OfficeApplicationStatus.PENDING_APPROVAL);
     SealApplication saved = sealRepository.save(item);
-    storeDocuments("SEAL_APPLICATION", saved.getId(), files);
+    documentService.storeDocuments("SEAL_APPLICATION", saved.getId(), files);
     String businessType = sealBusinessType(request.documentName(), request.documentPurpose());
     String content = request.sealType() + " · " + request.documentName() + " · " + request.documentPurpose()
         + (request.takeOut() ? " · 外带至 " + request.expectedReturnDate() : " · 现场用印");
@@ -662,103 +653,6 @@ public class OfficeService {
   @Transactional(readOnly = true)
   public List<SupplierOption> suppliers() { return supplierRepository.findAllByOrderByCreatedAtDesc().stream().map(item -> new SupplierOption(item.getId(), item.getCode(), item.getName())).toList(); }
 
-  @Transactional(readOnly = true)
-  public List<DocumentResponse> listDocuments() {
-    return documentRepository.findAllByOrderByCreatedAtDesc().stream().map(this::toDocument).toList();
-  }
-
-  @Transactional(readOnly = true)
-  public Page<DocumentResponse> listDocuments(
-      String bizType, UUID bizId, int page, int size) {
-    Pageable p = PageRequest.of(page, size);
-    Page<DocumentFile> source;
-    if (bizType != null && bizId != null) {
-      source = documentRepository.findByBizTypeAndBizIdOrderByCreatedAtDesc(bizType, bizId, p);
-    } else if (bizType != null) {
-      source = documentRepository.findByBizTypeOrderByCreatedAtDesc(bizType, p);
-    } else {
-      source = documentRepository.findAllByOrderByCreatedAtDesc(p);
-    }
-    List<DocumentFile> visible = deleteGovernanceService.visible("OFFICE_DOCUMENT", source.getContent(), DocumentFile::getId);
-    return new org.springframework.data.domain.PageImpl<>(
-        visible.stream().map(this::toDocument).toList(),
-        p,
-        visible.size()
-    );
-  }
-
-  @Transactional(readOnly = true)
-  public List<DocumentResponse> listDocumentsByBiz(String bizType, UUID bizId) {
-    return documentRepository.findByBizTypeAndBizIdOrderByCreatedAtDesc(bizType, bizId).stream()
-        .filter(item -> !deleteGovernanceService.isHidden("OFFICE_DOCUMENT", item.getId()))
-        .map(this::toDocument).toList();
-  }
-
-  @Transactional(readOnly = true)
-  public long getDocumentCount(String bizType, UUID bizId) {
-    return documentRepository.countByBizTypeAndBizId(bizType, bizId);
-  }
-
-  @Transactional
-  public DocumentResponse storeDocument(String bizType, UUID bizId, MultipartFile file) {
-    var stored = storageService.store(file, "office", DOCUMENT_POLICY);
-    DocumentFile item = new DocumentFile(); item.setBizType(bizType); item.setBizId(bizId); item.setFileName(stored.originalName());
-    item.setObjectKey(stored.objectKey()); item.setContentType(stored.contentType()); item.setSizeBytes(stored.sizeBytes());
-    item.setUploadedBy(currentName());
-    return toDocument(documentRepository.save(item));
-  }
-
-  @Transactional
-  public List<DocumentResponse> storeDocuments(String bizType, UUID bizId, List<MultipartFile> files) {
-    if (files == null || files.isEmpty()) throw new BusinessException("上传文件列表不能为空");
-    List<DocumentResponse> results = new ArrayList<>();
-    for (MultipartFile file : files) {
-      results.add(storeDocument(bizType, bizId, file));
-    }
-    return results;
-  }
-
-  @Transactional
-  public void deleteDocument(UUID id) {
-    DocumentFile item = documentRepository.findById(id).orElseThrow(() -> new BusinessException("档案不存在"));
-    if (!deleteGovernanceService.allowPhysicalDelete("OFFICE_DOCUMENT", id, item.getFileName())) return;
-    storageService.deleteInNamespace("office", item.getObjectKey());
-    documentRepository.delete(item);
-  }
-
-  @Transactional
-  public void deleteDocumentsByBiz(String bizType, UUID bizId) {
-    List<DocumentFile> items = documentRepository.findByBizTypeAndBizIdOrderByCreatedAtDesc(bizType, bizId);
-    for (DocumentFile item : items) {
-      if (!deleteGovernanceService.allowPhysicalDelete("OFFICE_DOCUMENT", item.getId(), item.getFileName())) continue;
-      storageService.deleteInNamespace("office", item.getObjectKey());
-      documentRepository.delete(item);
-    }
-  }
-
-  @Transactional
-  public DocumentResponse updateDocumentName(UUID id, String newName) {
-    if (newName == null || newName.isBlank()) throw new BusinessException("文件名不能为空");
-    if (newName.length() > 240) throw new BusinessException("文件名不能超过240个字符");
-    DocumentFile item = documentRepository.findById(id).orElseThrow(() -> new BusinessException("档案不存在"));
-    item.setFileName(newName.trim());
-    return toDocument(documentRepository.save(item));
-  }
-
-  @Transactional(readOnly = true)
-  public DocumentFile requireDocument(UUID id) {
-    DocumentFile item = documentRepository.findById(id).orElseThrow(() -> new BusinessException("档案不存在"));
-    if (deleteGovernanceService.isHidden("OFFICE_DOCUMENT", id)) throw new BusinessException("档案不存在");
-    return item;
-  }
-
-  public Resource loadDocument(DocumentFile item) {
-    return storageService.load("office/" + item.getObjectKey());
-  }
-
-  public Resource loadDocumentForPreview(DocumentFile item) {
-    return storageService.load("office/" + item.getObjectKey());
-  }
 
   @Transactional(readOnly = true)
   public List<NotificationResponse> notifications() {
@@ -1439,11 +1333,6 @@ public class OfficeService {
   }
   private DocumentResponse toDocument(DocumentFile item) { return new DocumentResponse(item.getId(), item.getBizType(), item.getBizId(), item.getFileName(), item.getContentType(), item.getSizeBytes(), item.getUploadedBy(), item.getCreatedAt()); }
 
-  private String currentName() {
-    var authentication = SecurityContextHolder.getContext().getAuthentication();
-    return authentication != null && authentication.getPrincipal() instanceof UserPrincipal principal
-        ? principal.displayName() : "系统";
-  }
   private NotificationResponse toNotification(SystemNotification item, SystemNotificationRead receipt) {
     return new NotificationResponse(item.getId(), item.getType(), item.getTitle(), item.getContent(),
         item.getRelatedType(), item.getRelatedId(), receipt != null,

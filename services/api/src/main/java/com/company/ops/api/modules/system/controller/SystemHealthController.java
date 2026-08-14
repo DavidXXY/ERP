@@ -2,6 +2,15 @@ package com.company.ops.api.modules.system.controller;
 
 import com.company.ops.api.common.api.ApiResponse;
 import com.company.ops.api.common.version.ApplicationVersion;
+import com.company.ops.api.modules.system.dto.SystemHealthDtos.ApplicationInfo;
+import com.company.ops.api.modules.system.dto.SystemHealthDtos.CpuInfo;
+import com.company.ops.api.modules.system.dto.SystemHealthDtos.DependencyInfo;
+import com.company.ops.api.modules.system.dto.SystemHealthDtos.DiskInfo;
+import com.company.ops.api.modules.system.dto.SystemHealthDtos.HealthResponse;
+import com.company.ops.api.modules.system.dto.SystemHealthDtos.JvmInfo;
+import com.company.ops.api.modules.system.dto.SystemHealthDtos.MemoryInfo;
+import com.company.ops.api.modules.system.dto.SystemHealthDtos.MemoryUsageInfo;
+import com.company.ops.api.modules.system.dto.SystemHealthDtos.OperatingSystemInfo;
 import java.io.File;
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
@@ -10,9 +19,7 @@ import java.lang.management.OperatingSystemMXBean;
 import java.lang.management.RuntimeMXBean;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.env.Environment;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -43,35 +50,30 @@ public class SystemHealthController {
 
   @GetMapping
   @PreAuthorize("hasAuthority('system:health:view')")
-  public ApiResponse<Map<String, Object>> getSystemHealth() {
-    Map<String, Object> result = new LinkedHashMap<>();
-    result.put("application", getApplicationInfo());
-    result.put("dependencies", getDependencyInfo());
-    result.put("operatingSystem", getOperatingSystemInfo());
-    result.put("cpu", getCpuInfo());
-    result.put("memory", getMemoryInfo());
-    result.put("jvm", getJvmInfo());
-    result.put("disk", getDiskInfo());
-    return ApiResponse.ok(result);
+  public ApiResponse<HealthResponse> getSystemHealth() {
+    return ApiResponse.ok(new HealthResponse(
+        getApplicationInfo(),
+        getDependencyInfo(),
+        getOperatingSystemInfo(),
+        getCpuInfo(),
+        getMemoryInfo(),
+        getJvmInfo(),
+        getDiskInfo()));
   }
 
-  private Map<String, Object> getApplicationInfo() {
-    Map<String, Object> app = new LinkedHashMap<>();
-    app.put("appName", appName);
-    app.put("version", applicationVersion.getDisplayVersion());
-    app.put("productVersion", applicationVersion.getProductVersion());
-    app.put("commitId", applicationVersion.getCommitId());
-    app.put("buildTime", applicationVersion.getBuildTime());
-    app.put("activeProfiles", getActiveProfiles());
-    app.put("storageType", storageType);
-    return app;
+  private ApplicationInfo getApplicationInfo() {
+    return new ApplicationInfo(
+        appName,
+        applicationVersion.getDisplayVersion(),
+        applicationVersion.getProductVersion(),
+        applicationVersion.getCommitId(),
+        applicationVersion.getBuildTime(),
+        getActiveProfiles(),
+        storageType);
   }
 
-  private Map<String, Object> getDependencyInfo() {
-    Map<String, Object> deps = new LinkedHashMap<>();
-    deps.put("databaseDriver", datasourceDriver);
-    deps.put("storageType", storageType);
-    return deps;
+  private DependencyInfo getDependencyInfo() {
+    return new DependencyInfo(datasourceDriver, storageType);
   }
 
   private String getActiveProfiles() {
@@ -82,32 +84,69 @@ public class SystemHealthController {
     return String.join(", ", Arrays.stream(profiles).filter((item) -> !item.isBlank()).toList());
   }
 
-  private Map<String, Object> getOperatingSystemInfo() {
+  private OperatingSystemInfo getOperatingSystemInfo() {
     OperatingSystemMXBean osBean = ManagementFactory.getOperatingSystemMXBean();
-    Map<String, Object> info = new LinkedHashMap<>();
-    info.put("name", osBean.getName());
-    info.put("version", osBean.getVersion());
-    info.put("architecture", osBean.getArch());
-    info.put("availableProcessors", osBean.getAvailableProcessors());
-    info.put("systemLoadAverage", osBean.getSystemLoadAverage());
-    try {
-      Class<?> clazz = Class.forName("com.sun.management.OperatingSystemMXBean");
-      if (clazz.isInstance(osBean)) {
-        Object bean = clazz.cast(osBean);
-        info.put("processCpuLoad", clazz.getMethod("getProcessCpuLoad").invoke(bean));
-        info.put("systemCpuLoad", clazz.getMethod("getCpuLoad").invoke(bean));
-      }
-    } catch (Exception ignored) {}
-    return info;
+    Double[] loads = optionalCpuLoads(osBean);
+    return new OperatingSystemInfo(
+        osBean.getName(),
+        osBean.getVersion(),
+        osBean.getArch(),
+        osBean.getAvailableProcessors(),
+        osBean.getSystemLoadAverage(),
+        loads[0],
+        loads[1]);
   }
 
-  private Map<String, Object> getCpuInfo() {
+  private CpuInfo getCpuInfo() {
     OperatingSystemMXBean osBean = ManagementFactory.getOperatingSystemMXBean();
-    Map<String, Object> cpu = new LinkedHashMap<>();
-    cpu.put("availableProcessors", osBean.getAvailableProcessors());
-    cpu.put("systemLoadAverage", osBean.getSystemLoadAverage());
-    double processCpuLoad = -1;
-    double systemCpuLoad = -1;
+    Double[] loads = optionalCpuLoads(osBean);
+    return new CpuInfo(
+        osBean.getAvailableProcessors(),
+        osBean.getSystemLoadAverage(),
+        loads[0] == null ? -1 : loads[0],
+        loads[1] == null ? -1 : loads[1]);
+  }
+
+  private MemoryInfo getMemoryInfo() {
+    MemoryMXBean memoryBean = ManagementFactory.getMemoryMXBean();
+    MemoryUsage heap = memoryBean.getHeapMemoryUsage();
+    MemoryUsage nonHeap = memoryBean.getNonHeapMemoryUsage();
+    Long[] physical = optionalPhysicalMemory();
+    return new MemoryInfo(
+        new MemoryUsageInfo(heap.getInit(), heap.getUsed(), heap.getCommitted(), heap.getMax()),
+        new MemoryUsageInfo(nonHeap.getInit(), nonHeap.getUsed(), nonHeap.getCommitted(), nonHeap.getMax()),
+        physical[0],
+        physical[1]);
+  }
+
+  private JvmInfo getJvmInfo() {
+    RuntimeMXBean runtime = ManagementFactory.getRuntimeMXBean();
+    return new JvmInfo(
+        System.getProperty("java.version"),
+        System.getProperty("java.vendor"),
+        runtime.getVmName(),
+        runtime.getVmVersion(),
+        runtime.getVmVendor(),
+        runtime.getUptime(),
+        runtime.getStartTime());
+  }
+
+  private List<DiskInfo> getDiskInfo() {
+    File[] roots = File.listRoots();
+    List<DiskInfo> disks = new ArrayList<>();
+    for (File root : roots) {
+      disks.add(new DiskInfo(
+          "disk-" + (disks.size() + 1),
+          root.getTotalSpace(),
+          root.getFreeSpace(),
+          root.getUsableSpace()));
+    }
+    return disks;
+  }
+
+  private Double[] optionalCpuLoads(OperatingSystemMXBean osBean) {
+    Double processCpuLoad = null;
+    Double systemCpuLoad = null;
     try {
       Class<?> clazz = Class.forName("com.sun.management.OperatingSystemMXBean");
       if (clazz.isInstance(osBean)) {
@@ -118,71 +157,23 @@ public class SystemHealthController {
         if (scl instanceof Double) systemCpuLoad = (Double) scl;
       }
     } catch (Exception ignored) {}
-    cpu.put("processCpuLoad", processCpuLoad);
-    cpu.put("systemCpuLoad", systemCpuLoad);
-    return cpu;
+    return new Double[]{processCpuLoad, systemCpuLoad};
   }
 
-  private Map<String, Object> getMemoryInfo() {
-    MemoryMXBean memoryBean = ManagementFactory.getMemoryMXBean();
-    OperatingSystemMXBean osBean = ManagementFactory.getOperatingSystemMXBean();
-    Map<String, Object> mem = new LinkedHashMap<>();
-
-    // JVM heap
-    MemoryUsage heap = memoryBean.getHeapMemoryUsage();
-    Map<String, Object> heapMap = new LinkedHashMap<>();
-    heapMap.put("init", heap.getInit());
-    heapMap.put("used", heap.getUsed());
-    heapMap.put("committed", heap.getCommitted());
-    heapMap.put("max", heap.getMax());
-    mem.put("heap", heapMap);
-
-    // JVM non-heap
-    MemoryUsage nonHeap = memoryBean.getNonHeapMemoryUsage();
-    Map<String, Object> nonHeapMap = new LinkedHashMap<>();
-    nonHeapMap.put("init", nonHeap.getInit());
-    nonHeapMap.put("used", nonHeap.getUsed());
-    nonHeapMap.put("committed", nonHeap.getCommitted());
-    nonHeapMap.put("max", nonHeap.getMax());
-    mem.put("nonHeap", nonHeapMap);
-
-    // Physical memory via com.sun.management if available
+  private Long[] optionalPhysicalMemory() {
+    Long totalPhysicalMemory = null;
+    Long freePhysicalMemory = null;
     try {
       Class<?> clazz = Class.forName("com.sun.management.OperatingSystemMXBean");
+      OperatingSystemMXBean osBean = ManagementFactory.getOperatingSystemMXBean();
       if (clazz.isInstance(osBean)) {
         Object bean = clazz.cast(osBean);
-        mem.put("totalPhysicalMemory", clazz.getMethod("getTotalMemorySize").invoke(bean));
-        mem.put("freePhysicalMemory", clazz.getMethod("getFreeMemorySize").invoke(bean));
+        Object total = clazz.getMethod("getTotalMemorySize").invoke(bean);
+        Object free = clazz.getMethod("getFreeMemorySize").invoke(bean);
+        if (total instanceof Long) totalPhysicalMemory = (Long) total;
+        if (free instanceof Long) freePhysicalMemory = (Long) free;
       }
     } catch (Exception ignored) {}
-
-    return mem;
-  }
-
-  private Map<String, Object> getJvmInfo() {
-    RuntimeMXBean runtime = ManagementFactory.getRuntimeMXBean();
-    Map<String, Object> jvm = new LinkedHashMap<>();
-    jvm.put("javaVersion", System.getProperty("java.version"));
-    jvm.put("javaVendor", System.getProperty("java.vendor"));
-    jvm.put("jvmName", runtime.getVmName());
-    jvm.put("jvmVersion", runtime.getVmVersion());
-    jvm.put("jvmVendor", runtime.getVmVendor());
-    jvm.put("uptime", runtime.getUptime());
-    jvm.put("startTime", runtime.getStartTime());
-    return jvm;
-  }
-
-  private List<Map<String, Object>> getDiskInfo() {
-    File[] roots = File.listRoots();
-    List<Map<String, Object>> disks = new ArrayList<>();
-    for (File root : roots) {
-      Map<String, Object> disk = new LinkedHashMap<>();
-      disk.put("name", "disk-" + (disks.size() + 1));
-      disk.put("totalSpace", root.getTotalSpace());
-      disk.put("freeSpace", root.getFreeSpace());
-      disk.put("usableSpace", root.getUsableSpace());
-      disks.add(disk);
-    }
-    return disks;
+    return new Long[]{totalPhysicalMemory, freePhysicalMemory};
   }
 }

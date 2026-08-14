@@ -35,6 +35,7 @@ import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.UpdateContractReque
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.UpdateReceivableRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.OwnerDepartmentResponse;
 import com.company.ops.api.modules.crm.service.CrmOperationsService;
+import com.company.ops.api.modules.crm.service.CrmOpportunityService;
 import com.company.ops.api.modules.crm.service.CrmExportService;
 import com.company.ops.api.modules.crm.dto.CreateCustomerRequest;
 import jakarta.validation.Valid;
@@ -57,17 +58,22 @@ import org.springframework.web.bind.annotation.RestController;
 public class CrmOperationsController {
 
   private final CrmOperationsService crmOperationsService;
+  private final CrmOpportunityService crmOpportunityService;
   private final CrmExportService crmExportService;
 
-  public CrmOperationsController(CrmOperationsService crmOperationsService, CrmExportService crmExportService) {
+  public CrmOperationsController(
+      CrmOperationsService crmOperationsService,
+      CrmOpportunityService crmOpportunityService,
+      CrmExportService crmExportService) {
     this.crmOperationsService = crmOperationsService;
+    this.crmOpportunityService = crmOpportunityService;
     this.crmExportService = crmExportService;
   }
 
   @GetMapping("/opportunities")
   @PreAuthorize("hasAuthority('crm:opportunity:view')")
   public ApiResponse<List<OpportunityResponse>> listOpportunities() {
-    return ApiResponse.ok(crmOperationsService.listOpportunities());
+    return ApiResponse.ok(crmOpportunityService.listOpportunities());
   }
 
   @GetMapping("/departments")
@@ -81,7 +87,7 @@ public class CrmOperationsController {
   @GetMapping("/opportunities/{id}")
   @PreAuthorize("hasAuthority('crm:opportunity:view')")
   public ApiResponse<OpportunityResponse> getOpportunity(@PathVariable UUID id) {
-    return ApiResponse.ok(crmOperationsService.getOpportunity(id));
+    return ApiResponse.ok(crmOpportunityService.getOpportunity(id));
   }
 
   @PostMapping("/opportunities")
@@ -90,7 +96,7 @@ public class CrmOperationsController {
   public ApiResponse<OpportunityResponse> createOpportunity(
       @Valid @RequestBody CreateOpportunityRequest request
   ) {
-    return ApiResponse.ok(crmOperationsService.createOpportunity(request));
+    return ApiResponse.ok(crmOpportunityService.createOpportunity(request));
   }
 
   @PostMapping("/opportunities/{id}/advance")
@@ -99,7 +105,7 @@ public class CrmOperationsController {
       @PathVariable UUID id,
       @Valid @RequestBody AdvanceOpportunityRequest request
   ) {
-    return ApiResponse.ok(crmOperationsService.advanceOpportunity(id, request));
+    return ApiResponse.ok(crmOpportunityService.advanceOpportunity(id, request));
   }
 
   @GetMapping("/quotes")
@@ -301,7 +307,7 @@ public class CrmOperationsController {
   @DeleteMapping("/opportunities/{id}")
   @PreAuthorize("hasAuthority('crm:opportunity:delete')")
   public ApiResponse<Void> deleteOpportunity(@PathVariable UUID id) {
-    crmOperationsService.deleteOpportunity(id);
+    crmOpportunityService.deleteOpportunity(id);
     return ApiResponse.ok();
   }
 
@@ -364,7 +370,7 @@ public class CrmOperationsController {
       @PathVariable UUID id,
       @Valid @RequestBody CreateOpportunityRequest request
   ) {
-    return ApiResponse.ok(crmOperationsService.updateOpportunity(id, request));
+    return ApiResponse.ok(crmOpportunityService.updateOpportunity(id, request));
   }
 
   @PutMapping("/contracts/{id}")

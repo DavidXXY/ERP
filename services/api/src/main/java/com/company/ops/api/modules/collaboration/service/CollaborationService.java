@@ -13,7 +13,7 @@ import com.company.ops.api.modules.maintenance.repository.EmployeeCertificateRep
 import com.company.ops.api.modules.office.domain.ApprovalStatus;
 import com.company.ops.api.modules.office.repository.ApprovalRequestRepository;
 import com.company.ops.api.modules.office.repository.DocumentFileRepository;
-import com.company.ops.api.modules.office.service.OfficeService;
+import com.company.ops.api.modules.office.service.OfficeDocumentService;
 import com.company.ops.api.modules.procurement.domain.*;
 import com.company.ops.api.modules.procurement.repository.*;
 import com.company.ops.api.modules.project.domain.*;
@@ -59,7 +59,7 @@ public class CollaborationService {
   private final CollaborationGovernanceService governance;
   private final DataScopeService dataScope;
   private final DocumentFileRepository documents;
-  private final OfficeService officeService;
+  private final OfficeDocumentService officeDocumentService;
 
   public CollaborationService(
       ResponsibilityBindingRepository responsibilities, ResponsibilityCollaboratorRepository responsibilityCollaborators,
@@ -74,13 +74,13 @@ public class CollaborationService {
       SupplierRepository suppliers, ApprovalRequestRepository approvals,
       SystemUserRepository users, SystemOrganizationRepository organizations,
       EmployeeCertificateRepository certificates, CollaborationGovernanceService governance,
-      DataScopeService dataScope, DocumentFileRepository documents, OfficeService officeService) {
+      DataScopeService dataScope, DocumentFileRepository documents, OfficeDocumentService officeDocumentService) {
     this.responsibilities=responsibilities; this.responsibilityCollaborators=responsibilityCollaborators; this.handovers=handovers; this.assignments=assignments;
     this.projects=projects; this.projectCosts=projectCosts; this.costLedger=costLedger; this.contracts=contracts; this.customers=customers;
     this.receivables=receivables; this.purchaseRequests=purchaseRequests; this.purchaseOrders=purchaseOrders;
     this.receipts=receipts; this.invoices=invoices; this.payables=payables; this.payments=payments;
     this.suppliers=suppliers; this.approvals=approvals; this.users=users; this.organizations=organizations;
-    this.certificates=certificates;this.governance=governance;this.dataScope=dataScope;this.documents=documents;this.officeService=officeService;
+    this.certificates=certificates;this.governance=governance;this.dataScope=dataScope;this.documents=documents;this.officeDocumentService=officeDocumentService;
   }
 
   @Transactional
@@ -372,12 +372,12 @@ public class CollaborationService {
   }
   public Object uploadHandoverMaterial(UUID id,MultipartFile file){
     ProjectHandover item=handovers.findById(id).orElseThrow(()->new BusinessException("交接单不存在"));assertVisibleProject(item.getProjectId());
-    return officeService.storeDocument("PROJECT_HANDOVER",id,file);
+    return officeDocumentService.storeDocument("PROJECT_HANDOVER",id,file);
   }
   @Transactional(readOnly=true)
   public List<?> handoverMaterials(UUID id){
     ProjectHandover item=handovers.findById(id).orElseThrow(()->new BusinessException("交接单不存在"));assertVisibleProject(item.getProjectId());
-    return officeService.listDocumentsByBiz("PROJECT_HANDOVER",id);
+    return officeDocumentService.listDocumentsByBiz("PROJECT_HANDOVER",id);
   }
   private void applyHandover(ProjectHandover h,HandoverRequest r){h.setProjectId(r.projectId());h.setContractId(r.contractId());h.setSalesOwnerId(r.salesOwnerId());h.setProjectManagerId(r.projectManagerId());h.setSalesDepartmentId(r.salesDepartmentId());h.setDeliveryDepartmentId(r.deliveryDepartmentId());h.setScopeSummary(r.scopeSummary());h.setPaymentTerms(r.paymentTerms());h.setAcceptanceCriteria(r.acceptanceCriteria());h.setCustomerContact(r.customerContact());h.setTechnicalSolution(r.technicalSolution());h.setQuotationSummary(r.quotationSummary());h.setRiskNotes(r.riskNotes());}
   private List<Map<String,Object>> handoverViews(){

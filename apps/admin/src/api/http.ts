@@ -68,20 +68,48 @@ export async function request<T>(config: AxiosRequestConfig) {
   return response.data.data;
 }
 
+/**
+ * 顺序拉取所有分页数据（默认每页 200）。
+ *
+ * 与一次性 Promise.all 并发请求全部页不同，这里用有界并发（默认 4）逐页拉取，
+ * 避免数据量大时对后端形成并发洪峰。对于确实需要全量数据的场景（下拉选项、导出、
+ * 前端聚合）继续适用；纯列表展示应优先使用服务端分页而非本函数。
+ *
+ * 可选 options.maxPages 用于限制最大拉取页数（防止无界加载），
+ * 不传则保持原有"拉全量"语义。
+ */
 export async function requestAllPages<T>(
   config: AxiosRequestConfig,
   size = 200,
+  options?: { maxPages?: number; concurrency?: number },
 ): Promise<T[]> {
   const pageConfig = (page: number): AxiosRequestConfig => ({
     ...config,
     params: { ...config.params, page, size },
   });
+
   const first = await request<PageResponse<T>>(pageConfig(0));
   if (first.totalPages <= 1) return first.content;
-  const rest = await Promise.all(
-    Array.from({ length: first.totalPages - 1 }, (_, index) =>
-      request<PageResponse<T>>(pageConfig(index + 1)),
-    ),
+
+  const totalPages = options?.maxPages
+    ? Math.min(first.totalPages, options.maxPages)
+    : first.totalPages;
+  if (totalPages <= 1) return first.content;
+
+  const concurrency = Math.max(1, options?.concurrency ?? 4);
+  const pages: T[][] = new Array<T[]>(totalPages - 1);
+  let nextPage = 1;
+
+  const worker = async () => {
+    while (nextPage < totalPages) {
+      const page = nextPage++;
+      pages[page - 1] = (await request<PageResponse<T>>(pageConfig(page))).content;
+    }
+  };
+
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, totalPages - 1) }, worker),
   );
-  return [...first.content, ...rest.flatMap((page) => page.content)];
+
+  return [...first.content, ...pages.flat()];
 }

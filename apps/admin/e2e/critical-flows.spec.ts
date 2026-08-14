@@ -71,7 +71,7 @@ test("login reaches the requested work area and applies command permissions", as
 }) => {
   await page.goto("/login?redirect=/system/users");
   await page.getByLabel("账号").fill("auditor");
-  await page.getByLabel("密码").fill("correct-password");
+  await page.getByLabel("密码", { exact: true }).fill("correct-password");
   await page.getByRole("button", { name: "登录系统" }).click();
 
   await expect(page).toHaveURL(/\/system\/users$/);
@@ -98,7 +98,7 @@ test("MFA challenge only creates a session after the second verification step", 
 
   await page.goto("/login?redirect=/system/users");
   await page.getByLabel("账号").fill("auditor");
-  await page.getByLabel("密码").fill("correct-password");
+  await page.getByLabel("密码", { exact: true }).fill("correct-password");
   await page.getByRole("button", { name: "登录系统" }).click();
 
   await expect(page.getByLabel("动态验证码或恢复码")).toBeVisible();

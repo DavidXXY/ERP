@@ -25,7 +25,7 @@
     "@eslint/js": "^9.31.0",
     "@types/qrcode": "1.5.5",
     "@vitejs/plugin-vue": "6.0.7",
-    "eslint": "^9.31.0",
+    "eslint": "^10.8.1",
     "eslint-plugin-vue": "^10.3.0",
     "typescript": "5.5.4",
     "typescript-eslint": "^8.38.0",

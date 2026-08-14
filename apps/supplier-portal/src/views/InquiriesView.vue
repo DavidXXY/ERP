@@ -111,7 +111,7 @@
           message="恭喜，贵司已中标"
           :description="
             selected.contract
-              ? `采购订单（合同）${selected.contract.contractNo} · ${money(selected.contract.amount)} · ${contractStatusText(selected.contract.status)}`
+              ? `采购订单（合同）${selected.contract.contractNo} · ${money(selected.contract.amount, selected.contract.currency)} · ${contractStatusText(selected.contract.status)}`
               : '采购方下单后生成采购订单（合同），请关注后续状态。'
           "
           class="quote-alert"
@@ -171,49 +171,10 @@
             description="采购方尚未上传合同附件"
           />
           <a-divider style="margin: 12px 0" />
-          <div class="section-title">
-            <div>
-              <h2>发货回传</h2>
-              <p>发货后回传送货单号与预计到货，采购方可在订单中查看。</p>
-            </div>
-          </div>
-          <a-form layout="inline" class="shipment-form">
-            <a-form-item label="送货单号"
-              ><a-input
-                v-model:value="shipmentForm.deliveryNo"
-                placeholder="例如：SF1234567890"
-            /></a-form-item>
-            <a-form-item label="承运方"
-              ><a-input
-                v-model:value="shipmentForm.carrier"
-                placeholder="例如：顺丰"
-            /></a-form-item>
-            <a-form-item label="预计到货"
-              ><a-input
-                v-model:value="shipmentForm.expectedArrival"
-                type="date"
-            /></a-form-item>
-            <a-form-item label="备注"
-              ><a-input v-model:value="shipmentForm.remark" placeholder="可选"
-            /></a-form-item>
-            <a-form-item
-              ><a-button
-                type="primary"
-                :loading="shipmentSaving"
-                @click="submitShipment"
-                >回传发货</a-button
-              ></a-form-item
-            >
-          </a-form>
-          <a-alert
-            v-if="shipmentSent"
-            type="success"
-            show-icon
-            message="发货信息已回传，采购方可提前安排收货。"
-            class="quote-alert"
-          />
-          <a-divider style="margin: 14px 0" />
-          <h3 style="margin-bottom: 8px">历史发货记录</h3>
+          <h3 style="margin-bottom: 8px">发货记录</h3>
+          <p class="table-subtitle">
+            交货提交请在“采购订单”页完成；发货后回传送货单号与预计到货，采购方可在订单中查看。
+          </p>
           <a-table
             v-if="orderShipments.length > 0"
             size="small"
@@ -261,11 +222,21 @@
               <h2>分项报价</h2>
               <p>所有物料均需填写含税单价与税率。</p>
             </div>
-            <span
-              >{{ completedLines }}/{{ quoteForm.lines.length }} 已完成</span
-            >
+            <span class="quote-save-state">
+              <template v-if="autoSaving">正在自动保存…</template>
+              <template v-else-if="dirty">有未保存修改</template>
+              <template v-else>已自动保存</template>
+              · {{ completedLines }}/{{ quoteForm.lines.length }} 已完成
+            </span>
           </div>
-          <div class="quote-table-wrap">
+          <div
+            class="quote-table-wrap"
+            :class="{ pasteable: !readOnly }"
+            @paste="onLinesPaste"
+          >
+            <p v-if="!readOnly" class="paste-hint">
+              支持从 Excel 复制整列粘贴：单价 / 税率 / 交付日期，每行一条。
+            </p>
             <table class="quote-table">
               <thead>
                 <tr>
@@ -359,9 +330,9 @@
         <section class="quote-total">
           <span
             >报价合计<small
-              >物料 {{ money(materialAmount) }} + 其他费用</small
+              >物料 {{ money(materialAmount, quoteForm.currency) }} + 其他费用</small
             ></span
-          ><strong>{{ money(totalAmount) }}</strong>
+          ><strong>{{ money(totalAmount, quoteForm.currency) }}</strong>
         </section>
         <section class="quote-section">
           <div class="section-title">
@@ -543,6 +514,16 @@
             >放弃本次报价</a-button
           >
           <span class="footer-spacer" />
+          <a-button
+            v-if="selected?.quote"
+            @click="exportQuotePdf"
+            ><DownloadOutlined /> 导出报价 PDF</a-button
+          >
+          <a-button
+            v-if="selected?.quote"
+            @click="exportQuoteExcel"
+            ><FileExcelOutlined /> 导出报价 Excel</a-button
+          >
           <a-button @click="editorOpen = false">关闭</a-button>
           <a-button
             v-if="
@@ -601,7 +582,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { message } from "ant-design-vue";
 import {
@@ -609,6 +590,7 @@ import {
   ClockCircleOutlined,
   CloseOutlined,
   DownloadOutlined,
+  FileExcelOutlined,
   PaperClipOutlined,
   ReloadOutlined,
   RightOutlined,
@@ -627,6 +609,8 @@ import {
   formatTime,
   money,
   quoteStatus,
+  shipmentStatusText,
+  validateUploadFile,
 } from "../utils/quote";
 
 type EditableLine = api.QuoteLine & { unitPrice: number; taxRate: number };
@@ -652,14 +636,10 @@ const clarificationQuestion = ref("");
 const declineOpen = ref(false);
 const declineReason = ref("");
 const acknowledging = ref(false);
-const shipmentSaving = ref(false);
-const shipmentSent = ref(false);
-const shipmentForm = reactive({
-  deliveryNo: "",
-  carrier: "",
-  expectedArrival: "",
-  remark: "",
-});
+const dirty = ref(false);
+const autoSaving = ref(false);
+let autoSaveTimer: number | undefined;
+let saveSeq = 0;
 const myShipments = ref<api.ProcurementShipment[]>([]);
 const revisions = ref<api.QuoteRevision[]>([]);
 const revisionLoading = ref(false);
@@ -667,7 +647,11 @@ const shipmentColumns = [
   { title: "送货单号", dataIndex: "deliveryNo" },
   { title: "承运方", dataIndex: "carrier" },
   { title: "预计到货", dataIndex: "expectedArrival" },
-  { title: "状态", dataIndex: "status" },
+  {
+    title: "状态",
+    dataIndex: "status",
+    customRender: ({ text }: { text: string }) => shipmentStatusText(text),
+  },
   { title: "提交时间", dataIndex: "createdAt" },
 ];
 const orderShipments = computed(() =>
@@ -816,8 +800,11 @@ function payload() {
   };
 }
 async function persist(submit: boolean) {
-  if (completionFromForm.value < 100 || !selected.value) {
-    message.warning("请完整填写所有分项报价");
+  if (!selected.value) {
+    return;
+  }
+  if (submit && completionFromForm.value < 100) {
+    message.warning("请完整填写所有分项的单价与税率后再提交");
     return;
   }
   saving.value = true;
@@ -837,6 +824,80 @@ async function persist(submit: boolean) {
     saving.value = false;
   }
 }
+
+watch(
+  () => ({ ...quoteForm, lines: quoteForm.lines.map((l) => ({ ...l })) }),
+  () => {
+    if (!editorOpen.value || readOnly.value) return;
+    dirty.value = true;
+    scheduleAutoSave();
+  },
+  { deep: true },
+);
+
+function scheduleAutoSave() {
+  if (autoSaveTimer) window.clearTimeout(autoSaveTimer);
+  autoSaveTimer = window.setTimeout(() => {
+    void runAutoSave();
+  }, 2000);
+}
+
+async function runAutoSave() {
+  if (!selected.value || !editorOpen.value || readOnly.value) return;
+  if (saving.value) {
+    scheduleAutoSave();
+    return;
+  }
+  const inquiryId = selected.value.id;
+  const seq = ++saveSeq;
+  autoSaving.value = true;
+  try {
+    await api.saveQuote(inquiryId, payload(), false);
+    if (seq === saveSeq) {
+      dirty.value = false;
+      autoSaving.value = false;
+    }
+  } catch {
+    if (seq === saveSeq) autoSaving.value = false;
+    // 自动保存失败不打断编辑，稍后再次修改会重试
+  }
+}
+
+function onLinesPaste(event: ClipboardEvent) {
+  if (readOnly.value) return;
+  const text = event.clipboardData?.getData("text") || "";
+  const rows = text
+    .split(/\r?\n/)
+    .map((row) => row.split(/\t/).map((cell) => cell.trim()))
+    .filter((cells) => cells.length > 0 && cells.some((c) => c !== ""));
+  if (rows.length === 0) return;
+  const start = /单价|税率|物料|交付|数量/i.test(rows[0][0]) ? 1 : 0;
+  rows.slice(start).forEach((cells, index) => {
+    const line = quoteForm.lines[index];
+    if (!line) return;
+    const price = cells.find((cell) => /^\d+(\.\d+)?$/.test(cell));
+    if (price !== undefined) line.unitPrice = Number(price);
+    const rate = cells.find((cell) => /^\d+(\.\d+)?$/.test(cell) && cell !== price);
+    if (rate !== undefined && Number(rate) <= 100) line.taxRate = Number(rate);
+    const date = cells.find((cell) => /^\d{4}-\d{2}-\d{2}$/.test(cell));
+    if (date) line.deliveryDate = date;
+  });
+  message.success(`已从剪贴板填入 ${Math.min(rows.length, quoteForm.lines.length)} 行`);
+}
+
+function beforeUnload(event: BeforeUnloadEvent) {
+  if (!dirty.value || !editorOpen.value) return;
+  event.preventDefault();
+  event.returnValue = "";
+}
+
+onMounted(() => {
+  window.addEventListener("beforeunload", beforeUnload);
+});
+onBeforeUnmount(() => {
+  window.removeEventListener("beforeunload", beforeUnload);
+  if (autoSaveTimer) window.clearTimeout(autoSaveTimer);
+});
 async function withdraw() {
   if (!selected.value) return;
   saving.value = true;
@@ -886,6 +947,11 @@ async function submitDecline() {
 }
 async function uploadAttachment(file: File) {
   if (!selected.value) return false;
+  const invalid = validateUploadFile(file);
+  if (invalid) {
+    message.warning(invalid);
+    return false;
+  }
   const data = new FormData();
   data.append("attachmentType", "QUOTATION");
   data.append("file", file);
@@ -947,33 +1013,6 @@ async function acknowledge() {
     acknowledging.value = false;
   }
 }
-async function submitShipment() {
-  if (!selected.value?.contract?.orderId) return;
-  if (!shipmentForm.deliveryNo.trim()) {
-    message.warning("请填写送货单号");
-    return;
-  }
-  shipmentSaving.value = true;
-  try {
-    await api.createShipment(selected.value.contract.orderId, {
-      deliveryNo: shipmentForm.deliveryNo.trim(),
-      carrier: shipmentForm.carrier.trim() || undefined,
-      expectedArrival: shipmentForm.expectedArrival || undefined,
-      remark: shipmentForm.remark.trim() || undefined,
-    });
-    message.success("发货信息已回传");
-    shipmentSent.value = true;
-    myShipments.value = await api.listMyShipments();
-    shipmentForm.deliveryNo = "";
-    shipmentForm.carrier = "";
-    shipmentForm.expectedArrival = "";
-    shipmentForm.remark = "";
-  } catch (e) {
-    message.error(e instanceof Error ? e.message : "回传失败");
-  } finally {
-    shipmentSaving.value = false;
-  }
-}
 async function removeAttachment(attachment: api.QuoteAttachment) {
   if (!selected.value) return;
   const inquiryId = selected.value.id;
@@ -996,5 +1035,15 @@ function completion(item: api.PortalInquiry) {
           100,
       )
     : 0;
+}
+
+function exportQuotePdf() {
+  if (!selected.value) return;
+  window.location.href = api.quotePdfUrl(selected.value.id);
+}
+
+function exportQuoteExcel() {
+  if (!selected.value) return;
+  window.location.href = api.quoteExcelUrl(selected.value.id);
 }
 </script>

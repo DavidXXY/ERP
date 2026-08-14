@@ -46,6 +46,24 @@
           :options="stageOptions"
           style="width: 150px"
         />
+        <a-select
+          v-model:value="ownerFilter"
+          allow-clear
+          show-search
+          option-filter-prop="label"
+          placeholder="全部负责人"
+          :options="ownerOptions"
+          style="width: 170px"
+        />
+        <a-select
+          v-model:value="departmentFilter"
+          allow-clear
+          show-search
+          option-filter-prop="label"
+          placeholder="全部部门"
+          :options="departmentOptions"
+          style="width: 150px"
+        />
         <a-input
           v-model:value="keyword"
           allow-clear
@@ -323,6 +341,7 @@ import {
 } from "@/api/crm";
 import { listUsersApi, type UserResponse } from "@/api/system";
 import { useAuthStore } from "@/stores/auth";
+import { loadOwnerDepartmentMap, ownerDepartment } from "./crm-department";
 import {
   formatMoney,
   generateCode,
@@ -337,6 +356,7 @@ const router = useRouter();
 const opportunities = ref<Opportunity[]>([]);
 const customers = ref<CustomerSummary[]>([]);
 const users = ref<UserResponse[]>([]);
+const departmentMap = ref<Map<string, string>>(new Map());
 const loading = ref(false);
 const saving = ref(false);
 const createOpen = ref(false);
@@ -360,6 +380,8 @@ const createFormRef = ref();
 const advanceFormRef = ref();
 const selectedOpportunity = ref<Opportunity | null>(null);
 const stageFilter = ref<OpportunityStage>();
+const ownerFilter = ref<string>();
+const departmentFilter = ref<string>();
 const keyword = ref("");
 const stageOptions = [...opportunityStageOptions];
 
@@ -410,13 +432,42 @@ const userOptions = computed(() => {
     ? [{ label: selected, value: selected }, ...options]
     : options;
 });
+const ownerOptions = computed(() => {
+  const names = new Set<string>();
+  users.value.forEach((item) => {
+    const name = item.displayName;
+    if (name) names.add(name);
+  });
+  opportunities.value.forEach((item) => {
+    if (item.ownerName) names.add(item.ownerName);
+  });
+  return Array.from(names)
+    .sort((a, b) => a.localeCompare(b, "zh-CN"))
+    .map((name) => ({ label: name, value: name }));
+});
+const departmentOptions = computed(() =>
+  Array.from(new Set(departmentMap.value.values()))
+    .sort((a, b) => a.localeCompare(b, "zh-CN"))
+    .map((name) => ({ label: name, value: name })),
+);
 const filteredOpportunities = computed(() => {
   const term = keyword.value.trim().toLowerCase();
   const results = opportunities.value.filter((item) => {
     const matchesStage = !stageFilter.value || item.stage === stageFilter.value;
+    const matchesOwner =
+      !ownerFilter.value || item.ownerName === ownerFilter.value;
+    const matchesDepartment =
+      !departmentFilter.value ||
+      ownerDepartment(item.ownerName, departmentMap.value) ===
+        departmentFilter.value;
     const text =
       `${item.code} ${item.customerName} ${item.needSummary} ${item.ownerName || ""}`.toLowerCase();
-    return matchesStage && (!term || text.includes(term));
+    return (
+      matchesStage &&
+      matchesOwner &&
+      matchesDepartment &&
+      (!term || text.includes(term))
+    );
   });
   results.sort((a, b) => {
     const getOrder = (s: string) => (s === "WON" ? 2 : s === "LOST" ? 3 : 1);
@@ -479,13 +530,15 @@ onMounted(async () => {
 async function loadData() {
   loading.value = true;
   try {
-    [opportunities.value, customers.value, users.value] = await Promise.all([
-      listOpportunities(),
-      listCustomers(),
-      listUsersApi(0, 9999)
-        .then((r) => r.content)
-        .catch(() => [] as UserResponse[]),
-    ]);
+    [opportunities.value, customers.value, users.value, departmentMap.value] =
+      await Promise.all([
+        listOpportunities(),
+        listCustomers(),
+        listUsersApi(0, 9999)
+          .then((r) => r.content)
+          .catch(() => [] as UserResponse[]),
+        loadOwnerDepartmentMap(),
+      ]);
   } catch (error) {
     message.error(error instanceof Error ? error.message : "商机加载失败");
   } finally {

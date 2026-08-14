@@ -33,6 +33,9 @@ const appVersion = commitId
 
 export default defineConfig({
   cacheDir: "../../node_modules/.vite-admin",
+  legacy: {
+    skipWebSocketTokenCheck: true,
+  },
   define: {
     __APP_VERSION__: JSON.stringify(appVersion),
   },

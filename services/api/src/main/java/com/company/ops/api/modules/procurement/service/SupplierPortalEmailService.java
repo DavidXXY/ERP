@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -76,6 +77,36 @@ public class SupplierPortalEmailService {
       log.warn("Supplier notification email failed: to={}, title={}, error={}",
           to, title, ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage());
       return false;
+    }
+  }
+
+  /** 站内通知附带的邮件：异步发送，不阻塞业务接口；不启用 SMTP 时静默跳过。 */
+  @Async("mailTaskExecutor")
+  public void sendAsync(String to, String title, String content) {
+    if (!enabled || mailSender == null || !StringUtils.hasText(to)) return;
+    for (int attempt = 1; attempt <= 2; attempt++) {
+      try {
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setFrom(from);
+        message.setTo(to.trim());
+        message.setSubject(title);
+        message.setText(content);
+        mailSender.send(message);
+        log.info("Supplier notification email sent (async): to={}, title={}", to, title);
+        return;
+      } catch (RuntimeException ex) {
+        if (attempt == 2) {
+          log.warn("Supplier notification email failed (async): to={}, title={}, error={}",
+              to, title, ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage());
+          return;
+        }
+        try {
+          Thread.sleep(1000L * attempt);
+        } catch (InterruptedException interrupted) {
+          Thread.currentThread().interrupt();
+          return;
+        }
+      }
     }
   }
 }

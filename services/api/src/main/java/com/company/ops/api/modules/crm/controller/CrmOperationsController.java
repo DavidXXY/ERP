@@ -33,6 +33,7 @@ import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ApprovalActionReque
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.UpdateContractRequest;
 
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.UpdateReceivableRequest;
+import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.OwnerDepartmentResponse;
 import com.company.ops.api.modules.crm.service.CrmOperationsService;
 import com.company.ops.api.modules.crm.service.CrmExportService;
 import com.company.ops.api.modules.crm.dto.CreateCustomerRequest;
@@ -67,6 +68,14 @@ public class CrmOperationsController {
   @PreAuthorize("hasAuthority('crm:opportunity:view')")
   public ApiResponse<List<OpportunityResponse>> listOpportunities() {
     return ApiResponse.ok(crmOperationsService.listOpportunities());
+  }
+
+  @GetMapping("/departments")
+  @PreAuthorize("hasAnyAuthority("
+      + "'crm:customer:view','crm:opportunity:view','crm:quote:view','crm:contract:view',"
+      + "'crm:followup:view','crm:renewal:view','crm:receivable:view')")
+  public ApiResponse<List<OwnerDepartmentResponse>> listOwnerDepartments() {
+    return ApiResponse.ok(crmOperationsService.listOwnerDepartments());
   }
 
   @GetMapping("/opportunities/{id}")

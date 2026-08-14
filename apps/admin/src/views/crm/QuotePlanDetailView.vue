@@ -77,6 +77,9 @@
             <a-descriptions-item label="关联商机">{{
               record.opportunityCode || "未关联"
             }}</a-descriptions-item>
+            <a-descriptions-item label="销售负责人">{{
+              quoteOwnerName(record)
+            }}</a-descriptions-item>
             <a-descriptions-item label="报价金额（含税，元）">
               <strong>{{ formatMoney(record.amount) }}</strong>
               <span class="table-subtitle"
@@ -429,6 +432,7 @@ import { useRoute, useRouter } from "vue-router";
 import {
   getQuote,
   listContracts,
+  listOpportunities,
   listReceivables,
   listQuoteRevisions,
   processQuoteApproval,
@@ -437,6 +441,7 @@ import {
   type ServiceContract,
   type Receivable,
   type QuoteRevision,
+  type Opportunity,
 } from "@/api/crm";
 import {
   formatMoney,
@@ -459,6 +464,7 @@ const record = ref<QuotePlan | null>(null);
 const relatedContract = ref<ServiceContract | null>(null);
 const relatedReceivables = ref<Receivable[]>([]);
 const revisions = ref<QuoteRevision[]>([]);
+const opportunities = ref<Opportunity[]>([]);
 const loading = ref(true);
 const loadingContract = ref(false);
 const saving = ref(false);
@@ -640,9 +646,10 @@ onMounted(loadData);
 async function loadData() {
   loading.value = true;
   try {
-    [record.value, revisions.value] = await Promise.all([
+    [record.value, revisions.value, opportunities.value] = await Promise.all([
       getQuote(id),
       listQuoteRevisions(id).catch(() => []),
+      listOpportunities().catch(() => []),
     ]);
     // Load related contract if converted
     if (record.value?.convertedContractId) {
@@ -675,6 +682,17 @@ async function loadData() {
 
 function handlePrintQuote() {
   window.print();
+}
+
+function quoteOwnerName(
+  quote: Pick<QuotePlan, "opportunityId" | "opportunityCode">,
+) {
+  const opportunity = opportunities.value.find(
+    (item) =>
+      (quote.opportunityId && item.id === quote.opportunityId) ||
+      (quote.opportunityCode && item.code === quote.opportunityCode),
+  );
+  return opportunity?.ownerName || "未关联负责人";
 }
 function openApproval() {
   Object.assign(approvalForm, {

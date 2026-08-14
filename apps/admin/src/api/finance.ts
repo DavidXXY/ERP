@@ -202,9 +202,13 @@ export type FinancePayable = {
   supplierName: string;
   orderId: string;
   orderCode: string;
+  handlerName?: string;
   amount: number;
+  adjustedAmount: number;
+  effectiveAmount: number;
   paidAmount: number;
   outstandingAmount: number;
+  refundAmount: number;
   reservedAmount: number;
   availableAmount: number;
   dueDate: string;
@@ -236,6 +240,7 @@ export type PaymentApplication = {
   approvedAt?: string;
   paymentId?: string;
   paymentCode?: string;
+  payableIds?: string[];
 };
 
 export type PaymentRecord = {
@@ -252,6 +257,45 @@ export type PaymentRecord = {
   paymentMethod: PaymentMethod;
   bankReference: string;
   payerName: string;
+  sourceType?: string;
+  note?: string;
+};
+
+export type PaymentSplit = {
+  payableId?: string;
+  amount: number;
+  paidDate: string;
+  paymentMethod: PaymentMethod;
+  bankReference: string;
+  note?: string;
+};
+
+export type PaymentExecutionResult = {
+  paymentCode: string;
+  totalAmount: number;
+  records: PaymentRecord[];
+};
+
+export type PayableAdjustmentType =
+  | "CREDIT"
+  | "CLAIM"
+  | "CORRECTION"
+  | "CANCELLATION";
+
+export type PayableAdjustment = {
+  id: string;
+  code: string;
+  payableId: string;
+  orderId: string;
+  supplierId: string;
+  adjustmentType: PayableAdjustmentType;
+  amount: number;
+  reason?: string;
+  operatorName: string;
+  appliedAt: string;
+  status: string;
+  source: string;
+  sourceId?: string;
 };
 
 export type FinanceReceivableDetail = {
@@ -448,6 +492,7 @@ export function getPaymentApprovalCapability() {
 export function createPaymentApplication(payload: {
   code?: string;
   payableId: string;
+  payableIds?: string[];
   requestedAmount: number;
   requestedDate: string;
   applicantName: string;
@@ -479,17 +524,44 @@ export function executePayment(
   id: string,
   payload: {
     paymentCode: string;
-    amount: number;
-    paidDate: string;
-    paymentMethod: PaymentMethod;
-    bankReference: string;
-    payerName: string;
+    payments: PaymentSplit[];
   },
 ) {
-  return request<PaymentRecord>({
+  return request<PaymentExecutionResult>({
     method: "POST",
     url: `/finance/payment-applications/${id}/payment`,
     data: payload,
+  });
+}
+
+export function cancelPayable(id: string, reason: string) {
+  return request<FinancePayable>({
+    method: "POST",
+    url: `/finance/payables/${id}/cancel`,
+    data: { reason },
+  });
+}
+
+export function applyPayableAdjustment(
+  id: string,
+  payload: {
+    adjustmentType: PayableAdjustmentType;
+    amount: number;
+    reason?: string;
+    appliedAt?: string;
+  },
+) {
+  return request<PayableAdjustment>({
+    method: "POST",
+    url: `/finance/payables/${id}/adjustments`,
+    data: payload,
+  });
+}
+
+export function listPayableAdjustments(id: string) {
+  return request<PayableAdjustment[]>({
+    method: "GET",
+    url: `/finance/payables/${id}/adjustments`,
   });
 }
 

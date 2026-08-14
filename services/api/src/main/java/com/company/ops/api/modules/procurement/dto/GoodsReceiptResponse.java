@@ -33,6 +33,13 @@ public record GoodsReceiptResponse(
     OffsetDateTime inspectedAt,
     String clientRequestId,
     String asnNo,
-    String carrier
+    String carrier,
+    String appealStatus,
+    String appealReason,
+    OffsetDateTime appealedAt,
+    String appealResolution,
+    String appealReviewComment,
+    String appealReviewedBy,
+    OffsetDateTime appealReviewedAt
 ) {
 }

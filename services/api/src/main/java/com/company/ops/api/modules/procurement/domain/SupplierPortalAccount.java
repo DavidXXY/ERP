@@ -24,6 +24,12 @@ public class SupplierPortalAccount extends BaseEntity {
   @Column(name = "profile_draft_json", columnDefinition = "text") private String profileDraftJson;
   @Column(name = "must_change_password", nullable = false) private boolean mustChangePassword;
   @Column(name = "password_changed_at") private OffsetDateTime passwordChangedAt;
+  @Column(name = "reset_token_hash", length = 255) private String resetTokenHash;
+  @Column(name = "reset_token_expires_at") private OffsetDateTime resetTokenExpiresAt;
+  @Column(name = "reset_token_used_at") private OffsetDateTime resetTokenUsedAt;
+  @Column(name = "mfa_enabled", nullable = false) private boolean mfaEnabled;
+  @Column(name = "mfa_secret", length = 1024) private String mfaSecret;
+  @Column(name = "mfa_recovery_codes", columnDefinition = "text") private String mfaRecoveryCodes;
 
   public UUID getSupplierId() { return supplierId; }
   public void setSupplierId(UUID supplierId) { this.supplierId = supplierId; }
@@ -53,4 +59,16 @@ public class SupplierPortalAccount extends BaseEntity {
   public void setMustChangePassword(boolean mustChangePassword) { this.mustChangePassword = mustChangePassword; }
   public OffsetDateTime getPasswordChangedAt() { return passwordChangedAt; }
   public void setPasswordChangedAt(OffsetDateTime passwordChangedAt) { this.passwordChangedAt = passwordChangedAt; }
+  public String getResetTokenHash() { return resetTokenHash; }
+  public void setResetTokenHash(String resetTokenHash) { this.resetTokenHash = resetTokenHash; }
+  public OffsetDateTime getResetTokenExpiresAt() { return resetTokenExpiresAt; }
+  public void setResetTokenExpiresAt(OffsetDateTime resetTokenExpiresAt) { this.resetTokenExpiresAt = resetTokenExpiresAt; }
+  public OffsetDateTime getResetTokenUsedAt() { return resetTokenUsedAt; }
+  public void setResetTokenUsedAt(OffsetDateTime resetTokenUsedAt) { this.resetTokenUsedAt = resetTokenUsedAt; }
+  public boolean isMfaEnabled() { return mfaEnabled; }
+  public void setMfaEnabled(boolean mfaEnabled) { this.mfaEnabled = mfaEnabled; }
+  public String getMfaSecret() { return mfaSecret; }
+  public void setMfaSecret(String mfaSecret) { this.mfaSecret = mfaSecret; }
+  public String getMfaRecoveryCodes() { return mfaRecoveryCodes; }
+  public void setMfaRecoveryCodes(String mfaRecoveryCodes) { this.mfaRecoveryCodes = mfaRecoveryCodes; }
 }

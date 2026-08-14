@@ -13,6 +13,7 @@ public record SupplierResponse(
     String category,
     String contactName,
     String phone,
+    String purchaserName,
     String settlementTerms,
     String legalRepresentative,
     String unifiedSocialCreditCode,

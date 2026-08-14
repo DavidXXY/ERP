@@ -704,6 +704,7 @@ public class OfficeService {
     var stored = storageService.store(file, "office", DOCUMENT_POLICY);
     DocumentFile item = new DocumentFile(); item.setBizType(bizType); item.setBizId(bizId); item.setFileName(stored.originalName());
     item.setObjectKey(stored.objectKey()); item.setContentType(stored.contentType()); item.setSizeBytes(stored.sizeBytes());
+    item.setUploadedBy(currentName());
     return toDocument(documentRepository.save(item));
   }
 
@@ -1436,7 +1437,13 @@ public class OfficeService {
         .toList();
     return new SealResponse(item.getId(), item.getCode(), item.getApplicantId(), item.getApplicantName(), item.getDepartmentName(), item.getSealType(), item.getDocumentName(), item.getDocumentPurpose(), item.getCounterparty(), item.getCopyCount(), item.getUseDate(), item.isTakeOut(), item.getExpectedReturnDate(), item.getReturnedAt(), item.getStatus(), item.getApprovalRequestId(), item.getCreatedAt(), attachments);
   }
-  private DocumentResponse toDocument(DocumentFile item) { return new DocumentResponse(item.getId(), item.getBizType(), item.getBizId(), item.getFileName(), item.getContentType(), item.getSizeBytes(), item.getCreatedAt()); }
+  private DocumentResponse toDocument(DocumentFile item) { return new DocumentResponse(item.getId(), item.getBizType(), item.getBizId(), item.getFileName(), item.getContentType(), item.getSizeBytes(), item.getUploadedBy(), item.getCreatedAt()); }
+
+  private String currentName() {
+    var authentication = SecurityContextHolder.getContext().getAuthentication();
+    return authentication != null && authentication.getPrincipal() instanceof UserPrincipal principal
+        ? principal.displayName() : "系统";
+  }
   private NotificationResponse toNotification(SystemNotification item, SystemNotificationRead receipt) {
     return new NotificationResponse(item.getId(), item.getType(), item.getTitle(), item.getContent(),
         item.getRelatedType(), item.getRelatedId(), receipt != null,

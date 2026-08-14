@@ -5,24 +5,38 @@ import com.company.ops.api.modules.procurement.domain.GoodsReceipt;
 import com.company.ops.api.modules.procurement.domain.ProcurementReturnOrder;
 import com.company.ops.api.modules.procurement.domain.SupplierInvoice;
 import com.company.ops.api.modules.procurement.dto.ProcurementControlDtos.*;
+import com.company.ops.api.modules.procurement.dto.SupplierPortalDtos.InvoiceSubmissionResponse;
 import com.company.ops.api.modules.procurement.dto.CreateConsolidatedInquiryRequest;
 import com.company.ops.api.modules.procurement.dto.ProcurementPurchasePoolResponse;
 import com.company.ops.api.modules.procurement.dto.ReceivePurchaseOrderRequest;
+import com.company.ops.api.modules.procurement.service.PortalCollaborationService;
 import com.company.ops.api.modules.procurement.service.ProcurementControlService;
 import jakarta.validation.Valid;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.core.io.Resource;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.RequestParam;
 
 @RestController
 @RequestMapping("/api/procurement")
 public class ProcurementControlController {
   private final ProcurementControlService service;
+  private final PortalCollaborationService collaboration;
 
-  public ProcurementControlController(ProcurementControlService service) {
+  public ProcurementControlController(
+      ProcurementControlService service,
+      PortalCollaborationService collaboration
+  ) {
     this.service = service;
+    this.collaboration = collaboration;
   }
 
   @GetMapping("/inquiries")
@@ -155,9 +169,71 @@ public class ProcurementControlController {
     return ApiResponse.ok(service.reviewInvoice(id, request));
   }
 
+  @PostMapping("/supplier-invoices/{id}/verify")
+  @PreAuthorize("hasAuthority('procurement:payable:view')")
+  public ApiResponse<SupplierInvoice> verifyInvoice(
+      @PathVariable UUID id,
+      @Valid @RequestBody VerifyInvoice request
+  ) {
+    return ApiResponse.ok(service.verifyInvoice(id, request));
+  }
+
   @GetMapping("/supplier-invoices")
   @PreAuthorize("hasAuthority('procurement:payable:view')")
   public ApiResponse<List<SupplierInvoice>> invoices() {
     return ApiResponse.ok(service.listInvoices());
+  }
+
+  @GetMapping("/invoice-submissions")
+  @PreAuthorize("hasAuthority('procurement:payable:view')")
+  public ApiResponse<List<InvoiceSubmissionResponse>> invoiceSubmissions(
+      @RequestParam(required = false) String status
+  ) {
+    return ApiResponse.ok(service.listInvoiceSubmissions(status));
+  }
+
+  @GetMapping("/invoice-submissions/{id}/download")
+  @PreAuthorize("hasAuthority('procurement:payable:view')")
+  public ResponseEntity<Resource> downloadInvoiceSubmission(@PathVariable UUID id) {
+    InvoiceSubmissionResponse metadata = service.invoiceSubmission(id);
+    return ResponseEntity.ok()
+        .contentType(MediaType.parseMediaType(metadata.contentType() == null
+            ? MediaType.APPLICATION_OCTET_STREAM_VALUE : metadata.contentType()))
+        .header(HttpHeaders.CONTENT_DISPOSITION,
+            ContentDisposition.attachment().filename(metadata.fileName(), StandardCharsets.UTF_8).build().toString())
+        .body(service.loadInvoiceSubmissionFile(id));
+  }
+
+  @PostMapping("/invoice-submissions/{id}/review")
+  @PreAuthorize("hasAuthority('procurement:request:approve')")
+  public ApiResponse<InvoiceSubmissionResponse> reviewInvoiceSubmission(
+      @PathVariable UUID id,
+      @Valid @RequestBody ReviewInvoiceSubmissionRequest request
+  ) {
+    return ApiResponse.ok(service.reviewInvoiceSubmission(id, request));
+  }
+
+  @GetMapping("/appeals")
+  @PreAuthorize("hasAuthority('procurement:view')")
+  public ApiResponse<List<Map<String, Object>>> appeals(
+      @RequestParam(required = false) String status
+  ) {
+    return ApiResponse.ok(service.listAppeals(status));
+  }
+
+
+  @GetMapping("/portal-collaboration/summary")
+  @PreAuthorize("hasAuthority('procurement:view')")
+  public ApiResponse<Map<String, Object>> portalCollaborationSummary() {
+    return ApiResponse.ok(collaboration.summary());
+  }
+
+  @PostMapping("/appeals/{id}/resolve")
+  @PreAuthorize("hasAuthority('procurement:order:receive')")
+  public ApiResponse<Map<String, Object>> resolveAppeal(
+      @PathVariable UUID id,
+      @Valid @RequestBody ResolveAppealRequest request
+  ) {
+    return ApiResponse.ok(service.resolveAppeal(id, request));
   }
 }

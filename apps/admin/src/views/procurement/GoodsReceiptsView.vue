@@ -61,6 +61,13 @@
             >
               {{ inspectionLabel(record.inspectionStatus) }}
             </a-tag>
+            <a-tag
+              v-if="record.appealStatus && record.appealStatus !== 'NONE'"
+              :color="appealColor(record.appealStatus)"
+              class="appeal-tag"
+            >
+              {{ appealLabel(record.appealStatus) }}
+            </a-tag>
           </template>
           <template v-else-if="column.key === 'action'">
             <a-button
@@ -72,6 +79,17 @@
               @click="openInspect(record)"
             >
               质量检验
+            </a-button>
+            <a-button
+              v-if="
+                record.appealStatus === 'PENDING' &&
+                auth.can('procurement:receipt:inspect')
+              "
+              type="link"
+              danger
+              @click="openAppeal(record)"
+            >
+              处理申诉
             </a-button>
           </template>
         </template>
@@ -196,6 +214,40 @@
         </a-form-item>
       </a-form>
     </a-modal>
+    <a-modal
+      v-model:open="appealOpen"
+      title="质检申诉处理"
+      :confirm-loading="savingAppeal"
+      @ok="saveAppeal"
+    >
+      <a-alert
+        v-if="selectedAppeal"
+        type="warning"
+        show-icon
+        :message="`${selectedAppeal.partName} · 到货单 ${selectedAppeal.code || ''} · 质检${inspectionLabel(selectedAppeal.inspectionStatus)}（合格 ${selectedAppeal.qualifiedQty || 0} / 不合格 ${selectedAppeal.rejectedQty || 0}）`"
+        :description="`供应商申诉：${selectedAppeal.appealReason || '（未填写原因）'}`"
+        style="margin-bottom: 14px"
+      />
+      <a-form layout="vertical">
+        <a-form-item label="处理结果" required>
+          <a-radio-group v-model:value="appealForm.action">
+            <a-radio value="DISMISSED">维持原质检结果（申诉不成立）</a-radio>
+            <a-radio value="REOPEN">受理申诉，打回重新质检</a-radio>
+          </a-radio-group>
+        </a-form-item>
+        <a-form-item
+          label="处理意见"
+          :required="appealForm.action === 'DISMISSED'"
+        >
+          <a-textarea
+            v-model:value="appealForm.comment"
+            :rows="3"
+            maxlength="500"
+            placeholder="处理意见将通知供应商"
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
@@ -208,6 +260,7 @@ import {
   inspectGoodsReceipt,
   listGoodsReceipts,
   listProcurementReturns,
+  resolveAppeal,
   resolveProcurementReturn,
   type GoodsReceipt,
   type ProcurementReturnOrder,
@@ -217,10 +270,17 @@ const auth = useAuthStore();
 const loading = ref(false);
 const inspectOpen = ref(false);
 const resolveOpen = ref(false);
+const appealOpen = ref(false);
+const savingAppeal = ref(false);
 const receipts = ref<GoodsReceipt[]>([]);
 const returns = ref<ProcurementReturnOrder[]>([]);
 const selectedReceipt = ref<GoodsReceipt | null>(null);
 const selectedReturn = ref<ProcurementReturnOrder | null>(null);
+const selectedAppeal = ref<GoodsReceipt | null>(null);
+const appealForm = reactive({
+  action: "DISMISSED" as "DISMISSED" | "REOPEN",
+  comment: "",
+});
 const today = () => new Date().toISOString().slice(0, 10);
 const inspectForm = reactive({
   qualifiedQty: 0,
@@ -244,8 +304,9 @@ const receiptColumns = [
   { title: "入库金额（含税，元）", key: "amount", width: 190 },
   { title: "到货日期", dataIndex: "receivedDate", width: 120 },
   { title: "收货人", dataIndex: "receiverName", width: 120 },
-  { title: "质检状态", key: "status", width: 110 },
-  { title: "操作", key: "action", width: 110, fixed: "right" as const },
+  { title: "验收人", dataIndex: "inspectorName", width: 120 },
+  { title: "质检状态", key: "status", width: 150 },
+  { title: "操作", key: "action", width: 170, fixed: "right" as const },
 ];
 const returnColumns = [
   { title: "退货单", dataIndex: "code" },
@@ -323,6 +384,55 @@ async function saveResolution() {
   await loadData();
 }
 
+function openAppeal(receipt: GoodsReceipt) {
+  selectedAppeal.value = receipt;
+  appealForm.action = "DISMISSED";
+  appealForm.comment = "";
+  appealOpen.value = true;
+}
+async function saveAppeal() {
+  if (!selectedAppeal.value) return;
+  if (appealForm.action === "DISMISSED" && !appealForm.comment.trim()) {
+    message.warning("驳回申诉时请填写处理意见");
+    return;
+  }
+  savingAppeal.value = true;
+  try {
+    await resolveAppeal(selectedAppeal.value.id, {
+      action: appealForm.action,
+      comment: appealForm.comment.trim() || undefined,
+    });
+    appealOpen.value = false;
+    message.success(
+      appealForm.action === "REOPEN"
+        ? "已受理并打回重新质检，供应商将收到通知"
+        : "已驳回申诉，供应商将收到通知",
+    );
+    await loadData();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "处理失败");
+  } finally {
+    savingAppeal.value = false;
+  }
+}
+function appealLabel(status?: string) {
+  return (
+    {
+      PENDING: "申诉待处理",
+      DISMISSED: "申诉未成立",
+      REOPENED: "已受理重检",
+    }[status || "NONE"] ||
+    status ||
+    ""
+  );
+}
+function appealColor(status?: string) {
+  return (
+    { PENDING: "red", DISMISSED: "default", REOPENED: "blue" }[
+      status || "NONE"
+    ] || "default"
+  );
+}
 function inspectionLabel(status?: string) {
   return (
     {

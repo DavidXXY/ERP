@@ -64,6 +64,15 @@ public class PurchaseOrderChange extends BaseEntity {
   @Column(name = "applied_at")
   private OffsetDateTime appliedAt;
 
+  @Column(name = "supplier_response", length = 32)
+  private String supplierResponse;
+
+  @Column(name = "supplier_comment", length = 500)
+  private String supplierComment;
+
+  @Column(name = "supplier_responded_at")
+  private OffsetDateTime supplierRespondedAt;
+
   public UUID getOrderId() { return orderId; }
   public void setOrderId(UUID v) { orderId = v; }
   public String getChangeNo() { return changeNo; }
@@ -98,4 +107,10 @@ public class PurchaseOrderChange extends BaseEntity {
   public void setOrderVersionAfter(Integer v) { orderVersionAfter = v; }
   public OffsetDateTime getAppliedAt() { return appliedAt; }
   public void setAppliedAt(OffsetDateTime v) { appliedAt = v; }
+  public String getSupplierResponse() { return supplierResponse; }
+  public void setSupplierResponse(String v) { supplierResponse = v; }
+  public String getSupplierComment() { return supplierComment; }
+  public void setSupplierComment(String v) { supplierComment = v; }
+  public OffsetDateTime getSupplierRespondedAt() { return supplierRespondedAt; }
+  public void setSupplierRespondedAt(OffsetDateTime v) { supplierRespondedAt = v; }
 }

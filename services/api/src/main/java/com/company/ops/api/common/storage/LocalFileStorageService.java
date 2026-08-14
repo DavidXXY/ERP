@@ -85,6 +85,8 @@ public class LocalFileStorageService implements FileStorageService {
       case "qualification" -> storageRoot.resolve("qualification");
       case "supplier-portal" -> storageRoot.resolve("supplier-portal");
       case "supplier-quotes" -> storageRoot.resolve("supplier-quotes");
+      case "supplier-invoices" -> storageRoot.resolve("supplier-invoices");
+      case "payment-receipts" -> storageRoot.resolve("payment-receipts");
       case "procurement-orders" -> storageRoot.resolve("procurement-orders");
       case "work-orders" -> storageRoot.resolve("work-orders");
       default -> throw new BusinessException("文件路径非法");

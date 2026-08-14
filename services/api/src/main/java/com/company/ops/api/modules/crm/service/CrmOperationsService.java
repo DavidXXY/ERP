@@ -59,6 +59,7 @@ import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ContractChangeRespo
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.CreateContractChangeRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ApprovalActionRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.UpdateContractRequest;
+import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.OwnerDepartmentResponse;
 
 
 import com.company.ops.api.modules.crm.repository.OpportunityRepository;
@@ -78,12 +79,16 @@ import com.company.ops.api.modules.project.dto.CreateProjectRequest;
 import com.company.ops.api.modules.project.dto.ProjectBudgetItemRequest;
 import com.company.ops.api.modules.project.repository.ProjectRepository;
 import com.company.ops.api.modules.project.service.ProjectService;
+import com.company.ops.api.modules.qualification.repository.QualificationEmployeeRepository;
+import com.company.ops.api.modules.system.domain.SystemUser;
 import com.company.ops.api.modules.system.security.DataScopeService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -115,6 +120,7 @@ public class CrmOperationsService {
   private final ProjectRepository projectRepository;
   private final CrmAttachmentRepository attachmentRepository;
   private final DataScopeService dataScopeService;
+  private final QualificationEmployeeRepository qualificationEmployeeRepository;
 
   @jakarta.persistence.PersistenceContext
   private jakarta.persistence.EntityManager entityManager;
@@ -138,7 +144,8 @@ public class CrmOperationsService {
       ProjectRepository projectRepository,
       CrmAttachmentRepository attachmentRepository,
       CodeGenerator codeGenerator,
-      DataScopeService dataScopeService) {
+      DataScopeService dataScopeService,
+      QualificationEmployeeRepository qualificationEmployeeRepository) {
     this.codeGenerator = codeGenerator;
     this.customerRepository = customerRepository;
     this.opportunityRepository = opportunityRepository;
@@ -156,6 +163,27 @@ public class CrmOperationsService {
     this.projectRepository = projectRepository;
     this.attachmentRepository = attachmentRepository;
     this.dataScopeService = dataScopeService;
+    this.qualificationEmployeeRepository = qualificationEmployeeRepository;
+  }
+
+  @Transactional(readOnly = true)
+  public List<OwnerDepartmentResponse> listOwnerDepartments() {
+    Map<String, String> ownerDepartments = new LinkedHashMap<>();
+    qualificationEmployeeRepository.findAll().forEach(employee -> {
+      String department = employee.getDepartment() == null ? "" : employee.getDepartment().trim();
+      if (department.isEmpty()) return;
+      List<String> names = new ArrayList<>();
+      if (hasText(employee.getName())) names.add(employee.getName());
+      SystemUser user = employee.getSystemUser();
+      if (user != null) {
+        if (hasText(user.getDisplayName())) names.add(user.getDisplayName());
+        if (hasText(user.getUsername())) names.add(user.getUsername());
+      }
+      names.forEach(name -> ownerDepartments.putIfAbsent(name, department));
+    });
+    return ownerDepartments.entrySet().stream()
+        .map(entry -> new OwnerDepartmentResponse(entry.getKey(), entry.getValue()))
+        .toList();
   }
 
   @Transactional(readOnly = true)
@@ -866,6 +894,7 @@ public class CrmOperationsService {
           customerName(customers, item.getCustomerId()),
           item.getCode(),
           item.getProjectName(),
+          contractSalesOwnerName(item, customers),
           item.getAmount(),
           item.getEndDate(),
           days,
@@ -1611,6 +1640,9 @@ public class CrmOperationsService {
         item.getContractId() == null || contracts.get(item.getContractId()) == null
             ? "未关联合同"
             : contracts.get(item.getContractId()).getProjectName(),
+        item.getContractId() == null || contracts.get(item.getContractId()) == null
+            ? ""
+            : contractSalesOwnerName(contracts.get(item.getContractId()), customers),
         item.getCode(),
         item.getSourceNo(),
         item.getAmount(),

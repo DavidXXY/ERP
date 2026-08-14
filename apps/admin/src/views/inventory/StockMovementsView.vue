@@ -66,6 +66,7 @@ const movementColumns = [
   { title: "类型", key: "type", width: 100 },
   { title: "数量", dataIndex: "quantity", width: 100 },
   { title: "来源单号", dataIndex: "sourceNo", width: 150 },
+  { title: "操作人", dataIndex: "operatorName", width: 120 },
   { title: "备注", dataIndex: "remark" },
   { title: "时间", key: "createdAt", width: 170 },
 ];

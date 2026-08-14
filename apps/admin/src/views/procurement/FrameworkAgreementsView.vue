@@ -263,7 +263,7 @@ const columns = [
   { title: "有效期", key: "validity", width: 220 },
   { title: "物料", key: "items", width: 100 },
   { title: "状态", key: "status", width: 100 },
-  { title: "创建人", dataIndex: "createdByName", width: 120 },
+  { title: "负责人", dataIndex: "createdByName", width: 120 },
   { title: "操作", key: "action", width: 190 },
 ];
 const itemColumns = [

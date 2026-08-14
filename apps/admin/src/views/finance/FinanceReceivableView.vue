@@ -592,6 +592,7 @@ const priorityOptions = [
 const columns = [
   { title: "应收单 / 客户", key: "receivable", width: 240 },
   { title: "合同名称 / 编号", key: "contract", width: 260 },
+  { title: "销售负责人", dataIndex: "salesOwnerName", width: 120 },
   { title: "来源单号", dataIndex: "sourceNo", width: 170 },
   { title: "应收 / 回款（含税，元）", key: "amount", width: 300 },
   { title: "开票信息", key: "invoice", width: 180 },

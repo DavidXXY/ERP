@@ -16,12 +16,14 @@
     "ant-design-vue": "4.2.6",
     "axios": "1.18.1",
     "pinia": "2.3.1",
+    "qrcode": "1.5.4",
     "unplugin-vue-components": "^32.1.0",
     "vue": "3.5.13",
     "vue-router": "4.5.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.31.0",
+    "@types/qrcode": "1.5.5",
     "@vitejs/plugin-vue": "6.0.7",
     "eslint": "^9.31.0",
     "eslint-plugin-vue": "^10.3.0",

@@ -74,6 +74,12 @@
       </section>
 
       <a-space wrap class="table-toolbar">
+        <a-button
+          type="primary"
+          :disabled="selectedItems.length === 0"
+          @click="openMergeApplication"
+          >合并申请（{{ selectedItems.length }}）</a-button
+        >
         <a-input-search
           v-model:value="keyword"
           allow-clear
@@ -100,6 +106,7 @@
         :data-source="filteredItems"
         :loading="loading"
         :pagination="{ pageSize: 8 }"
+        :row-selection="rowSelection"
         :row-key="(item: FinancePayable) => item.id"
         :scroll="{ x: 1280 }"
       >
@@ -123,7 +130,16 @@
             ><strong>{{ formatMoney(record.amount) }}</strong
             ><span class="table-subtitle"
               >已付 {{ formatMoney(record.paidAmount) }} · 待付
-              {{ formatMoney(record.outstandingAmount) }}</span
+              {{ formatMoney(record.outstandingAmount)
+              }}{{
+                Number(record.adjustedAmount || 0) > 0
+                  ? " · 冲减 " + formatMoney(record.adjustedAmount)
+                  : ""
+              }}{{
+                Number(record.refundAmount || 0) > 0
+                  ? " · 待退 " + formatMoney(record.refundAmount)
+                  : ""
+              }}</span
             ></template
           >
           <template v-else-if="column.key === 'available'"
@@ -185,6 +201,13 @@
         type="info"
         show-icon
         :message="`已有审批占用（含税，元）${formatMoney(selectedItem.reservedAmount)}，本次申请不得超过剩余可申请金额。`"
+      />
+      <a-alert
+        v-if="mergePayables.length > 1"
+        class="section-alert"
+        type="success"
+        show-icon
+        :message="`合并申请 ${mergePayables.length} 笔应付（${mergePayables.map((item) => item.code).join('、')}），合计可申请 ${formatMoney(mergePayables.reduce((sum, item) => sum + Number(item.availableAmount || 0), 0))}。`"
       />
       <a-form ref="formRef" :model="form" :rules="rules" layout="vertical">
         <div class="quick-amounts">
@@ -250,6 +273,8 @@ const applicationOpen = ref(false);
 const keyword = ref("");
 const statusFilter = ref<FinancePayableStatus>();
 const scheduleFilter = ref<string>();
+const selectedRowKeys = ref<string[]>([]);
+const mergePayables = ref<FinancePayable[]>([]);
 const formRef = ref();
 const form = reactive({
   code: "",
@@ -274,6 +299,7 @@ const columns = [
   { title: "供应商", key: "supplier", width: 220 },
   { title: "应付 / 已付（含税，元）", key: "amount", width: 300 },
   { title: "可申请 / 占用（含税，元）", key: "available", width: 260 },
+  { title: "经办人", dataIndex: "handlerName", width: 120 },
   { title: "付款排期", key: "schedule", width: 150 },
   { title: "到期日", dataIndex: "dueDate", width: 120 },
   { title: "状态", key: "status", width: 160 },
@@ -298,6 +324,15 @@ const filteredItems = computed(() =>
     );
   }),
 );
+const selectedItems = computed(() =>
+  items.value.filter((item) => selectedRowKeys.value.includes(item.id)),
+);
+const rowSelection = computed(() => ({
+  selectedRowKeys: selectedRowKeys.value,
+  onChange: (keys: (string | number)[]) => {
+    selectedRowKeys.value = keys.map(String);
+  },
+}));
 const outstandingAmount = computed(() =>
   items.value.reduce(
     (sum, item) => sum + Number(item.outstandingAmount || 0),
@@ -413,6 +448,7 @@ function exportPayables() {
   downloadCsv(`finance-payables-${today()}.csv`, headers, rows);
 }
 function openApplication(item: FinancePayable) {
+  mergePayables.value = [];
   selectedItem.value = item;
   Object.assign(form, {
     code: generateCode(),
@@ -423,8 +459,32 @@ function openApplication(item: FinancePayable) {
   });
   applicationOpen.value = true;
 }
+function openMergeApplication() {
+  const selected = selectedItems.value;
+  if (selected.length === 0) return;
+  mergePayables.value = selected;
+  selectedItem.value = selected[0];
+  const totalAvailable = selected.reduce(
+    (sum, item) => sum + Number(item.availableAmount || 0),
+    0,
+  );
+  Object.assign(form, {
+    code: generateCode(),
+    requestedAmount: Math.max(0.01, totalAvailable),
+    requestedDate: today(),
+    applicantName: auth.user?.displayName || "",
+    purpose: `合并支付 ${selected.length} 笔应付`,
+  });
+  applicationOpen.value = true;
+}
 function setApplicationRatio(ratio: number) {
-  const amount = Number(selectedItem.value?.availableAmount || 0);
+  const amount =
+    mergePayables.value.length > 1
+      ? mergePayables.value.reduce(
+          (sum, item) => sum + Number(item.availableAmount || 0),
+          0,
+        )
+      : Number(selectedItem.value?.availableAmount || 0);
   form.requestedAmount = Math.max(0.01, Math.round(amount * ratio * 100) / 100);
 }
 async function handleCreateApplication() {
@@ -435,9 +495,19 @@ async function handleCreateApplication() {
     await createPaymentApplication({
       ...form,
       payableId: selectedItem.value.id,
+      payableIds:
+        mergePayables.value.length > 1
+          ? mergePayables.value.map((item) => item.id)
+          : undefined,
     });
     applicationOpen.value = false;
-    message.success("付款申请已提交审批");
+    message.success(
+      mergePayables.value.length > 1
+        ? "合并付款申请已提交审批"
+        : "付款申请已提交审批",
+    );
+    selectedRowKeys.value = [];
+    mergePayables.value = [];
     await loadData();
   } catch (error) {
     message.error(error instanceof Error ? error.message : "付款申请失败");

@@ -6,6 +6,7 @@ import java.util.UUID;
 public record ProcurementMatchingResponse(
     UUID orderId,
     String orderCode,
+    String responsibleName,
     String supplierName,
     String partName,
     BigDecimal orderedQty,

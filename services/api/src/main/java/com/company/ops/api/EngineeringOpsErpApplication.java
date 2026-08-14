@@ -3,10 +3,12 @@ package com.company.ops.api;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.scheduling.annotation.EnableAsync;
 import net.javacrumbs.shedlock.spring.annotation.EnableSchedulerLock;
 
 @SpringBootApplication
 @EnableScheduling
+@EnableAsync
 @EnableSchedulerLock(defaultLockAtMostFor = "PT30M")
 public class EngineeringOpsErpApplication {
 

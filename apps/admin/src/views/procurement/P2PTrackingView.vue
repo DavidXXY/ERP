@@ -317,12 +317,14 @@ const matchingActions = computed(() => [
 
 const p2pColumns = [
   { title: "申请单", key: "code", width: 200 },
+  { title: "负责人", dataIndex: "requesterName", width: 110 },
   { title: "金额（含税，元）", key: "amount", width: 180 },
   { title: "P2P 状态", key: "p2p", width: 320 },
   { title: "申请状态", dataIndex: "status", width: 110 },
 ];
 const matchingColumns = [
   { title: "采购订单", key: "order", width: 240 },
+  { title: "负责人", dataIndex: "responsibleName", width: 100 },
   { title: "入库/订购数量", key: "qty", width: 130 },
   { title: "订单金额（含税，元）", key: "orderAmount", width: 190 },
   { title: "入库金额（含税，元）", key: "receiptAmount", width: 190 },

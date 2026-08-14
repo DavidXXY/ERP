@@ -65,6 +65,22 @@
           placeholder="全部风险状态"
           :options="riskOptions"
         />
+        <a-select
+          v-model:value="filters.ownerName"
+          allow-clear
+          show-search
+          option-filter-prop="label"
+          placeholder="全部负责人"
+          :options="ownerOptions"
+        />
+        <a-select
+          v-model:value="filters.department"
+          allow-clear
+          show-search
+          option-filter-prop="label"
+          placeholder="全部部门"
+          :options="departmentOptions"
+        />
         <span class="customer-filter-result"
           >当前 {{ filteredCustomers.length }} 家</span
         >
@@ -965,6 +981,7 @@ import {
 } from "@/api/crm";
 import { listUserOptionsApi, type UserResponse } from "@/api/system";
 import { useAuthStore } from "@/stores/auth";
+import { loadOwnerDepartmentMap, ownerDepartment } from "./crm-department";
 import { downloadCsv, customerRowToCsv } from "./crm-export";
 import {
   contractStatusColor,
@@ -1017,6 +1034,7 @@ const router = useRouter();
 const customers = ref<CustomerSummary[]>([]);
 const selectedDetail = ref<CustomerDetail | null>(null);
 const users = ref<UserResponse[]>([]);
+const departmentMap = ref<Map<string, string>>(new Map());
 const loading = ref(false);
 const detailLoading = ref(false);
 const saving = ref(false);
@@ -1034,6 +1052,8 @@ const filters = reactive({
   keyword: "",
   level: undefined as CustomerLevel | undefined,
   riskStatus: undefined as RiskStatus | undefined,
+  ownerName: undefined as string | undefined,
+  department: undefined as string | undefined,
 });
 const formState = reactive<CustomerFormState>(initialForm());
 
@@ -1100,6 +1120,24 @@ const userOptions = computed(() => {
   });
   return options;
 });
+const ownerOptions = computed(() => {
+  const names = new Set<string>();
+  users.value.forEach((item) => {
+    const name = item.displayName;
+    if (name) names.add(name);
+  });
+  customers.value.forEach((customer) => {
+    if (customer.ownerName) names.add(customer.ownerName);
+  });
+  return Array.from(names)
+    .sort((a, b) => a.localeCompare(b, "zh-CN"))
+    .map((name) => ({ label: name, value: name }));
+});
+const departmentOptions = computed(() =>
+  Array.from(new Set(departmentMap.value.values()))
+    .sort((a, b) => a.localeCompare(b, "zh-CN"))
+    .map((name) => ({ label: name, value: name })),
+);
 
 const filteredCustomers = computed(() => {
   const term = filters.keyword.trim().toLowerCase();
@@ -1109,6 +1147,10 @@ const filteredCustomers = computed(() => {
     return (
       (!filters.level || customer.level === filters.level) &&
       (!filters.riskStatus || customer.riskStatus === filters.riskStatus) &&
+      (!filters.ownerName || customer.ownerName === filters.ownerName) &&
+      (!filters.department ||
+        ownerDepartment(customer.ownerName, departmentMap.value) ===
+          filters.department) &&
       (!term || text.includes(term))
     );
   });
@@ -1144,12 +1186,14 @@ async function loadCustomers() {
   loading.value = true;
   errorMessage.value = "";
   try {
-    const [customerRows, userPage] = await Promise.all([
+    const [customerRows, userPage, deptMap] = await Promise.all([
       listCustomers(),
       listUserOptionsApi().catch(() => [] as UserResponse[]),
+      loadOwnerDepartmentMap(),
     ]);
     customers.value = customerRows;
     users.value = userPage;
+    departmentMap.value = deptMap;
     const queryCustomerId =
       typeof route.query.customer === "string"
         ? route.query.customer

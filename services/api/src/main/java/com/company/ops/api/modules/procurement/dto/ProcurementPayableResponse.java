@@ -4,6 +4,7 @@ import com.company.ops.api.modules.procurement.domain.PayableStatus;
 import com.company.ops.api.modules.procurement.domain.ProcurementCostType;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 public record ProcurementPayableResponse(
@@ -15,10 +16,22 @@ public record ProcurementPayableResponse(
     String orderCode,
     UUID receiptId,
     BigDecimal amount,
+    BigDecimal adjustedAmount,
+    BigDecimal effectiveAmount,
     BigDecimal taxRate,
     BigDecimal paidAmount,
     BigDecimal outstandingAmount,
+    BigDecimal refundAmount,
+    Boolean overdue,
     LocalDate dueDate,
+    LocalDate paidAt,
+    String paymentNote,
+    String paymentReceiptFileName,
+    String paymentReceiptContentType,
+    Long paymentReceiptSizeBytes,
+    String paymentReceiptUploadedBy,
+    OffsetDateTime paymentReceiptUploadedAt,
+    String handlerName,
     ProcurementCostType costType,
     UUID costTargetId,
     String costTargetCode,

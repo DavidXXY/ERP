@@ -73,6 +73,7 @@ const issues = ref<MaterialIssue[]>([]);
 const issueColumns = [
   { title: "领料单", key: "code", width: 210 },
   { title: "项目", key: "project", width: 240 },
+  { title: "领料人", dataIndex: "receiverName", width: 120 },
   { title: "用途", dataIndex: "purpose", width: 220 },
   { title: "明细", key: "lines", width: 100 },
   { title: "材料成本（含税，元）", key: "amount", width: 190 },

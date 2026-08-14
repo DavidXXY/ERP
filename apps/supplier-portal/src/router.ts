@@ -11,9 +11,12 @@ const router = createRouter({
       children: [
         { path: "", redirect: "/dashboard" },
         { path: "dashboard", component: () => import("./views/DashboardView.vue") },
+        { path: "notifications", component: () => import("./views/NotificationsView.vue") },
+        { path: "finance", component: () => import("./views/FinanceView.vue") },
         { path: "profile", component: () => import("./views/ProfileView.vue") },
         { path: "documents", component: () => import("./views/DocumentsView.vue") },
         { path: "inquiries", component: () => import("./views/InquiriesView.vue") },
+        { path: "orders", component: () => import("./views/OrdersView.vue") },
         { path: "account", component: () => import("./views/AccountView.vue") },
       ],
     },

@@ -27,6 +27,7 @@ export type StockMovement = {
   quantity: number;
   sourceNo?: string;
   remark?: string;
+  operatorName?: string;
   createdAt: string;
 };
 

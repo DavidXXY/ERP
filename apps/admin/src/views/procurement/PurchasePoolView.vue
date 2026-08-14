@@ -101,6 +101,13 @@
               >涉及 {{ record.costTargetCount }} 个成本归属</span
             >
           </template>
+          <template v-else-if="column.key === 'responsible'">
+            {{
+              [...new Set(record.items.map((item: any) => item.requesterName))]
+                .filter(Boolean)
+                .join("、") || "-"
+            }}
+          </template>
           <template v-else-if="column.key === 'quantity'">
             <strong>{{ formatQuantity(record.totalRemainingQuantity) }}</strong>
             <span class="table-subtitle">待采购数量</span>
@@ -332,6 +339,7 @@ const inquiryForm = reactive({
 const groupColumns = [
   { title: "物料分类", key: "material", width: 260 },
   { title: "申请来源", key: "requests", width: 150 },
+  { title: "负责人", key: "responsible", width: 130 },
   { title: "汇总数量", key: "quantity", width: 130 },
   { title: "预计金额（含税，元）", key: "amount", width: 190 },
   { title: "最早需求日", key: "date", width: 170 },
@@ -339,6 +347,7 @@ const groupColumns = [
 ];
 const itemColumns = [
   { title: "采购申请", key: "request", width: 190 },
+  { title: "负责人", dataIndex: "requesterName", width: 110 },
   { title: "待采购数量", key: "quantity", width: 190 },
   { title: "预计单价（含税，元）", key: "price", width: 180 },
   { title: "预计金额（含税，元）", key: "amount", width: 190 },
@@ -349,6 +358,7 @@ const itemColumns = [
 const selectionColumns = [
   { title: "物料", key: "material", width: 190 },
   { title: "申请/批次", key: "request" },
+  { title: "负责人", dataIndex: "requesterName", width: 110 },
   { title: "成本归属", dataIndex: "costTargetName", width: 210 },
   { title: "到货日期", dataIndex: "expectedDate", width: 120 },
   { title: "数量", key: "quantity", width: 90 },

@@ -109,6 +109,7 @@ const uploadForm = reactive<{ bizType: string; bizId: string; file?: File }>({
 const documentColumns = [
   { title: "文件", key: "file" },
   { title: "类别", dataIndex: "bizType", width: 180 },
+  { title: "上传人", dataIndex: "uploadedBy", width: 120 },
   { title: "大小", key: "size", width: 120 },
   { title: "上传时间", key: "created", width: 190 },
   { title: "操作", key: "action", width: 110 },

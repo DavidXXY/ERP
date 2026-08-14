@@ -25,6 +25,7 @@ import com.company.ops.api.modules.procurement.repository.SupplierRepository;
 import com.company.ops.api.modules.procurement.security.SupplierPortalPrincipal;
 import com.company.ops.api.modules.system.security.JwtService;
 import com.company.ops.api.modules.system.security.LoginAttemptService;
+import com.company.ops.api.modules.system.security.TotpService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -75,6 +76,9 @@ class SupplierPortalQuoteSubmitIntegrationTest {
   static class TestApplication {}
 
   @MockBean private SupplierPortalNotifier notifier;
+  @MockBean private ProcurementInternalNotifier internalNotifier;
+  @MockBean private SupplierPortalEmailService emails;
+  @MockBean private TotpService totpService;
   @MockBean private PasswordEncoder passwordEncoder;
   @MockBean private JwtService jwtService;
   @MockBean private LoginAttemptService loginAttempts;

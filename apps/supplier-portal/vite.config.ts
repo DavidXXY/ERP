@@ -5,6 +5,9 @@ import { AntDesignVueResolver } from "unplugin-vue-components/resolvers";
 
 export default defineConfig({
   cacheDir: "../../node_modules/.vite-supplier-portal",
+  legacy: {
+    skipWebSocketTokenCheck: true,
+  },
   plugins: [
     vue(),
     Components({

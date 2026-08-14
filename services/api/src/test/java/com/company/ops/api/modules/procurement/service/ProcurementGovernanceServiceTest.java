@@ -14,8 +14,10 @@ import com.company.ops.api.modules.procurement.domain.ProcurementInquiry;
 import com.company.ops.api.modules.procurement.domain.Supplier;
 import com.company.ops.api.modules.procurement.domain.SupplierQuotation;
 import com.company.ops.api.modules.procurement.domain.SupplierQuotationLine;
+import com.company.ops.api.modules.procurement.domain.SupplierPerformanceReview;
 import com.company.ops.api.modules.procurement.domain.SupplierRiskStatus;
 import com.company.ops.api.modules.procurement.dto.ProcurementGovernanceDtos.CreateContract;
+import com.company.ops.api.modules.procurement.dto.ProcurementGovernanceDtos.ResolvePerformanceAppealRequest;
 import com.company.ops.api.modules.procurement.repository.GoodsReceiptRepository;
 import com.company.ops.api.modules.procurement.repository.ProcurementActionLogRepository;
 import com.company.ops.api.modules.procurement.repository.ProcurementCollaborationEventRepository;
@@ -27,6 +29,7 @@ import com.company.ops.api.modules.procurement.repository.SupplierChangeRequestR
 import com.company.ops.api.modules.procurement.repository.SupplierInvoiceRepository;
 import com.company.ops.api.modules.procurement.repository.SupplierPerformanceReviewRepository;
 import com.company.ops.api.modules.procurement.repository.SupplierQuotationLineRepository;
+import com.company.ops.api.modules.procurement.service.SupplierPortalNotifier;
 import com.company.ops.api.modules.procurement.repository.SupplierQuotationRepository;
 import com.company.ops.api.modules.procurement.repository.SupplierRepository;
 import com.company.ops.api.modules.procurement.dto.ProcurementGovernanceDtos.ReviewAction;
@@ -58,6 +61,7 @@ class ProcurementGovernanceServiceTest {
   @Mock private ProcurementInquiryRepository inquiries;
   @Mock private SupplierQuotationRepository quotes;
   @Mock private SupplierQuotationLineRepository quoteLines;
+  @Mock private SupplierPortalNotifier portalNotifier;
   @InjectMocks private ProcurementGovernanceService service;
 
   private UUID supplierId;
@@ -184,6 +188,62 @@ class ProcurementGovernanceServiceTest {
     assertThat(result.getApprovalStatus()).isEqualTo("REJECTED");
   }
 
+  @Test
+  void dismissingPerformanceAppealKeepsReviewAndNotifiesSupplier() {
+    SupplierPerformanceReview review = review("2026-06", "PENDING");
+    when(reviews.findById(review.getId())).thenReturn(Optional.of(review));
+    when(reviews.save(review)).thenReturn(review);
+    when(suppliers.findById(supplierId)).thenReturn(Optional.of(supplier));
+
+    SupplierPerformanceReview result = service.resolvePerformanceAppeal(
+        review.getId(),
+        new ResolvePerformanceAppealRequest("DISMISSED", "数据核对无误"));
+
+    assertThat(result.getAppealStatus()).isEqualTo("DISMISSED");
+    assertThat(result.getAppealResolution()).isEqualTo("DISMISSED");
+    assertThat(result.getAppealReviewComment()).isEqualTo("数据核对无误");
+    assertThat(result.getAppealReviewedBy()).isNotBlank();
+  }
+
+  @Test
+  void reopeningPerformanceAppealRequestsRevision() {
+    SupplierPerformanceReview review = review("2026-06", "PENDING");
+    when(reviews.findById(review.getId())).thenReturn(Optional.of(review));
+    when(reviews.save(review)).thenReturn(review);
+    when(suppliers.findById(supplierId)).thenReturn(Optional.of(supplier));
+
+    SupplierPerformanceReview result = service.resolvePerformanceAppeal(
+        review.getId(),
+        new ResolvePerformanceAppealRequest("REOPEN", "补充交货数据后重新核定"));
+
+    assertThat(result.getAppealStatus()).isEqualTo("REOPENED");
+    assertThat(result.getAppealResolution()).isEqualTo("REOPEN");
+  }
+
+  @Test
+  void resolvingNonPendingAppealRejected() {
+    SupplierPerformanceReview review = review("2026-06", "DISMISSED");
+    when(reviews.findById(review.getId())).thenReturn(Optional.of(review));
+
+    assertThatThrownBy(() -> service.resolvePerformanceAppeal(
+        review.getId(),
+        new ResolvePerformanceAppealRequest("DISMISSED", "重复处理")))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("没有待处理");
+  }
+
+  @Test
+  void listReviewAppealsFiltersByStatus() {
+    SupplierPerformanceReview review = review("2026-06", "PENDING");
+    when(reviews.findByAppealStatusOrderByAppealedAtDesc("PENDING"))
+        .thenReturn(List.of(review));
+
+    var result = service.listReviewAppeals("PENDING");
+
+    assertThat(result).hasSize(1);
+    assertThat(result.get(0).getAppealStatus()).isEqualTo("PENDING");
+  }
+
   private SupplierQuotationLine line(int quantity, int unitPrice) {
     SupplierQuotationLine line = new SupplierQuotationLine();
     line.setQuantity(BigDecimal.valueOf(quantity));
@@ -201,5 +261,16 @@ class ProcurementGovernanceServiceTest {
     contract.setStatus("DRAFT");
     contract.setApprovalStatus("PENDING");
     return contract;
+  }
+
+  private SupplierPerformanceReview review(String period, String appealStatus) {
+    SupplierPerformanceReview review = new SupplierPerformanceReview();
+    review.setId(UUID.randomUUID());
+    review.setSupplierId(supplierId);
+    review.setReviewPeriod(period);
+    review.setTotalScore(BigDecimal.valueOf(88));
+    review.setGrade("B");
+    review.setAppealStatus(appealStatus);
+    return review;
   }
 }

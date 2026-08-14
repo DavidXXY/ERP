@@ -527,6 +527,7 @@ class ProcurementServiceTest {
         "Equipment",
         "Contact",
         "13800000000",
+        "采购专员A",
         "Net 30",
         "Legal Representative",
         "913100000000000000",

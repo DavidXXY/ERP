@@ -84,6 +84,7 @@ export type Supplier = {
   category?: string;
   contactName?: string;
   phone?: string;
+  purchaserName?: string;
   settlementTerms?: string;
   legalRepresentative?: string;
   unifiedSocialCreditCode?: string;
@@ -240,6 +241,9 @@ export type ProcurementShipment = {
   status: string;
   createdByName?: string;
   createdAt: string;
+  reviewComment?: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
 };
 
 export type CreateSupplierPayload = {
@@ -248,6 +252,7 @@ export type CreateSupplierPayload = {
   category: string;
   contactName?: string;
   phone?: string;
+  purchaserName?: string;
   settlementTerms?: string;
   legalRepresentative?: string;
   unifiedSocialCreditCode?: string;
@@ -343,6 +348,38 @@ export type GoodsReceipt = {
   inspectedAt?: string;
   clientRequestId?: string;
   asnNo?: string;
+  appealStatus?: "NONE" | "PENDING" | "DISMISSED" | "REOPENED";
+  appealReason?: string;
+  appealedAt?: string;
+  appealResolution?: "DISMISSED" | "REOPENED";
+  appealReviewComment?: string;
+  appealReviewedBy?: string;
+  appealReviewedAt?: string;
+};
+
+export type GoodsReceiptAppeal = {
+  id: string;
+  code?: string;
+  orderId: string;
+  orderCode?: string;
+  supplierId?: string;
+  supplierName?: string;
+  partName?: string;
+  quantity: number;
+  qualifiedQty?: number;
+  rejectedQty?: number;
+  inspectionStatus?: string;
+  inspectorName?: string;
+  inspectionComment?: string;
+  inspectedAt?: string;
+  receivedDate?: string;
+  appealStatus?: string;
+  appealReason?: string;
+  appealedAt?: string;
+  appealResolution?: string;
+  appealReviewComment?: string;
+  appealReviewedBy?: string;
+  appealReviewedAt?: string;
 };
 
 export type OrderDocument = {
@@ -368,10 +405,22 @@ export type ProcurementPayable = {
   orderCode: string;
   receiptId: string;
   amount: number;
+  adjustedAmount: number;
+  effectiveAmount: number;
   taxRate?: number;
   paidAmount: number;
   outstandingAmount: number;
+  refundAmount: number;
+  overdue?: boolean;
   dueDate: string;
+  paidAt?: string;
+  paymentNote?: string;
+  paymentReceiptFileName?: string;
+  paymentReceiptContentType?: string;
+  paymentReceiptSizeBytes?: number;
+  paymentReceiptUploadedBy?: string;
+  paymentReceiptUploadedAt?: string;
+  handlerName?: string;
   costType: ProcurementCostType;
   costTargetId: string;
   costTargetCode: string;
@@ -397,6 +446,7 @@ export type ProcurementCostAllocation = {
 export type ProcurementMatching = {
   orderId: string;
   orderCode?: string;
+  responsibleName?: string;
   supplierName?: string;
   partName: string;
   orderedQty: number;
@@ -634,6 +684,27 @@ export type ProcurementReturnOrder = {
   supplierResponse?: string;
   completedAt?: string;
 };
+export type InvoiceSubmission = {
+  id: string;
+  orderId: string;
+  orderCode?: string;
+  supplierId: string;
+  supplierName?: string;
+  invoiceNo: string;
+  amount: number;
+  taxRate: number;
+  invoiceDate: string;
+  remark?: string;
+  fileName: string;
+  contentType?: string;
+  sizeBytes: number;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  reviewComment?: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  createdAt: string;
+};
+
 export type SupplierInvoice = {
   id: string;
   code: string;
@@ -651,8 +722,13 @@ export type SupplierInvoice = {
   differenceAmount: number;
   approvalStatus: string;
   verificationStatus: string;
+  verifiedBy?: string;
+  verifiedAt?: string;
+  verificationComment?: string;
   attachmentDocumentId?: string;
   remark?: string;
+  handlerName?: string;
+  approvedByName?: string;
 };
 
 export function listProcurementMaterials() {
@@ -1011,6 +1087,18 @@ export function listOrderShipments(orderId: string) {
   });
 }
 
+export function confirmOrderShipment(
+  orderId: string,
+  shipmentId: string,
+  data: { action: "CONFIRMED" | "REJECTED"; comment?: string },
+) {
+  return request<ProcurementShipment>({
+    method: "POST",
+    url: `/procurement/orders/${orderId}/shipments/${shipmentId}/confirm`,
+    data,
+  });
+}
+
 export function cancelPurchaseOrder(id: string) {
   return request<PurchaseOrder>({
     method: "POST",
@@ -1054,6 +1142,60 @@ export function listProcurementPayables() {
     method: "GET",
     url: "/procurement/payables",
   });
+}
+
+export function listProcurementPayablesPaged(params?: {
+  status?: PayableStatus;
+  keyword?: string;
+  page?: number;
+  size?: number;
+}) {
+  return request<PageResponse<ProcurementPayable>>({
+    method: "GET",
+    url: "/procurement/payables/paged",
+    params,
+  });
+}
+
+export async function recordPayablePayment(
+  payableId: string,
+  data: {
+    payments: Array<{
+      payableId?: string;
+      amount: number;
+      paidDate: string;
+      paymentMethod: string;
+      bankReference: string;
+      note?: string;
+    }>;
+    paymentNote?: string;
+  },
+  file?: File,
+) {
+  const form = new FormData();
+  form.append(
+    "metadata",
+    new Blob([JSON.stringify(data)], { type: "application/json" }),
+  );
+  if (file) form.append("file", file);
+  return request<ProcurementPayable>({
+    method: "POST",
+    url: `/procurement/payables/${payableId}/payment`,
+    data: form,
+  });
+}
+
+export async function downloadPaymentReceipt(payable: ProcurementPayable) {
+  const response = await http.get<Blob>(
+    `/procurement/payables/${payable.id}/receipt`,
+    { responseType: "blob" },
+  );
+  const url = URL.createObjectURL(response.data);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = payable.paymentReceiptFileName || "payment-receipt";
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 
 export function submitPurchaseOrder(id: string) {
@@ -1110,6 +1252,88 @@ export function inspectGoodsReceipt(
     data: payload,
   });
 }
+export function listAppeals(status?: string) {
+  return request<GoodsReceiptAppeal[]>({
+    method: "GET",
+    url: "/procurement/appeals",
+    params: status ? { status } : undefined,
+  });
+}
+export function resolveAppeal(
+  id: string,
+  payload: { action: "DISMISSED" | "REOPEN"; comment?: string },
+) {
+  return request<GoodsReceiptAppeal>({
+    method: "POST",
+    url: `/procurement/appeals/${id}/resolve`,
+    data: payload,
+  });
+}
+export function getPortalCollaborationSummary() {
+  return request<{
+    pendingAccounts: number;
+    pendingAdmissions: number;
+    pendingDocuments: number;
+    pendingQuoteConfirmations: number;
+    pendingChangeResponses: number;
+    pendingChangeDecisions: number;
+    pendingInvoiceSubmissions: number;
+    pendingAppeals: number;
+    pendingSupplierChanges: number;
+    pendingPerformanceAppeals: number;
+    updatedAt: string;
+  }>({ method: "GET", url: "/procurement/portal-collaboration/summary" });
+}
+
+export type SupplierPerformanceReview = {
+  id: string;
+  supplierId: string;
+  reviewPeriod: string;
+  onTimeRate: number;
+  qualityRate: number;
+  invoiceMatchRate: number;
+  responseScore: number;
+  totalScore: number;
+  grade: string;
+  reviewerName?: string;
+  improvementAction?: string;
+  status: string;
+  appealStatus?: string;
+  appealReason?: string;
+  appealedAt?: string;
+  appealResolution?: string;
+  appealReviewComment?: string;
+  appealReviewedBy?: string;
+  appealReviewedAt?: string;
+  createdAt: string;
+};
+
+export function listSupplierReviews() {
+  return request<SupplierPerformanceReview[]>({
+    method: "GET",
+    url: "/procurement/governance/supplier-reviews",
+  });
+}
+
+export function listSupplierReviewAppeals(status?: string) {
+  return request<SupplierPerformanceReview[]>({
+    method: "GET",
+    url: "/procurement/governance/supplier-reviews/appeals",
+    params: status ? { status } : undefined,
+  });
+}
+
+export function resolvePerformanceAppeal(
+  id: string,
+  payload: { action: "DISMISSED" | "REOPEN"; comment?: string },
+) {
+  return request<SupplierPerformanceReview>({
+    method: "POST",
+    url: `/procurement/governance/supplier-reviews/${id}/appeal/resolve`,
+    data: payload,
+  });
+}
+
 export function listProcurementInquiries() {
   return request<ProcurementInquiry[]>({
     method: "GET",
@@ -1282,6 +1506,7 @@ export function createSupplierInvoice(payload: {
   invoiceDate: string;
   remark?: string;
   payableId?: string;
+  payableIds?: string[];
   receiptId?: string;
   clientRequestId?: string;
   attachmentDocumentId?: string;
@@ -1305,6 +1530,39 @@ export function reviewSupplierInvoice(
     url: `/procurement/supplier-invoices/${id}/review`,
     data: payload,
   });
+}
+export function verifySupplierInvoice(
+  id: string,
+  payload: {
+    decision: "VERIFIED" | "EXCEPTION";
+    comment?: string;
+  },
+) {
+  return request<SupplierInvoice>({
+    method: "POST",
+    url: `/procurement/supplier-invoices/${id}/verify`,
+    data: payload,
+  });
+}
+export function listInvoiceSubmissions(status?: string) {
+  return request<InvoiceSubmission[]>({
+    method: "GET",
+    url: "/procurement/invoice-submissions",
+    params: status ? { status } : undefined,
+  });
+}
+export function reviewInvoiceSubmission(
+  id: string,
+  payload: { action: "APPROVED" | "REJECTED"; comment?: string },
+) {
+  return request<InvoiceSubmission>({
+    method: "POST",
+    url: `/procurement/invoice-submissions/${id}/review`,
+    data: payload,
+  });
+}
+export function invoiceSubmissionDownloadUrl(id: string): string {
+  return "/api/procurement/invoice-submissions/" + id + "/download";
 }
 export function resolveProcurementReturn(
   id: string,

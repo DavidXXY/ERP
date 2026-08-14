@@ -8,4 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface SupplierQuotationRepository extends JpaRepository<SupplierQuotation, UUID> {
   List<SupplierQuotation> findByInquiryIdOrderByUnitPriceAsc(UUID id);
   Optional<SupplierQuotation> findByInquiryIdAndSupplierId(UUID inquiryId, UUID supplierId);
+
+  long countBySubmissionSourceAndSubmissionStatusAndConfirmedByAccountIdIsNull(
+      String submissionSource, String submissionStatus);
 }

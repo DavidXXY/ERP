@@ -17,7 +17,7 @@ public class PaymentRecord extends BaseEntity {
   @Column(nullable = false, length = 64)
   private String code;
 
-  @Column(name = "application_id", nullable = false)
+  @Column(name = "application_id")
   private UUID applicationId;
 
   @Column(name = "payable_id", nullable = false)
@@ -44,6 +44,12 @@ public class PaymentRecord extends BaseEntity {
 
   @Column(name = "payer_user_id")
   private UUID payerUserId;
+
+  @Column(name = "source_type", nullable = false, length = 20)
+  private String sourceType = "APPLICATION";
+
+  @Column(length = 500)
+  private String note;
 
   public String getCode() {
     return code;
@@ -119,4 +125,8 @@ public class PaymentRecord extends BaseEntity {
 
   public UUID getPayerUserId() { return payerUserId; }
   public void setPayerUserId(UUID payerUserId) { this.payerUserId = payerUserId; }
+  public String getSourceType() { return sourceType; }
+  public void setSourceType(String sourceType) { this.sourceType = sourceType; }
+  public String getNote() { return note; }
+  public void setNote(String note) { this.note = note; }
 }

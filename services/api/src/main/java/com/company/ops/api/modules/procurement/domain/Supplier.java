@@ -27,6 +27,9 @@ public class Supplier extends BaseEntity {
   @Column(name = "contact_name", length = 80)
   private String contactName;
 
+  @Column(name = "purchaser_name", length = 80)
+  private String purchaserName;
+
   @Column(length = 40)
   private String phone;
 
@@ -82,6 +85,9 @@ public class Supplier extends BaseEntity {
   @Column(name = "remark", length = 1000)
   private String remark;
 
+  @Column(name = "payment_terms_days", nullable = false)
+  private int paymentTermsDays = 30;
+
   @Enumerated(EnumType.STRING)
   @Column(name = "risk_status", nullable = false, length = 32)
   private SupplierRiskStatus riskStatus = SupplierRiskStatus.NORMAL;
@@ -116,6 +122,14 @@ public class Supplier extends BaseEntity {
 
   public void setContactName(String contactName) {
     this.contactName = contactName;
+  }
+
+  public String getPurchaserName() {
+    return purchaserName;
+  }
+
+  public void setPurchaserName(String purchaserName) {
+    this.purchaserName = purchaserName;
   }
 
   public String getPhone() {
@@ -205,6 +219,10 @@ public class Supplier extends BaseEntity {
   public String getRemark() { return remark; }
 
   public void setRemark(String remark) { this.remark = remark; }
+
+  public int getPaymentTermsDays() { return paymentTermsDays; }
+
+  public void setPaymentTermsDays(int paymentTermsDays) { this.paymentTermsDays = paymentTermsDays; }
 
   public SupplierRiskStatus getRiskStatus() {
     return riskStatus;

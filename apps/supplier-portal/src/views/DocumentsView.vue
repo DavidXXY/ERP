@@ -45,7 +45,7 @@ import { message } from "ant-design-vue";
 import type { UploadFile } from "ant-design-vue";
 import { DeleteOutlined, DownloadOutlined, FileImageOutlined, FileOutlined, FilePdfOutlined, PaperClipOutlined, UploadOutlined } from "@ant-design/icons-vue";
 import * as api from "../api";
-import { docExpiryDays, expiryMessage, fileSize, formatDate } from "../utils/quote";
+import { docExpiryDays, expiryMessage, fileSize, formatDate, validateUploadFile } from "../utils/quote";
 
 const documents = ref<api.PortalDocument[]>([]); const loading = ref(false); const uploading = ref(false); const uploadOpen = ref(false); const filter = ref("ALL");
 const selectedFile = ref<File>(); const fileList = ref<UploadFile[]>([]); const uploadForm = reactive({ documentType: "BUSINESS_LICENSE", validTo: "" });
@@ -68,7 +68,16 @@ const expiryWarnings = computed(() => {
 });
 onMounted(load);
 async function load() { loading.value = true; try { documents.value = await api.listDocuments(); } catch (e) { message.error(e instanceof Error ? e.message : "加载失败"); } finally { loading.value = false; } }
-function selectFile(file: File) { selectedFile.value = file; fileList.value = [{ uid: file.name, name: file.name, status: "done", originFileObj: file } as UploadFile]; return false; }
+function selectFile(file: File) {
+  const invalid = validateUploadFile(file);
+  if (invalid) {
+    message.warning(invalid);
+    return false;
+  }
+  selectedFile.value = file;
+  fileList.value = [{ uid: file.name, name: file.name, status: "done", originFileObj: file } as UploadFile];
+  return false;
+}
 async function upload() { if (!selectedFile.value) { message.warning("请选择文件"); return; } uploading.value = true; try { const data = new FormData(); data.append("documentType", uploadForm.documentType); if (uploadForm.validTo) data.append("validTo", uploadForm.validTo); data.append("file", selectedFile.value); await api.uploadDocument(data); uploadOpen.value = false; selectedFile.value = undefined; fileList.value = []; await load(); message.success("文件已上传并进入审核"); } catch (e) { message.error(e instanceof Error ? e.message : "上传失败"); } finally { uploading.value = false; } }
 async function remove(id: string) { try { await api.deleteDocument(id); await load(); message.success("文件已删除"); } catch (e) { message.error(e instanceof Error ? e.message : "删除失败"); } }
 function download(doc: api.PortalDocument) { window.location.href = api.documentDownloadUrl(doc.id); }

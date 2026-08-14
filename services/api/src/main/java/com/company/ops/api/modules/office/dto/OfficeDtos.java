@@ -129,7 +129,7 @@ public final class OfficeDtos {
                              UUID approvalRequestId, OffsetDateTime createdAt,
                              List<DocumentResponse> attachments) {}
   public record DocumentResponse(UUID id, String bizType, UUID bizId, String fileName, String contentType,
-                                 Long sizeBytes, OffsetDateTime createdAt) {}
+                                 Long sizeBytes, String uploadedBy, OffsetDateTime createdAt) {}
   public record NotificationResponse(UUID id, String type, String title, String content, String relatedType,
                                      UUID relatedId, boolean read, OffsetDateTime readAt, OffsetDateTime createdAt) {}
   public record AuditResponse(UUID id, String username, String httpMethod, String requestPath,

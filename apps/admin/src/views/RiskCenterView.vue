@@ -326,6 +326,13 @@
               dateOnly(record.workflow.updatedAt)
             }}</span>
           </template>
+          <template v-else-if="column.key === 'handler'">
+            {{
+              record.workflow?.owner ||
+              record.workflow?.responsibleDepartment ||
+              "-"
+            }}
+          </template>
           <template v-else-if="column.key === 'sla'">
             <a-tag
               :color="
@@ -618,6 +625,7 @@ const columns = [
   { title: "等级", key: "severity", width: 100 },
   { title: "状态", key: "status", width: 100 },
   { title: "处理", key: "workflow", width: 140 },
+  { title: "责任人/处理人", key: "handler", width: 130 },
   { title: "SLA", key: "sla", width: 140 },
   { title: "金额（元，税价随来源单据）", key: "amount", width: 230 },
   { title: "日期", key: "date", width: 120 },

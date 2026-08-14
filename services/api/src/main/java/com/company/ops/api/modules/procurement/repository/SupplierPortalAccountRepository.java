@@ -12,4 +12,6 @@ public interface SupplierPortalAccountRepository extends JpaRepository<SupplierP
   boolean existsBySupplierId(UUID supplierId);
   List<SupplierPortalAccount> findAllByOrderByCreatedAtDesc();
   List<SupplierPortalAccount> findBySupplierIdOrderByCreatedAtAsc(UUID supplierId);
+
+  long countByStatus(String status);
 }

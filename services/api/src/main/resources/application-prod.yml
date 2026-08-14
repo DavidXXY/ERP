@@ -111,3 +111,6 @@ ops:
     enabled: ${WECHAT_ENABLED:false}
     app-id: ${WECHAT_APP_ID:}
     app-secret: ${WECHAT_APP_SECRET:}
+  supplier-portal:
+    # 生产环境禁止把密码重置验证码直接回传给调用方
+    dev-password-reset-code: false

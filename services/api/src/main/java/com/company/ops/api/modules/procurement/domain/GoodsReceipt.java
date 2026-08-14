@@ -52,6 +52,13 @@ public class GoodsReceipt extends BaseEntity {
   @Column(name="client_request_id",length=80) private String clientRequestId;
   @Column(name="asn_no",length=80) private String asnNo;
   @Column(length=80) private String carrier;
+  @Column(name="appeal_status",nullable=false,length=32) private String appealStatus="NONE";
+  @Column(name="appeal_reason",length=500) private String appealReason;
+  @Column(name="appealed_at") private OffsetDateTime appealedAt;
+  @Column(name="appeal_resolution",length=32) private String appealResolution;
+  @Column(name="appeal_review_comment",length=500) private String appealReviewComment;
+  @Column(name="appeal_reviewed_by",length=64) private String appealReviewedBy;
+  @Column(name="appeal_reviewed_at") private OffsetDateTime appealReviewedAt;
 
   public String getCode() {
     return code;
@@ -138,6 +145,13 @@ public class GoodsReceipt extends BaseEntity {
   public String getInspectorName(){return inspectorName;} public void setInspectorName(String v){inspectorName=v;}
   public String getInspectionComment(){return inspectionComment;} public void setInspectionComment(String v){inspectionComment=v;}
   public OffsetDateTime getInspectedAt(){return inspectedAt;} public void setInspectedAt(OffsetDateTime v){inspectedAt=v;}
+  public String getAppealStatus(){return appealStatus;} public void setAppealStatus(String v){appealStatus=v;}
+  public String getAppealReason(){return appealReason;} public void setAppealReason(String v){appealReason=v;}
+  public OffsetDateTime getAppealedAt(){return appealedAt;} public void setAppealedAt(OffsetDateTime v){appealedAt=v;}
+  public String getAppealResolution(){return appealResolution;} public void setAppealResolution(String v){appealResolution=v;}
+  public String getAppealReviewComment(){return appealReviewComment;} public void setAppealReviewComment(String v){appealReviewComment=v;}
+  public String getAppealReviewedBy(){return appealReviewedBy;} public void setAppealReviewedBy(String v){appealReviewedBy=v;}
+  public OffsetDateTime getAppealReviewedAt(){return appealReviewedAt;} public void setAppealReviewedAt(OffsetDateTime v){appealReviewedAt=v;}
   public LocalDate getPayableDueDate(){return payableDueDate;} public void setPayableDueDate(LocalDate v){payableDueDate=v;}
   public String getClientRequestId(){return clientRequestId;} public void setClientRequestId(String v){clientRequestId=v;}
   public String getAsnNo(){return asnNo;} public void setAsnNo(String v){asnNo=v;}

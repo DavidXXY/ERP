@@ -13,17 +13,23 @@ import com.company.ops.api.modules.finance.domain.PaymentApplication;
 import com.company.ops.api.modules.finance.domain.PaymentApplicationStatus;
 import com.company.ops.api.modules.finance.domain.PaymentMethod;
 import com.company.ops.api.modules.finance.dto.ExecutePaymentRequest;
+import com.company.ops.api.modules.finance.dto.PaymentSplit;
 import com.company.ops.api.modules.finance.dto.ProcessPaymentApplicationRequest;
 import com.company.ops.api.modules.finance.repository.PaymentApplicationRepository;
+import com.company.ops.api.modules.finance.repository.PaymentApplicationPayableRepository;
 import com.company.ops.api.modules.finance.repository.PaymentRecordRepository;
 import com.company.ops.api.modules.ledger.service.LedgerService;
+import com.company.ops.api.modules.procurement.repository.PayableAdjustmentRepository;
 import com.company.ops.api.modules.procurement.repository.ProcurementPayableRepository;
 import com.company.ops.api.modules.procurement.repository.PurchaseOrderRepository;
+import com.company.ops.api.modules.procurement.repository.SupplierInvoicePayableRepository;
 import com.company.ops.api.modules.procurement.repository.SupplierInvoiceRepository;
 import com.company.ops.api.modules.procurement.repository.SupplierRepository;
+import com.company.ops.api.modules.procurement.service.SupplierPortalNotifier;
 import com.company.ops.api.modules.system.security.UserPrincipal;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
@@ -45,9 +51,13 @@ class FinanceServiceSeparationTest {
   @Mock private SupplierRepository suppliers;
   @Mock private PurchaseOrderRepository orders;
   @Mock private PaymentApplicationRepository applications;
+  @Mock private PaymentApplicationPayableRepository applicationPayables;
   @Mock private PaymentRecordRepository payments;
+  @Mock private PayableAdjustmentRepository adjustments;
   @Mock private SupplierInvoiceRepository invoices;
+  @Mock private SupplierInvoicePayableRepository invoicePayables;
   @Mock private LedgerService ledger;
+  @Mock private SupplierPortalNotifier portalNotifier;
   @Mock private CodeGenerator codes;
   @InjectMocks private FinanceService service;
 
@@ -77,7 +87,8 @@ class FinanceServiceSeparationTest {
     when(applications.findByIdForUpdate(application.getId())).thenReturn(Optional.of(application));
 
     assertThatThrownBy(() -> service.executePayment(application.getId(), new ExecutePaymentRequest(
-        "FK-001", BigDecimal.ONE, LocalDate.now(), PaymentMethod.BANK_TRANSFER, "BANK-001", "审批人")))
+        "FK-001", List.of(new PaymentSplit(null, BigDecimal.ONE, LocalDate.now(),
+            PaymentMethod.BANK_TRANSFER, "BANK-001", null)))))
         .isInstanceOf(BusinessException.class).hasMessageContaining("不同人员");
   }
 

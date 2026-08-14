@@ -1,1 +1,0 @@
-"use strict";const e=require("../common/vendor.js"),t=e.defineComponent({__name:"AppHeader",props:{title:{},subtitle:{},badge:{}},setup:t=>(t,a)=>e.e({a:e.t(t.title),b:t.subtitle},t.subtitle?{c:e.t(t.subtitle)}:{},{d:t.badge},t.badge?{e:e.t(t.badge>99?"99+":t.badge)}:{})}),a=e._export_sfc(t,[["__scopeId","data-v-75a13712"]]);wx.createComponent(a);

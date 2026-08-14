@@ -1,1 +1,0 @@
-import{j as e}from"./index-DnMSwmCe.js";const a=()=>e({url:"/hr/self/leave-balances"}),s=()=>e({url:"/hr/self/leaves"}),l=a=>e({url:"/hr/self/leaves",method:"POST",data:a});export{s as a,l as c,a as l};

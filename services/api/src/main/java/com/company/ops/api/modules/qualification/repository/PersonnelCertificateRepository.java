@@ -64,4 +64,7 @@ public interface PersonnelCertificateRepository extends JpaRepository<PersonnelC
       @Param("registered") Boolean registered, @Param("today") LocalDate today,
       @Param("expiringCutoff") LocalDate expiringCutoff,
       @Param("hiddenIds") Collection<UUID> hiddenIds, Pageable pageable);
+  @Query("select c.externalId from PersonnelCertificate c where c.externalId is not null")
+  List<String> findAllExternalIds();
+
 }

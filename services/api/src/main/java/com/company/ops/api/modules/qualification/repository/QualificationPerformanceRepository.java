@@ -25,4 +25,7 @@ public interface QualificationPerformanceRepository extends JpaRepository<Qualif
   Page<QualificationPerformance> search(@Param("keyword") String keyword,
       @Param("subjectCompany") String subjectCompany, @Param("projectType") String projectType,
       @Param("hiddenIds") Collection<UUID> hiddenIds, Pageable pageable);
+  @Query("select p.externalId from QualificationPerformance p where p.externalId is not null")
+  List<String> findAllExternalIds();
+
 }

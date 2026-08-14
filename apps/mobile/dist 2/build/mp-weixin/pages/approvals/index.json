@@ -1,8 +1,0 @@
-{
-  "navigationBarTitleText": "审批待办",
-  "enablePullDownRefresh": true,
-  "usingComponents": {
-    "approval-card": "../../components/ApprovalCard",
-    "state-view": "../../components/StateView"
-  }
-}

@@ -49,14 +49,15 @@ export async function requestAllPages<T>(url: string, size = 200): Promise<T[]> 
   const first = await request<{ content: T[]; totalPages: number }>({
     url: `${url}${separator}page=0&size=${size}`,
   });
-  const items = [...first.content];
-  for (let page = 1; page < first.totalPages; page += 1) {
-    const next = await request<{ content: T[] }>({
-      url: `${url}${separator}page=${page}&size=${size}`,
-    });
-    items.push(...next.content);
-  }
-  return items;
+  if (first.totalPages <= 1) return first.content;
+  const rest = await Promise.all(
+    Array.from({ length: first.totalPages - 1 }, (_, index) =>
+      request<{ content: T[] }>({
+        url: `${url}${separator}page=${index + 1}&size=${size}`,
+      }),
+    ),
+  );
+  return [...first.content, ...rest.flatMap((page) => page.content)];
 }
 
 export function upload<T>(url: string, filePath: string, name = "file", formData: Record<string, string> = {}): Promise<T> {

@@ -32,6 +32,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.cache.annotation.Cacheable;
 
 @Service
 public class LedgerService {
@@ -160,6 +161,7 @@ public class LedgerService {
   }
 
   @Transactional(readOnly = true)
+  @Cacheable("ledgerOverview")
   public LedgerOverview overview() {
     FinancialStatements statements = statements();
     var totals = voucherRepository.aggregateTotals();

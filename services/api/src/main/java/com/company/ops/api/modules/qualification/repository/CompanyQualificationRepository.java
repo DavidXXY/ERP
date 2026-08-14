@@ -41,4 +41,7 @@ public interface CompanyQualificationRepository extends JpaRepository<CompanyQua
       @Param("subjectCompany") String subjectCompany, @Param("status") String status,
       @Param("today") LocalDate today, @Param("expiringCutoff") LocalDate expiringCutoff,
       @Param("hiddenIds") Collection<UUID> hiddenIds, Pageable pageable);
+  @Query("select q.externalId from CompanyQualification q where q.externalId is not null")
+  List<String> findAllExternalIds();
+
 }

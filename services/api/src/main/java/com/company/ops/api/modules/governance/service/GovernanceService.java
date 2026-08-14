@@ -42,6 +42,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.cache.annotation.Cacheable;
 
 @Service
 public class GovernanceService {
@@ -203,6 +204,7 @@ public class GovernanceService {
   }
 
   @Transactional(readOnly = true)
+  @Cacheable("governanceOverview")
   public GovernanceOverview overview() {
     List<BusinessControlRecord> all = controls.findAllByOrderByCreatedAtDesc();
     List<ControlExceptionResponse> issues = exceptions();

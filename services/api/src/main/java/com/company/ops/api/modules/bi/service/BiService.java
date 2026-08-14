@@ -28,6 +28,7 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import static com.company.ops.api.common.util.MoneyUtils.amount;
+import org.springframework.cache.annotation.Cacheable;
 
 @Service
 public class BiService {
@@ -65,6 +66,7 @@ public class BiService {
   }
 
   @Transactional(readOnly = true)
+  @Cacheable("biDashboard")
   public ExecutiveDashboard dashboard() {
     try {
     BigDecimal contractRevenue = amount(contracts.sumContractAmount());
@@ -99,6 +101,7 @@ public class BiService {
   }
 
   @Transactional(readOnly = true)
+  @Cacheable(value = "biCompanyDashboard", key = "{#startDate, #endDate}")
   public CompanyKpiDashboard companyDashboard(LocalDate startDate, LocalDate endDate) {
     LocalDate end = endDate == null ? LocalDate.now() : endDate;
     LocalDate start = startDate == null ? end.minusMonths(6).withDayOfMonth(1) : startDate;

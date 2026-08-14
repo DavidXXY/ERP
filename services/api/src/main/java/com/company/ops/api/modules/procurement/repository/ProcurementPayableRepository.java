@@ -95,4 +95,9 @@ public interface ProcurementPayableRepository extends JpaRepository<ProcurementP
     BigDecimal getPaidAmount();
     BigDecimal getOverdueAmount();
   }
+  List<ProcurementPayable> findByDueDateLessThanEqualAndStatusNotOrderByDueDateAsc(
+      LocalDate end, PayableStatus status);
+  List<ProcurementPayable> findByDueDateBetweenAndStatusNotOrderByDueDateAsc(
+      LocalDate start, LocalDate end, PayableStatus status);
+
 }

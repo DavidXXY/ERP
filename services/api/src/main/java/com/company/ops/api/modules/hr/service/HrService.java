@@ -50,6 +50,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.UUID;
+import com.company.ops.api.modules.maintenance.domain.WorkOrderStatus;
 
 @Service
 public class HrService {
@@ -499,9 +500,9 @@ public class HrService {
 
         // 4. Pending office approvals (if any)
         try {
-            var pendingApprovals = approvalRequestRepository.findAll().stream()
-                .filter(a -> a.getStatus() == ApprovalStatus.PENDING)
-                .limit(10).toList();
+            var pendingApprovals = approvalRequestRepository
+                .findByStatusOrderByCreatedAtDesc(ApprovalStatus.PENDING)
+                .stream().limit(10).toList();
             for (var a : pendingApprovals) {
                 items.add(new com.company.ops.api.modules.hr.dto.HrDtos.TodoItem(
                     "APPROVAL_PENDING", a.getTitle() != null ? a.getTitle() : "待审批事项",
@@ -512,18 +513,13 @@ public class HrService {
 
         // 5. Work orders assigned to me that are still open
         try {
-            var allWorkOrders = workOrderRepository.findAll();
-            var workOrders = allWorkOrders.stream()
-                .filter(wo -> wo.getAssigneeId() != null && wo.getAssigneeId().equals(employeeId))
-                .filter(wo -> !"ACCEPTED".equals(wo.getStatus()) && !"CANCELLED".equals(wo.getStatus()))
-                .toList();
+            var workOrders = workOrderRepository.findByAssigneeIdAndStatusNotIn(employeeId,
+                java.util.List.of(WorkOrderStatus.ACCEPTED, WorkOrderStatus.CANCELLED));
             for (var wo : workOrders) {
-                if (!"ACCEPTED".equals(wo.getStatus()) && !"CANCELLED".equals(wo.getStatus())) {
-                    items.add(new com.company.ops.api.modules.hr.dto.HrDtos.TodoItem(
-                        "WORK_ORDER", "待处理工单: " + wo.getCode(),
-                        wo.getTitle() != null ? wo.getTitle() : "",
-                        "/maintenance/work-orders", "MEDIUM", now.toString()));
-                }
+                items.add(new com.company.ops.api.modules.hr.dto.HrDtos.TodoItem(
+                    "WORK_ORDER", "待处理工单: " + wo.getCode(),
+                    wo.getTitle() != null ? wo.getTitle() : "",
+                    "/maintenance/work-orders", "MEDIUM", now.toString()));
             }
         } catch (Exception ignored) {}
 
@@ -623,9 +619,8 @@ public class HrService {
 
         // Education distribution (from highest education records)
         var eduDist = new java.util.LinkedHashMap<String, Long>();
-        var allEdu = educationRepository.findAll();
-        for (var e : allEdu) {
-            if (e.isHighest() && e.getDegree() != null && !e.getDegree().isBlank()) {
+        for (var e : educationRepository.findByHighestTrue()) {
+            if (e.getDegree() != null && !e.getDegree().isBlank()) {
                 eduDist.merge(e.getDegree(), 1L, Long::sum);
             }
         }

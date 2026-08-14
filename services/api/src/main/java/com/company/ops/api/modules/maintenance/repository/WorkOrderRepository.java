@@ -12,6 +12,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import java.util.Collection;
 
 public interface WorkOrderRepository extends JpaRepository<WorkOrder, UUID> {
   List<WorkOrder> findAllByOrderByCreatedAtDesc();
@@ -48,4 +49,6 @@ public interface WorkOrderRepository extends JpaRepository<WorkOrder, UUID> {
       "sum(case when o.workType = 'REPAIR' then 1 else 0 end), coalesce(sum(o.costAmount), 0) " +
       "from WorkOrder o where o.equipmentId is not null group by o.equipmentId")
   List<Object[]> aggregateByEquipment();
+  List<WorkOrder> findByAssigneeIdAndStatusNotIn(UUID assigneeId, Collection<WorkOrderStatus> statuses);
+
 }

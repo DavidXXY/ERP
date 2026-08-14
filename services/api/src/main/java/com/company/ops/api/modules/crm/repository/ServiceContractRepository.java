@@ -13,6 +13,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.repository.Lock;
 import jakarta.persistence.LockModeType;
+import java.util.Collection;
 
 public interface ServiceContractRepository extends JpaRepository<ServiceContract, UUID> {
 
@@ -46,5 +47,7 @@ public interface ServiceContractRepository extends JpaRepository<ServiceContract
 
   @Query("select c.customerId, coalesce(sum(c.amount), 0) from ServiceContract c group by c.customerId")
   List<Object[]> aggregateAmountByCustomer();
+
+  List<ServiceContract> findByCustomerIdIn(Collection<UUID> customerIds);
 
 }

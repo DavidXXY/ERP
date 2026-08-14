@@ -478,10 +478,17 @@ async function request<T>(config: AxiosRequestConfig): Promise<T> {
   return response.data.data;
 }
 
-export const login = (data: { email: string; password: string; mfaCode?: string }) =>
-  request<Session>({ url: "/auth/login", method: "POST", data });
+export const login = (data: {
+  email: string;
+  password: string;
+  mfaCode?: string;
+}) => request<Session>({ url: "/auth/login", method: "POST", data });
 export const forgotPassword = (email: string) =>
-  request<string>({ url: "/auth/forgot-password", method: "POST", data: { email } });
+  request<string>({
+    url: "/auth/forgot-password",
+    method: "POST",
+    data: { email },
+  });
 export const resetPassword = (
   email: string,
   code: string,
@@ -528,14 +535,17 @@ export const markAllNotificationsRead = () =>
   request<void>({ url: "/notifications/read-all", method: "POST" });
 export const listMyShipments = () =>
   request<ProcurementShipment[]>({ url: "/shipments" });
-export const listOrders = () =>
-  request<PortalOrderEntry[]>({ url: "/orders" });
+export const listOrders = () => request<PortalOrderEntry[]>({ url: "/orders" });
 export const listInvoices = () =>
   request<PortalInvoice[]>({ url: "/invoices" });
 export const listInvoiceSubmissions = () =>
   request<InvoiceSubmission[]>({ url: "/invoices/submissions" });
 export const uploadInvoiceSubmission = (data: FormData) =>
-  request<InvoiceSubmission>({ url: "/invoices/submissions", method: "POST", data });
+  request<InvoiceSubmission>({
+    url: "/invoices/submissions",
+    method: "POST",
+    data,
+  });
 export const deleteInvoiceSubmission = (id: string) =>
   request<void>({ url: `/invoices/submissions/${id}`, method: "DELETE" });
 export const invoiceSubmissionDownloadUrl = (id: string) =>
@@ -578,7 +588,9 @@ export const deleteShipment = (shipmentId: string) =>
   request<void>({ url: `/shipments/${shipmentId}`, method: "DELETE" });
 
 export const listShipmentAttachments = (shipmentId: string) =>
-  request<ShipmentAttachment[]>({ url: `/shipments/${shipmentId}/attachments` });
+  request<ShipmentAttachment[]>({
+    url: `/shipments/${shipmentId}/attachments`,
+  });
 export const uploadShipmentAttachment = (shipmentId: string, data: FormData) =>
   request<ShipmentAttachment>({
     url: `/shipments/${shipmentId}/attachments`,

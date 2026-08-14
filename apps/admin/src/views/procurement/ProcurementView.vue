@@ -54,9 +54,7 @@
       </a-row>
 
       <div class="portal-collab-bar" :class="{ 'is-empty': collabTotal === 0 }">
-        <span class="portal-collab-title"
-          ><TeamOutlined /> 门户协同待办</span
-        >
+        <span class="portal-collab-title"><TeamOutlined /> 门户协同待办</span>
         <template v-if="collabItems.length > 0">
           <a-tag
             v-for="item in collabItems"
@@ -1202,16 +1200,66 @@ const collabItems = computed(() => {
   const data = collab.value;
   if (!data) return [];
   return [
-    { label: "门户账号待审", count: data.pendingAccounts, to: "/procurement/suppliers", color: "orange" },
-    { label: "准入待审", count: data.pendingAdmissions, to: "/procurement/suppliers", color: "orange" },
-    { label: "资质文件待审", count: data.pendingDocuments, to: "/procurement/suppliers", color: "orange" },
-    { label: "报价待供应商确认", count: data.pendingQuoteConfirmations, to: "/procurement/inquiries", color: "blue" },
-    { label: "变更待供应商响应", count: data.pendingChangeResponses, to: "/procurement/orders", color: "blue" },
-    { label: "变更待采购决策", count: data.pendingChangeDecisions, to: "/procurement/orders", color: "geekblue" },
-    { label: "开票资料待审", count: data.pendingInvoiceSubmissions, to: "/procurement/invoices", color: "purple" },
-    { label: "质检申诉待处理", count: data.pendingAppeals, to: "/procurement/receipts", color: "red" },
-    { label: "供应商变更待审", count: data.pendingSupplierChanges, to: "/procurement/suppliers", color: "orange" },
-    { label: "绩效申诉待处理", count: data.pendingPerformanceAppeals, to: "/procurement/suppliers", color: "red" },
+    {
+      label: "门户账号待审",
+      count: data.pendingAccounts,
+      to: "/procurement/suppliers",
+      color: "orange",
+    },
+    {
+      label: "准入待审",
+      count: data.pendingAdmissions,
+      to: "/procurement/suppliers",
+      color: "orange",
+    },
+    {
+      label: "资质文件待审",
+      count: data.pendingDocuments,
+      to: "/procurement/suppliers",
+      color: "orange",
+    },
+    {
+      label: "报价待供应商确认",
+      count: data.pendingQuoteConfirmations,
+      to: "/procurement/inquiries",
+      color: "blue",
+    },
+    {
+      label: "变更待供应商响应",
+      count: data.pendingChangeResponses,
+      to: "/procurement/orders",
+      color: "blue",
+    },
+    {
+      label: "变更待采购决策",
+      count: data.pendingChangeDecisions,
+      to: "/procurement/orders",
+      color: "geekblue",
+    },
+    {
+      label: "开票资料待审",
+      count: data.pendingInvoiceSubmissions,
+      to: "/procurement/invoices",
+      color: "purple",
+    },
+    {
+      label: "质检申诉待处理",
+      count: data.pendingAppeals,
+      to: "/procurement/receipts",
+      color: "red",
+    },
+    {
+      label: "供应商变更待审",
+      count: data.pendingSupplierChanges,
+      to: "/procurement/suppliers",
+      color: "orange",
+    },
+    {
+      label: "绩效申诉待处理",
+      count: data.pendingPerformanceAppeals,
+      to: "/procurement/suppliers",
+      color: "red",
+    },
   ].filter((item) => item.count > 0);
 });
 const collabTotal = computed(() =>
@@ -1529,8 +1577,7 @@ const receiptRules = {
   deliveryNo: [{ required: true, message: "请输入送货单号" }],
   receiverName: [{ required: true, message: "请输入收货人" }],
 };
-const paymentRules = {
-};
+const paymentRules = {};
 
 const pendingApprovalCount = computed(
   () =>

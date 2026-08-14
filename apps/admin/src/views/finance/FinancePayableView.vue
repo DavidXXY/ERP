@@ -130,7 +130,8 @@
             ><strong>{{ formatMoney(record.amount) }}</strong
             ><span class="table-subtitle"
               >已付 {{ formatMoney(record.paidAmount) }} · 待付
-              {{ formatMoney(record.outstandingAmount) }}{{
+              {{ formatMoney(record.outstandingAmount)
+              }}{{
                 Number(record.adjustedAmount || 0) > 0
                   ? " · 冲减 " + formatMoney(record.adjustedAmount)
                   : ""
@@ -206,7 +207,7 @@
         class="section-alert"
         type="success"
         show-icon
-        :message="`合并申请 ${mergePayables.length} 笔应付（${mergePayables.map((item) => item.code).join("、")}），合计可申请 ${formatMoney(mergePayables.reduce((sum, item) => sum + Number(item.availableAmount || 0), 0))}。`"
+        :message="`合并申请 ${mergePayables.length} 笔应付（${mergePayables.map((item) => item.code).join('、')}），合计可申请 ${formatMoney(mergePayables.reduce((sum, item) => sum + Number(item.availableAmount || 0), 0))}。`"
       />
       <a-form ref="formRef" :model="form" :rules="rules" layout="vertical">
         <div class="quick-amounts">
@@ -477,12 +478,13 @@ function openMergeApplication() {
   applicationOpen.value = true;
 }
 function setApplicationRatio(ratio: number) {
-  const amount = mergePayables.value.length > 1
-    ? mergePayables.value.reduce(
-        (sum, item) => sum + Number(item.availableAmount || 0),
-        0,
-      )
-    : Number(selectedItem.value?.availableAmount || 0);
+  const amount =
+    mergePayables.value.length > 1
+      ? mergePayables.value.reduce(
+          (sum, item) => sum + Number(item.availableAmount || 0),
+          0,
+        )
+      : Number(selectedItem.value?.availableAmount || 0);
   form.requestedAmount = Math.max(0.01, Math.round(amount * ratio * 100) / 100);
 }
 async function handleCreateApplication() {

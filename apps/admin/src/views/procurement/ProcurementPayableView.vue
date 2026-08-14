@@ -32,13 +32,16 @@
           <template v-else-if="column.key === 'paid'"
             >{{ formatMoney(record.paidAmount || 0) }}<br /><span
               class="table-subtitle"
-              >待付 {{ formatMoney(record.outstandingAmount || 0) }}{{
+              >待付 {{ formatMoney(record.outstandingAmount || 0)
+              }}{{
                 Number(record.adjustedAmount || 0) > 0
                   ? " · 冲减 " + formatMoney(record.adjustedAmount)
                   : ""
-              }}{{ Number(record.refundAmount || 0) > 0
+              }}{{
+                Number(record.refundAmount || 0) > 0
                   ? " · 待退 " + formatMoney(record.refundAmount)
-                  : "" }}</span
+                  : ""
+              }}</span
             ></template
           >
           <template v-else-if="column.key === 'dueDate'">{{
@@ -111,12 +114,18 @@
         <a-descriptions-item label="应付金额（含税，元）">{{
           formatMoney(selectedPayable.amount)
         }}</a-descriptions-item>
-        <a-descriptions-item v-if="Number(selectedPayable.adjustedAmount || 0) > 0" label="累计冲减（含税，元）">{{
-          formatMoney(selectedPayable.adjustedAmount)
-        }}</a-descriptions-item>
-        <a-descriptions-item v-if="Number(selectedPayable.refundAmount || 0) > 0" label="供应商待退（含税，元）">{{
-          formatMoney(selectedPayable.refundAmount)
-        }}</a-descriptions-item>
+        <a-descriptions-item
+          v-if="Number(selectedPayable.adjustedAmount || 0) > 0"
+          label="累计冲减（含税，元）"
+          >{{
+            formatMoney(selectedPayable.adjustedAmount)
+          }}</a-descriptions-item
+        >
+        <a-descriptions-item
+          v-if="Number(selectedPayable.refundAmount || 0) > 0"
+          label="供应商待退（含税，元）"
+          >{{ formatMoney(selectedPayable.refundAmount) }}</a-descriptions-item
+        >
         <a-descriptions-item label="已付金额（含税，元）">{{
           formatMoney(selectedPayable.paidAmount)
         }}</a-descriptions-item>

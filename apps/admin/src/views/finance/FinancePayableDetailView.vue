@@ -241,10 +241,7 @@
             :sub-title="reconcileDescription"
           />
         </a-tab-pane>
-        <a-tab-pane
-          key="adjustments"
-          :tab="`应付调整 (${adjustments.length})`"
-        >
+        <a-tab-pane key="adjustments" :tab="`应付调整 (${adjustments.length})`">
           <a-table
             :columns="adjustmentColumns"
             :data-source="adjustments"
@@ -309,16 +306,10 @@
           />
         </a-form-item>
         <a-form-item label="调整日期">
-          <a-input
-            v-model:value="adjustmentForm.appliedAt"
-            type="date"
-          />
+          <a-input v-model:value="adjustmentForm.appliedAt" type="date" />
         </a-form-item>
         <a-form-item label="原因说明" required>
-          <a-textarea
-            v-model:value="adjustmentForm.reason"
-            :maxlength="500"
-          />
+          <a-textarea v-model:value="adjustmentForm.reason" :maxlength="500" />
         </a-form-item>
       </a-form>
     </a-modal>
@@ -588,23 +579,27 @@ function applicationStatusLabel(v: string) {
 }
 function adjustmentLabel(type: string) {
   return (
-    {
-      CREDIT: "折让",
-      CLAIM: "索赔",
-      CORRECTION: "更正",
-      CANCELLATION: "作废",
-    } as Record<string, string>
-  )[type] || type;
+    (
+      {
+        CREDIT: "折让",
+        CLAIM: "索赔",
+        CORRECTION: "更正",
+        CANCELLATION: "作废",
+      } as Record<string, string>
+    )[type] || type
+  );
 }
 function adjustmentColor(type: string) {
   return (
-    {
-      CREDIT: "blue",
-      CLAIM: "orange",
-      CORRECTION: "cyan",
-      CANCELLATION: "red",
-    } as Record<string, string>
-  )[type] || "default";
+    (
+      {
+        CREDIT: "blue",
+        CLAIM: "orange",
+        CORRECTION: "cyan",
+        CANCELLATION: "red",
+      } as Record<string, string>
+    )[type] || "default"
+  );
 }
 function today() {
   const value = new Date();

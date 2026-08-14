@@ -10,9 +10,7 @@
           v-model:value="submissionFilter"
           :options="submissionFilterOptions"
         />
-        <span class="table-count">
-          {{ filteredSubmissions.length }} 条
-        </span>
+        <span class="table-count"> {{ filteredSubmissions.length }} 条 </span>
       </a-space>
 
       <a-table
@@ -39,9 +37,7 @@
             <span class="table-subtitle">{{ record.taxRate }}%</span>
           </template>
           <template v-else-if="column.key === 'file'">
-            <a
-              class="download-link"
-              @click.prevent="downloadSubmission(record)"
+            <a class="download-link" @click.prevent="downloadSubmission(record)"
               >下载附件</a
             >
           </template>
@@ -163,11 +159,9 @@
                     : "未验真"
               }}
             </a-tag>
-            <span
-              v-if="record.verificationComment"
-              class="table-subtitle"
-              >{{ record.verificationComment }}</span
-            >
+            <span v-if="record.verificationComment" class="table-subtitle">{{
+              record.verificationComment
+            }}</span>
           </template>
           <template v-else-if="column.key === 'handler'">
             {{ record.handlerName || "-" }}
@@ -285,46 +279,50 @@
             v-model:value="reviewComment"
             :rows="3"
             maxlength="500"
-            :placeholder="reviewAction === 'REJECTED' ? '请填写退回原因，将通知供应商' : '可选'"
+            :placeholder="
+              reviewAction === 'REJECTED'
+                ? '请填写退回原因，将通知供应商'
+                : '可选'
+            "
           />
         </a-form-item>
       </a-form>
     </a-modal>
   </div>
 
-    <a-modal
-      v-model:open="verifyOpen"
-      :title="`${verifyTarget ? verifyTarget.invoiceNo : '—'} · 发票验真`"
-      :confirm-loading="verifying"
-      @ok="confirmVerify"
-    >
-      <a-alert
-        type="info"
-        show-icon
-        message="发票验真通常在发票审核通过后进行，可在税务平台核对发票号码、金额与销方信息。"
-        style="margin-bottom: 14px"
-      />
-      <a-form layout="vertical">
-        <a-form-item label="验真结果" required>
-          <a-radio-group v-model:value="verifyDecision">
-            <a-radio value="VERIFIED">验真通过</a-radio>
-            <a-radio value="EXCEPTION">验真异常</a-radio>
-          </a-radio-group>
-        </a-form-item>
-        <a-form-item
-          v-if="verifyDecision === 'EXCEPTION'"
-          label="异常说明"
-          required
-        >
-          <a-textarea
-            v-model:value="verifyComment"
-            :rows="2"
-            maxlength="500"
-            placeholder="说明发票验真异常的原因"
-          />
-        </a-form-item>
-      </a-form>
-    </a-modal>
+  <a-modal
+    v-model:open="verifyOpen"
+    :title="`${verifyTarget ? verifyTarget.invoiceNo : '—'} · 发票验真`"
+    :confirm-loading="verifying"
+    @ok="confirmVerify"
+  >
+    <a-alert
+      type="info"
+      show-icon
+      message="发票验真通常在发票审核通过后进行，可在税务平台核对发票号码、金额与销方信息。"
+      style="margin-bottom: 14px"
+    />
+    <a-form layout="vertical">
+      <a-form-item label="验真结果" required>
+        <a-radio-group v-model:value="verifyDecision">
+          <a-radio value="VERIFIED">验真通过</a-radio>
+          <a-radio value="EXCEPTION">验真异常</a-radio>
+        </a-radio-group>
+      </a-form-item>
+      <a-form-item
+        v-if="verifyDecision === 'EXCEPTION'"
+        label="异常说明"
+        required
+      >
+        <a-textarea
+          v-model:value="verifyComment"
+          :rows="2"
+          maxlength="500"
+          placeholder="说明发票验真异常的原因"
+        />
+      </a-form-item>
+    </a-form>
+  </a-modal>
 </template>
 
 <script setup lang="ts">
@@ -350,7 +348,9 @@ const submissionFilterOptions = [
 const filteredSubmissions = computed(() =>
   submissionFilter.value === "ALL"
     ? submissions.value
-    : submissions.value.filter((item) => item.status === submissionFilter.value),
+    : submissions.value.filter(
+        (item) => item.status === submissionFilter.value,
+      ),
 );
 const reviewOpen = ref(false);
 const reviewing = ref(false);
@@ -367,7 +367,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 const invoiceForm = reactive({
   orderId: "",
   payableIds: [] as string[],
-  invoiceNo: "", 
+  invoiceNo: "",
   amount: 0,
   taxRate: 13,
   invoiceDate: today(),
@@ -479,10 +479,17 @@ async function reviewInvoice(
 }
 
 function submissionStatusText(value: string) {
-  return { PENDING: "待审核", APPROVED: "已登记", REJECTED: "已退回" }[value] || value || "—";
+  return (
+    { PENDING: "待审核", APPROVED: "已登记", REJECTED: "已退回" }[value] ||
+    value ||
+    "—"
+  );
 }
 function submissionStatusColor(value: string) {
-  return { PENDING: "orange", APPROVED: "green", REJECTED: "red" }[value] || "default";
+  return (
+    { PENDING: "orange", APPROVED: "green", REJECTED: "red" }[value] ||
+    "default"
+  );
 }
 function openReview(
   submission: api.InvoiceSubmission,
@@ -549,7 +556,9 @@ async function confirmVerify() {
     });
     verifyOpen.value = false;
     message.success(
-      verifyDecision.value === "VERIFIED" ? "发票验真通过" : "发票验真异常已登记",
+      verifyDecision.value === "VERIFIED"
+        ? "发票验真通过"
+        : "发票验真异常已登记",
     );
     await load();
   } catch (error) {

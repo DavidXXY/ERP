@@ -32,7 +32,9 @@
       </article>
       <article class="finance-card">
         <small>发票差异</small>
-        <strong class="overdue">{{ money(summary.invoiceDifferenceAmount) }}</strong>
+        <strong class="overdue">{{
+          money(summary.invoiceDifferenceAmount)
+        }}</strong>
         <span>{{ summary.pendingInvoiceApprovals }} 张待审批</span>
       </article>
       <article class="finance-card">
@@ -222,7 +224,11 @@
           <a-input v-model:value="uploadForm.invoiceDate" type="date" />
         </a-form-item>
         <a-form-item label="备注">
-          <a-textarea v-model:value="uploadForm.remark" :rows="2" maxlength="500" />
+          <a-textarea
+            v-model:value="uploadForm.remark"
+            :rows="2"
+            maxlength="500"
+          />
         </a-form-item>
         <a-form-item label="发票文件" required>
           <a-upload
@@ -334,16 +340,32 @@ const submissionStatusOptions = [
 ];
 const filteredInvoices = computed(() => {
   return invoices.value.filter((item) => {
-    if (invoiceStatusFilter.value && item.status !== invoiceStatusFilter.value) return false;
-    if (invoiceMatchFilter.value && item.matchStatus !== invoiceMatchFilter.value) return false;
-    if (invoiceDateFrom.value && item.invoiceDate && item.invoiceDate < invoiceDateFrom.value) return false;
-    if (invoiceDateTo.value && item.invoiceDate && item.invoiceDate > invoiceDateTo.value) return false;
+    if (invoiceStatusFilter.value && item.status !== invoiceStatusFilter.value)
+      return false;
+    if (
+      invoiceMatchFilter.value &&
+      item.matchStatus !== invoiceMatchFilter.value
+    )
+      return false;
+    if (
+      invoiceDateFrom.value &&
+      item.invoiceDate &&
+      item.invoiceDate < invoiceDateFrom.value
+    )
+      return false;
+    if (
+      invoiceDateTo.value &&
+      item.invoiceDate &&
+      item.invoiceDate > invoiceDateTo.value
+    )
+      return false;
     return true;
   });
 });
 const filteredPayables = computed(() =>
   payables.value.filter((item) => {
-    if (payableStatusFilter.value && item.status !== payableStatusFilter.value) return false;
+    if (payableStatusFilter.value && item.status !== payableStatusFilter.value)
+      return false;
     if (payableOverdueOnly.value) {
       if (item.status === "PAID" || item.status === "CANCELLED") return false;
       if (!item.dueDate || item.dueDate >= today()) return false;
@@ -353,7 +375,9 @@ const filteredPayables = computed(() =>
 );
 const filteredSubmissions = computed(() =>
   submissions.value.filter(
-    (item) => !submissionStatusFilter.value || item.status === submissionStatusFilter.value,
+    (item) =>
+      !submissionStatusFilter.value ||
+      item.status === submissionStatusFilter.value,
   ),
 );
 function today() {
@@ -362,18 +386,24 @@ function today() {
 
 function invoiceStatusText(value: string) {
   return (
-    {
-      REGISTERED: "已登记",
-      VERIFIED: "已核验",
-      APPROVED: "已审批",
-      REJECTED: "已驳回",
-    } as Record<string, string>
-  )[value] || value || "—";
+    (
+      {
+        REGISTERED: "已登记",
+        VERIFIED: "已核验",
+        APPROVED: "已审批",
+        REJECTED: "已驳回",
+      } as Record<string, string>
+    )[value] ||
+    value ||
+    "—"
+  );
 }
 function approvalText(value: string) {
-  return { PENDING: "待审批", APPROVED: "已通过", REJECTED: "已驳回" }[
-    value
-  ] || value || "—";
+  return (
+    { PENDING: "待审批", APPROVED: "已通过", REJECTED: "已驳回" }[value] ||
+    value ||
+    "—"
+  );
 }
 function matchText(value?: string) {
   return value === "MATCHED"
@@ -384,24 +414,35 @@ function matchText(value?: string) {
 }
 function payableStatusText(value: string) {
   return (
-    {
-      PENDING: "待付款",
-      PARTIAL_PAID: "部分付款",
-      PAID: "已付款",
-      CANCELLED: "已取消",
-    } as Record<string, string>
-  )[value] || value || "—";
+    (
+      {
+        PENDING: "待付款",
+        PARTIAL_PAID: "部分付款",
+        PAID: "已付款",
+        CANCELLED: "已取消",
+      } as Record<string, string>
+    )[value] ||
+    value ||
+    "—"
+  );
 }
 function submissionStatusText(value: string) {
   return (
-    { PENDING: "待审核", APPROVED: "已登记", REJECTED: "已退回" } as Record<
-      string,
-      string
-    >
-  )[value] || value || "—";
+    (
+      { PENDING: "待审核", APPROVED: "已登记", REJECTED: "已退回" } as Record<
+        string,
+        string
+      >
+    )[value] ||
+    value ||
+    "—"
+  );
 }
 function submissionStatusColor(value: string) {
-  return { PENDING: "orange", APPROVED: "green", REJECTED: "red" }[value] || "default";
+  return (
+    { PENDING: "orange", APPROVED: "green", REJECTED: "red" }[value] ||
+    "default"
+  );
 }
 
 const submissionColumns = [
@@ -476,8 +517,16 @@ const submissionColumns = [
 const invoiceColumns = [
   { title: "发票号", dataIndex: "invoiceNo" },
   { title: "订单", dataIndex: "orderCode" },
-  { title: "开票日期", dataIndex: "invoiceDate", customRender: ({ text }: { text?: string }) => formatDate(text) },
-  { title: "金额", dataIndex: "amount", customRender: ({ text }: { text: number }) => money(text) },
+  {
+    title: "开票日期",
+    dataIndex: "invoiceDate",
+    customRender: ({ text }: { text?: string }) => formatDate(text),
+  },
+  {
+    title: "金额",
+    dataIndex: "amount",
+    customRender: ({ text }: { text: number }) => money(text),
+  },
   {
     title: "状态",
     dataIndex: "status",
@@ -506,7 +555,11 @@ const invoiceColumns = [
 const payableColumns = [
   { title: "应付单号", dataIndex: "code" },
   { title: "订单", dataIndex: "orderCode" },
-  { title: "应付金额", dataIndex: "amount", customRender: ({ text }: { text: number }) => money(text) },
+  {
+    title: "应付金额",
+    dataIndex: "amount",
+    customRender: ({ text }: { text: number }) => money(text),
+  },
   {
     title: "冲减金额",
     dataIndex: "adjustedAmount",
@@ -533,11 +586,16 @@ const payableColumns = [
         ? h("span", { style: "color:#cf1322" }, money(text || 0))
         : money(0),
   },
-  { title: "到期日", dataIndex: "dueDate", customRender: ({ text }: { text?: string }) => formatDate(text) },
+  {
+    title: "到期日",
+    dataIndex: "dueDate",
+    customRender: ({ text }: { text?: string }) => formatDate(text),
+  },
   {
     title: "付款日期",
     dataIndex: "paidAt",
-    customRender: ({ text }: { text?: string }) => (text ? formatDate(text) : "—"),
+    customRender: ({ text }: { text?: string }) =>
+      text ? formatDate(text) : "—",
   },
   {
     title: "付款说明",
@@ -587,8 +645,10 @@ async function load() {
     orders.value = orderList
       .map((entry) => entry.order)
       .filter((order): order is api.PortalOrder => Boolean(order));
-    const invoiceId = typeof route.query.invoice === "string" ? route.query.invoice : undefined;
-    const payableId = typeof route.query.payable === "string" ? route.query.payable : undefined;
+    const invoiceId =
+      typeof route.query.invoice === "string" ? route.query.invoice : undefined;
+    const payableId =
+      typeof route.query.payable === "string" ? route.query.payable : undefined;
     const target = invoiceId
       ? invoiceList.find((item) => item.id === invoiceId)
       : payableId
@@ -633,7 +693,12 @@ function selectFile(file: File) {
   }
   selectedFile.value = file;
   fileList.value = [
-    { uid: file.name, name: file.name, status: "done", originFileObj: file } as UploadFile,
+    {
+      uid: file.name,
+      name: file.name,
+      status: "done",
+      originFileObj: file,
+    } as UploadFile,
   ];
   return false;
 }

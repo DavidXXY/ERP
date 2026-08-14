@@ -374,7 +374,8 @@
                 >+ 添加付款方式</a-button
               >
             </a-form-item>
-          ></a-col>
+            ></a-col
+          >
         </a-row>
       </a-form>
     </a-modal>
@@ -450,16 +451,24 @@ const paymentForm = reactive<{
 const splitPayableOptions = computed(() => {
   const app = selectedApplication.value;
   if (!app) return [];
-  const ids = app.payableIds && app.payableIds.length > 0 ? app.payableIds : [app.payableId];
+  const ids =
+    app.payableIds && app.payableIds.length > 0
+      ? app.payableIds
+      : [app.payableId];
   return ids
     .map((id) => {
       const payable = payables.value.find((item) => item.id === id);
       return {
-        label: payable ? `${payable.code} · 待付 ${formatMoney(payable.outstandingAmount)}` : id.slice(0, 8),
+        label: payable
+          ? `${payable.code} · 待付 ${formatMoney(payable.outstandingAmount)}`
+          : id.slice(0, 8),
         value: id,
       };
     })
-    .filter((item, index, arr) => arr.findIndex((x) => x.value === item.value) === index);
+    .filter(
+      (item, index, arr) =>
+        arr.findIndex((x) => x.value === item.value) === index,
+    );
 });
 
 const statusOptions = [
@@ -628,13 +637,17 @@ onMounted(loadData);
 async function loadData() {
   loading.value = true;
   try {
-    [applications.value, payments.value, payables.value, canCurrentUserApprove.value] =
-      await Promise.all([
-        listPaymentApplications(),
-        listPaymentRecords(),
-        listFinancePayables(),
-        getPaymentApprovalCapability(),
-      ]);
+    [
+      applications.value,
+      payments.value,
+      payables.value,
+      canCurrentUserApprove.value,
+    ] = await Promise.all([
+      listPaymentApplications(),
+      listPaymentRecords(),
+      listFinancePayables(),
+      getPaymentApprovalCapability(),
+    ]);
   } catch (error) {
     message.error(error instanceof Error ? error.message : "付款数据加载失败");
   } finally {

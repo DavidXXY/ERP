@@ -429,10 +429,7 @@
                 <a-tag :color="shipmentStatusColor(record.status)">{{
                   shipmentStatusText(record.status)
                 }}</a-tag>
-                <div
-                  v-if="record.reviewComment"
-                  class="shipment-review"
-                >
+                <div v-if="record.reviewComment" class="shipment-review">
                   <template v-if="record.status === 'REJECTED'"
                     >退回原因：</template
                   >{{ record.reviewComment }}
@@ -1297,7 +1294,9 @@ function shipmentStatusText(v?: string) {
         CONFIRMED: "已确认到货",
         REJECTED: "已退回",
       } as Record<string, string>
-    )[v || ""] || v || "-"
+    )[v || ""] ||
+    v ||
+    "-"
   );
 }
 function shipmentStatusColor(v?: string) {

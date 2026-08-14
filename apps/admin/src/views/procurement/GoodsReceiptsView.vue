@@ -277,7 +277,10 @@ const returns = ref<ProcurementReturnOrder[]>([]);
 const selectedReceipt = ref<GoodsReceipt | null>(null);
 const selectedReturn = ref<ProcurementReturnOrder | null>(null);
 const selectedAppeal = ref<GoodsReceipt | null>(null);
-const appealForm = reactive({ action: "DISMISSED" as "DISMISSED" | "REOPEN", comment: "" });
+const appealForm = reactive({
+  action: "DISMISSED" as "DISMISSED" | "REOPEN",
+  comment: "",
+});
 const today = () => new Date().toISOString().slice(0, 10);
 const inspectForm = reactive({
   qualifiedQty: 0,
@@ -418,13 +421,16 @@ function appealLabel(status?: string) {
       PENDING: "申诉待处理",
       DISMISSED: "申诉未成立",
       REOPENED: "已受理重检",
-    }[status || "NONE"] || status || ""
+    }[status || "NONE"] ||
+    status ||
+    ""
   );
 }
 function appealColor(status?: string) {
   return (
-    { PENDING: "red", DISMISSED: "default", REOPENED: "blue" }[status || "NONE"] ||
-    "default"
+    { PENDING: "red", DISMISSED: "default", REOPENED: "blue" }[
+      status || "NONE"
+    ] || "default"
   );
 }
 function inspectionLabel(status?: string) {

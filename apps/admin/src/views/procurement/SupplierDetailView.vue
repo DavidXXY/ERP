@@ -679,9 +679,10 @@ const reviewColumns = [
 const appealReviewOpen = ref(false);
 const savingAppeal = ref(false);
 const appealTarget = ref<SupplierPerformanceReview | null>(null);
-const appealForm = reactive<{ action: "DISMISSED" | "REOPEN"; comment: string }>(
-  { action: "DISMISSED", comment: "" },
-);
+const appealForm = reactive<{
+  action: "DISMISSED" | "REOPEN";
+  comment: string;
+}>({ action: "DISMISSED", comment: "" });
 function openAppealReview(record: SupplierPerformanceReview) {
   appealTarget.value = record;
   appealForm.action = "DISMISSED";
@@ -696,9 +697,7 @@ async function handleAppealReview() {
       action: appealForm.action,
       comment: appealForm.comment.trim() || undefined,
     });
-    const index = reviews.value.findIndex(
-      (item) => item.id === updated.id,
-    );
+    const index = reviews.value.findIndex((item) => item.id === updated.id);
     if (index >= 0) reviews.value[index] = updated;
     appealReviewOpen.value = false;
     message.success(

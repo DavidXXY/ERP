@@ -112,6 +112,7 @@ class ProcurementServiceTest {
   @Mock private FrameworkAgreementRepository frameworkAgreementRepository;
   @Mock private FrameworkAgreementItemRepository frameworkAgreementItemRepository;
   @InjectMocks private ProcurementService procurementService;
+  @InjectMocks private ProcurementOrderDocumentService orderDocumentService;
 
   @Test
   void projectPurchaseRequiresProject() {
@@ -571,7 +572,7 @@ class ProcurementServiceTest {
       return document;
     });
 
-    var response = procurementService.uploadOrderDocument(orderId, file, "CONTRACT");
+    var response = orderDocumentService.uploadOrderDocument(orderId, file, "CONTRACT");
 
     assertThat(response.fileName()).isEqualTo("采购合同.pdf");
     assertThat(response.orderCode()).isEqualTo("CGDD-DOC-001");

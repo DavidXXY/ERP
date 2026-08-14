@@ -45,7 +45,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
     "spring.jpa.hibernate.ddl-auto=create-drop",
     "spring.flyway.enabled=false"
 })
-@Import({MaintenanceService.class, CodeGenerator.class, TenantConfig.class})
+@Import({MaintenanceService.class, MaintenanceEquipmentService.class, CodeGenerator.class, TenantConfig.class})
 class MaintenanceRealFlowIntegrationTest {
   @SpringBootConfiguration
   @EnableAutoConfiguration
@@ -64,6 +64,7 @@ class MaintenanceRealFlowIntegrationTest {
   @MockBean private DeleteGovernanceService deleteGovernanceService;
   @MockBean private FileStorageService fileStorageService;
   @Autowired private MaintenanceService service;
+  @Autowired private MaintenanceEquipmentService equipmentService;
   @Autowired private CustomerRepository customers;
   @Autowired private ReceivableRepository receivables;
   @Autowired private SystemUserRepository users;
@@ -86,7 +87,7 @@ class MaintenanceRealFlowIntegrationTest {
     engineer.setEnabled(true);
     engineer = users.save(engineer);
 
-    var equipment = service.createEquipment(new CreateEquipmentRequest(
+    var equipment = equipmentService.createEquipment(new CreateEquipmentRequest(
         customer.getId(), null, null, "配电设备", "电气", "M-1", "SN-" + suffix,
         "上海测试现场", LocalDate.now().minusYears(1), LocalDate.now().plusYears(1),
         30, LocalDate.now(), "低压电工证", "集成测试"));
@@ -146,11 +147,11 @@ class MaintenanceRealFlowIntegrationTest {
     engineer = users.save(engineer);
     UUID engineerId = engineer.getId();
 
-    var equipment1 = service.createEquipment(new CreateEquipmentRequest(
+    var equipment1 = equipmentService.createEquipment(new CreateEquipmentRequest(
         customer.getId(), null, null, "设备一", "电气", "C-1", "SN-C1-" + suffix,
         "上海测试现场", LocalDate.now().minusYears(1), LocalDate.now().plusYears(1),
         30, LocalDate.now(), null, "冲突测试"));
-    var equipment2 = service.createEquipment(new CreateEquipmentRequest(
+    var equipment2 = equipmentService.createEquipment(new CreateEquipmentRequest(
         customer.getId(), null, null, "设备二", "电气", "C-2", "SN-C2-" + suffix,
         "上海测试现场", LocalDate.now().minusYears(1), LocalDate.now().plusYears(1),
         30, LocalDate.now(), null, "冲突测试"));

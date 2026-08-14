@@ -55,7 +55,9 @@ class ProcurementControlServiceWorkflowTest {
   @Mock private LedgerService ledgerService;
   @Mock private DataScopeService dataScopeService;
   @Mock private SupplierPortalNotifier portalNotifier;
+  @Mock private PayableAdjustmentRepository adjustments;
   @InjectMocks private ProcurementControlService service;
+  @InjectMocks private ProcurementReturnService returnService;
 
   @Test
   void cancelledOrderCannotBeInspected() {
@@ -86,7 +88,7 @@ class ProcurementControlServiceWorkflowTest {
     when(receipts.countByOrderId(order.getId())).thenReturn(1L);
     when(receipts.save(any(GoodsReceipt.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-    service.resolveReturn(returnOrder.getId(), new ResolveReturn(
+    returnService.resolveReturn(returnOrder.getId(), new ResolveReturn(
         BigDecimal.ONE, new BigDecimal("100"), BigDecimal.ZERO, "补发并折让", "已确认", "采购员"));
 
     ArgumentCaptor<GoodsReceipt> captor = ArgumentCaptor.forClass(GoodsReceipt.class);

@@ -54,7 +54,7 @@
     "verify": "npm run lint && npm run format:check && npm run test && npm --prefix apps/admin run typecheck && npm run build && npm run supplier:lint && npm run supplier:typecheck && npm run supplier:test && npm run supplier:build && npm run mobile:typecheck && npm run mobile:test && npm run mobile:build:h5 && npm run mobile:build"
   },
   "dependencies": {
-    "@vitejs/plugin-react": "6.0.3",
+    "@vitejs/plugin-react": "6.0.5",
     "lucide-react": "1.21.0",
     "react": "19.2.7",
     "react-dom": "19.2.7",

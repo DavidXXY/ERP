@@ -158,9 +158,8 @@
 
 ### 前端 API 客户端
 
-当前管理端 API 客户端位于 `apps/admin/src/api`，移动端 API 客户端位于 `apps/mobile/src/api`。不要从早期原型 `src/api.ts` 推断当前接口。
+当前管理端 API 客户端位于 `apps/admin/src/api`，移动端 API 客户端位于 `apps/mobile/src/api`。
 
-运行 `npm run gen:api` 可从 OpenAPI 规范自动生成 TypeScript 类型。
 
 ### 前端初始化流程
 

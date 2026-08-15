@@ -83,7 +83,6 @@ npm run supplier:dev
 | `npm run infra:up` | 启动 PostgreSQL、Redis、MinIO |
 | `npm run infra:down` | 停止本地基础设施 |
 | `npm run data:backup` | 备份本地数据 |
-| `npm run gen:api` | 按 OpenAPI 生成 TypeScript 类型 |
 | `npm run verify` | 管理端与移动端 lint、测试、类型检查和生产构建 |
 
 ## 3. 登录、权限与页面进入逻辑

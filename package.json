@@ -16,10 +16,6 @@
   "scripts": {
     "dev": "npm run admin:dev",
     "build": "npm run admin:build",
-    "prototype:dev": "cd prototypes/react && npm run dev",
-    "gen:api": "bash ./scripts/gen-api-types.sh",
-    "prototype:build": "cd prototypes/react && npm run build",
-    "prototype:preview": "vite preview --host 0.0.0.0",
     "deps:install": "npm install --prefix apps/admin && npm install --prefix apps/mobile && npm install --prefix apps/supplier-portal",
     "admin:dev": "npm --prefix apps/admin run dev",
     "admin:build": "npm --prefix apps/admin run build",
@@ -69,7 +65,6 @@
     "@playwright/test": "^1.55.1",
     "@types/node": "^26.0.1",
     "@types/react": "^19.2.17",
-    "@types/react-dom": "^19.2.3",
-    "openapi-typescript": "^7.13.0"
+    "@types/react-dom": "^19.2.3"
   }
 }

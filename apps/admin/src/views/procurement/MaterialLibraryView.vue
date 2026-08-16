@@ -385,7 +385,11 @@ function openEdit(material: ProcurementMaterial) {
 }
 
 async function saveMaterial() {
-  await formRef.value?.validate();
+  try {
+    await formRef.value?.validate();
+  } catch {
+    return;
+  }
   saving.value = true;
   try {
     const payload = {
@@ -420,7 +424,11 @@ function openCategoryCreate() {
 }
 
 async function saveCategory() {
-  await categoryFormRef.value?.validate();
+  try {
+    await categoryFormRef.value?.validate();
+  } catch {
+    return;
+  }
   categorySaving.value = true;
   try {
     const created = await createMaterialCategory(categoryForm.name.trim());

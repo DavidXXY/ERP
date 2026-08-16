@@ -699,7 +699,11 @@ function formatMoney(v: number) {
 }
 
 async function handleCreate() {
-  await createFormRef.value?.validate();
+  try {
+    await createFormRef.value?.validate();
+  } catch {
+    return;
+  }
   if (createBudgetTotal.value <= 0) {
     message.warning("请填写项目分类预算");
     return;
@@ -733,7 +737,11 @@ async function handleCreate() {
 
 async function handleApproval() {
   if (!props.activeProject) return;
-  await approvalFormRef.value?.validate();
+  try {
+    await approvalFormRef.value?.validate();
+  } catch {
+    return;
+  }
   try {
     await assignProjectManager(props.activeProject.id, {
       managerUserId: approvalForm.managerUserId,
@@ -754,7 +762,11 @@ async function handleApproval() {
 
 async function handleAdvanceStage() {
   if (!props.detail || !props.nextStage) return;
-  await stageFormRef.value?.validate();
+  try {
+    await stageFormRef.value?.validate();
+  } catch {
+    return;
+  }
   try {
     await advanceProjectStage(props.detail.project.id, {
       targetStage: props.nextStage,
@@ -770,7 +782,11 @@ async function handleAdvanceStage() {
 
 async function handleCreateCost() {
   if (!props.detail) return;
-  await costFormRef.value?.validate();
+  try {
+    await costFormRef.value?.validate();
+  } catch {
+    return;
+  }
   if (costBudgetOverrun.value) {
     showBudgetOverrunPrompt(
       editingCost.value ? "更正后将超出项目预算" : "登记后将超出项目预算",
@@ -877,7 +893,11 @@ watch(
 
 async function handleEdit() {
   if (!props.editProject) return;
-  await editFormRef.value?.validate();
+  try {
+    await editFormRef.value?.validate();
+  } catch {
+    return;
+  }
   if (editBudgetTotal.value <= 0) {
     message.warning("请填写项目分类预算");
     return;

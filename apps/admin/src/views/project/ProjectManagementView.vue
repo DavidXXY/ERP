@@ -2314,7 +2314,11 @@ function openProjectPurchaseRequest() {
 
 async function handleProjectPurchaseRequest() {
   if (!detail.value) return;
-  await projectPurchaseFormRef.value?.validate();
+  try {
+    await projectPurchaseFormRef.value?.validate();
+  } catch {
+    return;
+  }
   savingPurchase.value = true;
   try {
     await createPurchaseRequest({

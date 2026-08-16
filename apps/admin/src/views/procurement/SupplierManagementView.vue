@@ -1685,14 +1685,18 @@ async function submitPortalReview() {
     message.warning("驳回时请填写原因");
     return;
   }
-  await reviewSupplierPortalAccount(
-    portalReviewTarget.value.id,
-    portalReviewDecision.value,
-    portalReviewComment.value,
-  );
-  portalReviewOpen.value = false;
-  message.success("门户账号审核已完成");
-  await openPortalAccounts();
+  try {
+    await reviewSupplierPortalAccount(
+      portalReviewTarget.value.id,
+      portalReviewDecision.value,
+      portalReviewComment.value,
+    );
+    portalReviewOpen.value = false;
+    message.success("门户账号审核已完成");
+    await openPortalAccounts();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "门户账号审核失败");
+  }
 }
 
 function changePortalAccountStatus(
@@ -1708,15 +1712,19 @@ function changePortalAccountStatus(
     okText: status === "SUSPENDED" ? "确认停用" : "确认恢复",
     okButtonProps: { danger: status === "SUSPENDED" },
     async onOk() {
-      await updateSupplierPortalAccountStatus(
-        account.id,
-        status,
-        status === "SUSPENDED"
-          ? "采购管理员停用门户账号"
-          : "采购管理员恢复门户账号",
-      );
-      message.success(status === "SUSPENDED" ? "账号已停用" : "账号已恢复");
-      await openPortalAccounts();
+      try {
+        await updateSupplierPortalAccountStatus(
+          account.id,
+          status,
+          status === "SUSPENDED"
+            ? "采购管理员停用门户账号"
+            : "采购管理员恢复门户账号",
+        );
+        message.success(status === "SUSPENDED" ? "账号已停用" : "账号已恢复");
+        await openPortalAccounts();
+      } catch (error) {
+        message.error(error instanceof Error ? error.message : "门户账号状态更新失败");
+      }
     },
   });
 }
@@ -1727,13 +1735,17 @@ function resetPortalPassword(account: SupplierPortalAccount) {
     content: "重置后现有登录令牌立即失效，新密码只展示一次。",
     okText: "确认重置",
     async onOk() {
-      const result = await resetSupplierPortalPassword(account.id);
-      Modal.info({
-        title: "临时密码已生成",
-        content: `临时密码：${result.temporaryPassword}。请通过可信渠道交给供应商，首次登录后必须修改。`,
-        okText: "我已记录",
-      });
-      await openPortalAccounts();
+      try {
+        const result = await resetSupplierPortalPassword(account.id);
+        Modal.info({
+          title: "临时密码已生成",
+          content: `临时密码：${result.temporaryPassword}。请通过可信渠道交给供应商，首次登录后必须修改。`,
+          okText: "我已记录",
+        });
+        await openPortalAccounts();
+      } catch (error) {
+        message.error(error instanceof Error ? error.message : "重置密码失败");
+      }
     },
   });
 }
@@ -1755,15 +1767,19 @@ async function reviewPortalDocument(
   document: SupplierPortalDocument,
   decision: "APPROVED" | "REJECTED",
 ) {
-  await reviewSupplierPortalDocument(
-    document.id,
-    decision,
-    decision === "APPROVED" ? "资料核验通过" : "资料不符合要求，请重新上传",
-  );
-  portalDocuments.value = await listSupplierPortalDocuments(
-    portalDocumentSupplierId.value,
-  );
-  message.success("资料审核已更新");
+  try {
+    await reviewSupplierPortalDocument(
+      document.id,
+      decision,
+      decision === "APPROVED" ? "资料核验通过" : "资料不符合要求，请重新上传",
+    );
+    portalDocuments.value = await listSupplierPortalDocuments(
+      portalDocumentSupplierId.value,
+    );
+    message.success("资料审核已更新");
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "资料审核失败");
+  }
 }
 
 function portalStatusText(status: string) {
@@ -1877,7 +1893,11 @@ async function saveSupplierCategory() {
 }
 
 async function handleCreate() {
-  await formRef.value?.validate();
+  try {
+    await formRef.value?.validate();
+  } catch {
+    return;
+  }
   saving.value = true;
   try {
     const created = await createSupplier({ ...form });
@@ -1959,7 +1979,11 @@ function cancelSupplierEdit() {
 
 async function saveSupplier() {
   if (!selectedSupplier.value) return;
-  await profileFormRef.value?.validate();
+  try {
+    await profileFormRef.value?.validate();
+  } catch {
+    return;
+  }
   saving.value = true;
   try {
     const wasRejected = selectedSupplier.value.admissionStatus === "REJECTED";

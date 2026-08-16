@@ -679,7 +679,11 @@ function openImport() {
 }
 
 async function handleCreate() {
-  await formRef.value?.validate();
+  try {
+    await formRef.value?.validate();
+  } catch {
+    return;
+  }
   saving.value = true;
   try {
     const created = await createPurchaseRequest({
@@ -724,7 +728,11 @@ function selectImportFile(file: File) {
 }
 
 async function handleImport() {
-  await importFormRef.value?.validate();
+  try {
+    await importFormRef.value?.validate();
+  } catch {
+    return;
+  }
   if (!importFile.value) {
     message.warning("请选择要导入的 Excel 或 CSV 文件");
     return;

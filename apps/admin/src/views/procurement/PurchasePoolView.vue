@@ -473,7 +473,11 @@ function prepareConsolidate(groups: ProcurementPurchasePoolGroup[]) {
 }
 
 async function handleCreateInquiry() {
-  await inquiryFormRef.value?.validate();
+  try {
+    await inquiryFormRef.value?.validate();
+  } catch {
+    return;
+  }
   if (!selectedRequestIds.value.length) {
     message.warning("请至少选择一条采购申请");
     return;

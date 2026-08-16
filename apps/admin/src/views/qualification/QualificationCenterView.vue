@@ -1982,7 +1982,11 @@ function openCompany(record?: CompanyQualification) {
   companyOpen.value = true;
 }
 async function saveCompany() {
-  await companyFormRef.value?.validate();
+  try {
+    await companyFormRef.value?.validate();
+  } catch {
+    return;
+  }
   saving.value = true;
   try {
     if (companyEditingId.value)
@@ -2000,10 +2004,14 @@ async function saveCompany() {
   }
 }
 async function removeCompany(id: string) {
-  await deleteCompanyQualification(id);
-  message.success("公司资质已删除");
-  await loadCompanies();
-  emit("dataChanged");
+  try {
+    await deleteCompanyQualification(id);
+    message.success("公司资质已删除");
+    await loadCompanies();
+    emit("dataChanged");
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "公司资质删除失败");
+  }
 }
 function goToEmployeeDetail(id: string) {
   window.open(`/hr/employees/${id}`, "_blank");
@@ -2018,7 +2026,11 @@ function openEmployee(record?: QualificationEmployee) {
   employeeOpen.value = true;
 }
 async function saveEmployee() {
-  await employeeFormRef.value?.validate();
+  try {
+    await employeeFormRef.value?.validate();
+  } catch {
+    return;
+  }
   saving.value = true;
   try {
     if (employeeEditingId.value)
@@ -2042,11 +2054,15 @@ async function saveEmployee() {
   }
 }
 async function removeEmployee(id: string) {
-  await deleteQualificationEmployee(id);
-  message.success("人员档案已删除");
-  await refreshReferences();
-  await loadEmployees();
-  emit("dataChanged");
+  try {
+    await deleteQualificationEmployee(id);
+    message.success("人员档案已删除");
+    await refreshReferences();
+    await loadEmployees();
+    emit("dataChanged");
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "人员档案删除失败");
+  }
 }
 async function showEmployee(id: string) {
   employeeDetail.value = await getQualificationEmployee(id);
@@ -2071,7 +2087,11 @@ function openEmployeeContract(record?: EmployeeContract) {
   employeeContractOpen.value = true;
 }
 async function saveEmployeeContract() {
-  await employeeContractFormRef.value?.validate();
+  try {
+    await employeeContractFormRef.value?.validate();
+  } catch {
+    return;
+  }
   if (!employeeDetail.value) return;
   saving.value = true;
   try {
@@ -2095,9 +2115,13 @@ async function saveEmployeeContract() {
   }
 }
 async function removeEmployeeContract(id: string) {
-  await deleteEmployeeContract(id);
-  message.success("员工合同已删除");
-  await reloadEmployeeDetail();
+  try {
+    await deleteEmployeeContract(id);
+    message.success("员工合同已删除");
+    await reloadEmployeeDetail();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "员工合同删除失败");
+  }
 }
 async function openEmployeeAccount() {
   if (!employeeDetail.value) return;
@@ -2132,7 +2156,11 @@ async function openEmployeeAccount() {
   employeeAccountOpen.value = true;
 }
 async function saveEmployeeAccount() {
-  await employeeAccountFormRef.value?.validate();
+  try {
+    await employeeAccountFormRef.value?.validate();
+  } catch {
+    return;
+  }
   if (!employeeDetail.value) return;
   saving.value = true;
   try {
@@ -2178,16 +2206,20 @@ async function saveEmployeeAccount() {
 }
 async function unlinkEmployeeAccount() {
   if (!employeeDetail.value) return;
-  await updateQualificationEmployee(
-    employeeDetail.value.employee.id,
-    employeePayload(employeeDetail.value.employee, null),
-  );
-  message.success("已解除账号关联");
-  await Promise.all([
-    reloadEmployeeDetail(),
-    loadEmployees(),
-    loadAccountReferences(),
-  ]);
+  try {
+    await updateQualificationEmployee(
+      employeeDetail.value.employee.id,
+      employeePayload(employeeDetail.value.employee, null),
+    );
+    message.success("已解除账号关联");
+    await Promise.all([
+      reloadEmployeeDetail(),
+      loadEmployees(),
+      loadAccountReferences(),
+    ]);
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "解除账号关联失败");
+  }
 }
 function openPasswordReset() {
   newPassword.value = "";
@@ -2234,7 +2266,11 @@ function openCertificate(record?: PersonnelCertificate) {
   certificateOpen.value = true;
 }
 async function saveCertificate() {
-  await certificateFormRef.value?.validate();
+  try {
+    await certificateFormRef.value?.validate();
+  } catch {
+    return;
+  }
   saving.value = true;
   try {
     if (certificateEditingId.value)
@@ -2255,10 +2291,14 @@ async function saveCertificate() {
   }
 }
 async function removeCertificate(id: string) {
-  await deletePersonnelCertificate(id);
-  message.success("人员证书已删除");
-  await loadCertificates();
-  emit("dataChanged");
+  try {
+    await deletePersonnelCertificate(id);
+    message.success("人员证书已删除");
+    await loadCertificates();
+    emit("dataChanged");
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "人员证书删除失败");
+  }
 }
 function openPerformance(record?: QualificationPerformance) {
   performanceEditingId.value = record?.id || "";
@@ -2271,7 +2311,11 @@ function openPerformance(record?: QualificationPerformance) {
   performanceOpen.value = true;
 }
 async function savePerformance() {
-  await performanceFormRef.value?.validate();
+  try {
+    await performanceFormRef.value?.validate();
+  } catch {
+    return;
+  }
   saving.value = true;
   try {
     if (performanceEditingId.value)
@@ -2291,9 +2335,13 @@ async function savePerformance() {
   }
 }
 async function removePerformance(id: string) {
-  await deleteQualificationPerformance(id);
-  message.success("项目业绩已删除");
-  await loadPerformances();
+  try {
+    await deleteQualificationPerformance(id);
+    message.success("项目业绩已删除");
+    await loadPerformances();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "项目业绩删除失败");
+  }
 }
 async function showAttachments(items: Attachment[]) {
   try {

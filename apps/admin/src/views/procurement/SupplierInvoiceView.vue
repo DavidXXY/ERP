@@ -450,33 +450,41 @@ async function saveInvoice() {
     return;
   }
   invoiceForm.clientRequestId = `invoice-${Date.now()}`;
-  await api.createSupplierInvoice({
-    orderId: invoiceForm.orderId,
-    invoiceNo: invoiceForm.invoiceNo,
-    amount: invoiceForm.amount,
-    taxRate: invoiceForm.taxRate,
-    invoiceDate: invoiceForm.invoiceDate,
-    payableIds:
-      invoiceForm.payableIds.length > 0 ? invoiceForm.payableIds : undefined,
-    clientRequestId: invoiceForm.clientRequestId,
-  });
-  invoiceForm.payableIds = [];
-  invoiceOpen.value = false;
-  message.success("发票已登记，等待审核");
-  await load();
+  try {
+    await api.createSupplierInvoice({
+      orderId: invoiceForm.orderId,
+      invoiceNo: invoiceForm.invoiceNo,
+      amount: invoiceForm.amount,
+      taxRate: invoiceForm.taxRate,
+      invoiceDate: invoiceForm.invoiceDate,
+      payableIds:
+        invoiceForm.payableIds.length > 0 ? invoiceForm.payableIds : undefined,
+      clientRequestId: invoiceForm.clientRequestId,
+    });
+    invoiceForm.payableIds = [];
+    invoiceOpen.value = false;
+    message.success("发票已登记，等待审核");
+    await load();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "发票登记失败");
+  }
 }
 
 async function reviewInvoice(
   invoice: api.SupplierInvoice,
   decision: "APPROVED" | "REJECTED",
 ) {
-  await api.reviewSupplierInvoice(invoice.id, {
-    decision,
-    reviewerName: auth.user?.displayName || "审核人",
-    comment: decision === "APPROVED" ? "四单匹配审核通过" : "发票审核驳回",
-  });
-  message.success(decision === "APPROVED" ? "发票审核通过" : "发票已驳回");
-  await load();
+  try {
+    await api.reviewSupplierInvoice(invoice.id, {
+      decision,
+      reviewerName: auth.user?.displayName || "审核人",
+      comment: decision === "APPROVED" ? "四单匹配审核通过" : "发票审核驳回",
+    });
+    message.success(decision === "APPROVED" ? "发票审核通过" : "发票已驳回");
+    await load();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "发票审核失败");
+  }
 }
 
 function submissionStatusText(value: string) {

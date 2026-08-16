@@ -1139,11 +1139,15 @@ function confirmHandover(record: any) {
     title: "确认接收项目",
     content: "确认后将记录当前登录账号、接收时间及业务审计轨迹。",
     onOk: async () => {
-      await acceptProjectHandover(record.id, {
-        comment: "项目部门确认材料齐全并接收",
-      });
-      message.success("项目交接完成");
-      await loadData();
+      try {
+        await acceptProjectHandover(record.id, {
+          comment: "项目部门确认材料齐全并接收",
+        });
+        message.success("项目交接完成");
+        await loadData();
+      } catch (e: any) {
+        message.error(e.message);
+      }
     },
   });
 }
@@ -1191,12 +1195,16 @@ function reviewSheet(record: any, decision: string) {
     title: decision === "APPROVED" ? "通过工时" : "驳回工时",
     content: "审批结果将影响项目人工成本。",
     onOk: async () => {
-      await reviewTimesheet(
-        record.id,
-        decision,
-        decision === "APPROVED" ? "工时确认" : "请补充工作内容",
-      );
-      await loadData();
+      try {
+        await reviewTimesheet(
+          record.id,
+          decision,
+          decision === "APPROVED" ? "工时确认" : "请补充工作内容",
+        );
+        await loadData();
+      } catch (e: any) {
+        message.error(e.message);
+      }
     },
   });
 }
@@ -1225,12 +1233,16 @@ function reviewBudget(record: any, decision: string) {
     title: decision === "APPROVED" ? "批准预算变更" : "驳回预算变更",
     content: `${record.projectName}：${money(record.previousAmount)} → ${money(record.requestedAmount)}`,
     onOk: async () => {
-      await reviewBudgetChange(
-        record.id,
-        decision,
-        decision === "APPROVED" ? "同意调整" : "不同意调整",
-      );
-      await loadData();
+      try {
+        await reviewBudgetChange(
+          record.id,
+          decision,
+          decision === "APPROVED" ? "同意调整" : "不同意调整",
+        );
+        await loadData();
+      } catch (e: any) {
+        message.error(e.message);
+      }
     },
   });
 }

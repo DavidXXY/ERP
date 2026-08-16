@@ -398,7 +398,11 @@ function bindInvoiceFile(record: ExpenseDraftLine, file: File) {
   return false;
 }
 async function handleExpense() {
-  await expenseFormRef.value?.validate();
+  try {
+    await expenseFormRef.value?.validate();
+  } catch {
+    return;
+  }
   const draftLines = expenseForm.lines.filter(
     (line) => line.amount > 0 && line.expenseDate && line.description.trim(),
   );

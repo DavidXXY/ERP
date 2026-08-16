@@ -264,7 +264,11 @@ function openOutsource() {
   outsourceOpen.value = true;
 }
 async function handleOutsource() {
-  await outsourceFormRef.value?.validate();
+  try {
+    await outsourceFormRef.value?.validate();
+  } catch {
+    return;
+  }
   saving.value = true;
   try {
     await createOutsource({
@@ -289,7 +293,11 @@ function openApproval(record: Outsource) {
   approvalCenterRef.value?.openApprovalById(record.approvalRequestId);
 }
 async function handleOutsourceComplete() {
-  await outsourceCompleteFormRef.value?.validate();
+  try {
+    await outsourceCompleteFormRef.value?.validate();
+  } catch {
+    return;
+  }
   if (!selectedOutsource.value) return;
   saving.value = true;
   try {

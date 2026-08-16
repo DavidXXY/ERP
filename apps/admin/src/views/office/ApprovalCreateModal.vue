@@ -120,7 +120,11 @@ watch(
 );
 
 async function handleOk() {
-  await formRef.value?.validate();
+  try {
+    await formRef.value?.validate();
+  } catch {
+    return;
+  }
   emit("submit", { ...form });
 }
 </script>

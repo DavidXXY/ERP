@@ -708,7 +708,11 @@ function removeIssueLine(index: number) {
 
 async function handleCreateMovement() {
   if (!movementPart.value) return;
-  await movementFormRef.value?.validate();
+  try {
+    await movementFormRef.value?.validate();
+  } catch {
+    return;
+  }
   saving.value = true;
   try {
     await createStockMovement(movementPart.value.id, { ...movementForm });
@@ -722,7 +726,11 @@ async function handleCreateMovement() {
   }
 }
 async function handleCreateIssue() {
-  await issueFormRef.value?.validate();
+  try {
+    await issueFormRef.value?.validate();
+  } catch {
+    return;
+  }
   if (issueForm.lines.some((line) => !line.partId || line.quantity <= 0)) {
     message.warning("请完整填写领料明细");
     return;
@@ -759,7 +767,11 @@ async function handleCreateIssue() {
 }
 async function handleCreateReturn() {
   if (!activeIssue.value) return;
-  await returnFormRef.value?.validate();
+  try {
+    await returnFormRef.value?.validate();
+  } catch {
+    return;
+  }
   const lines = returnForm.lines.filter((line) => Number(line.quantity) > 0);
   if (!lines.length) {
     message.warning("请填写至少一项退料数量");

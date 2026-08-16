@@ -317,7 +317,11 @@ function openCreate() {
 }
 
 async function saveLifecycle() {
-  await lcFormRef.value?.validate();
+  try {
+    await lcFormRef.value?.validate();
+  } catch {
+    return;
+  }
   saving.value = true;
   try {
     const { employeeId, ...payload } = lcForm;

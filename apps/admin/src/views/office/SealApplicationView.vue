@@ -377,7 +377,11 @@ function openApproval(record: SealApplication) {
   approvalCenterRef.value?.openApprovalById(record.approvalRequestId);
 }
 async function submit() {
-  await formRef.value?.validate();
+  try {
+    await formRef.value?.validate();
+  } catch {
+    return;
+  }
   const files = attachmentFiles.value.flatMap((item) =>
     item.originFileObj ? [item.originFileObj as File] : [],
   );

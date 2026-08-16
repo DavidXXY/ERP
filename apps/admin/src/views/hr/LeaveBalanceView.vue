@@ -394,7 +394,11 @@ function editBalance(record: LeaveBalanceRecord) {
 }
 
 async function saveBalance() {
-  await formRef.value?.validate();
+  try {
+    await formRef.value?.validate();
+  } catch {
+    return;
+  }
   saving.value = true;
   try {
     await setLeaveBalance(formData.employeeId, {

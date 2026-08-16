@@ -302,7 +302,11 @@ function openApproval(record: TravelApplication) {
   approvalCenterRef.value?.openApprovalById(record.approvalRequestId);
 }
 async function submit() {
-  await formRef.value?.validate();
+  try {
+    await formRef.value?.validate();
+  } catch {
+    return;
+  }
   if (travelDays.value < 1) {
     message.error("结束日期不能早于开始日期");
     return;

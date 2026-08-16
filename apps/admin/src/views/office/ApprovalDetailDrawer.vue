@@ -341,7 +341,11 @@ watch(
 );
 
 async function handleDetailProcess() {
-  await detailProcessFormRef.value?.validate();
+  try {
+    await detailProcessFormRef.value?.validate();
+  } catch {
+    return;
+  }
   emit("process", { ...detailProcessForm });
 }
 

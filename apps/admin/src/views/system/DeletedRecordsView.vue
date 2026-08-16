@@ -83,15 +83,23 @@ async function loadData() {
 }
 
 async function approve(id: string) {
-  await approveDeletedRecord(id);
-  message.success("已审批通过");
-  await loadData();
+  try {
+    await approveDeletedRecord(id);
+    message.success("已审批通过");
+    await loadData();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "审批操作失败");
+  }
 }
 
 async function restore(id: string) {
-  await restoreDeletedRecord(id);
-  message.success("已恢复显示");
-  await loadData();
+  try {
+    await restoreDeletedRecord(id);
+    message.success("已恢复显示");
+    await loadData();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "恢复操作失败");
+  }
 }
 
 function entityLabel(type: string) {

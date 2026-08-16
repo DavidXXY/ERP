@@ -802,7 +802,11 @@ async function loadOverview() {
 }
 
 async function saveProfile() {
-  await profileFormRef.value?.validate();
+  try {
+    await profileFormRef.value?.validate();
+  } catch {
+    return;
+  }
   saving.value = true;
   try {
     await updateMyProfileApi(profileForm);
@@ -816,7 +820,11 @@ async function saveProfile() {
 }
 
 async function changePassword() {
-  await passwordFormRef.value?.validate();
+  try {
+    await passwordFormRef.value?.validate();
+  } catch {
+    return;
+  }
   if (passwordForm.newPassword !== passwordForm.confirmPassword) {
     message.error("两次输入的新密码不一致");
     return;
@@ -970,7 +978,11 @@ function openCertificate(record?: MyCertificate) {
 }
 
 async function saveCertificate() {
-  await certificateFormRef.value?.validate();
+  try {
+    await certificateFormRef.value?.validate();
+  } catch {
+    return;
+  }
   saving.value = true;
   try {
     if (certificateEditingId.value)

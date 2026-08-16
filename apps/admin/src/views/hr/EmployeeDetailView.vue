@@ -895,7 +895,11 @@ function openEducation(record?: EducationRecord) {
   educationModal.value = true;
 }
 async function saveEducation() {
-  await eduFormRef.value?.validate();
+  try {
+    await eduFormRef.value?.validate();
+  } catch {
+    return;
+  }
   saving.value = true;
   try {
     if (educationEditingId.value) {
@@ -913,9 +917,13 @@ async function saveEducation() {
   }
 }
 async function removeEducation(id: string) {
-  await deleteEducation(id);
-  message.success("已删除");
-  educations.value = await listEducations(employeeId.value);
+  try {
+    await deleteEducation(id);
+    message.success("已删除");
+    educations.value = await listEducations(employeeId.value);
+  } catch (error: any) {
+    message.error(error.message || "删除失败");
+  }
 }
 
 // Work Experience
@@ -947,7 +955,11 @@ function openWorkExperience(record?: WorkExperienceRecord) {
   workModal.value = true;
 }
 async function saveWorkExperience() {
-  await workFormRef.value?.validate();
+  try {
+    await workFormRef.value?.validate();
+  } catch {
+    return;
+  }
   saving.value = true;
   try {
     if (workEditingId.value) {
@@ -965,9 +977,13 @@ async function saveWorkExperience() {
   }
 }
 async function removeWorkExperience(id: string) {
-  await deleteWorkExperience(id);
-  message.success("已删除");
-  workExperiences.value = await listWorkExperiences(employeeId.value);
+  try {
+    await deleteWorkExperience(id);
+    message.success("已删除");
+    workExperiences.value = await listWorkExperiences(employeeId.value);
+  } catch (error: any) {
+    message.error(error.message || "删除失败");
+  }
 }
 
 // Emergency Contact
@@ -997,7 +1013,11 @@ function openEmergencyContact(record?: EmergencyContactRecord) {
   contactModal.value = true;
 }
 async function saveEmergencyContact() {
-  await contactFormRef.value?.validate();
+  try {
+    await contactFormRef.value?.validate();
+  } catch {
+    return;
+  }
   saving.value = true;
   try {
     if (contactEditingId.value) {
@@ -1015,9 +1035,13 @@ async function saveEmergencyContact() {
   }
 }
 async function removeEmergencyContact(id: string) {
-  await deleteEmergencyContact(id);
-  message.success("已删除");
-  emergencyContacts.value = await listEmergencyContacts(employeeId.value);
+  try {
+    await deleteEmergencyContact(id);
+    message.success("已删除");
+    emergencyContacts.value = await listEmergencyContacts(employeeId.value);
+  } catch (error: any) {
+    message.error(error.message || "删除失败");
+  }
 }
 
 onMounted(loadData);

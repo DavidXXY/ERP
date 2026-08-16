@@ -15,6 +15,7 @@ import com.company.ops.api.common.storage.FileStorageService;
 import com.company.ops.api.modules.inventory.domain.InventoryPart;
 import com.company.ops.api.modules.inventory.repository.InventoryPartRepository;
 import com.company.ops.api.modules.inventory.repository.StockMovementRepository;
+import com.company.ops.api.modules.office.service.OfficeService;
 import com.company.ops.api.modules.procurement.domain.GoodsReceipt;
 import com.company.ops.api.modules.procurement.domain.FrameworkAgreement;
 import com.company.ops.api.modules.procurement.domain.FrameworkAgreementItem;
@@ -111,6 +112,7 @@ class ProcurementServiceTest {
   @Mock private ProcurementApprovalRuleRepository approvalRuleRepository;
   @Mock private FrameworkAgreementRepository frameworkAgreementRepository;
   @Mock private FrameworkAgreementItemRepository frameworkAgreementItemRepository;
+  @Mock private OfficeService officeService;
   @InjectMocks private ProcurementService procurementService;
   @InjectMocks private ProcurementOrderDocumentService orderDocumentService;
 

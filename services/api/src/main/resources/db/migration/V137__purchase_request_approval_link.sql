@@ -1,0 +1,1 @@
+ALTER TABLE procurement_purchase_requests ADD COLUMN approval_request_id UUID;

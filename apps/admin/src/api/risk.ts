@@ -64,6 +64,8 @@ export type RiskItemResponse = {
   workflow?: RiskWorkflowResponse;
 };
 
+export type RiskOwnerType = "ROLE" | "USER" | "POSITION" | "DYNAMIC";
+
 export type RiskRuleConfigResponse = {
   id?: string;
   ruleCode: string;
@@ -75,8 +77,30 @@ export type RiskRuleConfigResponse = {
   warningDays?: number;
   slaHours?: number;
   defaultOwner?: string;
+  defaultOwnerType?: RiskOwnerType | null;
+  defaultOwnerUserId?: string | null;
+  defaultOwnerRoleId?: string | null;
+  defaultOwnerPosition?: string | null;
+  defaultOwnerDynamic?: string | null;
   escalationOwner?: string;
+  escalationOwnerType?: RiskOwnerType | null;
+  escalationOwnerUserId?: string | null;
+  escalationOwnerRoleId?: string | null;
+  escalationOwnerPosition?: string | null;
+  escalationOwnerDynamic?: string | null;
   remark?: string;
+};
+
+export type RiskOwnerOption = {
+  id: string;
+  name: string;
+  secondary?: string;
+};
+
+export type RiskOwnerOptionsResponse = {
+  roles: RiskOwnerOption[];
+  users: RiskOwnerOption[];
+  positions: string[];
 };
 
 export type RiskModuleSummaryResponse = {
@@ -133,6 +157,13 @@ export function listRiskRules() {
   return request<RiskRuleConfigResponse[]>({
     method: "GET",
     url: "/risk/rules",
+  });
+}
+
+export function listRiskOwnerOptions() {
+  return request<RiskOwnerOptionsResponse>({
+    method: "GET",
+    url: "/risk/owner-options",
   });
 }
 

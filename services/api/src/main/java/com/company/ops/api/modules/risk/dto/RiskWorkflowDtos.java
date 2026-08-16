@@ -52,6 +52,18 @@ public final class RiskWorkflowDtos {
       String organizationName
   ) {}
 
+  public record RiskOwnerOption(
+      UUID id,
+      String name,
+      String secondary
+  ) {}
+
+  public record RiskOwnerOptionsResponse(
+      List<RiskOwnerOption> roles,
+      List<RiskOwnerOption> users,
+      List<String> positions
+  ) {}
+
   public record RiskItemResponse(
       String key,
       String module,
@@ -82,7 +94,17 @@ public final class RiskWorkflowDtos {
       Integer warningDays,
       Integer slaHours,
       String defaultOwner,
+      String defaultOwnerType,
+      UUID defaultOwnerUserId,
+      UUID defaultOwnerRoleId,
+      String defaultOwnerPosition,
+      String defaultOwnerDynamic,
       String escalationOwner,
+      String escalationOwnerType,
+      UUID escalationOwnerUserId,
+      UUID escalationOwnerRoleId,
+      String escalationOwnerPosition,
+      String escalationOwnerDynamic,
       String remark
   ) {}
 
@@ -95,8 +117,16 @@ public final class RiskWorkflowDtos {
       @PositiveOrZero BigDecimal mediumThreshold,
       @PositiveOrZero Integer warningDays,
       @Positive Integer slaHours,
-      @Size(max = 80) String defaultOwner,
-      @Size(max = 80) String escalationOwner,
+      @Size(max = 20) String defaultOwnerType,
+      UUID defaultOwnerUserId,
+      UUID defaultOwnerRoleId,
+      @Size(max = 120) String defaultOwnerPosition,
+      @Size(max = 40) String defaultOwnerDynamic,
+      @Size(max = 20) String escalationOwnerType,
+      UUID escalationOwnerUserId,
+      UUID escalationOwnerRoleId,
+      @Size(max = 120) String escalationOwnerPosition,
+      @Size(max = 40) String escalationOwnerDynamic,
       @Size(max = 500) String remark
   ) {}
 

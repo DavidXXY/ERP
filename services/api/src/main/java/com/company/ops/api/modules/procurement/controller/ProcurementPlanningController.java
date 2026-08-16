@@ -1,10 +1,8 @@
 package com.company.ops.api.modules.procurement.controller;
 
 import com.company.ops.api.common.api.ApiResponse;
-import com.company.ops.api.modules.procurement.dto.ProcurementPlanningDtos.ApprovalRuleResponse;
 import com.company.ops.api.modules.procurement.dto.ProcurementPlanningDtos.CentralPlanResponse;
 import com.company.ops.api.modules.procurement.dto.ProcurementPlanningDtos.FrameworkAgreementResponse;
-import com.company.ops.api.modules.procurement.dto.ProcurementPlanningDtos.SaveApprovalRuleRequest;
 import com.company.ops.api.modules.procurement.dto.ProcurementPlanningDtos.CentralPlanSuggestionsResponse;
 import com.company.ops.api.modules.procurement.dto.ProcurementPlanningDtos.SaveCentralPlanRequest;
 import com.company.ops.api.modules.procurement.dto.ProcurementPlanningDtos.SaveFrameworkAgreementRequest;
@@ -14,7 +12,6 @@ import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -32,38 +29,6 @@ public class ProcurementPlanningController {
 
   public ProcurementPlanningController(ProcurementPlanningService service) {
     this.service = service;
-  }
-
-  // ---------- 分级审批规则 ----------
-
-  @GetMapping("/approval-rules")
-  @PreAuthorize("hasAuthority('procurement:view')")
-  public ApiResponse<List<ApprovalRuleResponse>> approvalRules() {
-    return ApiResponse.ok(service.listApprovalRules());
-  }
-
-  @PostMapping("/approval-rules")
-  @PreAuthorize("hasAuthority('procurement:request:approve')")
-  public ApiResponse<ApprovalRuleResponse> createApprovalRule(
-      @Valid @RequestBody SaveApprovalRuleRequest request
-  ) {
-    return ApiResponse.ok(service.saveApprovalRule(null, request));
-  }
-
-  @PutMapping("/approval-rules/{id}")
-  @PreAuthorize("hasAuthority('procurement:request:approve')")
-  public ApiResponse<ApprovalRuleResponse> updateApprovalRule(
-      @PathVariable UUID id,
-      @Valid @RequestBody SaveApprovalRuleRequest request
-  ) {
-    return ApiResponse.ok(service.saveApprovalRule(id, request));
-  }
-
-  @DeleteMapping("/approval-rules/{id}")
-  @PreAuthorize("hasAuthority('procurement:request:approve')")
-  public ApiResponse<Void> deleteApprovalRule(@PathVariable UUID id) {
-    service.deleteApprovalRule(id);
-    return ApiResponse.ok(null);
   }
 
   // ---------- 框架协议 ----------

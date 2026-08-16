@@ -19,7 +19,6 @@ import com.company.ops.api.modules.procurement.repository.CentralPlanItemReposit
 import com.company.ops.api.modules.procurement.repository.CentralPlanRepository;
 import com.company.ops.api.modules.procurement.repository.FrameworkAgreementItemRepository;
 import com.company.ops.api.modules.procurement.repository.FrameworkAgreementRepository;
-import com.company.ops.api.modules.procurement.repository.ProcurementApprovalRuleRepository;
 import com.company.ops.api.modules.procurement.repository.ProcurementInquiryRequestRepository;
 import com.company.ops.api.modules.procurement.repository.PurchaseOrderRepository;
 import com.company.ops.api.modules.procurement.repository.PurchaseRequestRepository;
@@ -32,7 +31,6 @@ import org.junit.jupiter.api.Test;
 class ProcurementPlanningServiceTest {
   @Test
   void generateSuggestionsAggregatesApprovedRequestsByPart() {
-    ProcurementApprovalRuleRepository rules = mock(ProcurementApprovalRuleRepository.class);
     FrameworkAgreementRepository agreements = mock(FrameworkAgreementRepository.class);
     FrameworkAgreementItemRepository agreementItems = mock(FrameworkAgreementItemRepository.class);
     CentralPlanRepository plans = mock(CentralPlanRepository.class);
@@ -71,7 +69,7 @@ class ProcurementPlanningServiceTest {
     when(parts.findAllById(any())).thenReturn(List.of(part));
 
     ProcurementPlanningService service = new ProcurementPlanningService(
-        rules, agreements, agreementItems, plans, planItems, suppliers, parts,
+        agreements, agreementItems, plans, planItems, suppliers, parts,
         requests, orders, inquiryRequests, mock(CodeGenerator.class), procurementService);
 
     var result = service.generateCentralPlanSuggestions(2026);

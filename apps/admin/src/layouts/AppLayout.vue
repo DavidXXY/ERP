@@ -98,9 +98,6 @@
           >
           <a-menu-item key="/procurement/central-plans">集采计划</a-menu-item>
           <a-menu-item key="/procurement/orders">采购订单</a-menu-item>
-          <a-menu-item key="/procurement/approval-rules"
-            >分级审批规则</a-menu-item
-          >
           <a-menu-item key="/procurement/receipts">到货入库</a-menu-item>
           <a-menu-item
             v-if="auth.can('procurement:payable:view')"

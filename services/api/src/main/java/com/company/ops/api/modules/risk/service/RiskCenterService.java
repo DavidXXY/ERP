@@ -21,13 +21,17 @@ import com.company.ops.api.modules.procurement.dto.ProcurementMatchingResponse;
 import com.company.ops.api.modules.procurement.service.ProcurementService;
 import com.company.ops.api.modules.project.dto.ProjectProfitabilityResponse;
 import com.company.ops.api.modules.project.service.ProjectService;
+import com.company.ops.api.modules.qualification.domain.QualificationEmployee;
 import com.company.ops.api.modules.qualification.dto.QualificationDtos.WarningResponse;
+import com.company.ops.api.modules.qualification.repository.QualificationEmployeeRepository;
 import com.company.ops.api.modules.qualification.service.QualificationService;
 import com.company.ops.api.modules.risk.domain.RiskRuleConfig;
 import com.company.ops.api.modules.risk.domain.RiskSnapshot;
 import com.company.ops.api.modules.risk.domain.RiskWorkflow;
 import com.company.ops.api.modules.risk.dto.RiskWorkflowDtos.RiskItemResponse;
 import com.company.ops.api.modules.risk.dto.RiskWorkflowDtos.RiskModuleSummaryResponse;
+import com.company.ops.api.modules.risk.dto.RiskWorkflowDtos.RiskOwnerOption;
+import com.company.ops.api.modules.risk.dto.RiskWorkflowDtos.RiskOwnerOptionsResponse;
 import com.company.ops.api.modules.risk.dto.RiskWorkflowDtos.RiskRuleConfigResponse;
 import com.company.ops.api.modules.risk.dto.RiskWorkflowDtos.RiskSummaryResponse;
 import com.company.ops.api.modules.risk.dto.RiskWorkflowDtos.RiskTrendPointResponse;
@@ -36,6 +40,10 @@ import com.company.ops.api.modules.risk.dto.RiskWorkflowDtos.RiskWorkflowRespons
 import com.company.ops.api.modules.risk.repository.RiskRuleConfigRepository;
 import com.company.ops.api.modules.risk.repository.RiskSnapshotRepository;
 import com.company.ops.api.modules.risk.repository.RiskWorkflowRepository;
+import com.company.ops.api.modules.system.domain.SystemRole;
+import com.company.ops.api.modules.system.domain.SystemUser;
+import com.company.ops.api.modules.system.repository.SystemRoleRepository;
+import com.company.ops.api.modules.system.repository.SystemUserRepository;
 import com.company.ops.api.modules.system.security.UserPrincipal;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -68,6 +76,9 @@ public class RiskCenterService {
   private final RiskRuleConfigRepository ruleRepository;
   private final RiskSnapshotRepository snapshotRepository;
   private final SystemNotificationRepository notificationRepository;
+  private final SystemRoleRepository roleRepository;
+  private final SystemUserRepository userRepository;
+  private final QualificationEmployeeRepository employeeRepository;
 
   public RiskCenterService(
       OfficeService officeService,
@@ -81,7 +92,10 @@ public class RiskCenterService {
       RiskWorkflowRepository workflowRepository,
       RiskRuleConfigRepository ruleRepository,
       RiskSnapshotRepository snapshotRepository,
-      SystemNotificationRepository notificationRepository) {
+      SystemNotificationRepository notificationRepository,
+      SystemRoleRepository roleRepository,
+      SystemUserRepository userRepository,
+      QualificationEmployeeRepository employeeRepository) {
     this.officeService = officeService;
     this.inventoryService = inventoryService;
     this.procurementService = procurementService;
@@ -94,6 +108,9 @@ public class RiskCenterService {
     this.ruleRepository = ruleRepository;
     this.snapshotRepository = snapshotRepository;
     this.notificationRepository = notificationRepository;
+    this.roleRepository = roleRepository;
+    this.userRepository = userRepository;
+    this.employeeRepository = employeeRepository;
   }
 
   @Transactional(readOnly = true)
@@ -242,10 +259,94 @@ public class RiskCenterService {
     rule.setMediumThreshold(request.mediumThreshold());
     rule.setWarningDays(request.warningDays());
     rule.setSlaHours(request.slaHours());
-    rule.setDefaultOwner(trimToNull(request.defaultOwner()));
-    rule.setEscalationOwner(trimToNull(request.escalationOwner()));
+    OwnerRef defaultRef = normalizeOwner(request.defaultOwnerType(), request.defaultOwnerUserId(), request.defaultOwnerRoleId(), request.defaultOwnerPosition(), request.defaultOwnerDynamic());
+    OwnerRef escalationRef = normalizeOwner(request.escalationOwnerType(), request.escalationOwnerUserId(), request.escalationOwnerRoleId(), request.escalationOwnerPosition(), request.escalationOwnerDynamic());
+    rule.setDefaultOwnerType(defaultRef.type());
+    rule.setDefaultOwnerUserId(defaultRef.userId());
+    rule.setDefaultOwnerRoleId(defaultRef.roleId());
+    rule.setDefaultOwnerPosition(defaultRef.position());
+    rule.setDefaultOwnerDynamic(defaultRef.dynamic());
+    rule.setDefaultOwner(defaultRef.label());
+    rule.setEscalationOwnerType(escalationRef.type());
+    rule.setEscalationOwnerUserId(escalationRef.userId());
+    rule.setEscalationOwnerRoleId(escalationRef.roleId());
+    rule.setEscalationOwnerPosition(escalationRef.position());
+    rule.setEscalationOwnerDynamic(escalationRef.dynamic());
+    rule.setEscalationOwner(escalationRef.label());
     rule.setRemark(trimToNull(request.remark()));
   }
+
+  @Transactional(readOnly = true)
+  public RiskOwnerOptionsResponse ownerOptions() {
+    List<RiskOwnerOption> roles = roleRepository.findAll().stream()
+        .sorted(Comparator.comparing(SystemRole::getName))
+        .map(role -> new RiskOwnerOption(role.getId(), role.getName(), role.getCode()))
+        .toList();
+    List<RiskOwnerOption> users = userRepository.findByEnabledTrueOrderByDisplayNameAsc().stream()
+        .map(user -> new RiskOwnerOption(user.getId(), user.getDisplayName(), user.getUsername()))
+        .toList();
+    List<String> positions = employeeRepository.findAllByOrderByNameAsc().stream()
+        .map(QualificationEmployee::getPosition)
+        .filter(position -> position != null && !position.isBlank())
+        .map(String::trim)
+        .distinct()
+        .sorted()
+        .toList();
+    return new RiskOwnerOptionsResponse(roles, users, positions);
+  }
+
+  private OwnerRef normalizeOwner(String type, UUID userId, UUID roleId, String position, String dynamic) {
+    String normalizedType = trimToNull(type);
+    if (normalizedType == null) {
+      return new OwnerRef(null, null, null, null, null, null);
+    }
+    return switch (normalizedType) {
+      case "ROLE" -> {
+        if (roleId == null || !roleRepository.existsById(roleId)) throw new BusinessException("责任人角色不存在");
+        String label = roleRepository.findById(roleId).map(SystemRole::getName).orElse("已删除角色");
+        yield new OwnerRef("ROLE", null, roleId, null, null, label);
+      }
+      case "USER" -> {
+        if (userId == null || !userRepository.existsById(userId)) throw new BusinessException("责任人不存在");
+        String label = userRepository.findById(userId).map(SystemUser::getDisplayName).orElse("已删除用户");
+        yield new OwnerRef("USER", userId, null, null, null, label);
+      }
+      case "POSITION" -> {
+        String normalizedPosition = trimToNull(position);
+        if (normalizedPosition == null) throw new BusinessException("责任人岗位不能为空");
+        yield new OwnerRef("POSITION", null, null, normalizedPosition, null, normalizedPosition);
+      }
+      case "DYNAMIC" -> {
+        String normalizedDynamic = trimToNull(dynamic);
+        String label = dynamicOwnerLabels().get(normalizedDynamic);
+        if (label == null) throw new BusinessException("动态责任人不正确");
+        yield new OwnerRef("DYNAMIC", null, null, null, normalizedDynamic, label);
+      }
+      default -> throw new BusinessException("责任人类型不正确");
+    };
+  }
+
+  private Map<String, String> dynamicOwnerLabels() {
+    return Map.ofEntries(
+        Map.entry("DEPARTMENT_LEADER", "部门负责人"),
+        Map.entry("DIRECT_MANAGER", "直属上级"),
+        Map.entry("PROJECT_MANAGER", "项目经理"),
+        Map.entry("PROJECT_DIRECTOR", "项目总监"),
+        Map.entry("CUSTOMER_OWNER", "客户负责人"),
+        Map.entry("SALES_MANAGER", "销售经理"),
+        Map.entry("FINANCE_MANAGER", "财务经理"),
+        Map.entry("PROCUREMENT_MANAGER", "采购经理"),
+        Map.entry("OPERATIONS_MANAGER", "运营负责人"),
+        Map.entry("GENERAL_MANAGER", "总经理"),
+        Map.entry("HR_MANAGER", "人事经理"),
+        Map.entry("BUSINESS_OWNER", "业务负责人"),
+        Map.entry("WAREHOUSE_MANAGER", "仓库管理员"),
+        Map.entry("ADMIN_MANAGER", "综合管理员"),
+        Map.entry("QUALIFICATION_MANAGER", "资质管理员"),
+        Map.entry("MAINTENANCE_MANAGER", "维保主管"));
+  }
+
+  private record OwnerRef(String type, UUID userId, UUID roleId, String position, String dynamic, String label) {}
 
   private List<RiskItemResponse> collectItems(Map<String, RiskWorkflowResponse> workflows, Map<String, RiskRuleConfig> rules) {
     List<RiskItemResponse> items = new ArrayList<>();
@@ -429,7 +530,17 @@ public class RiskCenterService {
         rule.getWarningDays(),
         rule.getSlaHours(),
         rule.getDefaultOwner(),
+        rule.getDefaultOwnerType(),
+        rule.getDefaultOwnerUserId(),
+        rule.getDefaultOwnerRoleId(),
+        rule.getDefaultOwnerPosition(),
+        rule.getDefaultOwnerDynamic(),
         rule.getEscalationOwner(),
+        rule.getEscalationOwnerType(),
+        rule.getEscalationOwnerUserId(),
+        rule.getEscalationOwnerRoleId(),
+        rule.getEscalationOwnerPosition(),
+        rule.getEscalationOwnerDynamic(),
         rule.getRemark()
     );
   }

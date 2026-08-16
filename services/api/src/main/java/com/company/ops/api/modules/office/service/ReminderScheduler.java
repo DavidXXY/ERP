@@ -32,6 +32,9 @@ public class ReminderScheduler {
   private final InventoryPartRepository parts; private final SystemNotificationRepository notifications; private final OfficeService officeService;
   private final ProjectRepository projects;
   public ReminderScheduler(EquipmentAssetRepository equipment,EmployeeCertificateRepository certificates,ServiceContractRepository contracts,ReceivableRepository receivables,InventoryPartRepository parts,SystemNotificationRepository notifications,OfficeService officeService,ProjectRepository projects){this.equipment=equipment;this.certificates=certificates;this.contracts=contracts;this.receivables=receivables;this.parts=parts;this.notifications=notifications;this.officeService=officeService;this.projects=projects;}
+  @Scheduled(cron="${ops.sla.cron:0 */10 * * * *}") @Transactional
+  @SchedulerLock(name = "approvalSlaScan", lockAtLeastFor = "PT30S", lockAtMostFor = "PT5M")
+  public int scanApprovalSla(){ return officeService.scanApprovalSla(); }
   @Scheduled(cron="${ops.reminders.cron:0 15 1 * * *}") @Transactional
   @SchedulerLock(name = "officeReminderRefresh", lockAtLeastFor = "PT1M", lockAtMostFor = "PT30M")
   public int refresh(){LocalDate today=LocalDate.now();int count=0;
@@ -58,7 +61,6 @@ public class ReminderScheduler {
     for(var item:projects.findByApprovalStatusAndCreatedAtBefore(ProjectApprovalStatus.PENDING,today.atStartOfDay().minusDays(3).atOffset(ZoneOffset.ofHours(8)))){
       count+=create(existing,"PROJECT_PENDING_APPROVAL:"+item.getId(),"PROJECT","立项审批待处理",item.getCode()+" · "+item.getName()+" · 已提交超过 3 天","PROJECT",item.getId());
     }
-    count+=officeService.scanApprovalSla();
     return count;}
   private int create(Set<String> existing,String key,String type,String title,String content,String relatedType,UUID relatedId){if(!existing.add(key))return 0;SystemNotification item=new SystemNotification();item.setDedupKey(key);item.setType(type);item.setTitle(title);item.setContent(content);item.setRelatedType(relatedType);item.setRelatedId(relatedId);item.setRead(false);notifications.save(item);return 1;}
 }

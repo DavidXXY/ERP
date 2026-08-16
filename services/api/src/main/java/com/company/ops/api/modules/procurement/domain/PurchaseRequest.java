@@ -89,6 +89,9 @@ public class PurchaseRequest extends BaseEntity {
   @Column(name = "approval_level", length = 24)
   private String approvalLevel;
 
+  @Column(name = "approval_request_id")
+  private UUID approvalRequestId;
+
   public UUID getBatchId() {
     return batchId;
   }
@@ -263,4 +266,6 @@ public class PurchaseRequest extends BaseEntity {
   public void setSourceReference(String sourceReference) { this.sourceReference = sourceReference; }
   public String getApprovalLevel() { return approvalLevel; }
   public void setApprovalLevel(String approvalLevel) { this.approvalLevel = approvalLevel; }
+  public UUID getApprovalRequestId() { return approvalRequestId; }
+  public void setApprovalRequestId(UUID approvalRequestId) { this.approvalRequestId = approvalRequestId; }
 }

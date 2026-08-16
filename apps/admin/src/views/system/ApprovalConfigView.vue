@@ -3,213 +3,120 @@
     <a-card>
       <template #title>审批流配置</template>
       <template #extra>
-        <a-space>
-          <a-button @click="openBatchPreview">批量模拟</a-button>
+        <a-space wrap>
+          <a-select
+            :value="selectedFlow"
+            :options="flowOptions"
+            style="width: 220px"
+            @change="onFlowChange"
+          />
+          <a-radio-group
+            :value="flowMode"
+            button-style="solid"
+            @change="onModeChange"
+          >
+            <a-radio-button value="SEQUENTIAL">依次审批</a-radio-button>
+            <a-radio-button value="PARALLEL">同步审批</a-radio-button>
+          </a-radio-group>
+          <a-button
+            type="primary"
+            :loading="saving"
+            :disabled="!dirty"
+            @click="saveDesign"
+            >保存设计</a-button
+          >
+          <a-button @click="openTemplate">套用模板</a-button>
+          <a-button @click="publishFlow(selectedFlow)">发布</a-button>
+          <a-button @click="openVersions(selectedFlow)">版本</a-button>
           <a-button @click="openCopyFlow">复制审批流</a-button>
-          <a-button type="primary" @click="openAdd()">新增规则</a-button>
+          <a-button @click="openBatchPreview">批量模拟</a-button>
         </a-space>
       </template>
+
       <a-alert
         type="info"
         show-icon
-        message="常用配置直接填写，低频规则收在高级设置。"
+        message="拖拽节点调整审批顺序，点击节点可编辑；修改后点击「保存设计」一次性落库。"
         style="margin-bottom: 16px"
       />
-      <a-collapse
-        v-model:active-key="activeFlowKeys"
-        class="approval-flow-collapse"
-      >
-        <a-collapse-panel v-for="group in groupedFlows" :key="group.flowCode">
-          <template #header>
-            <div class="flow-panel-title">
-              <strong>{{ group.flowName }}</strong>
-              <span
-                >{{ group.flowCode }} · {{ group.items.length }} 条规则 ·
-                {{ group.maxStep }} 步</span
-              >
-              <span v-if="group.versionNo"
-                >当前版本 V{{ group.versionNo }}</span
-              >
-              <div v-if="flowWarnings(group).length" class="flow-warnings">
-                <a-tag
-                  v-for="warning in flowWarnings(group)"
-                  :key="warning"
-                  color="orange"
-                  >{{ warning }}</a-tag
-                >
-              </div>
-            </div>
-          </template>
-          <template #extra>
-            <a-space @click.stop>
-              <a-button
-                size="small"
-                type="link"
-                @click="publishFlow(group.flowCode)"
-                >发布</a-button
-              >
-              <a-button
-                size="small"
-                type="link"
-                @click="openVersions(group.flowCode)"
-                >版本</a-button
-              >
-              <a-button
-                size="small"
-                type="link"
-                @click="openAdd(group.flowCode)"
-                >新增规则</a-button
-              >
-            </a-space>
-          </template>
-          <div class="step-stack">
-            <section
-              v-for="step in group.steps"
-              :key="step.stepNo"
-              class="step-section"
+
+      <div v-if="warnings.length" class="flow-warnings">
+        <a-tag v-for="w in warnings" :key="w" color="orange">{{ w }}</a-tag>
+        <a-tag v-if="dirty" color="red">未保存</a-tag>
+      </div>
+
+      <a-spin :spinning="loading">
+        <ApprovalFlowDesigner
+          :steps="flowSteps"
+          @reorder-step="reorderStep"
+          @move-branch="moveBranch"
+          @add-step="addStep"
+          @add-branch="addBranch"
+          @edit-branch="openEdit"
+          @delete-branch="deleteBranch"
+          @delete-step="deleteStep"
+        />
+      </a-spin>
+
+      <a-collapse v-model:active-key="previewKeys" ghost>
+        <a-collapse-panel key="preview" header="审批路径预览">
+          <a-row :gutter="12">
+            <a-col :xs="24" :md="6"
+              ><a-input-number
+                v-model:value="previewForm.amount"
+                placeholder="金额/天数"
+                :min="0"
+                :precision="2"
+                style="width: 100%"
+            /></a-col>
+            <a-col :xs="24" :md="6"
+              ><a-input
+                v-model:value="previewForm.departmentName"
+                placeholder="部门/组织"
+            /></a-col>
+            <a-col :xs="24" :md="6"
+              ><a-input
+                v-model:value="previewForm.businessType"
+                placeholder="业务类型"
+            /></a-col>
+            <a-col :xs="24" :md="6"
+              ><a-button block @click="runPreview">预览路径</a-button></a-col
             >
-              <div class="step-title">
-                <a-tag color="blue">第 {{ step.stepNo }} 步</a-tag>
-                <span
-                  >{{ step.items.length }} 条规则，{{
-                    step.items.filter(
-                      (item: ApprovalConfigResponse) => item.enabled,
-                    ).length
-                  }}
-                  条启用</span
-                >
-              </div>
-              <a-table
-                :data-source="step.items"
-                :columns="columns"
-                :loading="loading"
-                row-key="id"
-                size="small"
-                :pagination="false"
-                :custom-row="
-                  (record: ApprovalConfigResponse) => ({
-                    onClick: () => openEdit(record),
-                  })
-                "
-                :row-class-name="() => 'clickable-row'"
-              >
-                <template #bodyCell="{ column, record }">
-                  <template v-if="column.key === 'assignee'">
-                    <a-tag :color="assigneeTypeColor(record.assigneeType)">{{
-                      assigneeTypeLabel(record.assigneeType)
-                    }}</a-tag>
-                    {{ record.assigneeName }}
-                    <a-tag
-                      v-if="
-                        record.assigneeType === 'ROLE' &&
-                        roleUserCount(record.roleId) === 0
-                      "
-                      color="red"
-                      >无成员</a-tag
-                    >
-                    <a-tag v-if="!record.enabled" color="default">停用</a-tag>
-                    <a-tag>V{{ record.versionNo }}</a-tag>
-                  </template>
-                  <template v-else-if="column.key === 'mode'"
-                    ><a-tag
-                      :color="
-                        record.approvalMode === 'SEQUENTIAL' ? 'blue' : 'green'
-                      "
-                      >{{
-                        record.approvalMode === "SEQUENTIAL" ? "依次" : "同步"
-                      }}</a-tag
-                    ></template
-                  >
-                  <template v-else-if="column.key === 'condition'">
-                    <a-tag :color="conditionColor(record.conditionType)">{{
-                      conditionLabel(record.conditionType)
-                    }}</a-tag>
-                    <span class="table-subtitle">{{
-                      conditionText(record)
-                    }}</span>
-                    <span v-if="record.slaHours" class="table-subtitle"
-                      >SLA {{ record.slaHours }} 小时</span
-                    >
-                  </template>
-                  <template v-else-if="column.key === 'action'">
-                    <a-space>
-                      <a-button type="link" @click.stop="openEdit(record)"
-                        >编辑</a-button
-                      >
-                      <a-popconfirm
-                        title="确定移除该审批规则？"
-                        @confirm="removeConfig(record.id)"
-                      >
-                        <a-button type="link" danger @click.stop>移除</a-button>
-                      </a-popconfirm>
-                    </a-space>
-                  </template>
-                </template>
-              </a-table>
-            </section>
-          </div>
-          <div class="preview-panel">
-            <div class="preview-title">审批路径预览</div>
-            <a-row :gutter="12">
-              <a-col :xs="24" :md="6"
-                ><a-input-number
-                  v-model:value="previewForms[group.flowCode].amount"
-                  placeholder="金额/天数"
-                  :min="0"
-                  :precision="2"
-                  style="width: 100%"
-              /></a-col>
-              <a-col :xs="24" :md="6"
-                ><a-input
-                  v-model:value="previewForms[group.flowCode].departmentName"
-                  placeholder="部门/组织"
-              /></a-col>
-              <a-col :xs="24" :md="6"
-                ><a-input
-                  v-model:value="previewForms[group.flowCode].businessType"
-                  placeholder="业务类型"
-              /></a-col>
-              <a-col :xs="24" :md="6"
-                ><a-button block @click="runPreview(group.flowCode)"
-                  >预览路径</a-button
-                ></a-col
-              >
-            </a-row>
-            <a-row :gutter="12" style="margin-top: 10px">
-              <a-col :xs="24" :md="6"
-                ><a-input
-                  v-model:value="previewForms[group.flowCode].projectCode"
-                  placeholder="项目编码"
-              /></a-col>
-              <a-col :xs="24" :md="6"
-                ><a-select
-                  v-model:value="previewForms[group.flowCode].supplierRisk"
-                  allow-clear
-                  placeholder="供应商风险"
-                  :options="supplierRiskOptions"
-                  style="width: 100%"
-              /></a-col>
-              <a-col :xs="24" :md="6"
-                ><a-input
-                  v-model:value="previewForms[group.flowCode].customerLevel"
-                  placeholder="客户等级"
-              /></a-col>
-            </a-row>
-            <div v-if="previewResults[group.flowCode]" class="preview-result">
-              <a-alert
-                :message="`${previewResults[group.flowCode]?.ruleText} · V${previewResults[group.flowCode]?.versionNo}`"
-                type="success"
-                show-icon
+          </a-row>
+          <a-row :gutter="12" style="margin-top: 10px">
+            <a-col :xs="24" :md="6"
+              ><a-input
+                v-model:value="previewForm.projectCode"
+                placeholder="项目编码"
+            /></a-col>
+            <a-col :xs="24" :md="6"
+              ><a-select
+                v-model:value="previewForm.supplierRisk"
+                allow-clear
+                placeholder="供应商风险"
+                :options="supplierRiskOptions"
+                style="width: 100%"
+            /></a-col>
+            <a-col :xs="24" :md="6"
+              ><a-input
+                v-model:value="previewForm.customerLevel"
+                placeholder="客户等级"
+            /></a-col>
+          </a-row>
+          <div v-if="previewResult" class="preview-result">
+            <a-alert
+              :message="`${previewResult.ruleText} · V${previewResult.versionNo}`"
+              type="success"
+              show-icon
+            />
+            <a-steps :current="-1" size="small" class="preview-steps">
+              <a-step
+                v-for="step in previewResult.steps"
+                :key="step.stepNo"
+                :title="`第 ${step.stepNo} 步`"
+                :description="stepDescription(step)"
               />
-              <a-steps :current="-1" size="small" class="preview-steps">
-                <a-step
-                  v-for="step in previewResults[group.flowCode]?.steps"
-                  :key="step.stepNo"
-                  :title="`第 ${step.stepNo} 步`"
-                  :description="stepDescription(step)"
-                />
-              </a-steps>
-            </div>
+            </a-steps>
           </div>
         </a-collapse-panel>
       </a-collapse>
@@ -217,14 +124,14 @@
 
     <a-modal
       v-model:open="addOpen"
-      :title="editingId ? '编辑审批规则' : '新增审批规则'"
+      :title="editingId ? '编辑审批节点' : '新增审批节点'"
       :confirm-loading="saving"
       @ok="saveConfig"
     >
       <a-form ref="formRef" :model="form" :rules="rules" layout="vertical">
-        <a-form-item label="审批流程" name="flowCode"
-          ><a-select v-model:value="form.flowCode" :options="flowOptions"
-        /></a-form-item>
+        <a-form-item label="审批流程">
+          <a-input :value="selectedFlowName" disabled />
+        </a-form-item>
         <a-form-item label="审批对象类型" name="assigneeType">
           <a-radio-group v-model:value="form.assigneeType">
             <a-radio-button value="ROLE">角色</a-radio-button>
@@ -245,7 +152,9 @@
             option-filter-prop="label"
             :max-tag-count="4"
             :placeholder="
-              editingId ? '请选择 1 个审批对象' : '可选择多个审批对象'
+              editingId
+                ? '请选择 1 个审批对象'
+                : '可选择多个审批对象（每个对象生成一个分支）'
             "
             :options="targetOptions"
             @change="handleTargetChange"
@@ -268,12 +177,6 @@
           message="命中该规则时将自动通过，请确认条件足够明确。"
           style="margin-bottom: 16px"
         />
-        <a-form-item label="审批模式" name="approvalMode"
-          ><a-radio-group v-model:value="form.approvalMode"
-            ><a-radio value="PARALLEL">同步审批（任一人通过）</a-radio
-            ><a-radio value="SEQUENTIAL">依次审批</a-radio></a-radio-group
-          ></a-form-item
-        >
         <a-form-item label="适用条件" name="conditionType"
           ><a-select
             v-model:value="form.conditionType"
@@ -363,29 +266,6 @@
                 >已配置 {{ advancedSettingCount }} 项</span
               >
             </template>
-            <a-form-item
-              v-if="form.approvalMode === 'SEQUENTIAL'"
-              label="起始审批顺序"
-              name="sequenceNo"
-            >
-              <a-input-number
-                v-model:value="form.sequenceNo"
-                :min="1"
-                :precision="0"
-              />
-              <span class="form-hint">{{
-                editingId
-                  ? "当前审批配置所在步骤。"
-                  : "多人依次审批时，会按选择顺序从该数字开始递增。"
-              }}</span>
-            </a-form-item>
-            <a-form-item label="规则优先级"
-              ><a-input-number
-                v-model:value="form.priority"
-                :min="1"
-                :precision="0"
-                style="width: 100%"
-            /></a-form-item>
             <a-form-item label="节点通过策略">
               <a-select
                 v-model:value="form.stepPolicy"
@@ -454,6 +334,39 @@
     </a-modal>
 
     <a-modal
+      v-model:open="templateOpen"
+      title="套用审批流模板"
+      :footer="null"
+      width="640px"
+    >
+      <a-alert
+        type="warning"
+        show-icon
+        message="套用模板会覆盖当前流程的节点，套用后仍需点击「保存设计」落库。"
+        style="margin-bottom: 12px"
+      />
+      <a-radio-group v-model:value="selectedTemplate" style="width: 100%">
+        <div v-for="t in approvalTemplates" :key="t.key" class="template-item">
+          <a-radio :value="t.key">
+            <div class="template-head">
+              <strong>{{ t.name }}</strong>
+              <a-tag :color="t.mode === 'SEQUENTIAL' ? 'blue' : 'green'">{{
+                t.mode === "SEQUENTIAL" ? "依次" : "同步"
+              }}</a-tag>
+            </div>
+            <div class="template-desc">{{ t.description }}</div>
+          </a-radio>
+        </div>
+      </a-radio-group>
+      <div style="margin-top: 16px; text-align: right">
+        <a-button @click="templateOpen = false">取消</a-button>
+        <a-button type="primary" style="margin-left: 8px" @click="applyTemplate"
+          >套用</a-button
+        >
+      </div>
+    </a-modal>
+
+    <a-modal
       v-model:open="batchOpen"
       title="批量模拟审批路径"
       width="760px"
@@ -499,26 +412,31 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
 import { message, type FormInstance } from "ant-design-vue";
+import ApprovalFlowDesigner from "@/components/ApprovalFlowDesigner.vue";
 import {
   batchPreviewApprovalFlows,
   copyApprovalFlow,
-  createApprovalConfig,
-  deleteApprovalConfig,
   listApprovalConfigs,
-  listApprovalDiagnostics,
   listApprovalFlowVersions,
   listRolesApi,
   listUsersApi,
   previewApprovalFlow,
   publishApprovalFlow,
+  replaceApprovalFlow,
   rollbackApprovalFlow,
-  updateApprovalConfig,
   type ApprovalConfigResponse,
   type ApprovalFlowPreview,
   type ApprovalFlowVersion,
+  type ApprovalRulePayload,
   type RoleResponse,
   type UserResponse,
 } from "@/api/system";
+import {
+  approvalTemplates,
+  type ApprovalFlowTemplate,
+} from "./approvalTemplates";
+
+type FlowStep = { stepNo: number; rules: ApprovalConfigResponse[] };
 
 const flowOptions = [
   { label: "报价审批", value: "QUOTE", flowName: "报价审批" },
@@ -538,11 +456,15 @@ const flowOptions = [
   { label: "用印审批", value: "SEAL", flowName: "用印审批" },
   { label: "通用审批", value: "OTHER", flowName: "通用审批" },
 ];
+
 const configs = ref<ApprovalConfigResponse[]>([]);
 const users = ref<UserResponse[]>([]);
 const roles = ref<RoleResponse[]>([]);
 const versions = ref<ApprovalFlowVersion[]>([]);
-const selectedVersionFlow = ref("QUOTE");
+const selectedFlow = ref("QUOTE");
+const flowMode = ref<"PARALLEL" | "SEQUENTIAL">("SEQUENTIAL");
+const flowSteps = ref<FlowStep[]>([]);
+const dirty = ref(false);
 const loading = ref(false);
 const saving = ref(false);
 const addOpen = ref(false);
@@ -550,31 +472,29 @@ const copyOpen = ref(false);
 const batchOpen = ref(false);
 const versionOpen = ref(false);
 const editingId = ref<string | null>(null);
-const activeFlowKeys = ref<string[]>([]);
+const previewKeys = ref<string[]>([]);
 const advancedKeys = ref<string[]>([]);
 const formRef = ref<FormInstance>();
-const previewResults = ref<Record<string, ApprovalFlowPreview | undefined>>({});
+const previewResult = ref<ApprovalFlowPreview | undefined>();
 const batchResults = ref<ApprovalFlowPreview[]>([]);
-const previewForms = reactive<
-  Record<
-    string,
-    {
-      amount?: number;
-      departmentName: string;
-      businessType: string;
-      projectCode: string;
-      supplierRisk?: string;
-      customerLevel: string;
-    }
-  >
->({});
+const selectedVersionFlow = ref("QUOTE");
+const templateOpen = ref(false);
+const selectedTemplate = ref(approvalTemplates[0].key);
+
+const previewForm = reactive({
+  amount: undefined as number | undefined,
+  departmentName: "",
+  businessType: "",
+  projectCode: "",
+  supplierRisk: undefined as string | undefined,
+  customerLevel: "",
+});
+
 const form = reactive({
   flowCode: "QUOTE",
   assigneeType: "ROLE" as ApprovalConfigResponse["assigneeType"],
   targetIds: [] as string[],
   dynamicAssignee: "DEPARTMENT_LEADER",
-  approvalMode: "SEQUENTIAL" as "PARALLEL" | "SEQUENTIAL",
-  sequenceNo: 1,
   conditionType: "ANY" as ApprovalConfigResponse["conditionType"],
   minAmount: undefined as number | undefined,
   maxAmount: undefined as number | undefined,
@@ -583,13 +503,14 @@ const form = reactive({
   projectCode: "",
   supplierRisk: undefined as string | undefined,
   customerLevel: "",
-  priority: 100,
   stepPolicy: "ANY_APPROVE" as ApprovalConfigResponse["stepPolicy"],
   slaHours: undefined as number | undefined,
   escalationRoleId: undefined as string | undefined,
   remark: "",
   enabled: true,
+  sequenceNo: 1,
 });
+
 const copyForm = reactive({
   sourceFlowCode: "QUOTE",
   targetFlowCode: "CONTRACT",
@@ -605,6 +526,7 @@ const batchText = ref(
     2,
   ),
 );
+
 const userOptions = computed(() =>
   users.value
     .filter((item) => item.enabled)
@@ -652,11 +574,35 @@ const dynamicAssigneeOptions = [
   { label: "采购经理", value: "PROCUREMENT_MANAGER" },
   { label: "人事经理", value: "HR_MANAGER" },
 ];
+const dynamicLabelMap: Record<string, string> = {
+  DEPARTMENT_LEADER: "部门负责人",
+  DIRECT_MANAGER: "直属上级",
+  PROJECT_MANAGER: "项目经理",
+  CUSTOMER_OWNER: "客户负责人",
+  FINANCE_MANAGER: "财务经理",
+  PROCUREMENT_MANAGER: "采购经理",
+  HR_MANAGER: "人事经理",
+};
+const rules = {
+  assigneeType: [{ required: true, message: "请选择审批对象类型" }],
+  targetIds: [
+    { required: true, type: "array", min: 1, message: "请选择审批对象" },
+  ],
+};
+const versionColumns = [
+  { title: "版本", dataIndex: "versionNo" },
+  { title: "规则数", dataIndex: "ruleCount" },
+  { title: "状态", dataIndex: "publishStatus" },
+  { title: "操作", key: "action", width: 100 },
+];
+const selectedFlowName = computed(
+  () =>
+    flowOptions.find((item) => item.value === selectedFlow.value)?.flowName ||
+    selectedFlow.value,
+);
 const advancedSettingCount = computed(
   () =>
     [
-      form.sequenceNo !== 1,
-      form.priority !== 100,
       form.stepPolicy !== "ANY_APPROVE",
       form.slaHours != null,
       form.escalationRoleId != null,
@@ -664,91 +610,166 @@ const advancedSettingCount = computed(
       editingId.value != null && !form.enabled,
     ].filter(Boolean).length,
 );
-const columns = [
-  { title: "审批对象", key: "assignee", width: 180 },
-  { title: "模式", key: "mode", width: 140 },
-  { title: "适用条件", key: "condition", width: 360 },
-  { title: "操作", key: "action", width: 120 },
-];
-const versionColumns = [
-  { title: "版本", dataIndex: "versionNo" },
-  { title: "规则数", dataIndex: "ruleCount" },
-  { title: "状态", dataIndex: "publishStatus" },
-  { title: "操作", key: "action", width: 100 },
-];
-const rules = {
-  flowCode: [{ required: true, message: "请选择审批流程" }],
-  assigneeType: [{ required: true, message: "请选择审批对象类型" }],
-  targetIds: [
-    { required: true, type: "array", min: 1, message: "请选择审批对象" },
-  ],
-  approvalMode: [{ required: true }],
-  sequenceNo: [{ required: true, message: "请输入审批顺序" }],
-};
-const groupedFlows = computed(() =>
-  flowOptions.map((flow) => {
-    const items = configs.value
-      .filter((item) => item.flowCode === flow.value)
-      .sort((a, b) => a.sequenceNo - b.sequenceNo || a.priority - b.priority);
-    const stepNos = [...new Set(items.map((item) => item.sequenceNo))].sort(
-      (a, b) => a - b,
-    );
-    return {
-      flowCode: flow.value,
-      flowName: flow.flowName,
-      items,
-      versionNo: items.reduce(
-        (max, item) => Math.max(max, item.versionNo || 1),
-        0,
-      ),
-      maxStep: items.reduce((max, item) => Math.max(max, item.sequenceNo), 0),
-      steps: stepNos.map((stepNo) => ({
-        stepNo,
-        items: items.filter((item) => item.sequenceNo === stepNo),
-      })),
-    };
-  }),
-);
-
-flowOptions.forEach((item) => {
-  previewForms[item.value] = {
-    departmentName: "",
-    businessType: "",
-    projectCode: "",
-    customerLevel: "",
-  };
+const warnings = computed(() => {
+  const all = flowSteps.value.flatMap((s) => s.rules);
+  const w: string[] = [];
+  if (!all.length) w.push("尚未配置任何审批节点");
+  if (all.length && !all.some((r) => r.enabled)) w.push("无启用节点");
+  if (
+    all.length &&
+    !all.some(
+      (r) => r.enabled && r.conditionType === "ANY" && r.sequenceNo === 1,
+    )
+  )
+    w.push("缺少第1步默认规则（全部单据）");
+  if (
+    all.some((r) => r.assigneeType === "ROLE" && roleUserCount(r.roleId) === 0)
+  )
+    w.push("存在空角色");
+  if (all.some((r) => r.assigneeType === "AUTO" && r.conditionType === "ANY"))
+    w.push("自动通过条件过宽");
+  if (hasAmountOverlap()) w.push("同一步金额区间重叠");
+  return w;
 });
+
+function tempId() {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : "draft-" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+}
 
 async function loadData() {
   loading.value = true;
   try {
-    const [configData, userData, roleData, diagnostics] = await Promise.all([
+    const [configData, userData, roleData] = await Promise.all([
       listApprovalConfigs(),
       listUsersApi(0, 200),
       listRolesApi(0, 200),
-      listApprovalDiagnostics(),
     ]);
     configs.value = configData;
     users.value = userData.content;
     roles.value = roleData.content;
-    if (diagnostics.some((item) => item.severity === "HIGH"))
-      message.warning("审批流存在高风险配置，请查看流程面板提示");
-    if (!activeFlowKeys.value.length) {
-      const configuredFlowCodes = new Set(
-        configData.map((item) => item.flowCode),
-      );
-      activeFlowKeys.value = flowOptions
-        .filter((item) => configuredFlowCodes.has(item.value))
-        .map((item) => item.value)
-        .slice(0, 1);
+    const configured = new Set(configData.map((c) => c.flowCode));
+    if (!configured.has(selectedFlow.value)) {
+      selectedFlow.value = configured.size ? [...configured][0] : "QUOTE";
     }
+    reinitDraft(selectedFlow.value);
   } catch (error) {
     message.error(error instanceof Error ? error.message : "审批配置加载失败");
   } finally {
     loading.value = false;
   }
 }
-function openAdd(flowCode = "QUOTE") {
+
+function reinitDraft(flowCode: string) {
+  const items = configs.value
+    .filter((c) => c.flowCode === flowCode)
+    .sort((a, b) => a.sequenceNo - b.sequenceNo || a.priority - b.priority);
+  const byStep = new Map<number, ApprovalConfigResponse[]>();
+  for (const r of items) {
+    if (!byStep.has(r.sequenceNo)) byStep.set(r.sequenceNo, []);
+    byStep.get(r.sequenceNo)!.push({ ...r });
+  }
+  flowSteps.value = [...byStep.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([stepNo, stepRules]) => ({
+      stepNo,
+      rules: stepRules.sort((a, b) => a.priority - b.priority),
+    }));
+  flowMode.value =
+    items.find((c) => c.approvalMode)?.approvalMode || "SEQUENTIAL";
+  renumber();
+  dirty.value = false;
+}
+
+function renumber() {
+  flowSteps.value = flowSteps.value.map((s, i) => ({
+    stepNo: i + 1,
+    rules: s.rules.map((r, j) => ({
+      ...r,
+      sequenceNo: i + 1,
+      priority: j + 1,
+    })),
+  }));
+}
+
+function onFlowChange(value: string) {
+  if (value === selectedFlow.value) return;
+  if (dirty.value) {
+    const ok = window.confirm("当前流程有未保存的修改，切换将丢弃。是否继续？");
+    if (!ok) return;
+  }
+  selectedFlow.value = value;
+  reinitDraft(value);
+}
+
+function onModeChange(e: unknown) {
+  const mode = (e as { target?: { value?: string } })?.target?.value as
+    | "PARALLEL"
+    | "SEQUENTIAL"
+    | undefined;
+  if (!mode || mode === flowMode.value) return;
+  flowMode.value = mode;
+  flowSteps.value = flowSteps.value.map((s) => ({
+    stepNo: s.stepNo,
+    rules: s.rules.map((r) => ({ ...r, approvalMode: mode })),
+  }));
+  dirty.value = true;
+}
+
+function reorderStep(from: number, to: number) {
+  const arr = [...flowSteps.value];
+  const [moved] = arr.splice(from, 1);
+  arr.splice(to, 0, moved);
+  flowSteps.value = arr;
+  renumber();
+  dirty.value = true;
+}
+
+function moveBranch(
+  fromStep: number,
+  fromIndex: number,
+  toStep: number,
+  toIndex: number,
+) {
+  const arr = flowSteps.value.map((s) => ({
+    stepNo: s.stepNo,
+    rules: [...s.rules],
+  }));
+  const src = arr[fromStep];
+  if (!src) return;
+  const [moved] = src.rules.splice(fromIndex, 1);
+  if (!moved) return;
+  if (fromStep === toStep) {
+    const insertAt = toIndex > fromIndex ? toIndex - 1 : toIndex;
+    src.rules.splice(
+      Math.min(Math.max(insertAt, 0), src.rules.length),
+      0,
+      moved,
+    );
+  } else {
+    const dst = arr[toStep];
+    if (!dst) src.rules.push(moved);
+    else dst.rules.splice(Math.min(toIndex, dst.rules.length), 0, moved);
+  }
+  flowSteps.value = arr.filter((s) => s.rules.length > 0);
+  renumber();
+  dirty.value = true;
+}
+
+function addStep() {
+  const maxStep = flowSteps.value.length
+    ? Math.max(...flowSteps.value.map((s) => s.stepNo))
+    : 0;
+  openAdd(selectedFlow.value, maxStep + 1);
+}
+
+function addBranch(stepIndex: number) {
+  const step = flowSteps.value[stepIndex];
+  openAdd(selectedFlow.value, step ? step.stepNo : 1);
+}
+
+function openAdd(flowCode: string, sequenceNo: number) {
   editingId.value = null;
   advancedKeys.value = [];
   Object.assign(form, {
@@ -756,8 +777,6 @@ function openAdd(flowCode = "QUOTE") {
     assigneeType: "ROLE",
     targetIds: [],
     dynamicAssignee: "DEPARTMENT_LEADER",
-    approvalMode: "SEQUENTIAL",
-    sequenceNo: 1,
     conditionType: "ANY",
     minAmount: undefined,
     maxAmount: undefined,
@@ -766,15 +785,16 @@ function openAdd(flowCode = "QUOTE") {
     projectCode: "",
     supplierRisk: undefined,
     customerLevel: "",
-    priority: 100,
     stepPolicy: "ANY_APPROVE",
     slaHours: undefined,
     escalationRoleId: undefined,
     remark: "",
     enabled: true,
+    sequenceNo,
   });
   addOpen.value = true;
 }
+
 function openEdit(record: ApprovalConfigResponse) {
   editingId.value = record.id;
   Object.assign(form, {
@@ -788,8 +808,6 @@ function openEdit(record: ApprovalConfigResponse) {
           : undefined,
     ].filter(Boolean) as string[],
     dynamicAssignee: record.dynamicAssignee || "DEPARTMENT_LEADER",
-    approvalMode: record.approvalMode,
-    sequenceNo: record.sequenceNo,
     conditionType: record.conditionType,
     minAmount: record.minAmount,
     maxAmount: record.maxAmount,
@@ -798,106 +816,177 @@ function openEdit(record: ApprovalConfigResponse) {
     projectCode: record.projectCode || "",
     supplierRisk: record.supplierRisk,
     customerLevel: record.customerLevel || "",
-    priority: record.priority,
     stepPolicy: record.stepPolicy || "ANY_APPROVE",
     slaHours: record.slaHours,
     escalationRoleId: record.escalationRoleId,
     remark: record.remark || "",
     enabled: record.enabled,
+    sequenceNo: record.sequenceNo,
   });
   advancedKeys.value = advancedSettingCount.value ? ["advanced"] : [];
   addOpen.value = true;
 }
+
 function handleTargetChange(values: string[]) {
   if (editingId.value && values.length > 1) {
     form.targetIds = [values[values.length - 1]];
   }
 }
+
+function buildRule(
+  assigneeType: ApprovalConfigResponse["assigneeType"],
+  userId?: string,
+  roleId?: string,
+): ApprovalConfigResponse {
+  const flowName = selectedFlowName.value;
+  const assigneeName =
+    assigneeType === "ROLE"
+      ? roles.value.find((r) => r.id === roleId)?.name || "角色"
+      : assigneeType === "USER"
+        ? users.value.find((u) => u.id === userId)?.displayName || "用户"
+        : assigneeType === "DYNAMIC"
+          ? dynamicLabelMap[form.dynamicAssignee] || "动态审批人"
+          : "自动通过";
+  return {
+    id: editingId.value ?? tempId(),
+    flowCode: selectedFlow.value,
+    flowName,
+    assigneeType,
+    userId: assigneeType === "USER" ? userId : undefined,
+    roleId: assigneeType === "ROLE" ? roleId : undefined,
+    assigneeName,
+    versionNo: 1,
+    dynamicAssignee:
+      assigneeType === "DYNAMIC" ? form.dynamicAssignee : undefined,
+    autoAction: assigneeType === "AUTO" ? "APPROVE" : undefined,
+    slaHours: form.slaHours,
+    escalationRoleId: form.escalationRoleId,
+    escalationRoleName: roles.value.find((r) => r.id === form.escalationRoleId)
+      ?.name,
+    stepPolicy: form.stepPolicy,
+    approvalMode: flowMode.value,
+    sequenceNo: form.sequenceNo,
+    conditionType: form.conditionType,
+    minAmount: form.minAmount,
+    maxAmount: form.maxAmount,
+    departmentName: form.departmentName || undefined,
+    businessType: form.businessType || undefined,
+    projectCode: form.projectCode || undefined,
+    supplierRisk: form.supplierRisk,
+    customerLevel: form.customerLevel || undefined,
+    priority: 1,
+    remark: form.remark || undefined,
+    enabled: form.enabled,
+  };
+}
+
 async function saveConfig() {
   await formRef.value?.validate();
+  const targets =
+    form.assigneeType === "USER" || form.assigneeType === "ROLE"
+      ? [...new Set(form.targetIds)]
+      : ["__virtual__"];
+  if (editingId.value && targets.length !== 1) {
+    message.warning("编辑已有配置时请选择 1 个审批对象");
+    return;
+  }
+  const newRules = targets.map((t) =>
+    buildRule(
+      form.assigneeType,
+      form.assigneeType === "USER" ? t : undefined,
+      form.assigneeType === "ROLE" ? t : undefined,
+    ),
+  );
+  if (editingId.value) {
+    const rule = newRules[0];
+    flowSteps.value = flowSteps.value.map((s) => ({
+      stepNo: s.stepNo,
+      rules: s.rules.map((r) => (r.id === editingId.value ? rule : r)),
+    }));
+  } else {
+    const stepNo = form.sequenceNo;
+    const existing = flowSteps.value.find((s) => s.stepNo === stepNo);
+    if (existing) existing.rules.push(...newRules);
+    else flowSteps.value.push({ stepNo, rules: newRules });
+  }
+  renumber();
+  dirty.value = true;
+  addOpen.value = false;
+}
+
+async function saveDesign() {
+  const payloadRules: ApprovalRulePayload[] = [];
+  for (const step of flowSteps.value) {
+    for (const r of step.rules) {
+      payloadRules.push({
+        assigneeType: r.assigneeType,
+        userId: r.userId,
+        roleId: r.roleId,
+        dynamicAssignee: r.dynamicAssignee,
+        autoAction: r.autoAction,
+        slaHours: r.slaHours,
+        escalationRoleId: r.escalationRoleId,
+        stepPolicy: r.stepPolicy,
+        approvalMode: flowMode.value,
+        sequenceNo: r.sequenceNo,
+        conditionType: r.conditionType,
+        minAmount: r.minAmount,
+        maxAmount: r.maxAmount,
+        departmentName: r.departmentName,
+        businessType: r.businessType,
+        projectCode: r.projectCode,
+        supplierRisk: r.supplierRisk,
+        customerLevel: r.customerLevel,
+        priority: r.priority,
+        remark: r.remark,
+        enabled: r.enabled,
+      });
+    }
+  }
+  if (!payloadRules.length) {
+    message.warning("审批流至少需要一个审批节点");
+    return;
+  }
   saving.value = true;
   try {
-    const flow = flowOptions.find((item) => item.value === form.flowCode)!;
-    const uniqueTargetIds =
-      form.assigneeType === "USER" || form.assigneeType === "ROLE"
-        ? [...new Set(form.targetIds)]
-        : ["__virtual__"];
-    if (editingId.value) {
-      if (uniqueTargetIds.length !== 1) {
-        message.warning("编辑已有配置时请选择 1 个审批对象");
-        return;
-      }
-      await updateApprovalConfig(editingId.value, {
-        flowCode: flow.value,
-        flowName: flow.flowName,
-        assigneeType: form.assigneeType,
-        userId: form.assigneeType === "USER" ? uniqueTargetIds[0] : undefined,
-        roleId: form.assigneeType === "ROLE" ? uniqueTargetIds[0] : undefined,
-        dynamicAssignee:
-          form.assigneeType === "DYNAMIC" ? form.dynamicAssignee : undefined,
-        autoAction: form.assigneeType === "AUTO" ? "APPROVE" : undefined,
-        slaHours: form.slaHours,
-        escalationRoleId: form.escalationRoleId,
-        approvalMode: form.approvalMode,
-        sequenceNo: form.sequenceNo,
-        conditionType: form.conditionType,
-        minAmount: form.minAmount,
-        maxAmount: form.maxAmount,
-        departmentName: form.departmentName,
-        businessType: form.businessType,
-        projectCode: form.projectCode,
-        supplierRisk: form.supplierRisk,
-        customerLevel: form.customerLevel,
-        priority: form.priority,
-        stepPolicy: form.stepPolicy,
-        remark: form.remark,
-        enabled: form.enabled,
-      });
-      message.success("审批配置已更新");
-    } else {
-      for (const [index, targetId] of uniqueTargetIds.entries()) {
-        await createApprovalConfig({
-          flowCode: flow.value,
-          flowName: flow.flowName,
-          assigneeType: form.assigneeType,
-          userId: form.assigneeType === "USER" ? targetId : undefined,
-          roleId: form.assigneeType === "ROLE" ? targetId : undefined,
-          dynamicAssignee:
-            form.assigneeType === "DYNAMIC" ? form.dynamicAssignee : undefined,
-          autoAction: form.assigneeType === "AUTO" ? "APPROVE" : undefined,
-          slaHours: form.slaHours,
-          escalationRoleId: form.escalationRoleId,
-          approvalMode: form.approvalMode,
-          sequenceNo:
-            form.approvalMode === "SEQUENTIAL"
-              ? form.sequenceNo + index
-              : form.sequenceNo,
-          conditionType: form.conditionType,
-          minAmount: form.minAmount,
-          maxAmount: form.maxAmount,
-          departmentName: form.departmentName,
-          businessType: form.businessType,
-          projectCode: form.projectCode,
-          supplierRisk: form.supplierRisk,
-          customerLevel: form.customerLevel,
-          priority: form.priority,
-          stepPolicy: form.stepPolicy,
-          remark: form.remark,
-        });
-      }
-      message.success(
-        `已配置 ${form.assigneeType === "USER" || form.assigneeType === "ROLE" ? uniqueTargetIds.length : 1} 个审批对象`,
-      );
-    }
-    addOpen.value = false;
+    await replaceApprovalFlow({
+      flowCode: selectedFlow.value,
+      flowName: selectedFlowName.value,
+      rules: payloadRules,
+    });
+    message.success("审批流已保存");
     await loadData();
   } catch (error) {
-    message.error(error instanceof Error ? error.message : "配置保存失败");
+    message.error(error instanceof Error ? error.message : "保存失败");
   } finally {
     saving.value = false;
   }
 }
+
+function deleteBranch(rule: ApprovalConfigResponse) {
+  flowSteps.value = flowSteps.value
+    .map((s) => ({
+      stepNo: s.stepNo,
+      rules: s.rules.filter((r) => r.id !== rule.id),
+    }))
+    .filter((s) => s.rules.length > 0);
+  renumber();
+  dirty.value = true;
+}
+
+function deleteStep(stepIndex: number) {
+  flowSteps.value = flowSteps.value
+    .filter((_, i) => i !== stepIndex)
+    .map((s, i) => ({ stepNo: i + 1, rules: s.rules }));
+  renumber();
+  dirty.value = true;
+}
+
 async function publishFlow(flowCode: string) {
+  if (dirty.value) {
+    message.warning("有未保存的修改，请先点击「保存设计」再发布");
+    return;
+  }
   try {
     await publishApprovalFlow(flowCode);
     message.success("审批流已发布");
@@ -906,11 +995,13 @@ async function publishFlow(flowCode: string) {
     message.error(error instanceof Error ? error.message : "发布失败");
   }
 }
+
 async function openVersions(flowCode: string) {
   selectedVersionFlow.value = flowCode;
   versions.value = await listApprovalFlowVersions(flowCode);
   versionOpen.value = true;
 }
+
 async function rollbackFlow(versionNo: number) {
   try {
     await rollbackApprovalFlow(selectedVersionFlow.value, versionNo);
@@ -921,6 +1012,7 @@ async function rollbackFlow(versionNo: number) {
     message.error(error instanceof Error ? error.message : "回滚失败");
   }
 }
+
 function openCopyFlow() {
   Object.assign(copyForm, {
     sourceFlowCode: "QUOTE",
@@ -929,6 +1021,7 @@ function openCopyFlow() {
   });
   copyOpen.value = true;
 }
+
 async function handleCopyFlow() {
   const target = flowOptions.find(
     (item) => item.value === copyForm.targetFlowCode,
@@ -950,10 +1043,12 @@ async function handleCopyFlow() {
     saving.value = false;
   }
 }
+
 function openBatchPreview() {
   batchResults.value = [];
   batchOpen.value = true;
 }
+
 async function runBatchPreview() {
   saving.value = true;
   try {
@@ -967,63 +1062,26 @@ async function runBatchPreview() {
     saving.value = false;
   }
 }
-async function removeConfig(id: string) {
+
+async function runPreview() {
   try {
-    await deleteApprovalConfig(id);
-    message.success("审批人员配置已移除");
-    await loadData();
-  } catch (error) {
-    message.error(error instanceof Error ? error.message : "移除失败");
-  }
-}
-async function runPreview(flowCode: string) {
-  try {
-    previewResults.value[flowCode] = await previewApprovalFlow({
-      flowCode,
-      ...previewForms[flowCode],
+    previewResult.value = await previewApprovalFlow({
+      flowCode: selectedFlow.value,
+      ...previewForm,
     });
   } catch (error) {
     message.error(error instanceof Error ? error.message : "审批路径预览失败");
   }
 }
+
 function roleUserCount(roleId?: string) {
   if (!roleId) return 0;
   return roles.value.find((role) => role.id === roleId)?.userCount ?? 0;
 }
-function flowWarnings(group: {
-  items: ApprovalConfigResponse[];
-  steps: Array<{ stepNo: number; items: ApprovalConfigResponse[] }>;
-}) {
-  const warnings: string[] = [];
-  const enabledItems = group.items.filter((item) => item.enabled);
-  if (!enabledItems.length) warnings.push("无启用规则");
-  if (
-    !enabledItems.some(
-      (item) => item.sequenceNo === 1 && item.conditionType === "ANY",
-    )
-  )
-    warnings.push("缺少默认第1步");
-  if (
-    enabledItems.some(
-      (item) =>
-        item.assigneeType === "ROLE" && roleUserCount(item.roleId) === 0,
-    )
-  )
-    warnings.push("存在空角色");
-  if (
-    enabledItems.some(
-      (item) => item.assigneeType === "AUTO" && item.conditionType === "ANY",
-    )
-  )
-    warnings.push("自动通过过宽");
-  if (hasAmountOverlap(group.steps)) warnings.push("金额区间重叠");
-  return warnings;
-}
-function hasAmountOverlap(
-  steps: Array<{ stepNo: number; items: ApprovalConfigResponse[] }>,
-) {
-  return steps.some((step) => {
-    const ranges = step.items
+
+function hasAmountOverlap() {
+  return flowSteps.value.some((step) => {
+    const ranges = step.rules
       .filter(
         (item) =>
           item.enabled &&
@@ -1040,57 +1098,7 @@ function hasAmountOverlap(
     );
   });
 }
-function conditionLabel(value: ApprovalConfigResponse["conditionType"]) {
-  return (
-    (
-      {
-        ANY: "全部",
-        AMOUNT: "金额",
-        DEPARTMENT: "部门",
-        AMOUNT_AND_DEPARTMENT: "金额+部门",
-        BUSINESS_TYPE: "业务",
-        PROJECT: "项目",
-        SUPPLIER_RISK: "供应商",
-        CUSTOMER_LEVEL: "客户",
-        COMPOSITE: "复合",
-      } as Record<string, string>
-    )[value] || value
-  );
-}
-function conditionColor(value: ApprovalConfigResponse["conditionType"]) {
-  return (
-    (
-      {
-        ANY: "default",
-        AMOUNT: "orange",
-        DEPARTMENT: "blue",
-        AMOUNT_AND_DEPARTMENT: "purple",
-      } as Record<string, string>
-    )[value] || "default"
-  );
-}
-function assigneeTypeLabel(value: ApprovalConfigResponse["assigneeType"]) {
-  return (
-    (
-      { ROLE: "角色", USER: "人员", DYNAMIC: "动态", AUTO: "自动" } as Record<
-        string,
-        string
-      >
-    )[value] || value
-  );
-}
-function assigneeTypeColor(value: ApprovalConfigResponse["assigneeType"]) {
-  return (
-    (
-      {
-        ROLE: "purple",
-        USER: "blue",
-        DYNAMIC: "cyan",
-        AUTO: "green",
-      } as Record<string, string>
-    )[value] || "default"
-  );
-}
+
 function stepDescription(step: ApprovalFlowPreview["steps"][number]) {
   const extras = [step.assignees.join("、") || "无审批人"];
   if (step.autoApproved) extras.push("自动通过");
@@ -1098,30 +1106,75 @@ function stepDescription(step: ApprovalFlowPreview["steps"][number]) {
   if (step.escalationRoleName) extras.push(`升级 ${step.escalationRoleName}`);
   return extras.join(" · ");
 }
-function conditionText(record: ApprovalConfigResponse) {
-  const parts = [];
-  if (record.minAmount != null || record.maxAmount != null)
-    parts.push(`${record.minAmount ?? 0} - ${record.maxAmount ?? "不限"}`);
-  if (record.departmentName) parts.push(record.departmentName);
-  if (record.businessType) parts.push(`业务 ${record.businessType}`);
-  if (record.projectCode) parts.push(`项目 ${record.projectCode}`);
-  if (record.supplierRisk) parts.push(`供应商 ${record.supplierRisk}`);
-  if (record.customerLevel) parts.push(`客户 ${record.customerLevel}`);
-  if (record.priority) parts.push(`优先级 ${record.priority}`);
-  if (record.escalationRoleName)
-    parts.push(`升级 ${record.escalationRoleName}`);
-  if (record.remark) parts.push(record.remark);
-  return parts.join(" · ") || "所有单据适用";
+
+function openTemplate() {
+  selectedTemplate.value = approvalTemplates[0].key;
+  templateOpen.value = true;
 }
+
+function buildTemplateRules(t: ApprovalFlowTemplate): ApprovalConfigResponse[] {
+  return t.rules.map((r, index) => ({
+    id: tempId(),
+    flowCode: selectedFlow.value,
+    flowName: selectedFlowName.value,
+    assigneeType: r.assigneeType,
+    assigneeName:
+      r.assigneeType === "DYNAMIC"
+        ? dynamicLabelMap[r.dynamicAssignee || ""] || "动态审批人"
+        : "自动通过",
+    versionNo: 1,
+    dynamicAssignee: r.dynamicAssignee,
+    autoAction: r.autoAction,
+    slaHours: undefined,
+    escalationRoleId: undefined,
+    escalationRoleName: undefined,
+    stepPolicy: "ANY_APPROVE",
+    approvalMode: t.mode,
+    sequenceNo: r.sequenceNo,
+    conditionType: r.conditionType,
+    minAmount: r.minAmount,
+    maxAmount: r.maxAmount,
+    departmentName: undefined,
+    businessType: undefined,
+    projectCode: undefined,
+    supplierRisk: undefined,
+    customerLevel: undefined,
+    priority: index + 1,
+    remark: r.remark,
+    enabled: true,
+  }));
+}
+
+function applyTemplate() {
+  const t = approvalTemplates.find(
+    (item) => item.key === selectedTemplate.value,
+  );
+  if (!t) return;
+  const rules = buildTemplateRules(t);
+  const byStep = new Map<number, ApprovalConfigResponse[]>();
+  for (const r of rules) {
+    if (!byStep.has(r.sequenceNo)) byStep.set(r.sequenceNo, []);
+    byStep.get(r.sequenceNo)!.push(r);
+  }
+  flowSteps.value = [...byStep.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([stepNo, stepRules]) => ({ stepNo, rules: stepRules }));
+  flowMode.value = t.mode;
+  renumber();
+  dirty.value = true;
+  templateOpen.value = false;
+  message.success(`已套用模板「${t.name}」，请检查后点击「保存设计」`);
+}
+
 onMounted(loadData);
 </script>
 
 <style scoped>
-.form-hint {
-  display: block;
-  margin-top: 6px;
-  color: #8c8c8c;
-  font-size: 12px;
+.flow-warnings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
 }
 .advanced-settings-collapse {
   margin-top: 4px;
@@ -1132,64 +1185,40 @@ onMounted(loadData);
   color: #64748b;
   font-size: 12px;
 }
-.approval-flow-collapse {
-  background: transparent;
-}
-.flow-panel-title {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.flow-panel-title span {
-  color: #64748b;
-  font-size: 12px;
-}
-.flow-warnings {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 4px;
-}
-.step-stack {
-  display: grid;
-  gap: 14px;
-}
-.step-section {
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
-  padding: 10px;
-  background: #fff;
-}
-.step-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-  color: #64748b;
-}
-.preview-panel {
-  margin-top: 14px;
-  padding: 12px;
-  border: 1px dashed #cbd5e1;
-  border-radius: 6px;
-  background: #f8fafc;
-}
-.preview-title {
-  margin-bottom: 10px;
-  font-weight: 600;
-}
 .preview-result {
   display: grid;
   gap: 12px;
-  margin-top: 12px;
+  margin-top: 14px;
 }
 .preview-steps {
   padding: 4px 6px;
 }
-:deep(.clickable-row) {
-  cursor: pointer;
+.batch-results {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
 }
-:deep(.clickable-row:hover td) {
-  background: #f8fafc !important;
+.template-item {
+  padding: 10px 12px;
+  border: 1px solid #eef2f7;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+.template-item:hover {
+  border-color: #1677ff;
+  background: #f6f9fd;
+}
+.template-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.template-desc {
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 12px;
 }
 </style>

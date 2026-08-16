@@ -10,7 +10,6 @@ import com.company.ops.api.modules.procurement.domain.CentralPlan;
 import com.company.ops.api.modules.procurement.domain.CentralPlanItem;
 import com.company.ops.api.modules.procurement.domain.FrameworkAgreement;
 import com.company.ops.api.modules.procurement.domain.FrameworkAgreementItem;
-import com.company.ops.api.modules.procurement.domain.ProcurementApprovalRule;
 import com.company.ops.api.modules.procurement.domain.ApprovalStatus;
 import com.company.ops.api.modules.inventory.domain.InventoryPart;
 import com.company.ops.api.modules.procurement.domain.ProcurementInquiryRequest;
@@ -20,7 +19,6 @@ import com.company.ops.api.modules.procurement.domain.PurchaseRequest;
 import com.company.ops.api.modules.procurement.domain.PurchaseRequestStatus;
 import com.company.ops.api.modules.procurement.domain.Supplier;
 import com.company.ops.api.modules.procurement.dto.CreatePurchaseRequestRequest;
-import com.company.ops.api.modules.procurement.dto.ProcurementPlanningDtos.ApprovalRuleResponse;
 import com.company.ops.api.modules.procurement.dto.ProcurementPlanningDtos.CentralPlanItemRequest;
 import com.company.ops.api.modules.procurement.dto.ProcurementPlanningDtos.CentralPlanItemResponse;
 import com.company.ops.api.modules.procurement.dto.ProcurementPlanningDtos.CentralPlanResponse;
@@ -29,7 +27,6 @@ import com.company.ops.api.modules.procurement.dto.ProcurementPlanningDtos.Centr
 import com.company.ops.api.modules.procurement.dto.ProcurementPlanningDtos.FrameworkAgreementResponse;
 import com.company.ops.api.modules.procurement.dto.ProcurementPlanningDtos.FrameworkItemRequest;
 import com.company.ops.api.modules.procurement.dto.ProcurementPlanningDtos.FrameworkItemResponse;
-import com.company.ops.api.modules.procurement.dto.ProcurementPlanningDtos.SaveApprovalRuleRequest;
 import com.company.ops.api.modules.procurement.dto.ProcurementPlanningDtos.SaveCentralPlanRequest;
 import com.company.ops.api.modules.procurement.dto.ProcurementPlanningDtos.SaveFrameworkAgreementRequest;
 import com.company.ops.api.modules.procurement.dto.PurchaseRequestResponse;
@@ -37,7 +34,6 @@ import com.company.ops.api.modules.procurement.repository.CentralPlanItemReposit
 import com.company.ops.api.modules.procurement.repository.CentralPlanRepository;
 import com.company.ops.api.modules.procurement.repository.FrameworkAgreementItemRepository;
 import com.company.ops.api.modules.procurement.repository.FrameworkAgreementRepository;
-import com.company.ops.api.modules.procurement.repository.ProcurementApprovalRuleRepository;
 import com.company.ops.api.modules.procurement.repository.ProcurementInquiryRequestRepository;
 import com.company.ops.api.modules.procurement.repository.PurchaseOrderRepository;
 import com.company.ops.api.modules.procurement.repository.PurchaseRequestRepository;
@@ -65,7 +61,6 @@ import org.springframework.util.StringUtils;
 @Service
 public class ProcurementPlanningService {
 
-  private final ProcurementApprovalRuleRepository approvalRules;
   private final FrameworkAgreementRepository agreements;
   private final FrameworkAgreementItemRepository agreementItems;
   private final CentralPlanRepository plans;
@@ -79,7 +74,6 @@ public class ProcurementPlanningService {
   private final ProcurementService procurementService;
 
   public ProcurementPlanningService(
-      ProcurementApprovalRuleRepository approvalRules,
       FrameworkAgreementRepository agreements,
       FrameworkAgreementItemRepository agreementItems,
       CentralPlanRepository plans,
@@ -92,7 +86,6 @@ public class ProcurementPlanningService {
       CodeGenerator codeGenerator,
       ProcurementService procurementService
   ) {
-    this.approvalRules = approvalRules;
     this.agreements = agreements;
     this.agreementItems = agreementItems;
     this.plans = plans;
@@ -104,77 +97,6 @@ public class ProcurementPlanningService {
     this.inquiryRequests = inquiryRequests;
     this.codeGenerator = codeGenerator;
     this.procurementService = procurementService;
-  }
-
-  // ---------- 分级审批规则 ----------
-
-  @Transactional(readOnly = true)
-  public List<ApprovalRuleResponse> listApprovalRules() {
-    return approvalRules.findAllByOrderBySortOrderAsc().stream()
-        .map(rule -> new ApprovalRuleResponse(
-            rule.getId(), rule.getRuleName(), rule.getMinAmount(), rule.getMaxAmount(),
-            rule.getApprovalLevel(), rule.getRequiredRoleCode(), rule.isEnabled(), rule.getSortOrder()))
-        .toList();
-  }
-
-  @Transactional
-  public ApprovalRuleResponse saveApprovalRule(UUID id, SaveApprovalRuleRequest request) {
-    ProcurementApprovalRule rule = id == null ? new ProcurementApprovalRule() : approvalRules.findById(id)
-        .orElseThrow(() -> new BusinessException("审批规则不存在"));
-    if (rule.getId() == null) {
-      rule.setTenantId(TenantContext.currentTenant());
-    }
-    rule.setRuleName(request.ruleName());
-    rule.setMinAmount(request.minAmount());
-    rule.setMaxAmount(request.maxAmount());
-    rule.setApprovalLevel(request.approvalLevel());
-    rule.setRequiredRoleCode(request.requiredRoleCode());
-    rule.setEnabled(request.enabled());
-    rule.setSortOrder(request.sortOrder());
-    ProcurementApprovalRule saved = approvalRules.save(rule);
-    return new ApprovalRuleResponse(
-        saved.getId(), saved.getRuleName(), saved.getMinAmount(), saved.getMaxAmount(),
-        saved.getApprovalLevel(), saved.getRequiredRoleCode(), saved.isEnabled(), saved.getSortOrder());
-  }
-
-  @Transactional
-  public void deleteApprovalRule(UUID id) {
-    if (!approvalRules.existsById(id)) {
-      throw new BusinessException("审批规则不存在");
-    }
-    approvalRules.deleteById(id);
-  }
-
-  /** 根据金额匹配启用的审批规则，返回审批级别；无匹配规则时返回 null（保持原单级审批）。 */
-  @Transactional(readOnly = true)
-  public String resolveApprovalLevel(BigDecimal amount) {
-    return approvalRules.findByEnabledTrueOrderBySortOrderAsc().stream()
-        .filter(rule -> matches(rule, amount))
-        .map(ProcurementApprovalRule::getApprovalLevel)
-        .findFirst()
-        .orElse(null);
-  }
-
-  @Transactional(readOnly = true)
-  public String requiredRoleForLevel(String approvalLevel) {
-    if (approvalLevel == null) {
-      return null;
-    }
-    return approvalRules.findByEnabledTrueOrderBySortOrderAsc().stream()
-        .filter(rule -> approvalLevel.equals(rule.getApprovalLevel()))
-        .map(ProcurementApprovalRule::getRequiredRoleCode)
-        .findFirst()
-        .orElse(null);
-  }
-
-  private boolean matches(ProcurementApprovalRule rule, BigDecimal value) {
-    if (rule.getMinAmount() != null && value.compareTo(rule.getMinAmount()) < 0) {
-      return false;
-    }
-    if (rule.getMaxAmount() != null && value.compareTo(rule.getMaxAmount()) >= 0) {
-      return false;
-    }
-    return true;
   }
 
   // ---------- 框架协议 ----------

@@ -2,6 +2,7 @@ package com.company.ops.api.modules.risk.controller;
 
 import com.company.ops.api.common.api.ApiResponse;
 import com.company.ops.api.modules.risk.dto.RiskWorkflowDtos.RiskItemResponse;
+import com.company.ops.api.modules.risk.dto.RiskWorkflowDtos.RiskOwnerOptionsResponse;
 import com.company.ops.api.modules.risk.dto.RiskWorkflowDtos.RiskRuleConfigResponse;
 import com.company.ops.api.modules.risk.dto.RiskWorkflowDtos.RiskSummaryResponse;
 import com.company.ops.api.modules.risk.dto.RiskWorkflowDtos.UpdateRiskRuleConfigRequest;
@@ -57,6 +58,12 @@ public class RiskCenterController {
   @PreAuthorize("hasAnyAuthority('risk:view','risk:update')")
   public ApiResponse<List<RiskRuleConfigResponse>> listRules() {
     return ApiResponse.ok(service.listRules());
+  }
+
+  @GetMapping("/owner-options")
+  @PreAuthorize("hasAnyAuthority('risk:view','risk:update')")
+  public ApiResponse<RiskOwnerOptionsResponse> ownerOptions() {
+    return ApiResponse.ok(service.ownerOptions());
   }
 
   @PostMapping("/rules")

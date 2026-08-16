@@ -668,7 +668,7 @@ function openEquipment(item?: Equipment) {
   editingEquipmentId.value = item?.id;
   Object.assign(equipmentForm, {
     customerId: item?.customerId,
-    contractId: undefined,
+    contractId: item?.contractId,
     code: item?.code,
     name: item?.name || "",
     category: item?.category || "",
@@ -679,7 +679,7 @@ function openEquipment(item?: Equipment) {
     nextMaintenanceDate: item?.nextMaintenanceDate
       ? dayjs(item.nextMaintenanceDate)
       : undefined,
-    requiredCertificate: undefined,
+    requiredCertificate: item?.requiredCertificate,
   });
   equipmentOpen.value = true;
 }

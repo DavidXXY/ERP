@@ -1433,14 +1433,15 @@ async function handleBankFile(file: File) {
   return false;
 }
 function parseCsv(text: string) {
+  const content = text.replace(/^\uFEFF/, "");
   const rows: string[][] = [];
   let row: string[] = [];
   let cell = "";
   let quoted = false;
-  for (let i = 0; i < text.replace(/^\uFEFF/, "").length; i += 1) {
-    const char = text.replace(/^\uFEFF/, "")[i];
+  for (let i = 0; i < content.length; i += 1) {
+    const char = content[i];
     if (char === '"') {
-      if (quoted && text.replace(/^\uFEFF/, "")[i + 1] === '"') {
+      if (quoted && content[i + 1] === '"') {
         cell += '"';
         i += 1;
       } else quoted = !quoted;
@@ -1448,7 +1449,7 @@ function parseCsv(text: string) {
       row.push(cell.trim());
       cell = "";
     } else if ((char === "\n" || char === "\r") && !quoted) {
-      if (char === "\r" && text.replace(/^\uFEFF/, "")[i + 1] === "\n") i += 1;
+      if (char === "\r" && content[i + 1] === "\n") i += 1;
       row.push(cell.trim());
       if (row.some(Boolean)) rows.push(row);
       row = [];

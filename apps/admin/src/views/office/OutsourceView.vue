@@ -155,6 +155,7 @@
   </div>
 </template>
 <script setup lang="ts">
+import { generateCode } from "@/utils/code";
 import { computed, onMounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 import { message } from "ant-design-vue";
@@ -312,19 +313,6 @@ async function handleOutsourceComplete() {
   } finally {
     saving.value = false;
   }
-}
-function generateCode(prefix: string) {
-  const d = new Date();
-  return (
-    prefix +
-    "-" +
-    d.getFullYear() +
-    String(d.getMonth() + 1).padStart(2, "0") +
-    String(d.getDate()).padStart(2, "0") +
-    "-" +
-    String(d.getHours()).padStart(2, "0") +
-    String(d.getMinutes()).padStart(2, "0")
-  );
 }
 function today() {
   const d = new Date();

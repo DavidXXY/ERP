@@ -342,10 +342,10 @@ import {
 import { listUsersApi, type UserResponse } from "@/api/system";
 import { useAuthStore } from "@/stores/auth";
 import { todayLocal, toLocalDateString } from "@/utils/date";
+import { generateCode } from "@/utils/code";
 import { loadOwnerDepartmentMap, ownerDepartment } from "./crm-department";
 import {
   formatMoney,
-  generateCode,
   opportunityStageColor,
   opportunityStageLabel,
   opportunityStageOptions,

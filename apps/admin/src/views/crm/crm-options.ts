@@ -148,17 +148,3 @@ export function formatMoney(value?: number) {
     minimumFractionDigits: 2,
   }).format(value || 0);
 }
-
-export function generateCode(prefix: string) {
-  const now = new Date();
-  const stamp = [
-    now.getFullYear(),
-    String(now.getMonth() + 1).padStart(2, "0"),
-    String(now.getDate()).padStart(2, "0"),
-  ].join("");
-  const seq = [
-    String(now.getHours()).padStart(2, "0"),
-    String(now.getMinutes()).padStart(2, "0"),
-  ].join("");
-  return prefix + "-" + stamp + "-" + seq;
-}

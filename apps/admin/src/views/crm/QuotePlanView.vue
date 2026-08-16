@@ -1044,9 +1044,9 @@ import {
   type QuoteCostRequest,
 } from "@/api/crm";
 import { useAuthStore } from "@/stores/auth";
+import { generateCode } from "@/utils/code";
 import {
   formatMoney,
-  generateCode,
   quoteStatusColor,
   quoteStatusLabel,
 } from "./crm-options";

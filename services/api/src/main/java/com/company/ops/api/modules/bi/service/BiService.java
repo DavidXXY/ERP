@@ -66,8 +66,8 @@ public class BiService {
   }
 
   @Transactional(readOnly = true)
-  @Cacheable("biDashboard")
-  public ExecutiveDashboard dashboard() {
+  @Cacheable(value = "biDashboard", key = "{#startDate, #endDate}")
+  public ExecutiveDashboard dashboard(LocalDate startDate, LocalDate endDate) {
     try {
     BigDecimal contractRevenue = amount(contracts.sumContractAmount());
     BigDecimal received = amount(receivables.sumSettledAmount());
@@ -92,7 +92,8 @@ public class BiService {
         cash.in.subtract(cash.out), activeProjects, openOrders, completed,
         lowStock, renewals, complaints);
 
-    return new ExecutiveDashboard(summary, monthlyTrends(),
+    return new ExecutiveDashboard(summary,
+        monthlyTrends(endDate == null ? YearMonth.now() : YearMonth.from(endDate)),
         customerProfits(), equipmentPerformance(), workforcePerformance());
     } catch (Exception e) {
       log.error("Dashboard query failed", e);

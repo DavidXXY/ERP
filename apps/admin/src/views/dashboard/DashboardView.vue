@@ -303,7 +303,7 @@ async function loadData() {
         }
       : undefined;
     const [base, kpi] = await Promise.all([
-      getExecutiveDashboard(),
+      getExecutiveDashboard(params),
       getCompanyKpiDashboard(params),
     ]);
     Object.assign(data, base);

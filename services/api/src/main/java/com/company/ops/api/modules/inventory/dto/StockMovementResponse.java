@@ -13,5 +13,6 @@ public record StockMovementResponse(
     String sourceNo,
     String remark,
     String operatorName,
-    OffsetDateTime createdAt
+    OffsetDateTime createdAt,
+    String partName
 ) {}

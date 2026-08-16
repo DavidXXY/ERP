@@ -135,18 +135,32 @@ public class InventoryService {
 
   @Transactional(readOnly = true)
   public List<StockMovementResponse> listMovements(UUID partId) {
-    if (!partRepository.existsById(partId)) {
-      throw new BusinessException("物料不存在");
-    }
+    InventoryPart part = partRepository.findById(partId)
+        .orElseThrow(() -> new BusinessException("物料不存在"));
+    String partName = part.getName();
     return movementRepository.findByPartIdOrderByCreatedAtDesc(partId).stream()
-        .map(this::toMovementResponse)
+        .map(m -> toMovementResponse(m, partName))
         .toList();
   }
 
   @Transactional(readOnly = true)
   public Page<StockMovementResponse> listMovements(UUID partId, Pageable pageable) {
-    if (!partRepository.existsById(partId)) throw new BusinessException("物料不存在");
-    return movementRepository.findByPartIdOrderByCreatedAtDesc(partId, pageable).map(this::toMovementResponse);
+    InventoryPart part = partRepository.findById(partId)
+        .orElseThrow(() -> new BusinessException("物料不存在"));
+    String partName = part.getName();
+    return movementRepository.findByPartIdOrderByCreatedAtDesc(partId, pageable)
+        .map(m -> toMovementResponse(m, partName));
+  }
+
+  @Transactional(readOnly = true)
+  public Page<StockMovementResponse> listMovements(Pageable pageable) {
+    Page<StockMovement> page = movementRepository.findAllByOrderByCreatedAtDesc(pageable);
+    Set<UUID> partIds = page.getContent().stream()
+        .map(StockMovement::getPartId)
+        .collect(Collectors.toSet());
+    Map<UUID, String> names = partRepository.findAllById(partIds).stream()
+        .collect(Collectors.toMap(InventoryPart::getId, InventoryPart::getName));
+    return page.map(m -> toMovementResponse(m, names.get(m.getPartId())));
   }
 
   @Transactional
@@ -542,10 +556,11 @@ public class InventoryService {
     };
   }
 
-  private StockMovementResponse toMovementResponse(StockMovement movement) {
+  private StockMovementResponse toMovementResponse(StockMovement movement, String partName) {
     return new StockMovementResponse(
         movement.getId(), movement.getPartId(), movement.getMovementType(), movement.getQuantity(),
-        movement.getSourceNo(), movement.getRemark(), movement.getOperatorName(), movement.getCreatedAt()
+        movement.getSourceNo(), movement.getRemark(), movement.getOperatorName(), movement.getCreatedAt(),
+        partName
     );
   }
 

@@ -605,7 +605,7 @@
 
           <a-form
             v-else
-            ref="formRef"
+            ref="drawerFormRef"
             :model="formState"
             :rules="rules"
             layout="vertical"
@@ -770,7 +770,7 @@
       :confirm-loading="saving"
       @ok="saveCustomer"
     >
-      <a-form ref="formRef" :model="formState" :rules="rules" layout="vertical">
+      <a-form ref="modalFormRef" :model="formState" :rules="rules" layout="vertical">
         <a-tabs v-model:active-key="formTab" class="customer-form-tabs">
           <a-tab-pane key="base" tab="基本资料">
             <a-row :gutter="16">
@@ -1047,7 +1047,8 @@ const editing = ref(false);
 const detailTab = ref("profile");
 const formTab = ref("base");
 const errorMessage = ref("");
-const formRef = ref();
+const drawerFormRef = ref();
+const modalFormRef = ref();
 const filters = reactive({
   keyword: "",
   level: undefined as CustomerLevel | undefined,
@@ -1287,6 +1288,7 @@ async function openEdit(id: string) {
     selectedDetail.value = detail;
     editingCustomerId.value = id;
     editing.value = true;
+    detailOpen.value = true;
     resetForm(formFromDetail(detail));
   } catch (error) {
     message.error(error instanceof Error ? error.message : "客户档案加载失败");
@@ -1330,7 +1332,7 @@ function cancelEdit() {
 }
 
 async function saveCustomer() {
-  await formRef.value?.validate();
+  await (formOpen.value ? modalFormRef : drawerFormRef).value?.validate();
   const incompleteContact = formState.contacts.find(
     (contact) =>
       (contact.title || contact.phone || contact.email) && !contact.name.trim(),

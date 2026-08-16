@@ -247,6 +247,7 @@ import {
   followUpTypeOptions,
 } from "./crm-options";
 import { listUsersApi, type UserResponse } from "@/api/system";
+import { todayLocal, toLocalDateTimeString } from "@/utils/date";
 import { loadOwnerDepartmentMap, ownerDepartment } from "./crm-department";
 
 const auth = useAuthStore();
@@ -398,7 +399,7 @@ const pendingCount = computed(() => pendingItems.value.length);
 
 function isOverdue(dateStr?: string) {
   if (!dateStr) return false;
-  return dateStr < new Date().toISOString().slice(0, 10);
+  return dateStr < todayLocal();
 }
 
 function syncOpportunity(customerId: string) {
@@ -412,7 +413,7 @@ function initialForm() {
     type: "VISIT" as string,
     subject: "",
     content: "",
-    followedAt: new Date().toISOString().slice(0, 16),
+    followedAt: toLocalDateTimeString(new Date()),
     ownerName: auth.user?.displayName || "",
     nextAction: "",
   };

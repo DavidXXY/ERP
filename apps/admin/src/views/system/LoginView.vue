@@ -39,7 +39,7 @@
           />
         </a-form-item>
         <a-form-item>
-          <a-checkbox v-model:checked="rememberMe">记住密码</a-checkbox>
+          <a-checkbox v-model:checked="rememberMe">记住账号</a-checkbox>
         </a-form-item>
         <a-form-item
           v-if="mfaRequired"
@@ -103,10 +103,9 @@ function loadRememberedCredentials() {
   try {
     const raw = localStorage.getItem(REMEMBER_KEY);
     if (!raw) return;
-    const saved = JSON.parse(raw) as { username?: string; password?: string };
+    const saved = JSON.parse(raw) as { username?: string };
     if (saved.username) formState.username = decodeRemembered(saved.username);
-    if (saved.password) formState.password = decodeRemembered(saved.password);
-    rememberMe.value = Boolean(saved.username || saved.password);
+    rememberMe.value = Boolean(saved.username);
   } catch {
     localStorage.removeItem(REMEMBER_KEY);
   }
@@ -118,7 +117,6 @@ function saveRememberedCredentials() {
       REMEMBER_KEY,
       JSON.stringify({
         username: encodeRemembered(formState.username.trim()),
-        password: encodeRemembered(formState.password),
       }),
     );
   } else {

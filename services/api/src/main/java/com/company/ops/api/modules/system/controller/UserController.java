@@ -76,8 +76,8 @@ public class UserController {
 
   @PostMapping("/{id}/reset-password")
   @PreAuthorize("hasAuthority('system:user:reset-password')")
-  public ApiResponse<Void> resetPassword(@PathVariable UUID id, @Valid @RequestBody ResetPasswordRequest request) {
-    userService.resetPassword(id, request.newPassword());
-    return ApiResponse.ok();
+  public ApiResponse<String> resetPassword(@PathVariable UUID id, @Valid @RequestBody ResetPasswordRequest request) {
+    String generated = userService.resetPassword(id, request.newPassword());
+    return ApiResponse.ok(generated);
   }
 }

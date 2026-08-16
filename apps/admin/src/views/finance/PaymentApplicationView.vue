@@ -20,7 +20,7 @@
         /></a-col>
         <a-col :xs="12" :lg="6"
           ><a-statistic
-            title="待付款（含税，元）"
+            title="待付款（笔）"
             :value="countByStatus('APPROVED')"
             suffix="笔"
         /></a-col>

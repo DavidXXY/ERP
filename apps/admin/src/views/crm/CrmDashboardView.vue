@@ -434,6 +434,7 @@ import {
   type ProcurementMatching,
 } from "@/api/procurement";
 import { businessStatusLabel } from "@/utils/status-mapper";
+import { toLocalDateString } from "@/utils/date";
 import {
   listProjectProfitability,
   type ProjectProfitability,
@@ -1082,12 +1083,8 @@ async function loadData() {
     procurementMatchItems.value = procurementMatching;
     replenishmentItems.value = replenishmentSuggestions;
     const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-      .toISOString()
-      .slice(0, 10);
-    const in30d = new Date(Date.now() + 30 * 86400000)
-      .toISOString()
-      .slice(0, 10);
+    const monthStart = toLocalDateString(new Date(now.getFullYear(), now.getMonth(), 1));
+    const in30d = toLocalDateString(new Date(Date.now() + 30 * 86400000));
     const activeOpps = opps.filter(
       (o) => o.stage !== "WON" && o.stage !== "LOST",
     );
@@ -1113,7 +1110,7 @@ async function loadData() {
       (r) =>
         r.status !== "SETTLED" &&
         r.dueDate &&
-        r.dueDate < now.toISOString().slice(0, 10),
+        r.dueDate < toLocalDateString(now),
     );
     stats.overdueCount = overdueItems.length;
     stats.overdueAmount = overdueItems.reduce(
@@ -1267,7 +1264,7 @@ async function loadData() {
       }),
     );
     // Overdue next actions from follow-ups
-    const nowStr = now.toISOString().slice(0, 10);
+    const nowStr = toLocalDateString(now);
     followUps
       .filter((f) => f.nextAction && f.opportunityId)
       .forEach((f) => {

@@ -360,7 +360,7 @@ const scheduleBuckets = computed(() => [
   buildScheduleBucket(
     "d30",
     "30天内到期",
-    (item) => !item.overdue && dueDays(item) <= 30,
+    (item) => !item.overdue && dueDays(item) > 7 && dueDays(item) <= 30,
   ),
   buildScheduleBucket(
     "reserved",

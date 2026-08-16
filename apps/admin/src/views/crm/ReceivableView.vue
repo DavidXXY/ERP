@@ -379,7 +379,9 @@ const filteredItems = computed(() => {
     );
   });
 });
-const totalAmount = computed(() => sumByStatus());
+const totalAmount = computed(() =>
+  items.value.reduce((sum, item) => sum + Number(item.amount || 0), 0),
+);
 const invoicePendingAmount = computed(() => sumByStatus("INVOICE_PENDING"));
 const paymentPendingAmount = computed(() => sumByStatus("PAYMENT_PENDING"));
 const overdueAmount = computed(() => sumByStatus("OVERDUE"));

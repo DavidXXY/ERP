@@ -1262,10 +1262,16 @@ function statusColor(v: string) {
     return "green";
   return "default";
 }
-watch(workDate, () => loadAll());
-onMounted(() => {
+function refreshPeriodContext() {
   periodForm.idempotencyKey = `PE-${periodLabel.value}-${Date.now()}`;
   periodReversalDate.value = workDate.value.add(1, "month").startOf("month");
+}
+watch(workDate, () => {
+  refreshPeriodContext();
+  loadAll();
+});
+onMounted(() => {
+  refreshPeriodContext();
   loadAll();
   runOpeningValidation();
 });

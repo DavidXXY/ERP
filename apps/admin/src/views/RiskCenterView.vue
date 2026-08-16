@@ -550,6 +550,7 @@ import {
 } from "@/api/risk";
 import { useAuthStore } from "@/stores/auth";
 import { downloadCsv } from "@/utils/csv";
+import { todayLocal } from "@/utils/date";
 
 type RiskSeverity = "HIGH" | "MEDIUM" | "LOW";
 type RiskStatus = "OPEN" | "PENDING" | "OVERDUE";
@@ -1264,7 +1265,7 @@ function exportRisks() {
     item.description,
   ]);
   downloadCsv(
-    `risk-center-${new Date().toISOString().slice(0, 10)}.csv`,
+    `risk-center-${todayLocal()}.csv`,
     headers,
     rows,
   );

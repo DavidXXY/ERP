@@ -31,7 +31,7 @@
             ><span>{{ record.lines?.length || 0 }} 项</span></template
           >
           <template v-else-if="column.key === 'amount'">{{
-            formatMoney(record.totalCost || 0)
+            formatMoney(record.totalAmount || 0)
           }}</template>
           <template v-else-if="column.key === 'status'"
             ><a-tag

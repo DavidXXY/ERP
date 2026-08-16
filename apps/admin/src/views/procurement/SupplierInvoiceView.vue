@@ -329,6 +329,7 @@
 import { computed, onMounted, reactive, ref } from "vue";
 import { message } from "ant-design-vue";
 import { useAuthStore } from "@/stores/auth";
+import { todayLocal } from "@/utils/date";
 import * as api from "@/api/procurement";
 
 const auth = useAuthStore();
@@ -363,7 +364,7 @@ const verifyTarget = ref<api.SupplierInvoice>();
 const verifyDecision = ref<"VERIFIED" | "EXCEPTION">("VERIFIED");
 const verifyComment = ref("");
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => todayLocal();
 const invoiceForm = reactive({
   orderId: "",
   payableIds: [] as string[],

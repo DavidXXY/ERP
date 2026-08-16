@@ -411,6 +411,7 @@
 import { computed, reactive, ref, watch } from "vue";
 import { message, Modal } from "ant-design-vue";
 import { useRouter } from "vue-router";
+import { toLocalDateString } from "@/utils/date";
 import {
   createProject,
   createProjectCost,
@@ -553,11 +554,12 @@ const managerModalTitle = computed(() =>
     ? "变更项目负责人"
     : "分配项目经理",
 );
-const projectedCostAfterEntry = computed(
-  () =>
-    Number(props.detail?.project?.actualCost || 0) +
-    Number(costForm.amount || 0),
-);
+const projectedCostAfterEntry = computed(() => {
+  const base =
+    Number(props.detail?.project?.actualCost || 0) -
+    (editingCost.value ? Number(props.editCostEntry?.amount || 0) : 0);
+  return base + Number(costForm.amount || 0);
+});
 const projectedBudgetVariance = computed(
   () =>
     Number(props.detail?.project?.budgetAmount || 0) -
@@ -573,10 +575,21 @@ watch(
   () => props.createOpen,
   (open) => {
     if (open) {
-      createForm.parentProjectId = props.defaultParentProjectId || undefined;
-      if (props.defaultCustomerId)
-        createForm.customerId = props.defaultCustomerId;
-      createForm.quoteId = undefined;
+      Object.assign(createForm, {
+        customerId: props.defaultCustomerId || "",
+        parentProjectId: props.defaultParentProjectId || undefined,
+        code: "",
+        name: "",
+        projectType: "RENOVATION",
+        managerUserId: undefined,
+        siteAddress: "",
+        contractAmount: 0,
+        plannedStartDate: dateAfter(0),
+        plannedEndDate: dateAfter(90),
+        warrantyEndDate: dateAfter(455),
+        quoteId: undefined,
+        budgets: { LABOR: 0, MATERIAL: 0, SUBCONTRACT: 0, TRAVEL: 0, OTHER: 0 },
+      });
     }
   },
 );
@@ -661,7 +674,7 @@ watch(
 function dateAfter(days: number) {
   const d = new Date();
   d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  return toLocalDateString(d);
 }
 function stageLabel(s: string) {
   if (s === "INITIATED" || s === "BIDDING") return "入场";

@@ -791,6 +791,7 @@ import PlusOutlined from "@ant-design/icons-vue/PlusOutlined";
 import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
 import UploadOutlined from "@ant-design/icons-vue/UploadOutlined";
 import { useAuthStore } from "@/stores/auth";
+import { todayLocal } from "@/utils/date";
 import {
   closeAccountingPeriod,
   createControl,
@@ -1240,7 +1241,7 @@ async function handleReview(record: ControlRecord) {
   try {
     await reviewControl(
       record.id,
-      new Date().toISOString().slice(0, 10),
+      todayLocal(),
       "周期复核完成",
     );
     message.success("复核日期已更新");

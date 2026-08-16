@@ -1564,6 +1564,7 @@ import ApprovalProgressFlow, {
   type ApprovalProgressStep,
 } from "@/components/ApprovalProgressFlow.vue";
 import { useAuthStore } from "@/stores/auth";
+import { toLocalDateString } from "@/utils/date";
 import ProjectModals from "./ProjectModals.vue";
 import BusinessTraceTimeline from "@/components/business/BusinessTraceTimeline.vue";
 import {
@@ -2878,7 +2879,7 @@ function formatDateTime(value: string) {
 function dateAfter(days: number) {
   const date = new Date();
   date.setDate(date.getDate() + days);
-  return date.toISOString().slice(0, 10);
+  return toLocalDateString(date);
 }
 </script>
 

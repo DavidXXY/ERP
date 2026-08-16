@@ -256,6 +256,7 @@ import { onMounted, reactive, ref } from "vue";
 import { message } from "ant-design-vue";
 import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
 import { useAuthStore } from "@/stores/auth";
+import { todayLocal } from "@/utils/date";
 import {
   inspectGoodsReceipt,
   listGoodsReceipts,
@@ -281,7 +282,7 @@ const appealForm = reactive({
   action: "DISMISSED" as "DISMISSED" | "REOPEN",
   comment: "",
 });
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => todayLocal();
 const inspectForm = reactive({
   qualifiedQty: 0,
   rejectedQty: 0,

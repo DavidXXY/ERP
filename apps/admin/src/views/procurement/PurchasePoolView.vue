@@ -310,6 +310,7 @@ import {
 } from "@/api/procurement";
 import { useAuthStore } from "@/stores/auth";
 import { sourcingMethodOptions } from "@/utils/procurement-sourcing";
+import { toLocalDateString } from "@/utils/date";
 
 const auth = useAuthStore();
 const router = useRouter();
@@ -520,7 +521,7 @@ function defaultDeadline(expected?: string) {
     result.setTime(expectedDate.getTime());
     result.setDate(result.getDate() - 1);
   }
-  return result.toISOString().slice(0, 10);
+  return toLocalDateString(result);
 }
 
 function formatMoney(value: number) {

@@ -836,11 +836,9 @@ function lifecycleLabel(value: string) {
   return (
     (
       {
-        ENTRY: "入职",
-        TRANSFER: "调动",
-        PROMOTION: "晋升",
-        POSITION_CHANGE: "转岗",
-        LEAVE: "离职",
+        ONBOARDING: "入职",
+        TRANSFER: "调岗",
+        RESIGNATION: "离职",
       } as Record<string, string>
     )[value] || value
   );

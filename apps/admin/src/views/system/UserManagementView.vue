@@ -117,7 +117,7 @@
               </a-button>
               <a-popconfirm
                 v-if="auth.can('system:user:reset-password')"
-                title="确认将该账号密码重置为 Admin@123？"
+                title="确认重置该账号密码？（将生成随机新密码）"
                 ok-text="确定"
                 cancel-text="取消"
                 @confirm="handleResetPassword(record)"
@@ -236,7 +236,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
-import { message, type FormInstance, type TableProps } from "ant-design-vue";
+import { message, Modal, type FormInstance, type TableProps } from "ant-design-vue";
 import { PlusOutlined, ReloadOutlined } from "@ant-design/icons-vue";
 import {
   createUserApi,
@@ -358,7 +358,7 @@ function applyFilters() {
 function initialForm() {
   return {
     username: "",
-    password: "Admin@123",
+    password: "",
     displayName: "",
     phone: "",
     email: "",
@@ -450,8 +450,11 @@ async function toggleEnabled(record: UserResponse) {
 
 async function handleResetPassword(record: UserResponse) {
   try {
-    await resetPasswordApi(record.id, "Admin@123");
-    message.success("密码已重置为 Admin@123");
+    const newPassword = await resetPasswordApi(record.id);
+    Modal.success({
+      title: "密码已重置",
+      content: `新密码：${newPassword}（请复制并告知用户，登录后建议立即修改）`,
+    });
   } catch (error) {
     message.error(error instanceof Error ? error.message : "重置密码失败");
   }

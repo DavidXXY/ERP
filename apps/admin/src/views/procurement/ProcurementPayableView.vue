@@ -192,6 +192,7 @@ import {
   type ProcurementPayable,
 } from "@/api/procurement";
 import { statusLabel, statusColor } from "@/utils/status-mapper";
+import { todayLocal } from "@/utils/date";
 import {
   createPaymentApplication,
   listPaymentApplications,
@@ -209,7 +210,7 @@ const submitting = ref(false);
 const applications = ref<PaymentApplication[]>([]);
 const paymentForm = reactive({
   requestedAmount: 0,
-  requestedDate: new Date().toISOString().slice(0, 10),
+  requestedDate: todayLocal(),
   purpose: "采购订单付款",
 });
 const reservedAmount = computed(() =>
@@ -254,7 +255,7 @@ function openPayment(record: ProcurementPayable) {
         )
         .reduce((sum, item) => sum + Number(item.requestedAmount || 0), 0),
   );
-  paymentForm.requestedDate = new Date().toISOString().slice(0, 10);
+  paymentForm.requestedDate = todayLocal();
   paymentForm.purpose = `采购订单 ${record.orderCode || ""} 付款`;
   paymentOpen.value = true;
 }

@@ -348,6 +348,7 @@ import {
 } from "@/api/finance";
 import { listAccountingPeriods, type AccountingPeriod } from "@/api/governance";
 import { useAuthStore } from "@/stores/auth";
+import { todayLocal } from "@/utils/date";
 
 const router = useRouter();
 const auth = useAuthStore();
@@ -628,7 +629,7 @@ function signedMoney(value: number) {
   return `${Number(value) > 0 ? "+" : ""}${formatMoney(value)}`;
 }
 function today() {
-  return new Date().toISOString().slice(0, 10);
+  return todayLocal();
 }
 function pad(value: number) {
   return String(value).padStart(2, "0");

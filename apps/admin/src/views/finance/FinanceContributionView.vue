@@ -310,6 +310,7 @@ import {
   type FinanceOrganizationNode,
 } from "@/api/finance";
 import { projectStageColor, projectStageLabel } from "@/utils/project-stage";
+import { todayLocal } from "@/utils/date";
 
 type SubjectType = "ORGANIZATION" | "USER";
 type OrganizationOption = {
@@ -570,7 +571,7 @@ function percent(value: number) {
   return `${Number(value || 0).toFixed(2)}%`;
 }
 function today() {
-  return new Date().toISOString().slice(0, 10);
+  return todayLocal();
 }
 </script>
 

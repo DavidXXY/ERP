@@ -321,6 +321,7 @@ import {
 } from "@/api/crm";
 import { listUsersApi, type UserResponse } from "@/api/system";
 import { useAuthStore } from "@/stores/auth";
+import { todayLocal } from "@/utils/date";
 import {
   followUpTypeColor,
   followUpTypeLabel,
@@ -438,7 +439,7 @@ const timelineEvents = computed(() => {
 const actionOverdue = computed(() =>
   Boolean(
     record.value?.nextActionAt &&
-      record.value.nextActionAt < new Date().toISOString().slice(0, 10),
+      record.value.nextActionAt < todayLocal(),
   ),
 );
 const lastFollowUpDays = computed(() => {

@@ -341,6 +341,7 @@ import {
 } from "@/api/crm";
 import { listUsersApi, type UserResponse } from "@/api/system";
 import { useAuthStore } from "@/stores/auth";
+import { todayLocal, toLocalDateString } from "@/utils/date";
 import { loadOwnerDepartmentMap, ownerDepartment } from "./crm-department";
 import {
   formatMoney,
@@ -637,7 +638,7 @@ async function handleConfirmMarkLost() {
       stage: "LOST",
       probability: 0,
       nextAction: "已标记为丢单",
-      nextActionAt: new Date().toISOString().slice(0, 10),
+      nextActionAt: todayLocal(),
     });
     try {
       await createFollowUp({
@@ -703,7 +704,7 @@ async function handleAdvance() {
 function actionOverdue(record: Opportunity) {
   return Boolean(
     record.nextActionAt &&
-      record.nextActionAt < new Date().toISOString().slice(0, 10),
+      record.nextActionAt < todayLocal(),
   );
 }
 
@@ -747,7 +748,7 @@ function initialCreateForm() {
 function dateAfterDays(days: number) {
   const date = new Date();
   date.setDate(date.getDate() + days);
-  return date.toISOString().slice(0, 10);
+  return toLocalDateString(date);
 }
 
 function moneyFormatter({ value }: { value: number }) {

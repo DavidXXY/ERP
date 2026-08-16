@@ -1171,6 +1171,7 @@ import {
 } from "@/api/procurement";
 import { useAuthStore } from "@/stores/auth";
 import { downloadCsv } from "@/views/crm/crm-export";
+import { toLocalDateString } from "@/utils/date";
 import {
   getErrorMessage,
   showBudgetOverrunPrompt,
@@ -2201,7 +2202,7 @@ function initialReceiptForm(): ReceiptForm {
 function addDays(days: number) {
   const date = new Date();
   date.setDate(date.getDate() + days);
-  return date.toISOString().slice(0, 10);
+  return toLocalDateString(date);
 }
 
 function canReceive(order: PurchaseOrder) {

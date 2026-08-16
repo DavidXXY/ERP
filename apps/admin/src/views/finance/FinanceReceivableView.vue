@@ -219,192 +219,6 @@
     </a-card>
 
     <a-modal
-      v-model:open="detailOpen"
-      title="应收详情"
-      width="860px"
-      :footer="null"
-    >
-      <a-spin :spinning="detailLoading">
-        <template v-if="detail">
-          <div class="detail-header">
-            <div>
-              <strong>{{ detail.receivable.code }}</strong>
-              <span>{{ detail.receivable.customerName }}</span>
-            </div>
-            <a-space>
-              <a-button
-                v-if="
-                  auth.can('finance:receivable:invoice') &&
-                  detail.receivable.invoiceRequestStatus ===
-                    'PENDING_APPROVAL' &&
-                  !detail.receivable.invoiceNo &&
-                  detail.receivable.status !== 'SETTLED'
-                "
-                type="primary"
-                @click="openReview(detail.receivable)"
-              >
-                审核开票申请
-              </a-button>
-              <a-button
-                v-if="
-                  auth.can('finance:receivable:invoice') &&
-                  detail.receivable.invoiceRequestStatus === 'APPROVED' &&
-                  !detail.receivable.invoiceNo
-                "
-                type="primary"
-                @click="openInvoice(detail.receivable)"
-                >登记发票</a-button
-              >
-              <a-button
-                v-if="
-                  auth.can('finance:receivable:collect') &&
-                  detail.receivable.invoiceNo &&
-                  detail.receivable.status !== 'SETTLED'
-                "
-                type="primary"
-                @click="openReceipt(detail.receivable)"
-              >
-                登记回款
-              </a-button>
-            </a-space>
-          </div>
-
-          <a-descriptions
-            bordered
-            size="small"
-            title="应收信息"
-            :column="2"
-            class="detail-section"
-          >
-            <a-descriptions-item label="应收金额（含税，元）">{{
-              formatMoney(detail.receivable.amount)
-            }}</a-descriptions-item>
-            <a-descriptions-item label="待收金额（含税，元）">{{
-              formatMoney(detail.receivable.outstandingAmount)
-            }}</a-descriptions-item>
-            <a-descriptions-item label="已收金额（含税，元）">{{
-              formatMoney(detail.receivable.settledAmount)
-            }}</a-descriptions-item>
-            <a-descriptions-item label="到期日">{{
-              detail.receivable.dueDate
-            }}</a-descriptions-item>
-            <a-descriptions-item label="状态"
-              ><a-tag :color="statusColor(detail.receivable.status)">{{
-                statusLabel(detail.receivable.status)
-              }}</a-tag></a-descriptions-item
-            >
-            <a-descriptions-item label="开票状态"
-              ><a-tag :color="invoiceStatusColor(detail.receivable)">{{
-                invoiceStatusLabel(detail.receivable)
-              }}</a-tag></a-descriptions-item
-            >
-            <a-descriptions-item
-              v-if="detail.receivable.invoiceRequested"
-              label="申请信息"
-              :span="2"
-            >
-              {{ detail.receivable.invoiceRequestedBy || "业务侧" }} ·
-              {{ formatDateTime(detail.receivable.invoiceRequestedAt) }}
-              <span v-if="detail.receivable.invoiceRequestRemark">
-                · {{ detail.receivable.invoiceRequestRemark }}</span
-              >
-            </a-descriptions-item>
-            <a-descriptions-item
-              v-if="detail.receivable.invoiceReviewedAt"
-              label="审核结果"
-              :span="2"
-            >
-              {{ detail.receivable.invoiceReviewedBy }} ·
-              {{ formatDateTime(detail.receivable.invoiceReviewedAt) }}
-              <span v-if="detail.receivable.invoiceReviewComment">
-                · {{ detail.receivable.invoiceReviewComment }}</span
-              >
-            </a-descriptions-item>
-          </a-descriptions>
-
-          <a-descriptions
-            bordered
-            size="small"
-            title="企业开票信息"
-            :column="2"
-            class="detail-section"
-          >
-            <a-descriptions-item label="开票抬头">{{
-              valueOrDash(
-                detail.customerInvoice.invoiceTitle ||
-                  detail.customerInvoice.customerName,
-              )
-            }}</a-descriptions-item>
-            <a-descriptions-item label="税号">{{
-              valueOrDash(detail.customerInvoice.taxNo)
-            }}</a-descriptions-item>
-            <a-descriptions-item label="开户行">{{
-              valueOrDash(detail.customerInvoice.bankName)
-            }}</a-descriptions-item>
-            <a-descriptions-item label="银行账号">{{
-              valueOrDash(detail.customerInvoice.bankAccount)
-            }}</a-descriptions-item>
-            <a-descriptions-item label="注册地址">{{
-              valueOrDash(detail.customerInvoice.registeredAddress)
-            }}</a-descriptions-item>
-            <a-descriptions-item label="注册电话">{{
-              valueOrDash(detail.customerInvoice.registeredPhone)
-            }}</a-descriptions-item>
-            <a-descriptions-item label="客户负责人">{{
-              valueOrDash(detail.customerInvoice.ownerName)
-            }}</a-descriptions-item>
-            <a-descriptions-item label="付款习惯">{{
-              valueOrDash(detail.customerInvoice.paymentHabit)
-            }}</a-descriptions-item>
-          </a-descriptions>
-
-          <a-descriptions
-            v-if="detail.contract"
-            bordered
-            size="small"
-            title="合同信息"
-            :column="2"
-            class="detail-section"
-          >
-            <a-descriptions-item label="合同编号">
-              <a-button
-                type="link"
-                class="cell-link"
-                @click="goContractDetail(detail.contract.id)"
-              >
-                {{ valueOrDash(detail.contract.code) }}
-              </a-button>
-            </a-descriptions-item>
-            <a-descriptions-item label="项目名称">{{
-              detail.contract.projectName
-            }}</a-descriptions-item>
-            <a-descriptions-item label="合同类型">{{
-              detail.contract.contractType
-            }}</a-descriptions-item>
-            <a-descriptions-item label="合同状态">{{
-              contractStatusLabel(detail.contract.status)
-            }}</a-descriptions-item>
-            <a-descriptions-item label="合同金额（含税，元）">{{
-              formatMoney(detail.contract.amount)
-            }}</a-descriptions-item>
-            <a-descriptions-item label="未税金额（元）"
-              >{{ formatMoney(detail.contract.netAmount) }} · 税率
-              {{ detail.contract.taxRate }}%</a-descriptions-item
-            >
-            <a-descriptions-item label="合同周期"
-              >{{ detail.contract.startDate }} 至
-              {{ detail.contract.endDate }}</a-descriptions-item
-            >
-            <a-descriptions-item label="服务频次">{{
-              valueOrDash(detail.contract.serviceCycle)
-            }}</a-descriptions-item>
-          </a-descriptions>
-          <a-empty v-else description="未关联合同" />
-        </template>
-      </a-spin>
-    </a-modal>
-
-    <a-modal
       v-model:open="reviewOpen"
       title="审核开票申请"
       :confirm-loading="saving"
@@ -538,12 +352,10 @@ import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
 import { useRouter } from "vue-router";
 import type { Receivable, ReceivableStatus } from "@/api/crm";
 import {
-  getFinanceReceivableDetail,
   listFinanceReceivables,
   recordFinanceReceipt,
   registerFinanceInvoice,
   reviewFinanceInvoice,
-  type FinanceReceivableDetail,
 } from "@/api/finance";
 import { useAuthStore } from "@/stores/auth";
 import { downloadCsv } from "@/utils/csv";
@@ -553,13 +365,10 @@ const router = useRouter();
 const items = ref<Receivable[]>([]);
 const loading = ref(false);
 const saving = ref(false);
-const detailOpen = ref(false);
-const detailLoading = ref(false);
 const invoiceOpen = ref(false);
 const reviewOpen = ref(false);
 const receiptOpen = ref(false);
 const selectedItem = ref<Receivable | null>(null);
-const detail = ref<FinanceReceivableDetail | null>(null);
 const keyword = ref("");
 const statusFilter = ref<ReceivableStatus>();
 const priorityFilter = ref<string>();
@@ -733,18 +542,6 @@ function exportReceivables() {
   ]);
   downloadCsv(`finance-receivables-${today()}.csv`, headers, rows);
 }
-async function openDetail(item: Receivable) {
-  selectedItem.value = item;
-  detailOpen.value = true;
-  detailLoading.value = true;
-  try {
-    detail.value = await getFinanceReceivableDetail(item.id);
-  } catch (error) {
-    message.error(error instanceof Error ? error.message : "应收详情加载失败");
-  } finally {
-    detailLoading.value = false;
-  }
-}
 function openInvoice(item: Receivable) {
   selectedItem.value = item;
   Object.assign(invoiceForm, { invoiceNo: "", invoiceDate: today() });
@@ -769,10 +566,6 @@ function openReceipt(item: Receivable) {
   });
   receiptOpen.value = true;
 }
-function goContractDetail(contractId: string) {
-  detailOpen.value = false;
-  router.push("/crm/contracts/" + contractId);
-}
 function setReceiptRatio(ratio: number) {
   const amount = Number(selectedItem.value?.outstandingAmount || 0);
   receiptForm.amount = Math.max(0.01, Math.round(amount * ratio * 100) / 100);
@@ -792,7 +585,6 @@ async function handleInvoice() {
     invoiceOpen.value = false;
     message.success("开票信息已登记");
     await loadData();
-    await refreshDetail(result.id);
   } catch (error) {
     message.error(error instanceof Error ? error.message : "开票登记失败");
   } finally {
@@ -818,7 +610,6 @@ async function handleReview() {
         : "申请已驳回，业务侧可修改后重新提交",
     );
     await loadData();
-    await refreshDetail(result.id);
   } catch (error) {
     message.error(error instanceof Error ? error.message : "开票审核失败");
   } finally {
@@ -842,17 +633,11 @@ async function handleReceipt() {
       result.status === "SETTLED" ? "应收已全部核销" : "部分回款已登记",
     );
     await loadData();
-    await refreshDetail(result.id);
   } catch (error) {
     message.error(error instanceof Error ? error.message : "回款登记失败");
   } finally {
     saving.value = false;
   }
-}
-async function refreshDetail(id: string) {
-  if (!detailOpen.value) return;
-  detail.value = await getFinanceReceivableDetail(id);
-  selectedItem.value = detail.value.receivable;
 }
 function today() {
   const value = new Date();

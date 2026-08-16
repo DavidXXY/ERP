@@ -527,7 +527,11 @@ function openEdit(record: Receivable) {
 }
 
 async function handleEdit() {
-  await editFormRef.value?.validate();
+  try {
+    await editFormRef.value?.validate();
+  } catch {
+    return;
+  }
   if (!selectedItem.value) return;
   saving.value = true;
   try {

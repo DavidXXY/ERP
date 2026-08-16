@@ -450,7 +450,11 @@ function openCreate() {
 }
 
 async function handleCreate() {
-  await formRef.value?.validate();
+  try {
+    await formRef.value?.validate();
+  } catch {
+    return;
+  }
   saving.value = true;
   try {
     if (!form.customerId) throw new Error("请选择客户");

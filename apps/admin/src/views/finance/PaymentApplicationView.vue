@@ -795,7 +795,11 @@ function openPayment(item: PaymentApplication) {
 }
 
 async function handleApproval() {
-  await approvalFormRef.value?.validate();
+  try {
+    await approvalFormRef.value?.validate();
+  } catch {
+    return;
+  }
   if (!selectedApplication.value) return;
   saving.value = true;
   try {
@@ -817,7 +821,11 @@ async function handleApproval() {
 }
 
 async function handlePayment() {
-  await paymentFormRef.value?.validate();
+  try {
+    await paymentFormRef.value?.validate();
+  } catch {
+    return;
+  }
   if (!selectedApplication.value) return;
   if (paymentTotal.value <= 0) {
     message.error("请填写大于零的付款金额");

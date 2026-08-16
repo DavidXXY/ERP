@@ -488,7 +488,11 @@ function setApplicationRatio(ratio: number) {
   form.requestedAmount = Math.max(0.01, Math.round(amount * ratio * 100) / 100);
 }
 async function handleCreateApplication() {
-  await formRef.value?.validate();
+  try {
+    await formRef.value?.validate();
+  } catch {
+    return;
+  }
   if (!selectedItem.value) return;
   saving.value = true;
   try {

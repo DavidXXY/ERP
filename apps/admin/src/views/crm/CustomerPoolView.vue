@@ -997,7 +997,6 @@ import {
   receivableStatusLabel,
   riskColor,
   riskLabel,
-  generateCode,
 } from "./crm-options";
 
 type ContactForm = {
@@ -1263,7 +1262,6 @@ function openTransferOwner() {
 function openCreate() {
   editingCustomerId.value = "";
   resetForm(initialForm(auth.user?.displayName || ""));
-  formState.code = generateCode("KH");
   formTab.value = "base";
   formOpen.value = true;
 }
@@ -1332,7 +1330,11 @@ function cancelEdit() {
 }
 
 async function saveCustomer() {
-  await (formOpen.value ? modalFormRef : drawerFormRef).value?.validate();
+  try {
+    await (formOpen.value ? modalFormRef : drawerFormRef).value?.validate();
+  } catch {
+    return;
+  }
   const incompleteContact = formState.contacts.find(
     (contact) =>
       (contact.title || contact.phone || contact.email) && !contact.name.trim(),

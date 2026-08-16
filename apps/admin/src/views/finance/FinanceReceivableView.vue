@@ -778,7 +778,11 @@ function setReceiptRatio(ratio: number) {
   receiptForm.amount = Math.max(0.01, Math.round(amount * ratio * 100) / 100);
 }
 async function handleInvoice() {
-  await invoiceFormRef.value?.validate();
+  try {
+    await invoiceFormRef.value?.validate();
+  } catch {
+    return;
+  }
   if (!selectedItem.value) return;
   saving.value = true;
   try {
@@ -796,7 +800,11 @@ async function handleInvoice() {
   }
 }
 async function handleReview() {
-  await reviewFormRef.value?.validate();
+  try {
+    await reviewFormRef.value?.validate();
+  } catch {
+    return;
+  }
   if (!selectedItem.value) return;
   saving.value = true;
   try {
@@ -818,7 +826,11 @@ async function handleReview() {
   }
 }
 async function handleReceipt() {
-  await receiptFormRef.value?.validate();
+  try {
+    await receiptFormRef.value?.validate();
+  } catch {
+    return;
+  }
   if (!selectedItem.value) return;
   saving.value = true;
   try {

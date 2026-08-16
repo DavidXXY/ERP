@@ -560,7 +560,11 @@ function openCreateFollowUp() {
 }
 
 async function handleCreateFollowUp() {
-  await followUpFormRef.value?.validate();
+  try {
+    await followUpFormRef.value?.validate();
+  } catch {
+    return;
+  }
   savingFollowUp.value = true;
   try {
     await createFollowUp({

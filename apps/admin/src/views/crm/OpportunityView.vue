@@ -548,7 +548,11 @@ async function loadData() {
 }
 
 async function handleCreate() {
-  await createFormRef.value?.validate();
+  try {
+    await createFormRef.value?.validate();
+  } catch {
+    return;
+  }
   saving.value = true;
   try {
     const payload = {
@@ -662,7 +666,11 @@ async function handleConfirmMarkLost() {
 }
 
 async function handleAdvance() {
-  await advanceFormRef.value?.validate();
+  try {
+    await advanceFormRef.value?.validate();
+  } catch {
+    return;
+  }
   if (!selectedOpportunity.value) return;
   saving.value = true;
   try {

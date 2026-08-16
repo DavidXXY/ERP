@@ -123,7 +123,10 @@
           </template>
           <template v-else-if="column.key === 'action'">
             <a-space>
-              <a-button type="link" size="small" @click.stop="openTodoDetail(record)"
+              <a-button
+                type="link"
+                size="small"
+                @click.stop="openTodoDetail(record)"
                 >详情</a-button
               >
               <a-button
@@ -518,14 +521,16 @@ function onApprovalChanged() {
 
 function actionText(v: string) {
   return (
-    ({
-      COMPLETE: "完成",
-      REOPEN: "重新打开",
-      TRANSFER: "转办",
-      CC: "抄送",
-      REMIND: "催办",
-      SET_DUE: "设置期限",
-    } as any)[v] || v
+    (
+      {
+        COMPLETE: "完成",
+        REOPEN: "重新打开",
+        TRANSFER: "转办",
+        CC: "抄送",
+        REMIND: "催办",
+        SET_DUE: "设置期限",
+      } as any
+    )[v] || v
   );
 }
 

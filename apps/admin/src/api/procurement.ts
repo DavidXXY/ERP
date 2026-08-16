@@ -1713,57 +1713,6 @@ function downloadExcelBlob(blob: Blob, filename: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-// ---------- 分级审批规则 ----------
-
-export type ApprovalRule = {
-  id: string;
-  ruleName: string;
-  minAmount?: number;
-  maxAmount?: number;
-  approvalLevel: string;
-  requiredRoleCode?: string;
-  enabled: boolean;
-  sortOrder: number;
-};
-export type SaveApprovalRulePayload = {
-  ruleName: string;
-  minAmount?: number;
-  maxAmount?: number;
-  approvalLevel: string;
-  requiredRoleCode?: string;
-  enabled: boolean;
-  sortOrder: number;
-};
-export function listApprovalRules() {
-  return request<ApprovalRule[]>({
-    method: "GET",
-    url: "/procurement/approval-rules",
-  });
-}
-export function createApprovalRule(payload: SaveApprovalRulePayload) {
-  return request<ApprovalRule>({
-    method: "POST",
-    url: "/procurement/approval-rules",
-    data: payload,
-  });
-}
-export function updateApprovalRule(
-  id: string,
-  payload: SaveApprovalRulePayload,
-) {
-  return request<ApprovalRule>({
-    method: "PUT",
-    url: `/procurement/approval-rules/${id}`,
-    data: payload,
-  });
-}
-export function deleteApprovalRule(id: string) {
-  return request<void>({
-    method: "DELETE",
-    url: `/procurement/approval-rules/${id}`,
-  });
-}
-
 // ---------- 框架协议 ----------
 
 export type FrameworkAgreementItem = {

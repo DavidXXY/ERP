@@ -71,7 +71,10 @@ import com.company.ops.api.modules.office.repository.SystemNotificationReadRepos
 import com.company.ops.api.modules.office.repository.TravelApplicationRepository;
 import com.company.ops.api.modules.crm.repository.CustomerRepository;
 import com.company.ops.api.modules.procurement.domain.Supplier;
+import com.company.ops.api.modules.procurement.domain.PurchaseRequest;
+import com.company.ops.api.modules.procurement.domain.PurchaseRequestStatus;
 import com.company.ops.api.modules.procurement.repository.SupplierRepository;
+import com.company.ops.api.modules.procurement.repository.PurchaseRequestRepository;
 import com.company.ops.api.modules.project.domain.Project;
 import com.company.ops.api.modules.project.domain.ProjectCostCategory;
 import com.company.ops.api.modules.project.domain.ProjectCostSource;
@@ -128,6 +131,7 @@ public class OfficeService {
   private final SystemNotificationRepository notificationRepository;
   private final SystemNotificationReadRepository notificationReadRepository;
   private final SupplierRepository supplierRepository;
+  private final PurchaseRequestRepository purchaseRequestRepository;
   private final ProjectRepository projectRepository;
   private final WorkOrderRepository workOrderRepository;
   private final ProjectService projectService;
@@ -148,7 +152,7 @@ public class OfficeService {
                        TravelApplicationRepository travelRepository, SealApplicationRepository sealRepository,
                        DocumentFileRepository documentRepository, SystemNotificationRepository notificationRepository,
                        SystemNotificationReadRepository notificationReadRepository,
-	                       SupplierRepository supplierRepository, CustomerRepository customerRepository,
+	                       SupplierRepository supplierRepository, CustomerRepository customerRepository, PurchaseRequestRepository purchaseRequestRepository,
 	                       ProjectRepository projectRepository, WorkOrderRepository workOrderRepository,
 	                       ProjectService projectService, SystemUserRepository userRepository, SystemRoleRepository roleRepository, SystemOrganizationRepository organizationRepository, LedgerService ledgerService, SystemAuditLogRepository auditLogRepository, ApprovalFlowSecurity approvalFlowSecurity,
 	                       DeleteGovernanceService deleteGovernanceService,
@@ -159,6 +163,7 @@ public class OfficeService {
     this.documentRepository = documentRepository; this.notificationRepository = notificationRepository;
     this.notificationReadRepository = notificationReadRepository;
     this.supplierRepository = supplierRepository; this.customerRepository = customerRepository;
+    this.purchaseRequestRepository = purchaseRequestRepository;
     this.projectRepository = projectRepository; this.workOrderRepository = workOrderRepository;
     this.projectService = projectService; this.userRepository = userRepository; this.roleRepository = roleRepository; this.organizationRepository = organizationRepository;
 	    this.ledgerService = ledgerService;
@@ -231,9 +236,11 @@ public class OfficeService {
   public WorkbenchResponse workbench() {
     List<TodoItemResponse> todos = new ArrayList<>();
     approvalRepository.findAllByOrderByCreatedAtDesc().stream()
+        .filter(item -> item.getStatus() == ApprovalStatus.PENDING)
+        .filter(this::canCurrentUserApprove)
         .forEach(item -> todos.add(new TodoItemResponse(
             "APPROVAL", item.getId(), item.getTitle(), item.getApprovalType().name() + " · " + item.getApplicantName(),
-            amount(item.getAmount()), item.getStatus() == ApprovalStatus.PENDING ? "HIGH" : "LOW", "/office/approvals", item.getCreatedAt(), item.getStatus().name()
+            amount(item.getAmount()), "HIGH", "/office/approvals", item.getCreatedAt(), item.getStatus().name()
         )));
     expenseRepository.findAllByOrderByExpenseDateDescCreatedAtDesc().stream()
         .filter(item -> item.getStatus() == ExpenseStatus.PENDING_APPROVAL)
@@ -293,7 +300,7 @@ public class OfficeService {
     if (request.decision() != ApprovalStatus.APPROVED && request.decision() != ApprovalStatus.REJECTED) throw new BusinessException("审批结论只能选择通过或驳回");
     ApprovalRequest approval = approvalRepository.findByIdForUpdate(id).orElseThrow(() -> new BusinessException("审批单不存在"));
     if (approval.getStatus() != ApprovalStatus.PENDING) throw new BusinessException("该审批单已处理");
-    String flowCode = approval.getApprovalType().name();
+    if (isCurrentApplicant(approval)) throw new BusinessException("申请人不能审批自己提交的单据");
     int completedApprovals = completedApprovals(id);
     List<ApprovalRuntimeNode> currentNodes = currentRuntimeNodes(approval);
     requireRuntimeApprover(currentNodes, approval.getDelegatedUserId());
@@ -328,6 +335,7 @@ public class OfficeService {
     if (saved.getApprovalType() == ApprovalType.OUTSOURCE) processOutsourceSource(saved);
     if (saved.getApprovalType() == ApprovalType.TRAVEL) processTravelSource(saved);
     if (saved.getApprovalType() == ApprovalType.SEAL) processSealSource(saved);
+    if (saved.getApprovalType() == ApprovalType.PURCHASE) processPurchaseSource(saved);
     if ("DELETE".equals(saved.getBusinessType())) processDeleteApproval(saved);
     notify("APPROVAL_RESULT", "审批结果：" + saved.getTitle(), request.decision() == ApprovalStatus.APPROVED ? "审批已通过" : "审批已驳回", "APPROVAL", saved.getId());
     return toApproval(saved);
@@ -337,13 +345,23 @@ public class OfficeService {
   public ApprovalResponse transferApproval(UUID id, ApprovalTransferRequest request) {
     ApprovalRequest approval = approvalRepository.findByIdForUpdate(id).orElseThrow(() -> new BusinessException("审批单不存在"));
     if (approval.getStatus() != ApprovalStatus.PENDING) throw new BusinessException("该审批单已处理");
-    int completed = completedApprovals(id);
-    approvalFlowSecurity.requireApprover(approvalContext(approval), completed, approval.getDelegatedUserId(), approval.getApprovalConfigVersion());
+    if (isCurrentApplicant(approval)) throw new BusinessException("申请人不能审批自己提交的单据");
+    List<ApprovalRuntimeNode> currentNodes = currentRuntimeNodes(approval);
+    requireRuntimeApprover(currentNodes, approval.getDelegatedUserId());
     var target = userRepository.findById(request.targetUserId()).orElseThrow(() -> new BusinessException("转交人员不存在"));
-    approval.setDelegatedUserId(request.targetUserId());
+    // 转交 = 将当前节点审批人替换为目标用户，原审批人随即失效
+    for (ApprovalRuntimeNode node : currentNodes) {
+      node.setAssigneeType("USER");
+      node.setAssigneeId(target.getId());
+      node.setAssigneeName(target.getDisplayName());
+      node.setSourceType("USER");
+      node.setSourceValue("TRANSFERRED");
+    }
+    runtimeNodeRepository.saveAll(currentNodes);
+    approval.setDelegatedUserId(null);
     approval.setCurrentApproverName(target.getDisplayName());
     ApprovalRequest saved = approvalRepository.save(approval);
-    saveRuntimeAction(saved.getId(), "TRANSFER", request.comment(), completed + 1);
+    saveRuntimeAction(saved.getId(), "TRANSFER", request.comment(), saved.getCurrentStep() == null ? 1 : saved.getCurrentStep());
     notify("APPROVAL", "审批已转交", saved.getTitle() + " 转交给 " + target.getDisplayName(), "APPROVAL", saved.getId());
     return toApproval(saved);
   }
@@ -352,13 +370,32 @@ public class OfficeService {
   public ApprovalResponse addSignApproval(UUID id, ApprovalAddSignRequest request) {
     ApprovalRequest approval = approvalRepository.findByIdForUpdate(id).orElseThrow(() -> new BusinessException("审批单不存在"));
     if (approval.getStatus() != ApprovalStatus.PENDING) throw new BusinessException("该审批单已处理");
-    int completed = completedApprovals(id);
-    approvalFlowSecurity.requireApprover(approvalContext(approval), completed, approval.getDelegatedUserId(), approval.getApprovalConfigVersion());
+    if (isCurrentApplicant(approval)) throw new BusinessException("申请人不能审批自己提交的单据");
+    List<ApprovalRuntimeNode> currentNodes = currentRuntimeNodes(approval);
+    requireRuntimeApprover(currentNodes, approval.getDelegatedUserId());
     var target = userRepository.findById(request.targetUserId()).orElseThrow(() -> new BusinessException("加签人员不存在"));
-    approval.setDelegatedUserId(request.targetUserId());
-    approval.setCurrentApproverName(target.getDisplayName());
+    if (currentNodes.stream().anyMatch(node -> "USER".equals(node.getAssigneeType()) && target.getId().equals(node.getAssigneeId()))) {
+      throw new BusinessException("该人员已在当前审批节点中");
+    }
+    // 加签 = 在当前节点新增一名会签审批人，原审批人保留
+    ApprovalRuntimeNode first = currentNodes.get(0);
+    ApprovalRuntimeNode node = new ApprovalRuntimeNode();
+    node.setApprovalId(id);
+    node.setStepNo(first.getStepNo());
+    node.setApprovalMode(first.getApprovalMode());
+    node.setStepPolicy(first.getStepPolicy() == null ? "ANY_APPROVE" : first.getStepPolicy());
+    node.setAssigneeType("USER");
+    node.setAssigneeId(target.getId());
+    node.setAssigneeName(target.getDisplayName());
+    node.setSourceType("USER");
+    node.setSourceValue("ADD_SIGN");
+    node.setConditionText(first.getConditionText());
+    node.setSlaHours(first.getSlaHours());
+    node.setDueAt(first.getDueAt());
+    runtimeNodeRepository.save(node);
+    approval.setCurrentApproverName(currentRuntimeApproverNames(id, approval.getCurrentStep()));
     ApprovalRequest saved = approvalRepository.save(approval);
-    saveRuntimeAction(saved.getId(), "ADD_SIGN", request.comment(), completed + 1);
+    saveRuntimeAction(saved.getId(), "ADD_SIGN", request.comment(), saved.getCurrentStep() == null ? 1 : saved.getCurrentStep());
     notify("APPROVAL", "审批已加签", saved.getTitle() + " 加签给 " + target.getDisplayName(), "APPROVAL", saved.getId());
     return toApproval(saved);
   }
@@ -368,7 +405,7 @@ public class OfficeService {
     ApprovalRequest approval = approvalRepository.findByIdForUpdate(id).orElseThrow(() -> new BusinessException("审批单不存在"));
     if (approval.getStatus() != ApprovalStatus.PENDING) throw new BusinessException("只有待审批单据可以撤回");
     requireCurrentApplicant(approval);
-    approval.setStatus(ApprovalStatus.REJECTED);
+    approval.setStatus(ApprovalStatus.WITHDRAWN);
     approval.setApproverName(currentActorName());
     approval.setApprovalComment("撤回：" + request.comment());
     approval.setProcessedAt(OffsetDateTime.now());
@@ -380,6 +417,7 @@ public class OfficeService {
     if (saved.getApprovalType() == ApprovalType.OUTSOURCE) processOutsourceSource(saved);
     if (saved.getApprovalType() == ApprovalType.TRAVEL) processTravelSource(saved);
     if (saved.getApprovalType() == ApprovalType.SEAL) processSealSource(saved);
+    if (saved.getApprovalType() == ApprovalType.PURCHASE) processPurchaseSource(saved);
     notify("APPROVAL_RESULT", "审批已撤回：" + saved.getTitle(), request.comment(), "APPROVAL", saved.getId());
     return toApproval(saved);
   }
@@ -405,7 +443,7 @@ public class OfficeService {
   @Transactional
   public ApprovalResponse resubmitApproval(UUID id, ApprovalResubmitRequest request) {
     ApprovalRequest approval = approvalRepository.findByIdForUpdate(id).orElseThrow(() -> new BusinessException("审批单不存在"));
-    if (approval.getStatus() != ApprovalStatus.REJECTED) throw new BusinessException("只有已驳回/撤回审批可以重新提交");
+    if (approval.getStatus() != ApprovalStatus.REJECTED && approval.getStatus() != ApprovalStatus.WITHDRAWN) throw new BusinessException("只有已驳回/撤回审批可以重新提交");
     requireCurrentApplicant(approval);
     ApprovalPlan plan = approvalFlowSecurity.resolve(approvalContext(approval));
     validatePlan(plan);
@@ -717,15 +755,18 @@ public class OfficeService {
   }
 
   private int completedApprovals(UUID approvalId) {
-    return (int) actionRepository.findByApprovalIdOrderByCreatedAtAsc(approvalId).stream()
-        .filter(item -> item.getDecision() == ApprovalStatus.APPROVED)
-        .filter(item -> item.getActionType() == null || "APPROVE".equals(item.getActionType()) || "ADD_SIGN_APPROVE".equals(item.getActionType()))
-        .count();
+    ApprovalRequest approval = approvalRepository.findById(approvalId).orElse(null);
+    if (approval == null) return 0;
+    if (approval.getCurrentStep() != null) return Math.max(0, approval.getCurrentStep() - 1);
+    Integer next = nextPendingStep(approvalId);
+    return next == null ? 0 : Math.max(0, next - 1);
   }
 
   private boolean canCurrentUserApprove(ApprovalRequest item) {
     try {
-      return approvalFlowSecurity.canApprove(approvalContext(item), completedApprovals(item.getId()), item.getDelegatedUserId(), item.getApprovalConfigVersion());
+      if (item.getDelegatedUserId() != null && item.getDelegatedUserId().equals(approvalFlowSecurity.currentUserId())) return true;
+      List<ApprovalRuntimeNode> nodes = currentRuntimeNodes(item);
+      return nodes.stream().anyMatch(this::runtimeNodeMatchesCurrentUser);
     } catch (RuntimeException ignored) {
       return false;
     }
@@ -781,19 +822,22 @@ public class OfficeService {
     if ("AUTO".equals(config.getAssigneeType())) return List.of(new RuntimeAssignee("AUTO", null, "系统自动审批"));
     List<RuntimeAssignee> exact = resolveExactDynamicAssignee(approval, config.getDynamicAssignee());
     if (!exact.isEmpty()) return exact;
-    return dynamicRoleCodes(config.getDynamicAssignee()).stream()
+    List<RuntimeAssignee> resolved = dynamicRoleCodes(config.getDynamicAssignee()).stream()
         .map(code -> roleRepository.findByCodeAndTenantId(code, TenantContext.currentTenant()))
         .filter(java.util.Optional::isPresent)
         .map(java.util.Optional::get)
         .findFirst()
         .map(role -> List.of(new RuntimeAssignee("ROLE", role.getId(), role.getName())))
         .orElseGet(List::of);
+    if (resolved.isEmpty()) throw new BusinessException("无法解析动态审批人「" + dynamicAssigneeName(config.getDynamicAssignee()) + "」，请检查部门/项目负责人或对应角色配置");
+    return resolved;
   }
 
   private List<RuntimeAssignee> resolveExactDynamicAssignee(ApprovalRequest approval, String dynamicAssignee) {
     String name = switch (dynamicAssignee == null ? "" : dynamicAssignee) {
       case "PROJECT_MANAGER" -> projectRepository.findByCode(approval.getProjectCode()).map(Project::getManagerName).orElse(null);
       case "CUSTOMER_OWNER" -> customerRepository.findByCode(approval.getSourceNo()).map(item -> item.getOwnerName()).orElse(null);
+      // 当前无汇报链数据，DIRECT_MANAGER(直属上级) 与 DEPARTMENT_LEADER(部门负责人) 均解析为部门负责人
       case "DEPARTMENT_LEADER", "DIRECT_MANAGER" -> organizationRepository.findFirstByName(approval.getDepartmentName()).map(item -> item.getLeaderName()).orElse(null);
       default -> null;
     };
@@ -805,13 +849,13 @@ public class OfficeService {
 
   private List<String> dynamicRoleCodes(String value) {
     return switch (value == null ? "" : value) {
-      case "FINANCE_MANAGER" -> List.of("FINANCE_MANAGER", "FINANCE_DIRECTOR", "CFO", "ADMIN");
-      case "PROCUREMENT_MANAGER" -> List.of("PROCUREMENT_MANAGER", "PURCHASE_MANAGER", "ADMIN");
-      case "HR_MANAGER" -> List.of("HR_MANAGER", "HR_ADMIN", "ADMIN");
-      case "PROJECT_MANAGER" -> List.of("PROJECT_MANAGER", "PROJECT_DIRECTOR", "ADMIN");
-      case "CUSTOMER_OWNER" -> List.of("SALES_MANAGER", "CRM_MANAGER", "ADMIN");
-      case "DEPARTMENT_LEADER", "DIRECT_MANAGER" -> List.of("DEPARTMENT_MANAGER", "MANAGER", "ADMIN");
-      default -> List.of("ADMIN");
+      case "FINANCE_MANAGER" -> List.of("FINANCE_MANAGER", "FINANCE_DIRECTOR", "CFO");
+      case "PROCUREMENT_MANAGER" -> List.of("PROCUREMENT_MANAGER", "PURCHASE_MANAGER");
+      case "HR_MANAGER" -> List.of("HR_MANAGER", "HR_ADMIN");
+      case "PROJECT_MANAGER" -> List.of("PROJECT_MANAGER", "PROJECT_DIRECTOR");
+      case "CUSTOMER_OWNER" -> List.of("SALES_MANAGER", "CRM_MANAGER");
+      case "DEPARTMENT_LEADER", "DIRECT_MANAGER" -> List.of("DEPARTMENT_MANAGER", "MANAGER");
+      default -> List.of();
     };
   }
 
@@ -883,7 +927,8 @@ public class OfficeService {
 
   private ApprovalRuntimeNode selectRuntimeNode(List<ApprovalRuntimeNode> nodes, UUID delegatedUserId) {
     if (delegatedUserId != null && delegatedUserId.equals(approvalFlowSecurity.currentUserId())) return nodes.get(0);
-    return nodes.stream().filter(this::runtimeNodeMatchesCurrentUser).findFirst().orElse(nodes.get(0));
+    return nodes.stream().filter(this::runtimeNodeMatchesCurrentUser).findFirst()
+        .orElseThrow(() -> new org.springframework.security.access.AccessDeniedException("当前账号不是该审批节点处理人"));
   }
 
   private boolean runtimeNodeMatchesCurrentUser(ApprovalRuntimeNode node) {
@@ -1044,6 +1089,7 @@ public class OfficeService {
     if (approval.getStatus() == ApprovalStatus.PENDING) return;
     outsourceRepository.findByApprovalRequestId(approval.getId()).ifPresent(item -> {
       item.setStatus(approval.getStatus() == ApprovalStatus.APPROVED ? OutsourceStatus.APPROVED : OutsourceStatus.REJECTED);
+      outsourceRepository.save(item);
     });
   }
 
@@ -1063,6 +1109,31 @@ public class OfficeService {
           ? OfficeApplicationStatus.APPROVED : OfficeApplicationStatus.REJECTED);
       sealRepository.save(item);
     });
+  }
+
+  private void processPurchaseSource(ApprovalRequest approval) {
+    if (approval.getStatus() == ApprovalStatus.PENDING) return;
+    boolean approved = approval.getStatus() == ApprovalStatus.APPROVED;
+    purchaseRequestRepository.findByApprovalRequestId(approval.getId()).forEach(item -> {
+      item.setApprovalStatus(approved
+          ? com.company.ops.api.modules.procurement.domain.ApprovalStatus.APPROVED
+          : com.company.ops.api.modules.procurement.domain.ApprovalStatus.REJECTED);
+      item.setStatus(approved ? PurchaseRequestStatus.APPROVED : PurchaseRequestStatus.SUBMITTED);
+      purchaseRequestRepository.save(item);
+    });
+  }
+
+  @Transactional
+  public ApprovalRequest createPurchaseApproval(String batchCode, String batchName, BigDecimal totalAmount,
+                                                String requesterName, String content, List<PurchaseRequest> purchaseRequests) {
+    ApprovalRequest approval = createApprovalEntity("SP-" + batchCode, ApprovalType.PURCHASE, "采购申请 " + batchCode,
+        batchCode, totalAmount, requesterName, content, null, null, null, null, null);
+    purchaseRequests.forEach(item -> {
+      item.setApprovalRequestId(approval.getId());
+      purchaseRequestRepository.save(item);
+    });
+    if (approval.getStatus() == ApprovalStatus.APPROVED) processPurchaseSource(approval);
+    return approval;
   }
 
   private void processDeleteApproval(ApprovalRequest approval) {
@@ -1126,6 +1197,7 @@ public class OfficeService {
           node.setAssigneeName(role.getName());
           node.setNodeStatus("PENDING");
           node.setEscalatedAt(now);
+          if (node.getSlaHours() != null) node.setDueAt(now.plusHours(node.getSlaHours()));
           approvalRepository.findById(node.getApprovalId()).ifPresent(approval -> {
             approval.setCurrentApproverName(currentRuntimeApproverNames(approval.getId(), approval.getCurrentStep()));
             approval.setMatchedRuleText((approval.getMatchedRuleText() == null ? "" : approval.getMatchedRuleText()) + " · 已升级至" + role.getName());

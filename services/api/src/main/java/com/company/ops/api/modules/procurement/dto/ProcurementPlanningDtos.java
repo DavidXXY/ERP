@@ -13,27 +13,6 @@ public final class ProcurementPlanningDtos {
 
   private ProcurementPlanningDtos() {}
 
-  public record SaveApprovalRuleRequest(
-      @NotBlank @Size(max = 80) String ruleName,
-      BigDecimal minAmount,
-      BigDecimal maxAmount,
-      @NotBlank @Size(max = 24) String approvalLevel,
-      @Size(max = 64) String requiredRoleCode,
-      @NotNull Boolean enabled,
-      @NotNull Integer sortOrder
-  ) {}
-
-  public record ApprovalRuleResponse(
-      UUID id,
-      String ruleName,
-      BigDecimal minAmount,
-      BigDecimal maxAmount,
-      String approvalLevel,
-      String requiredRoleCode,
-      boolean enabled,
-      Integer sortOrder
-  ) {}
-
   public record FrameworkItemRequest(
       @NotNull UUID partId,
       @NotBlank @Size(max = 160) String partName,

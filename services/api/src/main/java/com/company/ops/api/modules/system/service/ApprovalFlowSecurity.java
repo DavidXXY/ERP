@@ -1,5 +1,6 @@
 package com.company.ops.api.modules.system.service;
 
+import com.company.ops.api.common.exception.BusinessException;
 import com.company.ops.api.modules.system.domain.ApprovalAssigneeConfig;
 import com.company.ops.api.modules.system.repository.ApprovalAssigneeConfigRepository;
 import com.company.ops.api.modules.system.security.UserPrincipal;
@@ -22,7 +23,7 @@ public class ApprovalFlowSecurity {
     Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
     if (authentication == null || !(authentication.getPrincipal() instanceof UserPrincipal principal)) return false;
     var configs = latestEnabled(repository.findByFlowCodeAndEnabledTrue(flowCode));
-    return configs.isEmpty() || configs.stream().anyMatch(item -> assigneeMatches(item, principal));
+    return !configs.isEmpty() && configs.stream().anyMatch(item -> assigneeMatches(item, principal));
   }
 
   public UUID currentUserId() {
@@ -36,7 +37,7 @@ public class ApprovalFlowSecurity {
     if (authentication == null || !(authentication.getPrincipal() instanceof UserPrincipal principal)) return false;
     UUID userId = principal.id();
     var configs = latestEnabled(repository.findByFlowCodeAndEnabledTrue(flowCode));
-    if (configs.isEmpty()) return true;
+    if (configs.isEmpty()) return false;
     boolean sequential = configs.stream().anyMatch(item -> "SEQUENTIAL".equals(item.getApprovalMode()));
     return configs.stream().filter(item -> !sequential || item.getSequenceNo() == completedApprovals + 1)
         .anyMatch(item -> assigneeMatches(item, principal));
@@ -66,6 +67,7 @@ public class ApprovalFlowSecurity {
     List<ApprovalAssigneeConfig> enabled = versionNo == null
         ? latestEnabled(repository.findByFlowCodeAndEnabledTrue(context.flowCode()))
         : repository.findByFlowCodeAndVersionNoAndEnabledTrue(context.flowCode(), versionNo);
+    if (enabled.isEmpty()) throw new BusinessException("审批流「" + context.flowCode() + "」未配置任何规则，请先在审批流配置中配置规则");
     List<ApprovalAssigneeConfig> matched = enabled.stream()
         .filter(item -> matches(item, context))
         .sorted(Comparator.comparingInt(ApprovalAssigneeConfig::getPriority).thenComparingInt(ApprovalAssigneeConfig::getSequenceNo))
@@ -74,6 +76,7 @@ public class ApprovalFlowSecurity {
         .filter(item -> "ANY".equals(item.getConditionType()))
         .sorted(Comparator.comparingInt(ApprovalAssigneeConfig::getPriority).thenComparingInt(ApprovalAssigneeConfig::getSequenceNo))
         .toList();
+    if (matched.isEmpty()) throw new BusinessException("审批流「" + context.flowCode() + "」未命中任何适用规则，请配置「全部单据(ANY)」兜底规则");
     boolean sequential = matched.stream().anyMatch(item -> "SEQUENTIAL".equals(item.getApprovalMode()));
     int stepCount = matched.stream().mapToInt(ApprovalAssigneeConfig::getSequenceNo).max().orElse(0);
     String mode = matched.isEmpty() ? null : sequential ? "SEQUENTIAL" : "PARALLEL";
@@ -87,7 +90,7 @@ public class ApprovalFlowSecurity {
     if (authentication == null || !(authentication.getPrincipal() instanceof UserPrincipal principal)) return false;
     if (delegatedUserId != null && delegatedUserId.equals(principal.id())) return true;
     ApprovalPlan plan = resolve(context);
-    if (plan.configs().isEmpty()) return true;
+    if (plan.configs().isEmpty()) return false;
     int step = "SEQUENTIAL".equals(plan.mode()) ? completedApprovals + 1 : 1;
     return plan.configs().stream()
         .filter(item -> !"SEQUENTIAL".equals(plan.mode()) || item.getSequenceNo() == step)
@@ -103,7 +106,7 @@ public class ApprovalFlowSecurity {
     if (authentication == null || !(authentication.getPrincipal() instanceof UserPrincipal principal)) return false;
     if (delegatedUserId != null && delegatedUserId.equals(principal.id())) return true;
     ApprovalPlan plan = resolve(context, versionNo);
-    if (plan.configs().isEmpty()) return true;
+    if (plan.configs().isEmpty()) return false;
     int step = "SEQUENTIAL".equals(plan.mode()) ? completedApprovals + 1 : 1;
     return plan.configs().stream()
         .filter(item -> !"SEQUENTIAL".equals(plan.mode()) || item.getSequenceNo() == step)
@@ -116,7 +119,7 @@ public class ApprovalFlowSecurity {
 
   private boolean matches(ApprovalAssigneeConfig item, ApprovalContext context) {
     if (item.getMinAmount() != null && amount(context.amount()).compareTo(item.getMinAmount()) < 0) return false;
-    if (item.getMaxAmount() != null && amount(context.amount()).compareTo(item.getMaxAmount()) > 0) return false;
+    if (item.getMaxAmount() != null && amount(context.amount()).compareTo(item.getMaxAmount()) >= 0) return false;
     if (!blank(item.getDepartmentName()) && !equalsText(item.getDepartmentName(), context.departmentName())) return false;
     if (!blank(item.getBusinessType()) && !equalsText(item.getBusinessType(), context.businessType())) return false;
     if (!blank(item.getProjectCode()) && !equalsText(item.getProjectCode(), context.projectCode())) return false;
@@ -141,13 +144,13 @@ public class ApprovalFlowSecurity {
 
   private List<String> dynamicRoleCodes(String value) {
     return switch (value == null ? "" : value) {
-      case "FINANCE_MANAGER" -> List.of("FINANCE_MANAGER", "FINANCE_DIRECTOR", "CFO", "ADMIN");
-      case "PROCUREMENT_MANAGER" -> List.of("PROCUREMENT_MANAGER", "PURCHASE_MANAGER", "ADMIN");
-      case "HR_MANAGER" -> List.of("HR_MANAGER", "HR_ADMIN", "ADMIN");
-      case "PROJECT_MANAGER" -> List.of("PROJECT_MANAGER", "PROJECT_DIRECTOR", "ADMIN");
-      case "CUSTOMER_OWNER" -> List.of("SALES_DIRECTOR", "SALES_MANAGER", "CRM_MANAGER", "ADMIN");
-      case "DEPARTMENT_LEADER", "DIRECT_MANAGER" -> List.of("DEPARTMENT_MANAGER", "MANAGER", "ADMIN");
-      default -> List.of("ADMIN");
+      case "FINANCE_MANAGER" -> List.of("FINANCE_MANAGER", "FINANCE_DIRECTOR", "CFO");
+      case "PROCUREMENT_MANAGER" -> List.of("PROCUREMENT_MANAGER", "PURCHASE_MANAGER");
+      case "HR_MANAGER" -> List.of("HR_MANAGER", "HR_ADMIN");
+      case "PROJECT_MANAGER" -> List.of("PROJECT_MANAGER", "PROJECT_DIRECTOR");
+      case "CUSTOMER_OWNER" -> List.of("SALES_DIRECTOR", "SALES_MANAGER", "CRM_MANAGER");
+      case "DEPARTMENT_LEADER", "DIRECT_MANAGER" -> List.of("DEPARTMENT_MANAGER", "MANAGER");
+      default -> List.of();
     };
   }
 

@@ -65,6 +65,17 @@ public final class ApprovalConfigDtos {
                                         @NotBlank @Size(max = 64) String targetFlowCode,
                                         @NotBlank @Size(max = 120) String targetFlowName,
                                         boolean overwrite) {}
+  public record ApprovalRuleItem(String assigneeType, UUID userId, UUID roleId, String dynamicAssignee,
+                                 String autoAction, Integer slaHours, UUID escalationRoleId,
+                                 String stepPolicy, @NotBlank String approvalMode, int sequenceNo,
+                                 String conditionType, BigDecimal minAmount, BigDecimal maxAmount,
+                                 @Size(max = 120) String departmentName, @Size(max = 80) String businessType,
+                                 @Size(max = 80) String projectCode, @Size(max = 40) String supplierRisk,
+                                 @Size(max = 40) String customerLevel, Integer priority,
+                                 @Size(max = 500) String remark, Boolean enabled) {}
+  public record ReplaceApprovalFlowRequest(@NotBlank @Size(max = 64) String flowCode,
+                                           @NotBlank @Size(max = 120) String flowName,
+                                           @NotNull java.util.List<ApprovalRuleItem> rules) {}
   public record ApprovalFlowDiagnostic(String flowCode, String flowName, String severity, String message) {}
   public record BatchPreviewApprovalFlowRequest(@NotNull java.util.List<PreviewApprovalFlowRequest> items) {}
   public record ApprovalFlowVersionResponse(String flowCode, String flowName, int versionNo, long ruleCount,

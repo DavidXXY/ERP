@@ -9,6 +9,8 @@ import com.company.ops.api.modules.finance.dto.PaymentSplit;
 import com.company.ops.api.modules.finance.repository.PaymentRecordRepository;
 import com.company.ops.api.modules.ledger.dto.LedgerDtos.PostingLine;
 import com.company.ops.api.modules.ledger.service.LedgerService;
+import com.company.ops.api.modules.office.service.OfficeService;
+import com.company.ops.api.modules.office.dto.OfficeDtos.ProcessApprovalRequest;
 import com.company.ops.api.modules.inventory.domain.InventoryPart;
 import com.company.ops.api.modules.inventory.domain.StockMovement;
 import com.company.ops.api.modules.inventory.domain.StockMovementType;
@@ -161,6 +163,7 @@ public class ProcurementService {
   private final ProcurementArrivalService arrivals;
   private final SupplierPortalNotifier portalNotifier;
   private final ProcurementApprovalRuleRepository approvalRuleRepository;
+  private final OfficeService officeService;
   private final FrameworkAgreementItemRepository frameworkAgreementItemRepository;
   private final FrameworkAgreementRepository frameworkAgreementRepository;
 
@@ -192,6 +195,7 @@ public class ProcurementService {
       ProcurementArrivalService arrivals,
       SupplierPortalNotifier portalNotifier,
       ProcurementApprovalRuleRepository approvalRuleRepository,
+      OfficeService officeService,
       FrameworkAgreementItemRepository frameworkAgreementItemRepository,
       FrameworkAgreementRepository frameworkAgreementRepository
   ) {
@@ -222,6 +226,7 @@ public class ProcurementService {
     this.arrivals = arrivals;
     this.portalNotifier = portalNotifier;
     this.approvalRuleRepository = approvalRuleRepository;
+    this.officeService = officeService;
     this.frameworkAgreementItemRepository = frameworkAgreementItemRepository;
     this.frameworkAgreementRepository = frameworkAgreementRepository;
   }
@@ -472,7 +477,10 @@ public class ProcurementService {
     purchaseRequest.setStatus(PurchaseRequestStatus.SUBMITTED);
     purchaseRequest.setApprovalStatus(ApprovalStatus.PENDING);
     purchaseRequest.setApprovalLevel(resolveApprovalLevel(requestAmount));
-    return toPurchaseRequestResponse(requestRepository.save(purchaseRequest));
+    PurchaseRequest savedRequest = requestRepository.save(purchaseRequest);
+    officeService.createPurchaseApproval(prCode, partName, requestAmount, currentName(),
+        request.reason(), List.of(savedRequest));
+    return toPurchaseRequestResponse(savedRequest);
   }
 
   @Transactional
@@ -552,6 +560,8 @@ public class ProcurementService {
       entities.add(item);
     }
     List<PurchaseRequest> saved = requestRepository.saveAll(entities);
+    officeService.createPurchaseApproval(batchCode, batchName.trim(), batchAmount, currentName(),
+        sharedReason, saved);
     List<PurchaseRequestResponse> items = saved.stream()
         .map(this::toPurchaseRequestResponse)
         .toList();
@@ -632,30 +642,11 @@ public class ProcurementService {
   ) {
     PurchaseRequest purchaseRequest = requestRepository.findById(id)
         .orElseThrow(() -> new BusinessException("采购申请不存在"));
-    if (purchaseRequest.getApprovalStatus() != ApprovalStatus.PENDING) {
-      throw new BusinessException("该采购申请已处理");
+    if (purchaseRequest.getApprovalRequestId() == null) {
+      throw new BusinessException("该采购申请尚未接入审批流程");
     }
-    if (request.decision() == ApprovalStatus.PENDING) {
-      throw new BusinessException("请选择通过或驳回");
-    }
-    if (request.decision() == ApprovalStatus.APPROVED) {
-      enforceApprovalRole(purchaseRequest);
-    }
-
-    purchaseRequest.setApprovalStatus(request.decision());
-    purchaseRequest.setStatus(request.decision() == ApprovalStatus.APPROVED
-        ? PurchaseRequestStatus.APPROVED
-        : PurchaseRequestStatus.SUBMITTED);
-    requestRepository.save(purchaseRequest);
-
-    PurchaseRequestApprovalRecord record = new PurchaseRequestApprovalRecord();
-    record.setRequestId(purchaseRequest.getId());
-    record.setDecision(request.decision());
-    record.setComment(request.comment());
-    record.setApproverName(currentName());
-    record.setDecidedAt(OffsetDateTime.now());
-    requestApprovalRepository.save(record);
-    return toPurchaseRequestResponse(purchaseRequest);
+    officeService.processApproval(purchaseRequest.getApprovalRequestId(), toOfficeApprovalRequest(request));
+    return toPurchaseRequestResponse(requestRepository.findById(id).orElseThrow());
   }
 
   @Transactional
@@ -663,43 +654,24 @@ public class ProcurementService {
       UUID batchId,
       ProcessPurchaseRequestApprovalRequest request
   ) {
-    if (request.decision() == ApprovalStatus.PENDING) {
-      throw new BusinessException("请选择通过或驳回");
-    }
     List<PurchaseRequest> batch = requestRepository.findByBatchIdOrderByLineNoAsc(batchId);
     if (batch.isEmpty()) {
       throw new BusinessException("采购申请批次不存在");
     }
-    List<PurchaseRequest> pending = batch.stream()
-        .filter(item -> item.getApprovalStatus() == ApprovalStatus.PENDING)
-        .toList();
-    if (pending.isEmpty()) {
-      throw new BusinessException("该批次没有待处理的采购明细");
+    UUID approvalRequestId = batch.get(0).getApprovalRequestId();
+    if (approvalRequestId == null) {
+      throw new BusinessException("该采购申请批次尚未接入审批流程");
     }
-    if (request.decision() == ApprovalStatus.APPROVED) {
-      for (PurchaseRequest item : pending) {
-        enforceApprovalRole(item);
-      }
-    }
-    String approverName = currentName();
-    OffsetDateTime decidedAt = OffsetDateTime.now();
-    for (PurchaseRequest item : pending) {
-      item.setApprovalStatus(request.decision());
-      item.setStatus(request.decision() == ApprovalStatus.APPROVED
-          ? PurchaseRequestStatus.APPROVED
-          : PurchaseRequestStatus.SUBMITTED);
-      PurchaseRequestApprovalRecord record = new PurchaseRequestApprovalRecord();
-      record.setRequestId(item.getId());
-      record.setDecision(request.decision());
-      record.setComment(request.comment());
-      record.setApproverName(approverName);
-      record.setDecidedAt(decidedAt);
-      requestApprovalRepository.save(record);
-    }
-    requestRepository.saveAll(pending);
+    officeService.processApproval(approvalRequestId, toOfficeApprovalRequest(request));
     return requestRepository.findByBatchIdOrderByLineNoAsc(batchId).stream()
         .map(this::toPurchaseRequestResponse)
         .toList();
+  }
+
+  private ProcessApprovalRequest toOfficeApprovalRequest(ProcessPurchaseRequestApprovalRequest request) {
+    return new ProcessApprovalRequest(
+        com.company.ops.api.modules.office.domain.ApprovalStatus.valueOf(request.decision().name()),
+        request.comment(), request.approverName());
   }
 
   @Transactional
@@ -1633,11 +1605,12 @@ public class ProcurementService {
   }
 
   private String resolveApprovalLevel(BigDecimal amount) {
-    return approvalRuleRepository.findByEnabledTrueOrderBySortOrderAsc().stream()
+    List<ProcurementApprovalRule> rules = approvalRuleRepository.findByEnabledTrueOrderBySortOrderAsc();
+    return rules.stream()
         .filter(rule -> matchesApprovalRule(rule, amount))
         .map(ProcurementApprovalRule::getApprovalLevel)
         .findFirst()
-        .orElse(null);
+        .orElse(rules.isEmpty() ? null : rules.get(rules.size() - 1).getApprovalLevel());
   }
 
   private boolean matchesApprovalRule(ProcurementApprovalRule rule, BigDecimal value) {
@@ -1648,38 +1621,6 @@ public class ProcurementService {
       return false;
     }
     return true;
-  }
-
-  private void enforceApprovalRole(PurchaseRequest purchaseRequest) {
-    if (purchaseRequest.getApprovalLevel() == null) {
-      return;
-    }
-    ProcurementApprovalRule rule = approvalRuleRepository.findByEnabledTrueOrderBySortOrderAsc().stream()
-        .filter(item -> purchaseRequest.getApprovalLevel().equals(item.getApprovalLevel()))
-        .findFirst()
-        .orElse(null);
-    if (rule == null || rule.getRequiredRoleCode() == null) {
-      return;
-    }
-    var authentication = SecurityContextHolder.getContext().getAuthentication();
-    boolean permitted = authentication != null
-        && authentication.getPrincipal() instanceof UserPrincipal principal
-        && roleAllows(principal.roleCodes(), rule.getRequiredRoleCode());
-    if (!permitted) {
-      throw new BusinessException("该申请金额达到「" + rule.getRuleName() + "」审批级别，需要角色 "
-          + rule.getRequiredRoleCode() + " 审批");
-    }
-  }
-
-  private boolean roleAllows(List<String> roles, String required) {
-    if (roles.contains("ADMIN")) {
-      return true;
-    }
-    if (roles.contains(required)) {
-      return true;
-    }
-    // 采购经理可代审专员级申请
-    return "PROCUREMENT_SPECIALIST".equals(required) && roles.contains("PROCUREMENT_MANAGER");
   }
 
   private CostTarget resolveCostTarget(

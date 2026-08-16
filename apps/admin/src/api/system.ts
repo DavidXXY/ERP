@@ -210,6 +210,43 @@ export function updateApprovalConfig(
   });
 }
 
+export type ApprovalRulePayload = {
+  assigneeType: "USER" | "ROLE" | "DYNAMIC" | "AUTO";
+  userId?: string;
+  roleId?: string;
+  dynamicAssignee?: string;
+  autoAction?: string;
+  slaHours?: number;
+  escalationRoleId?: string;
+  stepPolicy?: ApprovalConfigResponse["stepPolicy"];
+  approvalMode: "PARALLEL" | "SEQUENTIAL";
+  sequenceNo: number;
+  conditionType?: ApprovalConfigResponse["conditionType"];
+  minAmount?: number;
+  maxAmount?: number;
+  departmentName?: string;
+  businessType?: string;
+  projectCode?: string;
+  supplierRisk?: string;
+  customerLevel?: string;
+  priority?: number;
+  remark?: string;
+  enabled?: boolean;
+};
+
+/** 整条审批流一次性保存：拖拽排序、增删节点后，用该接口在一个版本内原子落库。 */
+export function replaceApprovalFlow(data: {
+  flowCode: string;
+  flowName: string;
+  rules: ApprovalRulePayload[];
+}) {
+  return request<ApprovalConfigResponse[]>({
+    method: "PUT",
+    url: `/system/approval-configs/${data.flowCode}/flow`,
+    data,
+  });
+}
+
 export function deleteApprovalConfig(id: string) {
   return request<void>({
     method: "DELETE",

@@ -1,0 +1,10 @@
+alter table if exists risk_rule_configs add column if not exists default_owner_type varchar(20);
+alter table if exists risk_rule_configs add column if not exists default_owner_user_id uuid;
+alter table if exists risk_rule_configs add column if not exists default_owner_role_id uuid;
+alter table if exists risk_rule_configs add column if not exists default_owner_position varchar(120);
+alter table if exists risk_rule_configs add column if not exists default_owner_dynamic varchar(40);
+alter table if exists risk_rule_configs add column if not exists escalation_owner_type varchar(20);
+alter table if exists risk_rule_configs add column if not exists escalation_owner_user_id uuid;
+alter table if exists risk_rule_configs add column if not exists escalation_owner_role_id uuid;
+alter table if exists risk_rule_configs add column if not exists escalation_owner_position varchar(120);
+alter table if exists risk_rule_configs add column if not exists escalation_owner_dynamic varchar(40);

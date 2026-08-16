@@ -99,8 +99,8 @@
               >
                 <template #icon><PaperClipOutlined /></template>整批附件
               </a-button>
-              <a-button type="link" size="small" @click="openApproval(record)">
-                {{ record.pendingCount > 0 ? "整批审批" : "流程" }}
+              <a-button type="link" size="small" @click="goToApprovalCenter(record)">
+                {{ record.pendingCount > 0 ? "去审批中心" : "审批记录" }}
               </a-button>
             </a-space>
           </template>
@@ -352,51 +352,6 @@
       </a-form>
     </a-modal>
 
-    <a-modal
-      v-model:open="approvalOpen"
-      title="采购申请批次审批"
-      width="760px"
-      :footer="canApproveSelected ? undefined : null"
-      :confirm-loading="saving"
-      @ok="handleApproval"
-    >
-      <a-alert
-        v-if="selectedBatch"
-        class="section-alert"
-        type="info"
-        :message="`${selectedBatch.batchCode} · ${selectedBatch.itemCount}项 · 预计金额（含税，元）${formatMoney(selectedBatch.totalAmount)} · ${selectedBatch.costTargetName}`"
-      />
-      <a-card
-        v-if="selectedBatch"
-        size="small"
-        title="流程进展"
-        class="section-alert"
-      >
-        <ApprovalProgressFlow :steps="batchApprovalSteps(selectedBatch)" />
-      </a-card>
-      <a-table
-        v-if="selectedBatch"
-        size="small"
-        :columns="approvalLineColumns"
-        :data-source="selectedBatch.items"
-        :pagination="{ pageSize: 5 }"
-        row-key="id"
-      />
-      <a-form v-if="canApproveSelected" :model="approvalForm" layout="vertical">
-        <a-form-item label="审批结论">
-          <a-radio-group
-            v-model:value="approvalForm.decision"
-            button-style="solid"
-          >
-            <a-radio-button value="APPROVED">整批通过</a-radio-button>
-            <a-radio-button value="REJECTED">整批驳回</a-radio-button>
-          </a-radio-group>
-        </a-form-item>
-        <a-form-item label="审批意见">
-          <a-textarea v-model:value="approvalForm.comment" :rows="3" />
-        </a-form-item>
-      </a-form>
-    </a-modal>
 
     <a-drawer
       v-model:open="documentOpen"
@@ -479,7 +434,6 @@ import {
   importPurchaseRequestBatch,
   listProcurementCostTargets,
   listPurchaseRequests,
-  processPurchaseRequestBatchApproval,
   type ApprovalStatus,
   type ProcurementCostTargetOption,
   type ProcurementCostType,
@@ -494,9 +448,6 @@ import {
   type DocumentRecord,
 } from "@/api/office";
 import { useAuthStore } from "@/stores/auth";
-import ApprovalProgressFlow, {
-  type ApprovalProgressStep,
-} from "@/components/ApprovalProgressFlow.vue";
 import {
   getErrorMessage,
   showBudgetOverrunPrompt,
@@ -530,11 +481,9 @@ const projects = ref<ProcurementCostTargetOption[]>([]);
 const departments = ref<ProcurementCostTargetOption[]>([]);
 const createOpen = ref(false);
 const importOpen = ref(false);
-const approvalOpen = ref(false);
 const documentOpen = ref(false);
 const formRef = ref();
 const importFormRef = ref();
-const selectedBatch = ref<RequestBatch | null>(null);
 const importFile = ref<File | null>(null);
 const documents = ref<DocumentRecord[]>([]);
 const documentsLoading = ref(false);
@@ -562,12 +511,6 @@ const importForm = reactive({
   costTargetId: "",
   sharedReason: "",
 });
-const approvalForm = reactive<{
-  decision: ApprovalStatus;
-  comment: string;
-  approverName: string;
-}>({ decision: "APPROVED", comment: "同意整批采购", approverName: "" });
-
 const rules = {
   materialName: [{ required: true, message: "请填写物料名称" }],
   quantity: [{ required: true, message: "请填写数量" }],
@@ -603,12 +546,6 @@ const lineColumns = [
   { title: "审批级别", key: "level", width: 100 },
   { title: "审批", key: "approval", width: 100 },
   { title: "操作", key: "action", width: 120, fixed: "right" as const },
-];
-const approvalLineColumns = [
-  { title: "行号", dataIndex: "lineNo", width: 70 },
-  { title: "物料", dataIndex: "partName" },
-  { title: "数量", dataIndex: "quantity", width: 90 },
-  { title: "金额（含税，元）", dataIndex: "totalAmount", width: 180 },
 ];
 const documentColumns = [
   { title: "文件", key: "file" },
@@ -692,13 +629,6 @@ const requestBatches = computed<RequestBatch[]>(() => {
     };
   });
 });
-const canApproveSelected = computed(
-  () =>
-    !!selectedBatch.value &&
-    selectedBatch.value.pendingCount > 0 &&
-    auth.can("procurement:request:approve"),
-);
-
 onMounted(loadData);
 
 async function loadData() {
@@ -835,35 +765,8 @@ async function handleImport() {
   }
 }
 
-function openApproval(batch: RequestBatch) {
-  selectedBatch.value = batch;
-  Object.assign(approvalForm, {
-    decision: "APPROVED",
-    comment: "同意整批采购",
-    approverName: auth.user?.displayName || "",
-  });
-  approvalOpen.value = true;
-}
-
-async function handleApproval() {
-  if (!selectedBatch.value) return;
-  saving.value = true;
-  try {
-    await processPurchaseRequestBatchApproval(selectedBatch.value.batchId, {
-      ...approvalForm,
-    });
-    approvalOpen.value = false;
-    message.success(
-      approvalForm.decision === "APPROVED"
-        ? "采购申请批次已通过"
-        : "采购申请批次已驳回",
-    );
-    await loadData();
-  } catch (error: any) {
-    message.error(error.message || "批次审批失败");
-  } finally {
-    saving.value = false;
-  }
+function goToApprovalCenter(_batch: RequestBatch) {
+  router.push({ path: "/workbench/todos", query: { tab: "approvals" } });
 }
 
 function openBatchDocuments(batch: RequestBatch) {
@@ -961,47 +864,6 @@ function approvalStatusLabel(status: ApprovalStatus) {
   return { PENDING: "待审批", APPROVED: "已通过", REJECTED: "已驳回" }[status];
 }
 
-function batchApprovalSteps(batch: RequestBatch): ApprovalProgressStep[] {
-  const latest = batch.items.find((item) => item.lastApprovalAt);
-  return [
-    {
-      key: "start",
-      personName: batch.requesterName || "发起人",
-      title: `发起批次（${batch.itemCount}项）`,
-      note: `${batch.batchName}，预计金额（含税，元）${formatMoney(batch.totalAmount)}`,
-      state: "done",
-    },
-    {
-      key: "approval",
-      personName: latest?.lastApproverName || "当前审批人",
-      title:
-        batch.approvalStatus === "PENDING"
-          ? "待审批"
-          : batch.approvalStatus === "APPROVED"
-            ? "已同意"
-            : "已驳回",
-      time: latest?.lastApprovalAt,
-      note:
-        batch.approvalStatus === "PENDING"
-          ? `等待审批，${batch.pendingCount}项待处理`
-          : latest?.lastApprovalComment ||
-            approvalStatusLabel(batch.approvalStatus),
-      state:
-        batch.approvalStatus === "PENDING"
-          ? "pending"
-          : batch.approvalStatus === "REJECTED"
-            ? "rejected"
-            : "done",
-    },
-    {
-      key: "execute",
-      personName: "采购执行",
-      title: "待询价/下单",
-      note: "审批通过的明细可分别进入询价、订单、到货、应付和付款闭环",
-      state: batch.approvalStatus === "APPROVED" ? "pending" : "waiting",
-    },
-  ];
-}
 async function handleExport() {
   exporting.value = true;
   try {

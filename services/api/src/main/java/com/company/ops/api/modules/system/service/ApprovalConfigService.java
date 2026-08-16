@@ -8,6 +8,8 @@ import com.company.ops.api.modules.system.dto.ApprovalConfigDtos.ApprovalFlowPre
 import com.company.ops.api.modules.system.dto.ApprovalConfigDtos.ApprovalFlowPreviewStep;
 import com.company.ops.api.modules.system.dto.ApprovalConfigDtos.BatchPreviewApprovalFlowRequest;
 import com.company.ops.api.modules.system.dto.ApprovalConfigDtos.CopyApprovalFlowRequest;
+import com.company.ops.api.modules.system.dto.ApprovalConfigDtos.ReplaceApprovalFlowRequest;
+import com.company.ops.api.modules.system.dto.ApprovalConfigDtos.ApprovalRuleItem;
 import com.company.ops.api.modules.system.dto.ApprovalConfigDtos.ApprovalConfigResponse;
 import com.company.ops.api.modules.system.dto.ApprovalConfigDtos.CreateApprovalConfigRequest;
 import com.company.ops.api.modules.system.dto.ApprovalConfigDtos.PreviewApprovalFlowRequest;
@@ -16,6 +18,7 @@ import com.company.ops.api.modules.system.repository.ApprovalAssigneeConfigRepos
 import com.company.ops.api.modules.system.repository.SystemRoleRepository;
 import com.company.ops.api.modules.system.repository.SystemUserRepository;
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -86,13 +89,14 @@ public class ApprovalConfigService {
 
   @Transactional
   public ApprovalConfigResponse create(CreateApprovalConfigRequest request) {
+    assertModeConsistent(request.flowCode(), request.approvalMode(), null);
     int nextVersion = nextVersion(request.flowCode());
     List<ApprovalAssigneeConfig> next = latestEnabled(repository.findByFlowCodeAndEnabledTrue(request.flowCode())).stream().map(item -> cloneConfig(item, nextVersion)).collect(Collectors.toList());
     ApprovalAssigneeConfig config = new ApprovalAssigneeConfig(); config.setVersionNo(nextVersion);
     applyConfig(config, request.flowCode(), request.flowName(), request.assigneeType(), request.userId(), request.roleId(), request.dynamicAssignee(),
         request.autoAction(), request.slaHours(), request.escalationRoleId(), request.stepPolicy(), request.approvalMode(), request.sequenceNo(),
         request.conditionType(), request.minAmount(), request.maxAmount(), request.departmentName(), request.businessType(),
-        request.projectCode(), request.supplierRisk(), request.customerLevel(), request.priority(), request.remark(), true, null);
+        request.projectCode(), request.supplierRisk(), request.customerLevel(), request.priority(), request.remark(), true);
     next.add(config);
     repository.saveAll(next);
     return toResponse(config);
@@ -101,6 +105,7 @@ public class ApprovalConfigService {
   @Transactional
   public ApprovalConfigResponse update(UUID id, UpdateApprovalConfigRequest request) {
     ApprovalAssigneeConfig config = repository.findById(id).orElseThrow(() -> new BusinessException("审批配置不存在"));
+    assertModeConsistent(config.getFlowCode(), request.approvalMode(), id);
     int nextVersion = nextVersion(config.getFlowCode());
     List<ApprovalAssigneeConfig> next = latestEnabled(repository.findByFlowCodeAndEnabledTrue(config.getFlowCode())).stream()
         .filter(item -> !item.getId().equals(id))
@@ -111,7 +116,7 @@ public class ApprovalConfigService {
         request.autoAction(), request.slaHours(), request.escalationRoleId(), request.stepPolicy(), request.approvalMode(), request.sequenceNo(),
         request.conditionType(), request.minAmount(), request.maxAmount(), request.departmentName(), request.businessType(),
         request.projectCode(), request.supplierRisk(), request.customerLevel(), request.priority(), request.remark(),
-        request.enabled() == null || request.enabled(), id);
+        request.enabled() == null || request.enabled());
     next.add(updated);
     repository.saveAll(next);
     return toResponse(updated);
@@ -142,6 +147,29 @@ public class ApprovalConfigService {
       return copy;
     }).toList();
     return repository.saveAll(copied).stream().map(this::toResponse).toList();
+  }
+
+  @Transactional
+  public List<ApprovalConfigResponse> replaceFlow(ReplaceApprovalFlowRequest request) {
+    List<ApprovalRuleItem> rules = request.rules();
+    if (rules == null || rules.isEmpty()) throw new BusinessException("审批流至少需要一条规则");
+    String mode = rules.get(0).approvalMode();
+    if (rules.stream().anyMatch(item -> !mode.equals(item.approvalMode()))) {
+      throw new BusinessException("同一审批流程不能混用同步审批和依次审批");
+    }
+    int nextVersion = nextVersion(request.flowCode());
+    List<ApprovalAssigneeConfig> next = new ArrayList<>();
+    for (ApprovalRuleItem item : rules) {
+      ApprovalAssigneeConfig config = new ApprovalAssigneeConfig();
+      config.setVersionNo(nextVersion);
+      applyConfig(config, request.flowCode(), request.flowName(), item.assigneeType(), item.userId(), item.roleId(),
+          item.dynamicAssignee(), item.autoAction(), item.slaHours(), item.escalationRoleId(), item.stepPolicy(),
+          item.approvalMode(), item.sequenceNo(), item.conditionType(), item.minAmount(), item.maxAmount(),
+          item.departmentName(), item.businessType(), item.projectCode(), item.supplierRisk(), item.customerLevel(),
+          item.priority(), item.remark(), item.enabled() == null || item.enabled());
+      next.add(config);
+    }
+    return repository.saveAll(next).stream().map(this::toResponse).toList();
   }
 
   @Transactional(readOnly = true)
@@ -195,7 +223,7 @@ public class ApprovalConfigService {
                            String approvalMode, int sequenceNo, String conditionType, BigDecimal minAmount,
                            BigDecimal maxAmount, String departmentName, String businessType, String projectCode,
                            String supplierRisk, String customerLevel, Integer priority, String remark,
-                           boolean enabled, UUID currentId) {
+                           boolean enabled) {
     if (!List.of("USER", "ROLE", "DYNAMIC", "AUTO").contains(assigneeType)) throw new BusinessException("审批对象类型不正确");
     if ("USER".equals(assigneeType)) {
       if (userId == null || !userRepository.existsById(userId)) throw new BusinessException("审批人员不存在");
@@ -215,12 +243,6 @@ public class ApprovalConfigService {
     String normalizedStepPolicy = stepPolicy == null || stepPolicy.isBlank() ? "ANY_APPROVE" : stepPolicy;
     if (!List.of("ANY_APPROVE", "ALL_APPROVE", "MAJORITY_APPROVE").contains(normalizedStepPolicy)) throw new BusinessException("节点通过策略不正确");
     if (!"PARALLEL".equals(approvalMode) && !"SEQUENTIAL".equals(approvalMode)) throw new BusinessException("审批模式不正确");
-    var existing = latestEnabled(repository.findByFlowCodeAndEnabledTrue(flowCode)).stream()
-        .filter(item -> currentId == null || !item.getId().equals(currentId))
-        .toList();
-    if (enabled && !existing.isEmpty() && existing.stream().anyMatch(item -> !approvalMode.equals(item.getApprovalMode()))) {
-      throw new BusinessException("同一审批流程不能混用同步审批和依次审批");
-    }
     if (sequenceNo < 1) throw new BusinessException("审批顺序必须从1开始");
     String normalizedConditionType = conditionType == null || conditionType.isBlank() ? "ANY" : conditionType;
     if (!List.of("ANY", "AMOUNT", "DEPARTMENT", "AMOUNT_AND_DEPARTMENT", "BUSINESS_TYPE", "PROJECT", "SUPPLIER_RISK", "CUSTOMER_LEVEL", "COMPOSITE").contains(normalizedConditionType)) throw new BusinessException("审批条件类型不正确");
@@ -240,6 +262,16 @@ public class ApprovalConfigService {
     config.setPriority(priority == null || priority < 1 ? 100 : priority);
     config.setRemark(trimToNull(remark));
     config.setEnabled(enabled);
+  }
+
+  private void assertModeConsistent(String flowCode, String mode, UUID currentId) {
+    if (!"PARALLEL".equals(mode) && !"SEQUENTIAL".equals(mode)) throw new BusinessException("审批模式不正确");
+    var existing = latestEnabled(repository.findByFlowCodeAndEnabledTrue(flowCode)).stream()
+        .filter(item -> currentId == null || !item.getId().equals(currentId))
+        .toList();
+    if (existing.stream().anyMatch(item -> !mode.equals(item.getApprovalMode()))) {
+      throw new BusinessException("同一审批流程不能混用同步审批和依次审批");
+    }
   }
 
   private ApprovalConfigResponse toResponse(ApprovalAssigneeConfig config) {

@@ -76,19 +76,53 @@
                   />
                 </a-form-item>
               </a-col>
-              <a-col :xs="24" :md="12">
+              <a-col :span="24">
                 <a-form-item label="默认责任人">
-                  <a-input
-                    v-model:value="item.defaultOwner"
-                    placeholder="例如：项目经理"
+                  <a-radio-group
+                    v-model:value="item.defaultOwnerType"
+                    size="small"
+                    button-style="solid"
+                  >
+                    <a-radio-button value="ROLE">角色</a-radio-button>
+                    <a-radio-button value="POSITION">岗位</a-radio-button>
+                    <a-radio-button value="USER">人员</a-radio-button>
+                    <a-radio-button value="DYNAMIC">动态</a-radio-button>
+                  </a-radio-group>
+                  <a-select
+                    v-if="item.defaultOwnerType"
+                    :value="getOwnerTarget(item, 'default')"
+                    :options="ownerTargetOptions(item.defaultOwnerType)"
+                    :placeholder="ownerPlaceholder(item.defaultOwnerType)"
+                    show-search
+                    option-filter-prop="label"
+                    allow-clear
+                    class="owner-target-select"
+                    @change="(v: string | undefined) => setOwnerTarget(item, 'default', v)"
                   />
                 </a-form-item>
               </a-col>
-              <a-col :xs="24" :md="12">
+              <a-col :span="24">
                 <a-form-item label="升级责任人">
-                  <a-input
-                    v-model:value="item.escalationOwner"
-                    placeholder="例如：运营负责人"
+                  <a-radio-group
+                    v-model:value="item.escalationOwnerType"
+                    size="small"
+                    button-style="solid"
+                  >
+                    <a-radio-button value="ROLE">角色</a-radio-button>
+                    <a-radio-button value="POSITION">岗位</a-radio-button>
+                    <a-radio-button value="USER">人员</a-radio-button>
+                    <a-radio-button value="DYNAMIC">动态</a-radio-button>
+                  </a-radio-group>
+                  <a-select
+                    v-if="item.escalationOwnerType"
+                    :value="getOwnerTarget(item, 'escalation')"
+                    :options="ownerTargetOptions(item.escalationOwnerType)"
+                    :placeholder="ownerPlaceholder(item.escalationOwnerType)"
+                    show-search
+                    option-filter-prop="label"
+                    allow-clear
+                    class="owner-target-select"
+                    @change="(v: string | undefined) => setOwnerTarget(item, 'escalation', v)"
                   />
                 </a-form-item>
               </a-col>
@@ -141,10 +175,20 @@
             <span>{{ thresholdText(record) }}</span>
           </template>
           <template v-else-if="column.key === 'owner'">
-            <span>{{ record.defaultOwner || "-" }}</span>
-            <span class="table-subtitle"
-              >升级：{{ record.escalationOwner || "-" }}</span
-            >
+            <a-space direction="vertical" :size="0" style="text-align: left">
+              <span>
+                <a-tag v-if="record.defaultOwnerType" color="blue">{{
+                  ownerTypeLabel(record.defaultOwnerType)
+                }}</a-tag>
+                {{ record.defaultOwner || "未设置" }}
+              </span>
+              <span class="table-subtitle">
+                <a-tag v-if="record.escalationOwnerType">{{
+                  `升级 · ${ownerTypeLabel(record.escalationOwnerType)}`
+                }}</a-tag>
+                {{ record.escalationOwner || "未设置" }}
+              </span>
+            </a-space>
           </template>
           <template v-else-if="column.key === 'source'">
             <a-tag :color="record.id ? 'blue' : 'default'">
@@ -261,16 +305,53 @@
               />
             </a-form-item>
           </a-col>
-          <a-col :xs="24" :md="12">
-            <a-form-item label="默认责任人" name="defaultOwner">
-              <a-input v-model:value="editForm.defaultOwner" :maxlength="80" />
+          <a-col :span="24">
+            <a-form-item label="默认责任人">
+              <a-radio-group
+                v-model:value="editForm.defaultOwnerType"
+                size="small"
+                button-style="solid"
+              >
+                <a-radio-button value="ROLE">角色</a-radio-button>
+                <a-radio-button value="POSITION">岗位</a-radio-button>
+                <a-radio-button value="USER">人员</a-radio-button>
+                <a-radio-button value="DYNAMIC">动态</a-radio-button>
+              </a-radio-group>
+              <a-select
+                v-if="editForm.defaultOwnerType"
+                :value="getOwnerTarget(editForm, 'default')"
+                :options="ownerTargetOptions(editForm.defaultOwnerType)"
+                :placeholder="ownerPlaceholder(editForm.defaultOwnerType)"
+                show-search
+                option-filter-prop="label"
+                allow-clear
+                class="owner-target-select"
+                @change="(v: string | undefined) => setOwnerTarget(editForm, 'default', v)"
+              />
             </a-form-item>
           </a-col>
-          <a-col :xs="24" :md="12">
-            <a-form-item label="升级责任人" name="escalationOwner">
-              <a-input
-                v-model:value="editForm.escalationOwner"
-                :maxlength="80"
+          <a-col :span="24">
+            <a-form-item label="升级责任人">
+              <a-radio-group
+                v-model:value="editForm.escalationOwnerType"
+                size="small"
+                button-style="solid"
+              >
+                <a-radio-button value="ROLE">角色</a-radio-button>
+                <a-radio-button value="POSITION">岗位</a-radio-button>
+                <a-radio-button value="USER">人员</a-radio-button>
+                <a-radio-button value="DYNAMIC">动态</a-radio-button>
+              </a-radio-group>
+              <a-select
+                v-if="editForm.escalationOwnerType"
+                :value="getOwnerTarget(editForm, 'escalation')"
+                :options="ownerTargetOptions(editForm.escalationOwnerType)"
+                :placeholder="ownerPlaceholder(editForm.escalationOwnerType)"
+                show-search
+                option-filter-prop="label"
+                allow-clear
+                class="owner-target-select"
+                @change="(v: string | undefined) => setOwnerTarget(editForm, 'escalation', v)"
               />
             </a-form-item>
           </a-col>
@@ -301,9 +382,12 @@ import { computed, onMounted, ref } from "vue";
 import { message, type FormInstance } from "ant-design-vue";
 import {
   deleteRiskRule,
+  listRiskOwnerOptions,
   listRiskRules,
   saveRiskRule,
   updateRiskRule,
+  type RiskOwnerOptionsResponse,
+  type RiskOwnerType,
   type RiskRuleConfigResponse,
 } from "@/api/risk";
 
@@ -319,8 +403,10 @@ const templates: RuleForm[] = [
     mediumThreshold: 80,
     warningDays: 0,
     slaHours: 48,
-    defaultOwner: "项目经理",
-    escalationOwner: "项目总监",
+    defaultOwnerType: "DYNAMIC",
+    defaultOwnerDynamic: "PROJECT_MANAGER",
+    escalationOwnerType: "DYNAMIC",
+    escalationOwnerDynamic: "PROJECT_DIRECTOR",
     remark:
       "阶段推进前校验审批、预算、成本、资料、验收记录。高阈值表示必须满足项比例。",
   },
@@ -333,8 +419,10 @@ const templates: RuleForm[] = [
     mediumThreshold: 15,
     warningDays: 0,
     slaHours: 24,
-    defaultOwner: "销售经理",
-    escalationOwner: "财务负责人",
+    defaultOwnerType: "DYNAMIC",
+    defaultOwnerDynamic: "SALES_MANAGER",
+    escalationOwnerType: "DYNAMIC",
+    escalationOwnerDynamic: "FINANCE_MANAGER",
     remark: "报价毛利率低于高危阈值时阻断或升级审批，低于关注阈值时提示复核。",
   },
   {
@@ -346,8 +434,10 @@ const templates: RuleForm[] = [
     mediumThreshold: 80,
     warningDays: 0,
     slaHours: 72,
-    defaultOwner: "采购负责人",
-    escalationOwner: "运营负责人",
+    defaultOwnerType: "DYNAMIC",
+    defaultOwnerDynamic: "PROCUREMENT_MANAGER",
+    escalationOwnerType: "DYNAMIC",
+    escalationOwnerDynamic: "OPERATIONS_MANAGER",
     remark: "供应商综合评分低于高危阈值列为高风险，低于关注阈值进入观察名单。",
   },
   {
@@ -359,8 +449,10 @@ const templates: RuleForm[] = [
     mediumThreshold: 72,
     warningDays: 1,
     slaHours: 48,
-    defaultOwner: "业务负责人",
-    escalationOwner: "总经理",
+    defaultOwnerType: "DYNAMIC",
+    defaultOwnerDynamic: "BUSINESS_OWNER",
+    escalationOwnerType: "DYNAMIC",
+    escalationOwnerDynamic: "GENERAL_MANAGER",
     remark: "跨模块待办超过SLA自动升级，高/中阈值用于区分超时严重程度。",
   },
 ];
@@ -377,6 +469,156 @@ const editingId = ref("");
 const editFormRef = ref<FormInstance>();
 const editForm = ref<RuleForm>(cloneRule(templates[0]));
 const editingSystemDefault = computed(() => !editingId.value);
+const ownerOptions = ref<RiskOwnerOptionsResponse>({
+  roles: [],
+  users: [],
+  positions: [],
+});
+
+const dynamicOwnerOptions = [
+  { label: "部门负责人", value: "DEPARTMENT_LEADER" },
+  { label: "直属上级", value: "DIRECT_MANAGER" },
+  { label: "项目经理", value: "PROJECT_MANAGER" },
+  { label: "项目总监", value: "PROJECT_DIRECTOR" },
+  { label: "客户负责人", value: "CUSTOMER_OWNER" },
+  { label: "销售经理", value: "SALES_MANAGER" },
+  { label: "财务经理", value: "FINANCE_MANAGER" },
+  { label: "采购经理", value: "PROCUREMENT_MANAGER" },
+  { label: "运营负责人", value: "OPERATIONS_MANAGER" },
+  { label: "总经理", value: "GENERAL_MANAGER" },
+  { label: "人事经理", value: "HR_MANAGER" },
+  { label: "业务负责人", value: "BUSINESS_OWNER" },
+  { label: "仓库管理员", value: "WAREHOUSE_MANAGER" },
+  { label: "综合管理员", value: "ADMIN_MANAGER" },
+  { label: "资质管理员", value: "QUALIFICATION_MANAGER" },
+  { label: "维保主管", value: "MAINTENANCE_MANAGER" },
+];
+
+const ownerTypeLabels: Record<RiskOwnerType, string> = {
+  ROLE: "角色",
+  USER: "人员",
+  POSITION: "岗位",
+  DYNAMIC: "动态",
+};
+
+function ownerTypeLabel(type?: RiskOwnerType | null) {
+  return type ? ownerTypeLabels[type] : "";
+}
+
+function ownerTargetOptions(type?: RiskOwnerType | null) {
+  switch (type) {
+    case "ROLE":
+      return ownerOptions.value.roles.map((item) => ({
+        label: `${item.name} · ${item.secondary || ""}`,
+        value: item.id,
+      }));
+    case "USER":
+      return ownerOptions.value.users.map((item) => ({
+        label: `${item.name} · ${item.secondary || ""}`,
+        value: item.id,
+      }));
+    case "POSITION":
+      return ownerOptions.value.positions.map((item) => ({
+        label: item,
+        value: item,
+      }));
+    case "DYNAMIC":
+      return dynamicOwnerOptions;
+    default:
+      return [];
+  }
+}
+
+function ownerPlaceholder(type?: RiskOwnerType | null) {
+  switch (type) {
+    case "ROLE":
+      return "选择角色";
+    case "USER":
+      return "选择人员";
+    case "POSITION":
+      return "选择岗位";
+    case "DYNAMIC":
+      return "选择动态责任人";
+    default:
+      return "请先选择责任人类型";
+  }
+}
+
+function getOwnerTarget(
+  item: RuleForm,
+  slot: "default" | "escalation",
+): string | undefined {
+  const type =
+    slot === "default" ? item.defaultOwnerType : item.escalationOwnerType;
+  switch (type) {
+    case "ROLE":
+      return slot === "default"
+        ? (item.defaultOwnerRoleId ?? undefined)
+        : (item.escalationOwnerRoleId ?? undefined);
+    case "USER":
+      return slot === "default"
+        ? (item.defaultOwnerUserId ?? undefined)
+        : (item.escalationOwnerUserId ?? undefined);
+    case "POSITION":
+      return slot === "default"
+        ? (item.defaultOwnerPosition ?? undefined)
+        : (item.escalationOwnerPosition ?? undefined);
+    case "DYNAMIC":
+      return slot === "default"
+        ? (item.defaultOwnerDynamic ?? undefined)
+        : (item.escalationOwnerDynamic ?? undefined);
+    default:
+      return undefined;
+  }
+}
+
+function setOwnerType(
+  item: RuleForm,
+  slot: "default" | "escalation",
+  type: RiskOwnerType,
+) {
+  if (slot === "default") {
+    item.defaultOwnerType = type;
+    item.defaultOwnerUserId = null;
+    item.defaultOwnerRoleId = null;
+    item.defaultOwnerPosition = null;
+    item.defaultOwnerDynamic = null;
+  } else {
+    item.escalationOwnerType = type;
+    item.escalationOwnerUserId = null;
+    item.escalationOwnerRoleId = null;
+    item.escalationOwnerPosition = null;
+    item.escalationOwnerDynamic = null;
+  }
+}
+
+function setOwnerTarget(
+  item: RuleForm,
+  slot: "default" | "escalation",
+  value: string | undefined,
+) {
+  const type =
+    slot === "default" ? item.defaultOwnerType : item.escalationOwnerType;
+  if (slot === "default") {
+    item.defaultOwnerUserId = null;
+    item.defaultOwnerRoleId = null;
+    item.defaultOwnerPosition = null;
+    item.defaultOwnerDynamic = null;
+    if (type === "ROLE") item.defaultOwnerRoleId = value ?? null;
+    else if (type === "USER") item.defaultOwnerUserId = value ?? null;
+    else if (type === "POSITION") item.defaultOwnerPosition = value ?? null;
+    else if (type === "DYNAMIC") item.defaultOwnerDynamic = value ?? null;
+  } else {
+    item.escalationOwnerUserId = null;
+    item.escalationOwnerRoleId = null;
+    item.escalationOwnerPosition = null;
+    item.escalationOwnerDynamic = null;
+    if (type === "ROLE") item.escalationOwnerRoleId = value ?? null;
+    else if (type === "USER") item.escalationOwnerUserId = value ?? null;
+    else if (type === "POSITION") item.escalationOwnerPosition = value ?? null;
+    else if (type === "DYNAMIC") item.escalationOwnerDynamic = value ?? null;
+  }
+}
 
 const moduleOptions = [
   { label: "项目管理", value: "project" },
@@ -416,7 +658,12 @@ const columns = [
 async function loadData() {
   loading.value = true;
   try {
-    rules.value = await listRiskRules();
+    const [ruleData, optionsData] = await Promise.all([
+      listRiskRules(),
+      listRiskOwnerOptions(),
+    ]);
+    rules.value = ruleData;
+    ownerOptions.value = optionsData;
     ruleForms.value = templates.map((template) => ({
       ...cloneRule(template),
       ...stripId(
@@ -537,8 +784,16 @@ function normalizeRule(item: RuleForm): RuleForm {
     mediumThreshold: numberOrUndefined(item.mediumThreshold),
     warningDays: numberOrUndefined(item.warningDays),
     slaHours: numberOrUndefined(item.slaHours),
-    defaultOwner: item.defaultOwner || undefined,
-    escalationOwner: item.escalationOwner || undefined,
+    defaultOwnerType: item.defaultOwnerType || undefined,
+    defaultOwnerUserId: item.defaultOwnerUserId || undefined,
+    defaultOwnerRoleId: item.defaultOwnerRoleId || undefined,
+    defaultOwnerPosition: item.defaultOwnerPosition || undefined,
+    defaultOwnerDynamic: item.defaultOwnerDynamic || undefined,
+    escalationOwnerType: item.escalationOwnerType || undefined,
+    escalationOwnerUserId: item.escalationOwnerUserId || undefined,
+    escalationOwnerRoleId: item.escalationOwnerRoleId || undefined,
+    escalationOwnerPosition: item.escalationOwnerPosition || undefined,
+    escalationOwnerDynamic: item.escalationOwnerDynamic || undefined,
     remark: item.remark || undefined,
   };
 }
@@ -615,6 +870,11 @@ onMounted(loadData);
 
 .full-input {
   width: 100%;
+}
+
+.owner-target-select {
+  width: 100%;
+  margin-top: 8px;
 }
 
 .rule-footer {

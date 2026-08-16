@@ -273,6 +273,7 @@ import {
   type DocumentRecord,
 } from "@/api/office";
 import { useAuthStore } from "@/stores/auth";
+import { approvalStatusLabel } from "./approvalStatusMeta";
 const route = useRoute(),
   router = useRouter(),
   auth = useAuthStore(),
@@ -332,7 +333,7 @@ const sourceRoute = computed(() => {
   if (a.approvalType === "PAYMENT" && source?.id)
     return `/finance/payment-applications/${source.id}`;
   if (a.approvalType === "PURCHASE" && source?.id)
-    return `/procurement/orders/${source.id}`;
+    return "/procurement/requests";
   if (a.approvalType === "CONTRACT" && source?.id)
     return `/crm/contracts/${source.id}`;
   if (a.approvalType === "QUOTE" && source?.id)
@@ -484,14 +485,7 @@ function typeLabel(v?: string) {
   );
 }
 function statusLabel(v?: string) {
-  return (
-    (
-      { PENDING: "审批中", APPROVED: "已通过", REJECTED: "已驳回" } as Record<
-        string,
-        string
-      >
-    )[v || ""] || ""
-  );
+  return approvalStatusLabel(v || "");
 }
 function nodeLabel(v: string) {
   return (
@@ -526,7 +520,7 @@ function actionTypeLabel(t: string | undefined, d: string) {
         WITHDRAW: "撤回",
         RESUBMIT: "重新提交",
       } as Record<string, string>
-    )[t || ""] || statusLabel(d)
+    )[t || ""] || approvalStatusLabel(d)
   );
 }
 </script>

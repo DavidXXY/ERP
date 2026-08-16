@@ -6,6 +6,7 @@ import com.company.ops.api.modules.system.dto.ApprovalConfigDtos.ApprovalFlowDia
 import com.company.ops.api.modules.system.dto.ApprovalConfigDtos.ApprovalFlowVersionResponse;
 import com.company.ops.api.modules.system.dto.ApprovalConfigDtos.BatchPreviewApprovalFlowRequest;
 import com.company.ops.api.modules.system.dto.ApprovalConfigDtos.CopyApprovalFlowRequest;
+import com.company.ops.api.modules.system.dto.ApprovalConfigDtos.ReplaceApprovalFlowRequest;
 import com.company.ops.api.modules.system.dto.ApprovalConfigDtos.ApprovalConfigResponse;
 import com.company.ops.api.modules.system.dto.ApprovalConfigDtos.CreateApprovalConfigRequest;
 import com.company.ops.api.modules.system.dto.ApprovalConfigDtos.PreviewApprovalFlowRequest;
@@ -61,6 +62,10 @@ public class ApprovalConfigController {
   @PostMapping("/{flowCode}/rollback/{versionNo}")
   @PreAuthorize("hasAuthority('system:role:update')")
   public ApiResponse<List<ApprovalConfigResponse>> rollback(@PathVariable String flowCode, @PathVariable int versionNo) { return ApiResponse.ok(service.rollback(flowCode, versionNo)); }
+
+  @PutMapping("/{flowCode}/flow")
+  @PreAuthorize("hasAuthority('system:role:update')")
+  public ApiResponse<List<ApprovalConfigResponse>> replaceFlow(@PathVariable String flowCode, @Valid @RequestBody ReplaceApprovalFlowRequest request) { return ApiResponse.ok(service.replaceFlow(request)); }
 
   @PostMapping
   @PreAuthorize("hasAuthority('system:role:update')")

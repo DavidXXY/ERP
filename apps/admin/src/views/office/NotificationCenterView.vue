@@ -158,7 +158,7 @@ function notifyLayout() {
 }
 function relatedRoute(item: NotificationRecord) {
   const type = (item.relatedType || item.type || "").toUpperCase();
-  if (type.includes("APPROVAL")) return "/workbench/todos?tab=approvals";
+  if (type.includes("APPROVAL")) return "/collaboration?tab=approvals";
   if (type.includes("EXPENSE")) return "/office/expenses";
   if (type.includes("OUTSOURCE")) return "/office/outsourcing";
   if (type.includes("DOCUMENT")) return "/office/documents";

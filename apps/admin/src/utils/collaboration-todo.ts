@@ -2,6 +2,8 @@ import type { CollaborationTodo } from "@/api/collaboration";
 
 export type CanonicalBusinessTodo = {
   key: string;
+  type: string;
+  id: string;
   module: string;
   moduleName: string;
   title: string;
@@ -61,6 +63,8 @@ export function mapCanonicalTodo(
   };
   return {
     key: `${item.type}-${item.id}`,
+    type: item.type,
+    id: item.id,
     module: presentation.module,
     moduleName: presentation.moduleName,
     title: item.title,

@@ -1,49 +1,38 @@
 <template>
-  <div class="business-todo-page">
-    <a-card :bordered="false" class="todo-hero">
-      <div class="hero-main">
-        <div>
-          <a-typography-title :level="3">业务待办中心</a-typography-title>
-          <a-typography-text type="secondary">
-            统一处理业务待办和审批事项；消息中心只保留通知阅读。
-          </a-typography-text>
-        </div>
-        <a-space>
-          <a-button @click="go('/office/notifications')">消息中心</a-button>
-          <a-button @click="resetFilters">重置筛选</a-button>
-          <a-button type="primary" :loading="loading" @click="loadData"
-            >刷新待办</a-button
-          >
-        </a-space>
-      </div>
+  <div class="collab-todo-tab">
+    <a-alert
+      class="todo-tip"
+      type="info"
+      show-icon
+      message="统一处理业务待办与审批：可办理、转办、抄送、催办和设置期限；逾期任务由后台定时升级并发送站内消息。"
+    />
 
-      <a-row :gutter="[16, 16]" class="metric-grid">
-        <a-col :xs="12" :lg="6">
-          <div class="metric-card">
-            <span>全部待办</span>
-            <strong>{{ filteredTodos.length }}</strong>
-          </div>
-        </a-col>
-        <a-col :xs="12" :lg="6">
-          <div class="metric-card high">
-            <span>高优先</span>
-            <strong>{{ highCount }}</strong>
-          </div>
-        </a-col>
-        <a-col :xs="12" :lg="6">
-          <div class="metric-card overdue">
-            <span>已超时</span>
-            <strong>{{ overdueCount }}</strong>
-          </div>
-        </a-col>
-        <a-col :xs="12" :lg="6">
-          <div class="metric-card amount">
-            <span>金额敞口（元，税价随来源单据）</span>
-            <strong>{{ formatCurrency(totalExposure) }}</strong>
-          </div>
-        </a-col>
-      </a-row>
-    </a-card>
+    <a-row :gutter="[16, 16]" class="metric-grid">
+      <a-col :xs="12" :lg="6">
+        <div class="metric-card">
+          <span>全部待办</span>
+          <strong>{{ filteredTodos.length }}</strong>
+        </div>
+      </a-col>
+      <a-col :xs="12" :lg="6">
+        <div class="metric-card high">
+          <span>高优先</span>
+          <strong>{{ highCount }}</strong>
+        </div>
+      </a-col>
+      <a-col :xs="12" :lg="6">
+        <div class="metric-card overdue">
+          <span>已超时</span>
+          <strong>{{ overdueCount }}</strong>
+        </div>
+      </a-col>
+      <a-col :xs="12" :lg="6">
+        <div class="metric-card amount">
+          <span>金额敞口（元，税价随来源单据）</span>
+          <strong>{{ formatCurrency(totalExposure) }}</strong>
+        </div>
+      </a-col>
+    </a-row>
 
     <a-row :gutter="[16, 16]">
       <a-col :xs="24" :lg="6" v-for="card in commandCards" :key="card.key">
@@ -134,14 +123,31 @@
           </template>
           <template v-else-if="column.key === 'action'">
             <a-space>
-              <span>{{ record.action }}</span>
+              <a-button type="link" size="small" @click.stop="openTodoDetail(record)"
+                >详情</a-button
+              >
               <a-button
                 type="link"
                 size="small"
-                @click.stop="openTodoDetail(record)"
+                @click.stop="handleTodoAction(record)"
               >
-                查看详情
+                {{ isOfficeApprovalTodo(record) ? "处理审批" : "去办理" }}
               </a-button>
+              <a-dropdown>
+                <a-button type="link" size="small">协同操作</a-button>
+                <template #overlay
+                  ><a-menu
+                    @click="({ key }: any) => openTodoAction(record, key)"
+                  >
+                    <a-menu-item key="COMPLETE">完成</a-menu-item
+                    ><a-menu-item key="REOPEN">重新打开</a-menu-item>
+                    <a-menu-item key="TRANSFER">转办</a-menu-item
+                    ><a-menu-item key="CC">抄送</a-menu-item>
+                    <a-menu-item key="REMIND">催办</a-menu-item
+                    ><a-menu-item key="SET_DUE">设置期限</a-menu-item>
+                  </a-menu></template
+                >
+              </a-dropdown>
             </a-space>
           </template>
         </template>
@@ -193,34 +199,98 @@
                   : "进入业务页面"
               }}
             </a-button>
+            <a-dropdown>
+              <a-button>协同操作</a-button>
+              <template #overlay
+                ><a-menu
+                  @click="({ key }: any) => openTodoAction(selectedTodo!, key)"
+                >
+                  <a-menu-item key="COMPLETE">完成</a-menu-item
+                  ><a-menu-item key="REOPEN">重新打开</a-menu-item>
+                  <a-menu-item key="TRANSFER">转办</a-menu-item
+                  ><a-menu-item key="CC">抄送</a-menu-item>
+                  <a-menu-item key="REMIND">催办</a-menu-item
+                  ><a-menu-item key="SET_DUE">设置期限</a-menu-item>
+                </a-menu></template
+              >
+            </a-dropdown>
             <a-button @click="detailOpen = false">关闭</a-button>
           </a-space>
         </a-space>
       </template>
     </a-drawer>
 
+    <a-modal
+      v-model:open="todoOpen"
+      title="协同待办操作"
+      ok-text="确认"
+      @ok="submitTodoAction"
+    >
+      <a-form layout="vertical">
+        <a-form-item label="操作"
+          ><a-tag>{{ actionText(todoForm.action) }}</a-tag></a-form-item
+        >
+        <a-form-item
+          v-if="todoForm.action === 'TRANSFER'"
+          label="转办给"
+          required
+          ><a-select
+            v-model:value="todoForm.targetUserId"
+            :options="userOptions"
+        /></a-form-item>
+        <a-form-item v-if="todoForm.action === 'CC'" label="抄送人" required
+          ><a-select
+            v-model:value="todoForm.ccUserIds"
+            mode="multiple"
+            :options="userOptions"
+        /></a-form-item>
+        <a-form-item
+          v-if="todoForm.action === 'SET_DUE'"
+          label="完成期限"
+          required
+          ><a-date-picker
+            v-model:value="todoForm.dueDate"
+            value-format="YYYY-MM-DD"
+        /></a-form-item>
+        <a-form-item label="处理意见"
+          ><a-textarea v-model:value="todoForm.comment" :rows="3"
+        /></a-form-item>
+      </a-form>
+    </a-modal>
+
     <ApprovalCenterView
       ref="approvalCenterRef"
       embedded
       drawer-only
-      @changed="loadData"
+      @changed="onApprovalChanged"
     />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 import { message } from "ant-design-vue";
-import { getCollaborationTodos } from "@/api/collaboration";
+import {
+  actOnCollaborationTodo,
+  getCollaborationTodos,
+} from "@/api/collaboration";
 import { mapCanonicalTodo } from "@/utils/collaboration-todo";
 import ApprovalCenterView from "@/views/office/ApprovalCenterView.vue";
+
+withDefaults(
+  defineProps<{ userOptions?: Array<{ label: string; value: string }> }>(),
+  { userOptions: () => [] },
+);
+const emit = defineEmits<{ changed: [] }>();
 
 type Priority = "HIGH" | "MEDIUM" | "LOW";
 type TodoStatus = "OPEN" | "PROCESSING" | "OVERDUE" | "DONE";
 
 type BusinessTodo = {
   key: string;
+  type: string;
+  id: string;
   module: string;
   moduleName: string;
   title: string;
@@ -247,6 +317,16 @@ const moduleFilter = ref("ALL");
 const priorityFilter = ref("ALL");
 const statusFilter = ref("ALL");
 
+const todoOpen = ref(false);
+const todoRecord = ref<BusinessTodo | null>(null);
+const todoForm = reactive<any>({
+  action: "",
+  targetUserId: undefined,
+  ccUserIds: [],
+  dueDate: "",
+  comment: "",
+});
+
 const columns = [
   { title: "事项", key: "title", width: 300 },
   { title: "模块", key: "module", width: 120 },
@@ -255,7 +335,7 @@ const columns = [
   { title: "责任人", dataIndex: "owner", key: "owner", width: 120 },
   { title: "金额（元，税价随来源单据）", key: "amount", width: 230 },
   { title: "到期/时间", key: "dueDate", width: 130 },
-  { title: "推荐动作", key: "action", width: 210 },
+  { title: "操作", key: "action", width: 230 },
 ];
 
 const moduleOptions = computed(() => {
@@ -344,7 +424,7 @@ async function loadData() {
       .sort(sortTodos);
     if (!todos.value.length) message.success("当前没有待处理事项");
   } catch (error) {
-    console.warn("[business-todos] canonical todo load failed", error);
+    console.warn("[collaboration-todos] canonical todo load failed", error);
     loadErrors.value = ["统一待办"];
     todos.value = [];
   } finally {
@@ -370,17 +450,6 @@ function daysUntil(value?: string) {
   today.setHours(0, 0, 0, 0);
   date.setHours(0, 0, 0, 0);
   return Math.ceil((date.getTime() - today.getTime()) / 86400000);
-}
-
-function resetFilters() {
-  keyword.value = "";
-  moduleFilter.value = "ALL";
-  priorityFilter.value = "ALL";
-  statusFilter.value = "ALL";
-}
-
-function go(path: string) {
-  router.push(path);
 }
 
 function todoRowProps(record: BusinessTodo) {
@@ -414,6 +483,50 @@ function handleTodoAction(record: BusinessTodo) {
   }
   detailOpen.value = false;
   router.push(record.route);
+}
+
+function openTodoAction(record: BusinessTodo, action: string) {
+  todoRecord.value = record;
+  Object.assign(todoForm, {
+    action,
+    targetUserId: undefined,
+    ccUserIds: [],
+    dueDate: "",
+    comment: "",
+  });
+  todoOpen.value = true;
+}
+
+async function submitTodoAction() {
+  const record = todoRecord.value;
+  if (!record) return;
+  try {
+    await actOnCollaborationTodo(record.type, record.id, todoForm);
+    todoOpen.value = false;
+    message.success("待办状态已更新");
+    await loadData();
+    emit("changed");
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "待办操作失败");
+  }
+}
+
+function onApprovalChanged() {
+  void loadData();
+  emit("changed");
+}
+
+function actionText(v: string) {
+  return (
+    ({
+      COMPLETE: "完成",
+      REOPEN: "重新打开",
+      TRANSFER: "转办",
+      CC: "抄送",
+      REMIND: "催办",
+      SET_DUE: "设置期限",
+    } as any)[v] || v
+  );
 }
 
 function formatCurrency(value: number) {
@@ -459,27 +572,18 @@ onMounted(loadData);
 </script>
 
 <style scoped>
-.business-todo-page {
+.collab-todo-tab {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-.todo-hero,
-.todo-table-card,
-.command-card {
-  border-radius: 8px;
-}
-
-.hero-main {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  align-items: flex-start;
+.todo-tip {
+  margin: 0;
 }
 
 .metric-grid {
-  margin-top: 20px;
+  margin-top: 0;
 }
 
 .metric-card {
@@ -523,6 +627,7 @@ onMounted(loadData);
 
 .command-card {
   min-height: 130px;
+  border-radius: 8px;
 }
 
 .command-count {
@@ -545,13 +650,11 @@ onMounted(loadData);
   font-size: 12px;
 }
 
-.todo-table-card :deep(.ant-table-tbody > tr) {
-  cursor: pointer;
+.todo-table-card {
+  border-radius: 8px;
 }
 
-@media (max-width: 768px) {
-  .hero-main {
-    flex-direction: column;
-  }
+.todo-table-card :deep(.ant-table-tbody > tr) {
+  cursor: pointer;
 }
 </style>

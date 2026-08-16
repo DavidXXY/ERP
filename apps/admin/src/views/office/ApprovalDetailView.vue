@@ -8,7 +8,7 @@
         : ''
     "
     :loading="loading"
-    back-to="/workbench/todos?tab=approvals"
+    back-to="/collaboration?tab=approvals"
     :status-label="statusLabel(approval?.status)"
     :status-color="
       approval?.status === 'APPROVED'

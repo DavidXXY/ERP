@@ -38,11 +38,6 @@
           <span>经营治理中心</span>
         </a-menu-item>
 
-        <a-menu-item v-if="canAccessBusinessTodos" key="/workbench/todos">
-          <template #icon><FileDoneOutlined /></template>
-          <span>业务待办中心</span>
-        </a-menu-item>
-
         <a-menu-item v-if="canAccessCollaboration" key="/collaboration">
           <template #icon><ApartmentOutlined /></template>
           <span>跨部门协同中心</span>
@@ -563,7 +558,7 @@ const canAccessRiskCenter = computed(() =>
     "crm:renewal:view",
   ].some((permission) => auth.can(permission)),
 );
-const canAccessBusinessTodos = computed(() =>
+const canAccessCollaboration = computed(() =>
   [
     "dashboard:view",
     "risk:view",
@@ -576,17 +571,9 @@ const canAccessBusinessTodos = computed(() =>
     "procurement:view",
     "inventory:view",
     "project:view",
+    "finance:view",
     "finance:receivable:view",
     "finance:payable:view",
-  ].some((permission) => auth.can(permission)),
-);
-const canAccessCollaboration = computed(() =>
-  [
-    "dashboard:view",
-    "project:view",
-    "office:approval:view",
-    "procurement:view",
-    "finance:view",
   ].some((permission) => auth.can(permission)),
 );
 const canAccessHumanResources = computed(() =>

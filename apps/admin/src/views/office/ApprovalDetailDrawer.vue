@@ -1,9 +1,5 @@
 <template>
-  <a-drawer
-    v-model:open="openProxy"
-    title="审批详情"
-    width="min(760px, 100vw)"
-  >
+  <a-drawer v-model:open="openProxy" title="审批详情" width="min(760px, 100vw)">
     <template v-if="approval">
       <a-space direction="vertical" class="detail-stack" size="middle">
         <a-descriptions bordered size="small" :column="2" title="审批单信息">
@@ -86,9 +82,7 @@
               : "-"
           }}</a-descriptions-item>
           <a-descriptions-item label="费用说明" :span="2">{{
-            expenseDetail(approval)?.description ||
-            approval.content ||
-            "-"
+            expenseDetail(approval)?.description || approval.content || "-"
           }}</a-descriptions-item>
         </a-descriptions>
         <a-table
@@ -241,9 +235,7 @@
               ></a-form-item
             >
             <a-form-item label="审批意见" name="comment"
-              ><a-textarea
-                v-model:value="detailProcessForm.comment"
-                :rows="3"
+              ><a-textarea v-model:value="detailProcessForm.comment" :rows="3"
             /></a-form-item>
             <a-form-item label="审批人" name="approverName"
               ><a-input v-model:value="detailProcessForm.approverName"

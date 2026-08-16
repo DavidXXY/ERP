@@ -152,7 +152,9 @@
             option-filter-prop="label"
             :max-tag-count="4"
             :placeholder="
-              editingId ? '请选择 1 个审批对象' : '可选择多个审批对象（每个对象生成一个分支）'
+              editingId
+                ? '请选择 1 个审批对象'
+                : '可选择多个审批对象（每个对象生成一个分支）'
             "
             :options="targetOptions"
             @change="handleTargetChange"
@@ -344,11 +346,7 @@
         style="margin-bottom: 12px"
       />
       <a-radio-group v-model:value="selectedTemplate" style="width: 100%">
-        <div
-          v-for="t in approvalTemplates"
-          :key="t.key"
-          class="template-item"
-        >
+        <div v-for="t in approvalTemplates" :key="t.key" class="template-item">
           <a-radio :value="t.key">
             <div class="template-head">
               <strong>{{ t.name }}</strong>
@@ -362,10 +360,7 @@
       </a-radio-group>
       <div style="margin-top: 16px; text-align: right">
         <a-button @click="templateOpen = false">取消</a-button>
-        <a-button
-          type="primary"
-          style="margin-left: 8px"
-          @click="applyTemplate"
+        <a-button type="primary" style="margin-left: 8px" @click="applyTemplate"
           >套用</a-button
         >
       </div>
@@ -446,7 +441,11 @@ type FlowStep = { stepNo: number; rules: ApprovalConfigResponse[] };
 const flowOptions = [
   { label: "报价审批", value: "QUOTE", flowName: "报价审批" },
   { label: "合同审批", value: "CONTRACT", flowName: "合同审批" },
-  { label: "合同变更/盖章件审批", value: "CONTRACT_CHANGE", flowName: "合同变更/盖章件审批" },
+  {
+    label: "合同变更/盖章件审批",
+    value: "CONTRACT_CHANGE",
+    flowName: "合同变更/盖章件审批",
+  },
   { label: "采购申请审批", value: "PURCHASE", flowName: "采购申请审批" },
   { label: "项目立项审批", value: "PROJECT", flowName: "项目立项审批" },
   { label: "付款申请审批", value: "PAYMENT", flowName: "付款申请审批" },
@@ -624,10 +623,7 @@ const warnings = computed(() => {
   )
     w.push("缺少第1步默认规则（全部单据）");
   if (
-    all.some(
-      (r) =>
-        r.assigneeType === "ROLE" && roleUserCount(r.roleId) === 0,
-    )
+    all.some((r) => r.assigneeType === "ROLE" && roleUserCount(r.roleId) === 0)
   )
     w.push("存在空角色");
   if (all.some((r) => r.assigneeType === "AUTO" && r.conditionType === "ANY"))
@@ -680,7 +676,8 @@ function reinitDraft(flowCode: string) {
       stepNo,
       rules: stepRules.sort((a, b) => a.priority - b.priority),
     }));
-  flowMode.value = items.find((c) => c.approvalMode)?.approvalMode || "SEQUENTIAL";
+  flowMode.value =
+    items.find((c) => c.approvalMode)?.approvalMode || "SEQUENTIAL";
   renumber();
   dirty.value = false;
 }
@@ -688,7 +685,11 @@ function reinitDraft(flowCode: string) {
 function renumber() {
   flowSteps.value = flowSteps.value.map((s, i) => ({
     stepNo: i + 1,
-    rules: s.rules.map((r, j) => ({ ...r, sequenceNo: i + 1, priority: j + 1 })),
+    rules: s.rules.map((r, j) => ({
+      ...r,
+      sequenceNo: i + 1,
+      priority: j + 1,
+    })),
   }));
 }
 
@@ -741,7 +742,11 @@ function moveBranch(
   if (!moved) return;
   if (fromStep === toStep) {
     const insertAt = toIndex > fromIndex ? toIndex - 1 : toIndex;
-    src.rules.splice(Math.min(Math.max(insertAt, 0), src.rules.length), 0, moved);
+    src.rules.splice(
+      Math.min(Math.max(insertAt, 0), src.rules.length),
+      0,
+      moved,
+    );
   } else {
     const dst = arr[toStep];
     if (!dst) src.rules.push(moved);
@@ -1141,7 +1146,9 @@ function buildTemplateRules(t: ApprovalFlowTemplate): ApprovalConfigResponse[] {
 }
 
 function applyTemplate() {
-  const t = approvalTemplates.find((item) => item.key === selectedTemplate.value);
+  const t = approvalTemplates.find(
+    (item) => item.key === selectedTemplate.value,
+  );
   if (!t) return;
   const rules = buildTemplateRules(t);
   const byStep = new Map<number, ApprovalConfigResponse[]>();
@@ -1196,7 +1203,9 @@ onMounted(loadData);
   border: 1px solid #eef2f7;
   border-radius: 8px;
   margin-bottom: 8px;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
 }
 .template-item:hover {
   border-color: #1677ff;

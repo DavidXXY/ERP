@@ -28,8 +28,7 @@
           <span class="drag-handle" title="拖拽调整步骤顺序">⠿</span>
           <a-tag color="blue">第 {{ stepIndex + 1 }} 步</a-tag>
           <span class="step-meta">
-            {{ step.rules.length }} 个分支 ·
-            {{ enabledCount(step) }} 启用
+            {{ step.rules.length }} 个分支 · {{ enabledCount(step) }} 启用
           </span>
           <span class="step-actions">
             <a-button
@@ -54,7 +53,9 @@
               title="删除该步骤及其下所有分支？"
               @confirm="emit('delete-step', stepIndex)"
             >
-              <a-button size="small" type="text" danger @click.stop>删除</a-button>
+              <a-button size="small" type="text" danger @click.stop
+                >删除</a-button
+              >
             </a-popconfirm>
           </span>
         </div>
@@ -65,7 +66,8 @@
             :key="rule.id"
             class="branch-row"
             :class="{
-              'is-drag-over': dragOver === 'branch-' + stepIndex + '-' + branchIndex,
+              'is-drag-over':
+                dragOver === 'branch-' + stepIndex + '-' + branchIndex,
               'is-disabled': !rule.enabled,
             }"
             draggable="true"
@@ -87,11 +89,11 @@
               <a-tag :color="assigneeTypeColor(rule.assigneeType)">
                 {{ assigneeTypeLabel(rule.assigneeType) }}
               </a-tag>
-              <span class="assignee-name">{{ rule.assigneeName || "未指定" }}</span>
+              <span class="assignee-name">{{
+                rule.assigneeName || "未指定"
+              }}</span>
               <a-tag v-if="!rule.enabled" color="default">停用</a-tag>
-              <a-tag
-                v-if="rule.approvalMode === 'SEQUENTIAL'"
-                color="blue"
+              <a-tag v-if="rule.approvalMode === 'SEQUENTIAL'" color="blue"
                 >依次</a-tag
               >
               <a-tag v-else color="green">同步</a-tag>
@@ -105,7 +107,15 @@
                 type="text"
                 :disabled="branchIndex === 0"
                 title="上移"
-                @click.stop="emit('move-branch', stepIndex, branchIndex, stepIndex, branchIndex - 1)"
+                @click.stop="
+                  emit(
+                    'move-branch',
+                    stepIndex,
+                    branchIndex,
+                    stepIndex,
+                    branchIndex - 1,
+                  )
+                "
               >
                 ↑
               </a-button>
@@ -114,15 +124,32 @@
                 type="text"
                 :disabled="branchIndex === step.rules.length - 1"
                 title="下移"
-                @click.stop="emit('move-branch', stepIndex, branchIndex, stepIndex, branchIndex + 1)"
+                @click.stop="
+                  emit(
+                    'move-branch',
+                    stepIndex,
+                    branchIndex,
+                    stepIndex,
+                    branchIndex + 1,
+                  )
+                "
               >
                 ↓
               </a-button>
-              <a-button size="small" type="text" @click.stop="emit('edit-branch', rule)">
+              <a-button
+                size="small"
+                type="text"
+                @click.stop="emit('edit-branch', rule)"
+              >
                 编辑
               </a-button>
-              <a-popconfirm title="移除该审批分支？" @confirm="emit('delete-branch', rule)">
-                <a-button size="small" type="text" danger @click.stop>移除</a-button>
+              <a-popconfirm
+                title="移除该审批分支？"
+                @confirm="emit('delete-branch', rule)"
+              >
+                <a-button size="small" type="text" danger @click.stop
+                  >移除</a-button
+                >
               </a-popconfirm>
             </span>
           </div>
@@ -136,7 +163,13 @@
           </div>
         </div>
 
-        <a-button block type="dashed" size="small" class="add-branch" @click="emit('add-branch', stepIndex)">
+        <a-button
+          block
+          type="dashed"
+          size="small"
+          class="add-branch"
+          @click="emit('add-branch', stepIndex)"
+        >
           + 添加审批人 / 分支
         </a-button>
       </div>
@@ -177,7 +210,13 @@ defineProps<{ steps: DesignerStep[] }>();
 
 const emit = defineEmits<{
   (e: "reorder-step", from: number, to: number): void;
-  (e: "move-branch", fromStep: number, fromIndex: number, toStep: number, toIndex: number): void;
+  (
+    e: "move-branch",
+    fromStep: number,
+    fromIndex: number,
+    toStep: number,
+    toIndex: number,
+  ): void;
   (e: "add-step"): void;
   (e: "add-branch", stepIndex: number): void;
   (e: "edit-branch", rule: ApprovalConfigResponse): void;
@@ -209,7 +248,8 @@ function onBranchDragStart(stepIndex: number, index: number) {
   drag.value = { type: "branch", stepIndex, index };
 }
 function onBranchDragOver(stepIndex: number, index: number) {
-  if (drag.value?.type === "branch") dragOver.value = "branch-" + stepIndex + "-" + index;
+  if (drag.value?.type === "branch")
+    dragOver.value = "branch-" + stepIndex + "-" + index;
 }
 function onBranchDrop(stepIndex: number, index: number) {
   const d = drag.value;
@@ -261,7 +301,10 @@ function conditionColor(value: ApprovalConfigResponse["conditionType"]) {
 function assigneeTypeLabel(value: ApprovalConfigResponse["assigneeType"]) {
   return (
     (
-      { ROLE: "角色", USER: "人员", DYNAMIC: "动态", AUTO: "自动" } as Record<string, string>
+      { ROLE: "角色", USER: "人员", DYNAMIC: "动态", AUTO: "自动" } as Record<
+        string,
+        string
+      >
     )[value] || value
   );
 }
@@ -354,7 +397,9 @@ function conditionText(record: ApprovalConfigResponse) {
   background: #fff;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
   overflow: hidden;
-  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+  transition:
+    box-shadow 0.15s ease,
+    border-color 0.15s ease;
 }
 .step-card:hover {
   box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);

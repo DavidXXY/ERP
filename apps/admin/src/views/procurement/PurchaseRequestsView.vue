@@ -99,7 +99,11 @@
               >
                 <template #icon><PaperClipOutlined /></template>整批附件
               </a-button>
-              <a-button type="link" size="small" @click="goToApprovalCenter(record)">
+              <a-button
+                type="link"
+                size="small"
+                @click="goToApprovalCenter(record)"
+              >
                 {{ record.pendingCount > 0 ? "去审批中心" : "审批记录" }}
               </a-button>
             </a-space>
@@ -351,7 +355,6 @@
         </a-space>
       </a-form>
     </a-modal>
-
 
     <a-drawer
       v-model:open="documentOpen"

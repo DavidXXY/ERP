@@ -97,7 +97,10 @@
                     option-filter-prop="label"
                     allow-clear
                     class="owner-target-select"
-                    @change="(v: string | undefined) => setOwnerTarget(item, 'default', v)"
+                    @change="
+                      (v: string | undefined) =>
+                        setOwnerTarget(item, 'default', v)
+                    "
                   />
                 </a-form-item>
               </a-col>
@@ -122,7 +125,10 @@
                     option-filter-prop="label"
                     allow-clear
                     class="owner-target-select"
-                    @change="(v: string | undefined) => setOwnerTarget(item, 'escalation', v)"
+                    @change="
+                      (v: string | undefined) =>
+                        setOwnerTarget(item, 'escalation', v)
+                    "
                   />
                 </a-form-item>
               </a-col>
@@ -326,7 +332,10 @@
                 option-filter-prop="label"
                 allow-clear
                 class="owner-target-select"
-                @change="(v: string | undefined) => setOwnerTarget(editForm, 'default', v)"
+                @change="
+                  (v: string | undefined) =>
+                    setOwnerTarget(editForm, 'default', v)
+                "
               />
             </a-form-item>
           </a-col>
@@ -351,7 +360,10 @@
                 option-filter-prop="label"
                 allow-clear
                 class="owner-target-select"
-                @change="(v: string | undefined) => setOwnerTarget(editForm, 'escalation', v)"
+                @change="
+                  (v: string | undefined) =>
+                    setOwnerTarget(editForm, 'escalation', v)
+                "
               />
             </a-form-item>
           </a-col>

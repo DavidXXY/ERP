@@ -14,7 +14,10 @@ import {
   type ServiceContract,
 } from "@/api/crm";
 import { useAuthStore } from "@/stores/auth";
-import { approvalStatusColor, approvalStatusLabel } from "../approvalStatusMeta";
+import {
+  approvalStatusColor,
+  approvalStatusLabel,
+} from "../approvalStatusMeta";
 import { approvalTypeLabel, formatMoney } from "../approvalFormat";
 import type { MergedApprovalItem } from "../approvalItemTypes";
 
@@ -30,9 +33,9 @@ export function useApprovalCenter(filters: ApprovalCenterFilters) {
 
   // Office approval data
   const officeApprovals = ref<Approval[]>([]);
-  const users = ref<Array<{ id: string; displayName: string; enabled: boolean }>>(
-    [],
-  );
+  const users = ref<
+    Array<{ id: string; displayName: string; enabled: boolean }>
+  >([]);
   // CRM approval data
   const pendingQuotes = ref<QuotePlan[]>([]);
   const pendingContracts = ref<ServiceContract[]>([]);
@@ -194,7 +197,8 @@ export function useApprovalCenter(filters: ApprovalCenterFilters) {
     () => mergedList.value.filter((item) => isPendingApproval(item)).length,
   );
   const overdueCount = computed(
-    () => mergedList.value.filter((item) => item._slaLevel === "OVERDUE").length,
+    () =>
+      mergedList.value.filter((item) => item._slaLevel === "OVERDUE").length,
   );
   const dueSoonCount = computed(
     () =>

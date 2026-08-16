@@ -40,20 +40,11 @@
         approval.customerLevel || "-"
       }}</a-descriptions-item>
     </a-descriptions>
-    <a-form
-      ref="formRef"
-      :model="form"
-      :rules="rules"
-      layout="vertical"
-    >
+    <a-form ref="formRef" :model="form" :rules="rules" layout="vertical">
       <a-form-item label="审批结论" name="decision"
-        ><a-radio-group
-          v-model:value="form.decision"
-          button-style="solid"
+        ><a-radio-group v-model:value="form.decision" button-style="solid"
           ><a-radio-button value="APPROVED">通过</a-radio-button
-          ><a-radio-button value="REJECTED"
-            >驳回</a-radio-button
-          ></a-radio-group
+          ><a-radio-button value="REJECTED">驳回</a-radio-button></a-radio-group
         ></a-form-item
       >
       <a-form-item label="审批意见" name="comment"

@@ -128,7 +128,8 @@ export function useApprovalActions(opts: ApprovalActionsOptions) {
   ) {
     saving.value = true;
     try {
-      if (action === "transfer") await transferApproval(approval.id, { ...form });
+      if (action === "transfer")
+        await transferApproval(approval.id, { ...form });
       else await addSignApproval(approval.id, { ...form });
       opts.closeRuntime();
       message.success(action === "transfer" ? "审批已转交" : "审批已加签");

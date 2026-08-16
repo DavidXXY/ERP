@@ -1772,7 +1772,11 @@ function openEdit() {
 }
 
 async function handleEdit() {
-  await editFormRef.value?.validate();
+  try {
+    await editFormRef.value?.validate();
+  } catch {
+    return;
+  }
   if (!record.value) return;
   if (!editForm.reason.trim()) {
     message.error("请填写变更原因");

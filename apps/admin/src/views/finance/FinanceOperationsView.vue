@@ -1053,19 +1053,29 @@ async function savePeriodJob() {
     periodModal.value = false;
     message.success("期末任务已建立");
     await loadAll();
+  } catch (e: any) {
+    message.error(e?.message || "期末任务建立失败");
   } finally {
     saving.value = false;
   }
 }
 async function executeJob(row: PeriodJob) {
-  await executePeriodJob(row.id);
-  message.success("期末凭证已完成");
-  await loadAll();
+  try {
+    await executePeriodJob(row.id);
+    message.success("期末凭证已完成");
+    await loadAll();
+  } catch (e: any) {
+    message.error(e?.message || "期末凭证执行失败");
+  }
 }
 async function reverseDue() {
-  await reverseDuePeriodJobs(dayjs().format("YYYY-MM-DD"));
-  message.success("到期转回处理完成");
-  await loadAll();
+  try {
+    await reverseDuePeriodJobs(dayjs().format("YYYY-MM-DD"));
+    message.success("到期转回处理完成");
+    await loadAll();
+  } catch (e: any) {
+    message.error(e?.message || "到期转回处理失败");
+  }
 }
 function openPartnerConfirm(row: PartnerStatement) {
   selectedPartner.value = row;
@@ -1088,6 +1098,8 @@ async function confirmPartner() {
     partnerModal.value = false;
     message.success("往来确认已留痕");
     await loadAll();
+  } catch (e: any) {
+    message.error(e?.message || "往来确认失败");
   } finally {
     saving.value = false;
   }
@@ -1103,14 +1115,20 @@ async function saveCashScenario() {
     cashModal.value = false;
     message.success("现金情景已生成");
     await loadAll();
+  } catch (e: any) {
+    message.error(e?.message || "现金情景生成失败");
   } finally {
     saving.value = false;
   }
 }
 async function reconcileTax() {
-  await reconcileTaxFiling(year.value, month.value);
-  message.success("税务勾稽完成");
-  await loadAll();
+  try {
+    await reconcileTaxFiling(year.value, month.value);
+    message.success("税务勾稽完成");
+    await loadAll();
+  } catch (e: any) {
+    message.error(e?.message || "税务勾稽失败");
+  }
 }
 function openTaxLock(row: TaxFiling) {
   selectedTax.value = row;
@@ -1130,6 +1148,8 @@ async function confirmTaxLock() {
     taxModal.value = false;
     message.success("申报已锁定并固化快照");
     await loadAll();
+  } catch (e: any) {
+    message.error(e?.message || "申报锁定失败");
   } finally {
     saving.value = false;
   }
@@ -1158,30 +1178,40 @@ async function saveConsolidation() {
     consolidationModal.value = false;
     message.success("合并批次已建立");
     await loadAll();
+  } catch (e: any) {
+    message.error(e?.message || "合并批次建立失败");
   } finally {
     saving.value = false;
   }
 }
 async function completeRun(row: Consolidation) {
-  await completeConsolidation(row.id);
-  message.success("合并底稿已固化");
-  await loadAll();
+  try {
+    await completeConsolidation(row.id);
+    message.success("合并底稿已固化");
+    await loadAll();
+  } catch (e: any) {
+    message.error(e?.message || "合并底稿固化失败");
+  }
 }
 async function captureCurrentSnapshot() {
-  await captureReportSnapshot({
-    reportType: "FINANCE_OVERVIEW",
-    scopeKey: periodLabel.value,
-    fiscalYear: year.value,
-    periodNo: month.value,
-    payload: JSON.stringify({
-      overview,
-      budgetRows: budgetRows.value,
-      periodJobs: periodJobs.value,
-    }),
-    evidenceNote: "财务运营工作台手工固化",
-  });
-  message.success("当前概览已固化");
-  await loadAll();
+  try {
+    await captureReportSnapshot({
+      reportType: "FINANCE_OVERVIEW",
+      scopeKey: periodLabel.value,
+      fiscalYear: year.value,
+      periodNo: month.value,
+      payload: JSON.stringify({
+        overview,
+        budgetRows: budgetRows.value,
+        periodJobs: periodJobs.value,
+      }),
+      evidenceNote: "财务运营工作台手工固化",
+    });
+    message.success("当前概览已固化");
+    await loadAll();
+  } catch (e: any) {
+    message.error(e?.message || "当前概览固化失败");
+  }
 }
 function money(v: number) {
   return new Intl.NumberFormat("zh-CN", {
@@ -1262,10 +1292,16 @@ function statusColor(v: string) {
     return "green";
   return "default";
 }
-watch(workDate, () => loadAll());
-onMounted(() => {
+function refreshPeriodContext() {
   periodForm.idempotencyKey = `PE-${periodLabel.value}-${Date.now()}`;
   periodReversalDate.value = workDate.value.add(1, "month").startOf("month");
+}
+watch(workDate, () => {
+  refreshPeriodContext();
+  loadAll();
+});
+onMounted(() => {
+  refreshPeriodContext();
   loadAll();
   runOpeningValidation();
 });

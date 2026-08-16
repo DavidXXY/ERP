@@ -239,7 +239,7 @@ async function saveSchedule() {
     await createSchedule({
       orderId: scheduleForm.orderId,
       engineerId: scheduleForm.engineerId,
-      scheduledAt: scheduleForm.scheduledAt.toISOString(),
+      scheduledAt: scheduleForm.scheduledAt.format("YYYY-MM-DD HH:mm"),
     });
     scheduleOpen.value = false;
     message.success("排班已保存");

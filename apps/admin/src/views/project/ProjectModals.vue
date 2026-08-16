@@ -411,6 +411,7 @@
 import { computed, reactive, ref, watch } from "vue";
 import { message, Modal } from "ant-design-vue";
 import { useRouter } from "vue-router";
+import { toLocalDateString } from "@/utils/date";
 import {
   createProject,
   createProjectCost,
@@ -553,11 +554,12 @@ const managerModalTitle = computed(() =>
     ? "变更项目负责人"
     : "分配项目经理",
 );
-const projectedCostAfterEntry = computed(
-  () =>
-    Number(props.detail?.project?.actualCost || 0) +
-    Number(costForm.amount || 0),
-);
+const projectedCostAfterEntry = computed(() => {
+  const base =
+    Number(props.detail?.project?.actualCost || 0) -
+    (editingCost.value ? Number(props.editCostEntry?.amount || 0) : 0);
+  return base + Number(costForm.amount || 0);
+});
 const projectedBudgetVariance = computed(
   () =>
     Number(props.detail?.project?.budgetAmount || 0) -
@@ -573,10 +575,21 @@ watch(
   () => props.createOpen,
   (open) => {
     if (open) {
-      createForm.parentProjectId = props.defaultParentProjectId || undefined;
-      if (props.defaultCustomerId)
-        createForm.customerId = props.defaultCustomerId;
-      createForm.quoteId = undefined;
+      Object.assign(createForm, {
+        customerId: props.defaultCustomerId || "",
+        parentProjectId: props.defaultParentProjectId || undefined,
+        code: "",
+        name: "",
+        projectType: "RENOVATION",
+        managerUserId: undefined,
+        siteAddress: "",
+        contractAmount: 0,
+        plannedStartDate: dateAfter(0),
+        plannedEndDate: dateAfter(90),
+        warrantyEndDate: dateAfter(455),
+        quoteId: undefined,
+        budgets: { LABOR: 0, MATERIAL: 0, SUBCONTRACT: 0, TRAVEL: 0, OTHER: 0 },
+      });
     }
   },
 );
@@ -661,7 +674,7 @@ watch(
 function dateAfter(days: number) {
   const d = new Date();
   d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  return toLocalDateString(d);
 }
 function stageLabel(s: string) {
   if (s === "INITIATED" || s === "BIDDING") return "入场";
@@ -686,7 +699,11 @@ function formatMoney(v: number) {
 }
 
 async function handleCreate() {
-  await createFormRef.value?.validate();
+  try {
+    await createFormRef.value?.validate();
+  } catch {
+    return;
+  }
   if (createBudgetTotal.value <= 0) {
     message.warning("请填写项目分类预算");
     return;
@@ -720,7 +737,11 @@ async function handleCreate() {
 
 async function handleApproval() {
   if (!props.activeProject) return;
-  await approvalFormRef.value?.validate();
+  try {
+    await approvalFormRef.value?.validate();
+  } catch {
+    return;
+  }
   try {
     await assignProjectManager(props.activeProject.id, {
       managerUserId: approvalForm.managerUserId,
@@ -741,7 +762,11 @@ async function handleApproval() {
 
 async function handleAdvanceStage() {
   if (!props.detail || !props.nextStage) return;
-  await stageFormRef.value?.validate();
+  try {
+    await stageFormRef.value?.validate();
+  } catch {
+    return;
+  }
   try {
     await advanceProjectStage(props.detail.project.id, {
       targetStage: props.nextStage,
@@ -757,7 +782,11 @@ async function handleAdvanceStage() {
 
 async function handleCreateCost() {
   if (!props.detail) return;
-  await costFormRef.value?.validate();
+  try {
+    await costFormRef.value?.validate();
+  } catch {
+    return;
+  }
   if (costBudgetOverrun.value) {
     showBudgetOverrunPrompt(
       editingCost.value ? "更正后将超出项目预算" : "登记后将超出项目预算",
@@ -864,7 +893,11 @@ watch(
 
 async function handleEdit() {
   if (!props.editProject) return;
-  await editFormRef.value?.validate();
+  try {
+    await editFormRef.value?.validate();
+  } catch {
+    return;
+  }
   if (editBudgetTotal.value <= 0) {
     message.warning("请填写项目分类预算");
     return;

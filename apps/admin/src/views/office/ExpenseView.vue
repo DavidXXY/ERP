@@ -244,6 +244,7 @@
 </template>
 
 <script setup lang="ts">
+import { generateCode } from "@/utils/code";
 import { computed, onMounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 import { message } from "ant-design-vue";
@@ -398,7 +399,11 @@ function bindInvoiceFile(record: ExpenseDraftLine, file: File) {
   return false;
 }
 async function handleExpense() {
-  await expenseFormRef.value?.validate();
+  try {
+    await expenseFormRef.value?.validate();
+  } catch {
+    return;
+  }
   const draftLines = expenseForm.lines.filter(
     (line) => line.amount > 0 && line.expenseDate && line.description.trim(),
   );
@@ -483,19 +488,6 @@ async function handlePayment() {
   } finally {
     paying.value = false;
   }
-}
-function generateCode(prefix: string) {
-  const d = new Date();
-  return (
-    prefix +
-    "-" +
-    d.getFullYear() +
-    String(d.getMonth() + 1).padStart(2, "0") +
-    String(d.getDate()).padStart(2, "0") +
-    "-" +
-    String(d.getHours()).padStart(2, "0") +
-    String(d.getMinutes()).padStart(2, "0")
-  );
 }
 function today() {
   const d = new Date();

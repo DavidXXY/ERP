@@ -433,8 +433,8 @@ export function deleteUserApi(id: string) {
   });
 }
 
-export function resetPasswordApi(id: string, newPassword: string) {
-  return request<void>({
+export function resetPasswordApi(id: string, newPassword?: string) {
+  return request<string>({
     method: "POST",
     url: `/users/${id}/reset-password`,
     data: { newPassword },

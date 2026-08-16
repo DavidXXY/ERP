@@ -62,6 +62,13 @@ public class InventoryController {
     return ApiResponse.ok(PageResponse.from(inventoryService.listMovements(partId, pageable)));
   }
 
+  @GetMapping("/stock-movements")
+  @PreAuthorize("hasAuthority('inventory:view')")
+  public ApiResponse<PageResponse<StockMovementResponse>> listAllMovements(
+      @PageableDefault(size = 100) Pageable pageable) {
+    return ApiResponse.ok(PageResponse.from(inventoryService.listMovements(pageable)));
+  }
+
   @PostMapping("/parts/{partId}/movements")
   @ResponseStatus(HttpStatus.CREATED)
   @PreAuthorize("hasAuthority('inventory:movement:create')")

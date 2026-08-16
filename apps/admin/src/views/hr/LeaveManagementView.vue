@@ -369,7 +369,11 @@ function openCreate() {
 }
 
 async function saveLeave() {
-  await leaveFormRef.value?.validate();
+  try {
+    await leaveFormRef.value?.validate();
+  } catch {
+    return;
+  }
   saving.value = true;
   try {
     const { employeeId, ...payload } = leaveForm;

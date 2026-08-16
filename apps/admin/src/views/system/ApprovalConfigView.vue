@@ -881,7 +881,11 @@ function buildRule(
 }
 
 async function saveConfig() {
-  await formRef.value?.validate();
+  try {
+    await formRef.value?.validate();
+  } catch {
+    return;
+  }
   const targets =
     form.assigneeType === "USER" || form.assigneeType === "ROLE"
       ? [...new Set(form.targetIds)]

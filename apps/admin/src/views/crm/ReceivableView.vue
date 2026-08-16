@@ -177,13 +177,12 @@
                 v-if="
                   auth.can('crm:receivable:settle') &&
                   record.invoiceNo &&
-                  !requestedReceiptIds.includes(record.id) &&
                   record.outstandingAmount > 0
                 "
                 size="small"
                 @click="openReceiptRequest(record)"
               >
-                申请回款
+                登记回款
               </a-button>
             </a-space>
           </template>
@@ -236,21 +235,35 @@
 
     <a-modal
       v-model:open="receiptOpen"
-      title="申请回款"
+      title="登记回款"
       width="480px"
       :confirm-loading="saving"
       @ok="handleReceiptRequest"
     >
-      <p style="margin: 16px 0; color: #595959">
-        确认提交回款申请？财务部门处理后将登记正式回款信息。
-      </p>
       <a-form ref="receiptFormRef" :model="receiptForm" layout="vertical">
-        <a-form-item label="申请说明（可选）"
-          ><a-textarea
+        <a-form-item label="回款金额（元）">
+          <a-input-number
+            v-model:value="receiptForm.amount"
+            :min="0.01"
+            class="full-input"
+          />
+        </a-form-item>
+        <a-form-item label="银行流水号">
+          <a-input
+            v-model:value="receiptForm.referenceNo"
+            placeholder="请输入银行流水号"
+          />
+        </a-form-item>
+        <a-form-item label="回款日期">
+          <a-input v-model:value="receiptForm.receivedDate" type="date" />
+        </a-form-item>
+        <a-form-item label="备注（可选）">
+          <a-textarea
             v-model:value="receiptForm.remark"
             :rows="2"
-            placeholder="请简要说明回款需求"
-        /></a-form-item>
+            placeholder="请简要说明"
+          />
+        </a-form-item>
       </a-form>
     </a-modal>
 
@@ -298,6 +311,7 @@ import { message } from "ant-design-vue";
 import {
   listReceivables,
   applyReceivableInvoice,
+  recordReceivableReceipt,
   updateReceivable,
   type Receivable,
   type ReceivableStatus,
@@ -310,6 +324,7 @@ import {
   receivableStatusLabel,
 } from "./crm-options";
 import { downloadCsv, receivableRowToCsv } from "./crm-export";
+import { todayLocal } from "@/utils/date";
 
 const auth = useAuthStore();
 const items = ref<Receivable[]>([]);
@@ -327,12 +342,15 @@ const salesFilter = ref<string>();
 const departmentFilter = ref<string>();
 const invoiceForm = reactive({ remark: "" });
 
-const requestedReceiptIds = ref<string[]>([]);
-
 const editOpen = ref(false);
 const editFormRef = ref();
 const editForm = reactive({ sourceNo: "", amount: 0, dueDate: "" });
-const receiptForm = reactive({ remark: "" });
+const receiptForm = reactive({
+  amount: 0,
+  receivedDate: todayLocal(),
+  referenceNo: "",
+  remark: "",
+});
 
 const statusOptions = [
   { label: "待开票", value: "INVOICE_PENDING" },
@@ -379,7 +397,9 @@ const filteredItems = computed(() => {
     );
   });
 });
-const totalAmount = computed(() => sumByStatus());
+const totalAmount = computed(() =>
+  items.value.reduce((sum, item) => sum + Number(item.amount || 0), 0),
+);
 const invoicePendingAmount = computed(() => sumByStatus("INVOICE_PENDING"));
 const paymentPendingAmount = computed(() => sumByStatus("PAYMENT_PENDING"));
 const overdueAmount = computed(() => sumByStatus("OVERDUE"));
@@ -461,20 +481,39 @@ async function handleInvoiceRequest() {
 
 function openReceiptRequest(record: Receivable) {
   selectedItem.value = record;
+  receiptForm.amount = Number(record.outstandingAmount || 0);
+  receiptForm.receivedDate = todayLocal();
+  receiptForm.referenceNo = "";
   receiptForm.remark = "";
   receiptOpen.value = true;
 }
 
 async function handleReceiptRequest() {
   if (!selectedItem.value) return;
+  if (receiptForm.amount <= 0) {
+    message.warning("回款金额必须大于 0");
+    return;
+  }
+  if (!receiptForm.referenceNo.trim()) {
+    message.warning("请输入银行流水号");
+    return;
+  }
   saving.value = true;
-  await new Promise((resolve) => setTimeout(resolve, 300));
-  requestedReceiptIds.value.push(selectedItem.value.id);
-  receiptOpen.value = false;
-  message.success(
-    "\u56de\u6b3e\u7533\u8bf7\u5df2\u63d0\u4ea4\uff0c\u8bf7\u7b49\u5f85\u8d22\u52a1\u5904\u7406",
-  );
-  saving.value = false;
+  try {
+    await recordReceivableReceipt(selectedItem.value.id, {
+      amount: receiptForm.amount,
+      receivedDate: receiptForm.receivedDate,
+      referenceNo: receiptForm.referenceNo.trim(),
+      recorderName: auth.user?.displayName || auth.user?.username || "",
+    });
+    receiptOpen.value = false;
+    message.success("回款已登记");
+    await loadData();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "登记回款失败");
+  } finally {
+    saving.value = false;
+  }
 }
 
 function openEdit(record: Receivable) {
@@ -488,7 +527,11 @@ function openEdit(record: Receivable) {
 }
 
 async function handleEdit() {
-  await editFormRef.value?.validate();
+  try {
+    await editFormRef.value?.validate();
+  } catch {
+    return;
+  }
   if (!selectedItem.value) return;
   saving.value = true;
   try {

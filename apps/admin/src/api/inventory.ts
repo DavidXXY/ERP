@@ -23,6 +23,7 @@ export type InventoryPart = {
 export type StockMovement = {
   id: string;
   partId: string;
+  partName?: string;
   movementType: StockMovementType;
   quantity: number;
   sourceNo?: string;
@@ -141,6 +142,13 @@ export function listStockMovements(partId: string) {
   return requestAllPages<StockMovement>({
     method: "GET",
     url: `/inventory/parts/${partId}/movements`,
+  });
+}
+
+export function listAllStockMovements() {
+  return requestAllPages<StockMovement>({
+    method: "GET",
+    url: "/inventory/stock-movements",
   });
 }
 

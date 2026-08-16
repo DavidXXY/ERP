@@ -256,6 +256,7 @@ import { onMounted, reactive, ref } from "vue";
 import { message } from "ant-design-vue";
 import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
 import { useAuthStore } from "@/stores/auth";
+import { todayLocal } from "@/utils/date";
 import {
   inspectGoodsReceipt,
   listGoodsReceipts,
@@ -281,7 +282,7 @@ const appealForm = reactive({
   action: "DISMISSED" as "DISMISSED" | "REOPEN",
   comment: "",
 });
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => todayLocal();
 const inspectForm = reactive({
   qualifiedQty: 0,
   rejectedQty: 0,
@@ -370,18 +371,26 @@ async function saveInspection() {
     message.warning("合格数量与不合格数量之和必须等于到货数量");
     return;
   }
-  await inspectGoodsReceipt(selectedReceipt.value.id, { ...inspectForm });
-  inspectOpen.value = false;
-  message.success("质检完成，合格数量已入库并生成应付");
-  await loadData();
+  try {
+    await inspectGoodsReceipt(selectedReceipt.value.id, { ...inspectForm });
+    inspectOpen.value = false;
+    message.success("质检完成，合格数量已入库并生成应付");
+    await loadData();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "质检登记失败");
+  }
 }
 
 async function saveResolution() {
   if (!selectedReturn.value) return;
-  await resolveProcurementReturn(selectedReturn.value.id, { ...resolveForm });
-  resolveOpen.value = false;
-  message.success("退换货 / 索赔已结案");
-  await loadData();
+  try {
+    await resolveProcurementReturn(selectedReturn.value.id, { ...resolveForm });
+    resolveOpen.value = false;
+    message.success("退换货 / 索赔已结案");
+    await loadData();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "退换货处理失败");
+  }
 }
 
 function openAppeal(receipt: GoodsReceipt) {

@@ -99,7 +99,7 @@ public class MaintenanceEquipmentService {
         a.getSiteAddress(), a.getInstalledDate(),
         a.getWarrantyEndDate(), a.getMaintenanceCycleDays(),
         a.getLastMaintenanceDate(), a.getNextMaintenanceDate(),
-        a.getStatus(), cnt);
+        a.getStatus(), cnt, a.getContractId(), a.getRequiredCertificate());
   }
 
 

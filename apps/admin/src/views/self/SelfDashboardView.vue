@@ -229,6 +229,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
+import { toLocalMonthString } from "@/utils/date";
 import {
   PlusOutlined,
   OrderedListOutlined,
@@ -273,7 +274,7 @@ const pendingLeaveCount = computed(
   () => recentLeaves.value.filter((item) => item.status === "PENDING").length,
 );
 const monthLeaveCount = computed(() => {
-  const month = new Date().toISOString().slice(0, 7);
+  const month = toLocalMonthString();
   return recentLeaves.value.filter((item) => item.startDate.startsWith(month))
     .length;
 });

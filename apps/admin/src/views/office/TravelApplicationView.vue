@@ -173,6 +173,7 @@
 </template>
 
 <script setup lang="ts">
+import { generateCode } from "@/utils/code";
 import { computed, onMounted, reactive, ref } from "vue";
 import { message } from "ant-design-vue";
 import PlusOutlined from "@ant-design/icons-vue/PlusOutlined";
@@ -302,7 +303,11 @@ function openApproval(record: TravelApplication) {
   approvalCenterRef.value?.openApprovalById(record.approvalRequestId);
 }
 async function submit() {
-  await formRef.value?.validate();
+  try {
+    await formRef.value?.validate();
+  } catch {
+    return;
+  }
   if (travelDays.value < 1) {
     message.error("结束日期不能早于开始日期");
     return;
@@ -351,10 +356,6 @@ function formatMoney(value: number) {
     currency: "CNY",
     minimumFractionDigits: 2,
   }).format(value || 0);
-}
-function generateCode(prefix: string) {
-  const date = new Date();
-  return `${prefix}-${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, "0")}${String(date.getDate()).padStart(2, "0")}-${String(date.getHours()).padStart(2, "0")}${String(date.getMinutes()).padStart(2, "0")}${String(date.getSeconds()).padStart(2, "0")}`;
 }
 function today() {
   const date = new Date();

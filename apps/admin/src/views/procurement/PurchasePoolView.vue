@@ -310,6 +310,7 @@ import {
 } from "@/api/procurement";
 import { useAuthStore } from "@/stores/auth";
 import { sourcingMethodOptions } from "@/utils/procurement-sourcing";
+import { toLocalDateString } from "@/utils/date";
 
 const auth = useAuthStore();
 const router = useRouter();
@@ -472,7 +473,11 @@ function prepareConsolidate(groups: ProcurementPurchasePoolGroup[]) {
 }
 
 async function handleCreateInquiry() {
-  await inquiryFormRef.value?.validate();
+  try {
+    await inquiryFormRef.value?.validate();
+  } catch {
+    return;
+  }
   if (!selectedRequestIds.value.length) {
     message.warning("请至少选择一条采购申请");
     return;
@@ -520,7 +525,7 @@ function defaultDeadline(expected?: string) {
     result.setTime(expectedDate.getTime());
     result.setDate(result.getDate() - 1);
   }
-  return result.toISOString().slice(0, 10);
+  return toLocalDateString(result);
 }
 
 function formatMoney(value: number) {

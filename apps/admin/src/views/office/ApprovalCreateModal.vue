@@ -51,6 +51,7 @@
 </template>
 
 <script setup lang="ts">
+import { generateCode } from "@/utils/code";
 import { computed, reactive, ref, watch } from "vue";
 import { useAuthStore } from "@/stores/auth";
 import type { ApprovalType } from "@/api/office";
@@ -91,12 +92,6 @@ const rules = {
   content: [{ required: true }],
 };
 
-function generateCode(prefix: string) {
-  const d = new Date();
-  const ds = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
-  return `${prefix}-${ds}-${String(d.getHours()).padStart(2, "0")}${String(d.getMinutes()).padStart(2, "0")}`;
-}
-
 watch(
   () => props.open,
   (isOpen) => {
@@ -120,7 +115,11 @@ watch(
 );
 
 async function handleOk() {
-  await formRef.value?.validate();
+  try {
+    await formRef.value?.validate();
+  } catch {
+    return;
+  }
   emit("submit", { ...form });
 }
 </script>

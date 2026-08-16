@@ -1171,6 +1171,7 @@ import {
 } from "@/api/procurement";
 import { useAuthStore } from "@/stores/auth";
 import { downloadCsv } from "@/views/crm/crm-export";
+import { toLocalDateString } from "@/utils/date";
 import {
   getErrorMessage,
   showBudgetOverrunPrompt,
@@ -1921,7 +1922,11 @@ async function refreshFrameworkQuote() {
 }
 
 async function handleCreateSupplier() {
-  await supplierFormRef.value?.validate();
+  try {
+    await supplierFormRef.value?.validate();
+  } catch {
+    return;
+  }
   savingSupplier.value = true;
   try {
     await createSupplier({ ...supplierForm });
@@ -1935,7 +1940,11 @@ async function handleCreateSupplier() {
   }
 }
 async function handleSaveRequest() {
-  await requestFormRef.value?.validate();
+  try {
+    await requestFormRef.value?.validate();
+  } catch {
+    return;
+  }
   savingRequest.value = true;
   try {
     if (editingRequestId.value) {
@@ -1964,7 +1973,11 @@ async function handleSaveRequest() {
 }
 async function handleApproval() {
   if (!selectedRequest.value) return;
-  await approvalFormRef.value?.validate();
+  try {
+    await approvalFormRef.value?.validate();
+  } catch {
+    return;
+  }
   savingApproval.value = true;
   try {
     await processPurchaseRequestApproval(selectedRequest.value.id, {
@@ -2027,7 +2040,11 @@ function handleCancelOrder(record: PurchaseOrder) {
 }
 
 async function handleCreateOrder() {
-  await orderFormRef.value?.validate();
+  try {
+    await orderFormRef.value?.validate();
+  } catch {
+    return;
+  }
   savingOrder.value = true;
   try {
     await createPurchaseOrder({
@@ -2046,7 +2063,11 @@ async function handleCreateOrder() {
 }
 async function handleReceive() {
   if (!selectedOrder.value) return;
-  await receiptFormRef.value?.validate();
+  try {
+    await receiptFormRef.value?.validate();
+  } catch {
+    return;
+  }
   savingReceipt.value = true;
   try {
     await registerPurchaseArrival(selectedOrder.value.id, {
@@ -2089,7 +2110,11 @@ function handleReceiptFile(file: File) {
 
 async function handleRecordPayment() {
   if (!paymentTarget.value) return;
-  await paymentFormRef.value?.validate();
+  try {
+    await paymentFormRef.value?.validate();
+  } catch {
+    return;
+  }
   if (paymentTotal.value <= 0) {
     message.error("请填写大于零的付款金额");
     return;
@@ -2201,7 +2226,7 @@ function initialReceiptForm(): ReceiptForm {
 function addDays(days: number) {
   const date = new Date();
   date.setDate(date.getDate() + days);
-  return date.toISOString().slice(0, 10);
+  return toLocalDateString(date);
 }
 
 function canReceive(order: PurchaseOrder) {

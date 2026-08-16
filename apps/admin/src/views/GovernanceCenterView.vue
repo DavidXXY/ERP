@@ -791,6 +791,7 @@ import PlusOutlined from "@ant-design/icons-vue/PlusOutlined";
 import ReloadOutlined from "@ant-design/icons-vue/ReloadOutlined";
 import UploadOutlined from "@ant-design/icons-vue/UploadOutlined";
 import { useAuthStore } from "@/stores/auth";
+import { todayLocal } from "@/utils/date";
 import {
   closeAccountingPeriod,
   createControl,
@@ -1238,11 +1239,7 @@ async function submitTransition() {
 }
 async function handleReview(record: ControlRecord) {
   try {
-    await reviewControl(
-      record.id,
-      new Date().toISOString().slice(0, 10),
-      "周期复核完成",
-    );
+    await reviewControl(record.id, todayLocal(), "周期复核完成");
     message.success("复核日期已更新");
     await loadAll();
   } catch (error) {
@@ -1432,14 +1429,15 @@ async function handleBankFile(file: File) {
   return false;
 }
 function parseCsv(text: string) {
+  const content = text.replace(/^\uFEFF/, "");
   const rows: string[][] = [];
   let row: string[] = [];
   let cell = "";
   let quoted = false;
-  for (let i = 0; i < text.replace(/^\uFEFF/, "").length; i += 1) {
-    const char = text.replace(/^\uFEFF/, "")[i];
+  for (let i = 0; i < content.length; i += 1) {
+    const char = content[i];
     if (char === '"') {
-      if (quoted && text.replace(/^\uFEFF/, "")[i + 1] === '"') {
+      if (quoted && content[i + 1] === '"') {
         cell += '"';
         i += 1;
       } else quoted = !quoted;
@@ -1447,7 +1445,7 @@ function parseCsv(text: string) {
       row.push(cell.trim());
       cell = "";
     } else if ((char === "\n" || char === "\r") && !quoted) {
-      if (char === "\r" && text.replace(/^\uFEFF/, "")[i + 1] === "\n") i += 1;
+      if (char === "\r" && content[i + 1] === "\n") i += 1;
       row.push(cell.trim());
       if (row.some(Boolean)) rows.push(row);
       row = [];

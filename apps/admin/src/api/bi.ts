@@ -80,8 +80,15 @@ export type CompanyKpiDashboard = {
   trends: MonthlyTrend[];
   topCustomers: CustomerProfit[];
 };
-export function getExecutiveDashboard() {
-  return request<ExecutiveDashboard>({ method: "GET", url: "/bi/dashboard" });
+export function getExecutiveDashboard(params?: {
+  startDate?: string;
+  endDate?: string;
+}) {
+  return request<ExecutiveDashboard>({
+    method: "GET",
+    url: "/bi/dashboard",
+    params,
+  });
 }
 export function getCompanyKpiDashboard(params?: {
   startDate?: string;

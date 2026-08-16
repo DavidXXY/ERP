@@ -117,7 +117,8 @@ public final class MaintenanceDtos {
       String siteAddress, LocalDate installedDate,
       LocalDate warrantyEndDate, Integer maintenanceCycleDays,
       LocalDate lastMaintenanceDate, LocalDate nextMaintenanceDate,
-      EquipmentStatus status, long orderCount) {}
+      EquipmentStatus status, long orderCount,
+      UUID contractId, String requiredCertificate) {}
 
   public record CreateEquipmentRequest(
       @jakarta.validation.constraints.NotNull UUID customerId, UUID contractId,

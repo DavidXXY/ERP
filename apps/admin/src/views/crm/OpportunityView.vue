@@ -341,10 +341,11 @@ import {
 } from "@/api/crm";
 import { listUsersApi, type UserResponse } from "@/api/system";
 import { useAuthStore } from "@/stores/auth";
+import { todayLocal, toLocalDateString } from "@/utils/date";
+import { generateCode } from "@/utils/code";
 import { loadOwnerDepartmentMap, ownerDepartment } from "./crm-department";
 import {
   formatMoney,
-  generateCode,
   opportunityStageColor,
   opportunityStageLabel,
   opportunityStageOptions,
@@ -547,7 +548,11 @@ async function loadData() {
 }
 
 async function handleCreate() {
-  await createFormRef.value?.validate();
+  try {
+    await createFormRef.value?.validate();
+  } catch {
+    return;
+  }
   saving.value = true;
   try {
     const payload = {
@@ -637,7 +642,7 @@ async function handleConfirmMarkLost() {
       stage: "LOST",
       probability: 0,
       nextAction: "已标记为丢单",
-      nextActionAt: new Date().toISOString().slice(0, 10),
+      nextActionAt: todayLocal(),
     });
     try {
       await createFollowUp({
@@ -661,7 +666,11 @@ async function handleConfirmMarkLost() {
 }
 
 async function handleAdvance() {
-  await advanceFormRef.value?.validate();
+  try {
+    await advanceFormRef.value?.validate();
+  } catch {
+    return;
+  }
   if (!selectedOpportunity.value) return;
   saving.value = true;
   try {
@@ -701,10 +710,7 @@ async function handleAdvance() {
 }
 
 function actionOverdue(record: Opportunity) {
-  return Boolean(
-    record.nextActionAt &&
-      record.nextActionAt < new Date().toISOString().slice(0, 10),
-  );
+  return Boolean(record.nextActionAt && record.nextActionAt < todayLocal());
 }
 
 function nextStage(stage: OpportunityStage): OpportunityStage {
@@ -747,7 +753,7 @@ function initialCreateForm() {
 function dateAfterDays(days: number) {
   const date = new Date();
   date.setDate(date.getDate() + days);
-  return date.toISOString().slice(0, 10);
+  return toLocalDateString(date);
 }
 
 function moneyFormatter({ value }: { value: number }) {

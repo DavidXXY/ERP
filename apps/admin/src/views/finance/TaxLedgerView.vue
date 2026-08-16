@@ -175,6 +175,7 @@ import {
 } from "@/api/finance";
 import { useAuthStore } from "@/stores/auth";
 import { downloadCsv } from "@/utils/csv";
+import { todayLocal } from "@/utils/date";
 
 const auth = useAuthStore();
 const loading = ref(false);
@@ -373,7 +374,7 @@ function signedMoney(value: number) {
   return `${Number(value) > 0 ? "+" : ""}${formatMoney(value)}`;
 }
 function today() {
-  return new Date().toISOString().slice(0, 10);
+  return todayLocal();
 }
 </script>
 

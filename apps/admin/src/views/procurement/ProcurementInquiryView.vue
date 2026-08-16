@@ -765,9 +765,13 @@ async function saveInquiry() {
     return;
   }
   inquiryForm.createdByName = auth.user?.displayName || "采购员";
-  await api.createProcurementInquiry({ ...inquiryForm });
-  inquiryOpen.value = false;
-  await load();
+  try {
+    await api.createProcurementInquiry({ ...inquiryForm });
+    inquiryOpen.value = false;
+    await load();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "创建询价失败");
+  }
 }
 
 async function saveQuote() {
@@ -780,17 +784,21 @@ async function saveQuote() {
     message.warning("请填写全部物料的含税单价");
     return;
   }
-  await api.addSupplierQuotation(selectedInquiry.value.id, {
-    ...quoteForm,
-    lines: quoteLineForm.value.map((line) => ({
-      requestId: line.requestId,
-      unitPrice: Number(line.unitPrice),
-      taxRate: Number(line.taxRate),
-      deliveryDate: line.deliveryDate || undefined,
-    })),
-  });
-  quoteOpen.value = false;
-  await load();
+  try {
+    await api.addSupplierQuotation(selectedInquiry.value.id, {
+      ...quoteForm,
+      lines: quoteLineForm.value.map((line) => ({
+        requestId: line.requestId,
+        unitPrice: Number(line.unitPrice),
+        taxRate: Number(line.taxRate),
+        deliveryDate: line.deliveryDate || undefined,
+      })),
+    });
+    quoteOpen.value = false;
+    await load();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "报价提交失败");
+  }
 }
 
 function openInvite(inquiry: api.ProcurementInquiry) {
@@ -805,29 +813,35 @@ async function saveInvitations() {
     message.warning("请选择要邀请的供应商");
     return;
   }
-  const result = await api.inviteInquirySuppliers(
-    selectedInquiry.value.id,
-    invitedSupplierIds.value,
-    { ...inviteEmails },
-  );
-  inviteOpen.value = false;
-  const codeEntries = Object.entries(result.registrationCodes || {});
-  if (codeEntries.length) {
-    const codeText = codeEntries
-      .map(([supplierId, code]) => {
-        const supplier = suppliers.value.find((item) => item.id === supplierId);
-        return `${supplier?.name || supplierId}：${code}`;
-      })
-      .join("；");
-    Modal.info({
-      title: "邀请已创建，请发送注册信息",
-      content: `${codeText}。注册码仅本次显示，7 天内有效；请通过可信渠道交给对应供应商。`,
-      okText: "我已记录",
-    });
-  } else {
-    message.info("所选供应商此前已邀请，本次未重复创建邀请");
+  try {
+    const result = await api.inviteInquirySuppliers(
+      selectedInquiry.value.id,
+      invitedSupplierIds.value,
+      { ...inviteEmails },
+    );
+    inviteOpen.value = false;
+    const codeEntries = Object.entries(result.registrationCodes || {});
+    if (codeEntries.length) {
+      const codeText = codeEntries
+        .map(([supplierId, code]) => {
+          const supplier = suppliers.value.find(
+            (item) => item.id === supplierId,
+          );
+          return `${supplier?.name || supplierId}：${code}`;
+        })
+        .join("；");
+      Modal.info({
+        title: "邀请已创建，请发送注册信息",
+        content: `${codeText}。注册码仅本次显示，7 天内有效；请通过可信渠道交给对应供应商。`,
+        okText: "我已记录",
+      });
+    } else {
+      message.info("所选供应商此前已邀请，本次未重复创建邀请");
+    }
+    await load();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "邀请供应商失败");
   }
-  await load();
 }
 
 function openDeadlineEditor(inquiry: api.ProcurementInquiry) {
@@ -841,13 +855,17 @@ async function saveDeadline() {
     message.warning("请选择新截止日期");
     return;
   }
-  await api.updateProcurementInquiryDeadline(
-    selectedInquiry.value.id,
-    deadlineValue.value,
-  );
-  deadlineOpen.value = false;
-  message.success("询价截止日期已更新");
-  await load();
+  try {
+    await api.updateProcurementInquiryDeadline(
+      selectedInquiry.value.id,
+      deadlineValue.value,
+    );
+    deadlineOpen.value = false;
+    message.success("询价截止日期已更新");
+    await load();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "更新截止日期失败");
+  }
 }
 
 function openMinQuotesEditor(inquiry: api.ProcurementInquiry) {
@@ -902,12 +920,16 @@ async function openClarifications(inquiry: api.ProcurementInquiry) {
 async function answerClarification(item: api.InquiryClarification) {
   const answer = clarificationAnswers[item.id]?.trim();
   if (!answer || !selectedInquiry.value) return;
-  await api.answerInquiryClarification(item.id, answer);
-  clarificationAnswers[item.id] = "";
-  clarifications.value = await api.listInquiryClarifications(
-    selectedInquiry.value.id,
-  );
-  message.success("澄清答复已提交");
+  try {
+    await api.answerInquiryClarification(item.id, answer);
+    clarificationAnswers[item.id] = "";
+    clarifications.value = await api.listInquiryClarifications(
+      selectedInquiry.value.id,
+    );
+    message.success("澄清答复已提交");
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "澄清答复提交失败");
+  }
 }
 
 function openScore(
@@ -923,14 +945,18 @@ function openScore(
 
 async function saveScore() {
   if (!selectedInquiry.value || !selectedQuote.value) return;
-  await api.scoreSupplierQuotation(
-    selectedInquiry.value.id,
-    selectedQuote.value.id,
-    { ...scoreForm },
-  );
-  scoreOpen.value = false;
-  message.success("内部评分已保存");
-  await load();
+  try {
+    await api.scoreSupplierQuotation(
+      selectedInquiry.value.id,
+      selectedQuote.value.id,
+      { ...scoreForm },
+    );
+    scoreOpen.value = false;
+    message.success("内部评分已保存");
+    await load();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "评分保存失败");
+  }
 }
 
 function invitationStatusText(status: string) {
@@ -960,11 +986,17 @@ function selectQuote(
     title: `选定 ${quote.supplierName}？`,
     content: `报价总额 ${money(quote.totalAmount)}，综合评分 ${quote.totalScore}`,
     async onOk() {
-      await api.selectSupplierQuotation(inquiry.id, quote.id, {
-        operatorName: auth.user?.displayName || "审批人",
-        reason: `综合分项价格、交期、技术与商务评分选定（综合分 ${quote.totalScore}）`,
-      });
-      await load();
+      try {
+        await api.selectSupplierQuotation(inquiry.id, quote.id, {
+          operatorName: auth.user?.displayName || "审批人",
+          reason: `综合分项价格、交期、技术与商务评分选定（综合分 ${quote.totalScore}）`,
+        });
+        await load();
+      } catch (error) {
+        message.error(
+          error instanceof Error ? error.message : "选定供应商失败",
+        );
+      }
     },
   });
 }

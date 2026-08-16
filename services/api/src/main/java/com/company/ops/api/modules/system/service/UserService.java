@@ -137,12 +137,16 @@ public class UserService {
   }
 
   @Transactional
-  public void resetPassword(UUID id, String newPassword) {
+  public String resetPassword(UUID id, String newPassword) {
     SystemUser user = userRepository.findById(id).orElseThrow();
-    PasswordPolicy.requireValid(newPassword, user.getUsername());
-    user.setPasswordHash(passwordEncoder.encode(newPassword));
+    String password = (newPassword == null || newPassword.isBlank())
+        ? PasswordPolicy.generate(user.getUsername())
+        : newPassword;
+    PasswordPolicy.requireValid(password, user.getUsername());
+    user.setPasswordHash(passwordEncoder.encode(password));
     user.bumpAuthVersion();
     userRepository.save(user);
+    return password;
   }
 
   private UserResponse toUserResponseWithDetails(SystemUser user) {

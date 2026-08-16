@@ -1044,12 +1044,8 @@ import {
   type QuoteCostRequest,
 } from "@/api/crm";
 import { useAuthStore } from "@/stores/auth";
-import {
-  formatMoney,
-  generateCode,
-  quoteStatusColor,
-  quoteStatusLabel,
-} from "./crm-options";
+import { generateCode } from "@/utils/code";
+import { formatMoney, quoteStatusColor, quoteStatusLabel } from "./crm-options";
 import { deleteQuote } from "@/api/crm";
 import { listUsersApi, type UserResponse } from "@/api/system";
 import { loadOwnerDepartmentMap, ownerDepartment } from "./crm-department";
@@ -1535,7 +1531,11 @@ function syncCustomer(opportunityId: string) {
 }
 
 async function handleSaveQuote() {
-  await formRef.value?.validate();
+  try {
+    await formRef.value?.validate();
+  } catch {
+    return;
+  }
   if (!form.paymentNodes.trim()) {
     message.warning("请输入付款方式/节点");
     return;
@@ -1636,7 +1636,11 @@ function openCostRequest(record: QuotePlan) {
 }
 
 async function handleCostRequest() {
-  await costRequestFormRef.value?.validate();
+  try {
+    await costRequestFormRef.value?.validate();
+  } catch {
+    return;
+  }
   if (!selectedQuote.value) return;
   saving.value = true;
   try {
@@ -1663,7 +1667,11 @@ function openCostSubmit(record: QuotePlan) {
 }
 
 async function handleCostSubmit() {
-  await costSubmitFormRef.value?.validate();
+  try {
+    await costSubmitFormRef.value?.validate();
+  } catch {
+    return;
+  }
   if (!selectedCostRequest.value) return;
   if (costSubmitTotal.value <= 0) {
     message.warning("请至少填写一项成本");
@@ -1694,7 +1702,11 @@ function openCostApproval(record: QuotePlan) {
 }
 
 async function handleCostApproval() {
-  await costApprovalFormRef.value?.validate();
+  try {
+    await costApprovalFormRef.value?.validate();
+  } catch {
+    return;
+  }
   if (!selectedCostRequest.value) return;
   saving.value = true;
   try {
@@ -1828,7 +1840,11 @@ function openApproval(record: QuotePlan) {
 }
 
 async function handleApproval() {
-  await approvalFormRef.value?.validate();
+  try {
+    await approvalFormRef.value?.validate();
+  } catch {
+    return;
+  }
   if (!selectedQuote.value) return;
   saving.value = true;
   try {
@@ -1864,7 +1880,11 @@ function syncCustomerComment() {
 }
 
 async function handleCustomerResult() {
-  await customerResultFormRef.value?.validate();
+  try {
+    await customerResultFormRef.value?.validate();
+  } catch {
+    return;
+  }
   if (!selectedQuote.value) return;
   saving.value = true;
   try {
@@ -1903,7 +1923,11 @@ function selectConversionAttachment(file: File) {
 }
 
 async function handleConversion() {
-  await conversionFormRef.value?.validate();
+  try {
+    await conversionFormRef.value?.validate();
+  } catch {
+    return;
+  }
   if (!selectedQuote.value) return;
   if (!selectedQuote.value.paymentNodes?.trim()) {
     message.warning("请先在报价中填写付款方式/节点");

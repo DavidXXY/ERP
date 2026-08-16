@@ -16,6 +16,7 @@ public interface StockMovementRepository extends JpaRepository<StockMovement, UU
 
   List<StockMovement> findByPartIdOrderByCreatedAtDesc(UUID partId);
   Page<StockMovement> findByPartIdOrderByCreatedAtDesc(UUID partId, Pageable pageable);
+  Page<StockMovement> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
   @Query("select m.partId, sum(m.quantity) from StockMovement m "
       + "where m.createdAt >= :since and m.movementType in :types group by m.partId")

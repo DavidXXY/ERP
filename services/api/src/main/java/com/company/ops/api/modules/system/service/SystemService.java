@@ -152,15 +152,6 @@ public class SystemService {
     userRepository.deleteById(id);
   }
 
-  @Transactional
-  public void resetPassword(UUID id, String newPassword) {
-    SystemUser user = userRepository.findById(id).orElseThrow();
-    PasswordPolicy.requireValid(newPassword, user.getUsername());
-    user.setPasswordHash(passwordEncoder.encode(newPassword));
-    user.bumpAuthVersion();
-    userRepository.save(user);
-  }
-
   private UserResponse toUserResponse(SystemUser user) {
     return new UserResponse(
         user.getId(),

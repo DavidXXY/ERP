@@ -219,6 +219,7 @@
 </template>
 
 <script setup lang="ts">
+import { generateCode } from "@/utils/code";
 import { computed, onMounted, reactive, ref } from "vue";
 import { message, Upload, type UploadFile } from "ant-design-vue";
 import CheckOutlined from "@ant-design/icons-vue/CheckOutlined";
@@ -377,7 +378,11 @@ function openApproval(record: SealApplication) {
   approvalCenterRef.value?.openApprovalById(record.approvalRequestId);
 }
 async function submit() {
-  await formRef.value?.validate();
+  try {
+    await formRef.value?.validate();
+  } catch {
+    return;
+  }
   const files = attachmentFiles.value.flatMap((item) =>
     item.originFileObj ? [item.originFileObj as File] : [],
   );
@@ -453,10 +458,6 @@ function formatDateTime(value?: string) {
     minute: "2-digit",
     hour12: false,
   }).format(new Date(value));
-}
-function generateCode(prefix: string) {
-  const date = new Date();
-  return `${prefix}-${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, "0")}${String(date.getDate()).padStart(2, "0")}-${String(date.getHours()).padStart(2, "0")}${String(date.getMinutes()).padStart(2, "0")}${String(date.getSeconds()).padStart(2, "0")}`;
 }
 function today() {
   const date = new Date();

@@ -57,6 +57,8 @@ export interface Equipment {
   name: string;
   customerId: string;
   customerName?: string;
+  contractId?: string;
+  requiredCertificate?: string;
   category: string;
   model?: string;
   serialNo?: string;

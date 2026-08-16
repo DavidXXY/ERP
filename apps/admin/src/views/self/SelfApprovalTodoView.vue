@@ -227,7 +227,11 @@ function openProcess(record: Approval, decision: "APPROVED" | "REJECTED") {
 }
 
 async function handleProcess() {
-  await processFormRef.value?.validate();
+  try {
+    await processFormRef.value?.validate();
+  } catch {
+    return;
+  }
   if (!selectedApproval.value) return;
   saving.value = true;
   try {

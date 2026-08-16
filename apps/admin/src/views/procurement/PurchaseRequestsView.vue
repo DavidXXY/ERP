@@ -769,7 +769,7 @@ async function handleImport() {
 }
 
 function goToApprovalCenter(_batch: RequestBatch) {
-  router.push({ path: "/workbench/todos", query: { tab: "approvals" } });
+  router.push({ path: "/collaboration", query: { tab: "approvals" } });
 }
 
 function openBatchDocuments(batch: RequestBatch) {

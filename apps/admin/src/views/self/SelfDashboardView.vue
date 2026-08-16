@@ -15,7 +15,7 @@
           }}</a-typography-text>
         </div>
         <a-space wrap class="self-hero-actions">
-          <a-button @click="$router.push('/workbench/todos?tab=approvals')"
+          <a-button @click="$router.push('/collaboration?tab=approvals')"
             ><template #icon><CheckSquareOutlined /></template
             >业务待办</a-button
           >
@@ -55,7 +55,7 @@
           <template #extra>
             <a-button
               type="link"
-              @click="$router.push('/workbench/todos?tab=approvals')"
+              @click="$router.push('/collaboration?tab=approvals')"
               >业务待办 {{ approvalTodoCount }}</a-button
             >
           </template>
@@ -104,7 +104,7 @@
             <a-col :xs="12"
               ><a-button
                 block
-                @click="$router.push('/workbench/todos?tab=approvals')"
+                @click="$router.push('/collaboration?tab=approvals')"
                 ><template #icon><CheckSquareOutlined /></template
                 >业务待办</a-button
               ></a-col

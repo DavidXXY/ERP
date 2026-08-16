@@ -30,8 +30,8 @@
             style="width: 150px"
           />
           <a-button @click="downloadReport">导出管理报表</a-button>
-          <a-button @click="router.push('/office/approvals')"
-            >统一审批中心</a-button
+          <a-button @click="router.push('/collaboration?tab=approvals')"
+            >审批中心</a-button
           >
           <a-button type="primary" :loading="loading" @click="loadData"
             >刷新</a-button
@@ -69,65 +69,16 @@
     </a-card>
 
     <a-card :bordered="false">
-      <a-tabs v-model:active-key="tab">
-        <a-tab-pane key="todos" tab="统一待办">
-          <a-alert
-            class="section-tip"
-            type="info"
-            show-icon
-            message="支持办理、转办、抄送、催办和期限管理；逾期任务由后台定时升级并发送站内消息。"
+      <a-tabs v-model:active-key="tab" destroy-inactive-tab-pane>
+        <a-tab-pane key="todos" tab="待办中心" force-render>
+          <CollaborationTodoTab
+            :user-options="userOptions"
+            @changed="loadData"
           />
-          <a-table
-            :columns="todoColumns"
-            :data-source="data.todos"
-            row-key="id"
-            size="middle"
-            :pagination="{ pageSize: 10 }"
-            :scroll="{ x: 1100 }"
-          >
-            <template #bodyCell="{ column, record }">
-              <a-tag
-                v-if="column.key === 'priority'"
-                :color="priorityColor(record.priority)"
-                >{{ priorityLabel(record.priority) }}</a-tag
-              >
-              <a-tag
-                v-else-if="column.key === 'status'"
-                :color="record.status === 'DONE' ? 'green' : 'orange'"
-                >{{ record.status === "DONE" ? "已完成" : "待处理" }}</a-tag
-              >
-              <span
-                v-else-if="column.key === 'overdue'"
-                :class="{ danger: record.overdueDays }"
-                >{{
-                  record.overdueDays ? `${record.overdueDays} 天` : "正常"
-                }}</span
-              >
-              <span v-else-if="column.key === 'assignee'">{{
-                userName(record.assigneeUserId)
-              }}</span>
-              <a-space v-else-if="column.key === 'action'">
-                <a-button type="link" @click="router.push(record.link)"
-                  >业务办理</a-button
-                >
-                <a-dropdown>
-                  <a-button type="link">协同操作</a-button>
-                  <template #overlay
-                    ><a-menu
-                      @click="({ key }: any) => openTodoAction(record, key)"
-                    >
-                      <a-menu-item key="COMPLETE">完成</a-menu-item
-                      ><a-menu-item key="REOPEN">重新打开</a-menu-item>
-                      <a-menu-item key="TRANSFER">转办</a-menu-item
-                      ><a-menu-item key="CC">抄送</a-menu-item>
-                      <a-menu-item key="REMIND">催办</a-menu-item
-                      ><a-menu-item key="SET_DUE">设置期限</a-menu-item>
-                    </a-menu></template
-                  >
-                </a-dropdown>
-              </a-space>
-            </template>
-          </a-table>
+        </a-tab-pane>
+
+        <a-tab-pane key="approvals" tab="审批中心">
+          <ApprovalCenterView embedded @changed="loadData" />
         </a-tab-pane>
 
         <a-tab-pane key="handover" tab="合同转项目交接">
@@ -193,7 +144,7 @@
             show-icon
             message="采购占用与实际成本持续校验；预算调整保留版本、申请原因、审批人和生效时间。"
           />
-          <a-tabs>
+          <a-tabs destroy-inactive-tab-pane>
             <a-tab-pane key="current" tab="当前预算">
               <a-table
                 :columns="budgetColumns"
@@ -307,7 +258,7 @@
         </a-tab-pane>
 
         <a-tab-pane key="staff" tab="派工·工时·负荷">
-          <a-tabs>
+          <a-tabs destroy-inactive-tab-pane>
             <a-tab-pane key="assignments" tab="项目派工">
               <div class="section-actions">
                 <a-button type="primary" @click="staffOpen = true"
@@ -451,44 +402,6 @@
         </a-tab-pane>
       </a-tabs>
     </a-card>
-
-    <a-modal
-      v-model:open="todoOpen"
-      title="协同待办操作"
-      ok-text="确认"
-      @ok="submitTodoAction"
-    >
-      <a-form layout="vertical">
-        <a-form-item label="操作"
-          ><a-tag>{{ actionText(todoForm.action) }}</a-tag></a-form-item
-        >
-        <a-form-item
-          v-if="todoForm.action === 'TRANSFER'"
-          label="转办给"
-          required
-          ><a-select
-            v-model:value="todoForm.targetUserId"
-            :options="userOptions"
-        /></a-form-item>
-        <a-form-item v-if="todoForm.action === 'CC'" label="抄送人" required
-          ><a-select
-            v-model:value="todoForm.ccUserIds"
-            mode="multiple"
-            :options="userOptions"
-        /></a-form-item>
-        <a-form-item
-          v-if="todoForm.action === 'SET_DUE'"
-          label="完成期限"
-          required
-          ><a-date-picker
-            v-model:value="todoForm.dueDate"
-            value-format="YYYY-MM-DD"
-        /></a-form-item>
-        <a-form-item label="处理意见"
-          ><a-textarea v-model:value="todoForm.comment" :rows="3"
-        /></a-form-item>
-      </a-form>
-    </a-modal>
 
     <a-modal
       v-model:open="handoverOpen"
@@ -747,7 +660,6 @@ import { message, Modal } from "ant-design-vue";
 import { useRoute, useRouter } from "vue-router";
 import {
   acceptProjectHandover,
-  actOnCollaborationTodo,
   assignProjectStaff,
   exportCollaboration,
   getCollaborationOverview,
@@ -764,11 +676,29 @@ import {
   type CollaborationReferences,
 } from "@/api/collaboration";
 import { getProject, type ProjectCostCategory } from "@/api/project";
+import ApprovalCenterView from "@/views/office/ApprovalCenterView.vue";
+import CollaborationTodoTab from "./CollaborationTodoTab.vue";
 
 const route = useRoute(),
   router = useRouter(),
-  loading = ref(false),
-  tab = ref("todos");
+  loading = ref(false);
+const collaborationTabKeys = [
+  "todos",
+  "approvals",
+  "handover",
+  "budget",
+  "finance",
+  "procurement",
+  "staff",
+  "responsibility",
+  "audit",
+];
+const tab = ref(
+  typeof route.query.tab === "string" &&
+    collaborationTabKeys.includes(route.query.tab)
+    ? route.query.tab
+    : "todos",
+);
 const now = new Date(),
   filters = reactive({
     year: now.getFullYear(),
@@ -797,21 +727,12 @@ const data = reactive<CollaborationOverview>({ ...blank }),
     departments: [],
     projects: [],
   });
-const todoOpen = ref(false),
-  handoverOpen = ref(false),
+const handoverOpen = ref(false),
   staffOpen = ref(false),
   timesheetOpen = ref(false),
   budgetOpen = ref(false),
   periodOpen = ref(false),
   responsibilityOpen = ref(false);
-const todoRecord = ref<any>(),
-  todoForm = reactive<any>({
-    action: "",
-    targetUserId: undefined,
-    ccUserIds: [],
-    dueDate: "",
-    comment: "",
-  });
 const handoverForm = reactive<any>({}),
   staffForm = reactive<any>({
     projectId: undefined,
@@ -990,16 +911,6 @@ const moneyKeys = [
   "requestedAmount",
   "differenceAmount",
 ];
-const todoColumns = [
-  { title: "事项", dataIndex: "title", width: 230 },
-  { title: "说明", dataIndex: "detail", width: 210 },
-  { title: "处理人", key: "assignee", width: 110 },
-  { title: "状态", key: "status", width: 90 },
-  { title: "优先级", key: "priority", width: 90 },
-  { title: "超时", key: "overdue", width: 85 },
-  { title: "催办", dataIndex: "reminderCount", width: 70 },
-  { title: "操作", key: "action", width: 190 },
-];
 const handoverColumns = [
   { title: "项目", dataIndex: "projectName", width: 220 },
   { title: "合同", dataIndex: "contractCode", width: 160 },
@@ -1116,15 +1027,6 @@ function money(v: any) {
     maximumFractionDigits: 0,
   }).format(Number(v || 0));
 }
-function userName(id?: string) {
-  return references.users.find((x) => x.id === id)?.name || "待认领";
-}
-function priorityColor(v: string) {
-  return v === "URGENT" ? "red" : v === "HIGH" ? "orange" : "blue";
-}
-function priorityLabel(v: string) {
-  return v === "URGENT" ? "紧急" : v === "HIGH" ? "高" : "普通";
-}
 function statusColor(v: string) {
   return v === "APPROVED" || v === "COMPLETED"
     ? "green"
@@ -1153,20 +1055,6 @@ function matchText(v: string) {
         PARTIAL: "部分匹配",
         WAITING_RECEIPT: "待收货",
         MISMATCH: "有差异",
-      } as any
-    )[v] || v
-  );
-}
-function actionText(v: string) {
-  return (
-    (
-      {
-        COMPLETE: "完成",
-        REOPEN: "重新打开",
-        TRANSFER: "转办",
-        CC: "抄送",
-        REMIND: "催办",
-        SET_DUE: "设置期限",
       } as any
     )[v] || v
   );
@@ -1207,31 +1095,6 @@ async function applyBudgetRequestIntent() {
 async function downloadReport() {
   try {
     await exportCollaboration(filters);
-  } catch (e: any) {
-    message.error(e.message);
-  }
-}
-function openTodoAction(record: any, action: string) {
-  todoRecord.value = record;
-  Object.assign(todoForm, {
-    action,
-    targetUserId: undefined,
-    ccUserIds: [],
-    dueDate: "",
-    comment: "",
-  });
-  todoOpen.value = true;
-}
-async function submitTodoAction() {
-  try {
-    await actOnCollaborationTodo(
-      todoRecord.value.type,
-      todoRecord.value.id,
-      todoForm,
-    );
-    todoOpen.value = false;
-    message.success("待办状态已更新");
-    await loadData();
   } catch (e: any) {
     message.error(e.message);
   }
@@ -1394,6 +1257,14 @@ async function submitResponsibility() {
     message.error(e.message);
   }
 }
+watch(
+  () => route.query.tab,
+  (value) => {
+    if (typeof value === "string" && collaborationTabKeys.includes(value)) {
+      tab.value = value;
+    }
+  },
+);
 watch(
   () => [filters.year, filters.month, filters.departmentId],
   () => loadData(),

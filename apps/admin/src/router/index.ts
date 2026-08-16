@@ -45,11 +45,11 @@ const rootRoutes: RouteRecordRaw[] = [
     meta: { title: "经营治理中心", permission: "governance:view" },
   },
   {
-    path: "workbench/todos",
-    name: "business-todos",
-    component: () => import("@/views/BusinessTodoCenterView.vue"),
+    path: "collaboration",
+    name: "collaboration-center",
+    component: () => import("@/views/CollaborationCenterView.vue"),
     meta: {
-      title: "业务待办中心",
+      title: "跨部门协同中心",
       permissions: [
         "dashboard:view",
         "risk:view",
@@ -62,23 +62,9 @@ const rootRoutes: RouteRecordRaw[] = [
         "procurement:view",
         "inventory:view",
         "project:view",
+        "finance:view",
         "finance:receivable:view",
         "finance:payable:view",
-      ],
-    },
-  },
-  {
-    path: "collaboration",
-    name: "collaboration-center",
-    component: () => import("@/views/CollaborationCenterView.vue"),
-    meta: {
-      title: "跨部门协同中心",
-      permissions: [
-        "dashboard:view",
-        "project:view",
-        "office:approval:view",
-        "procurement:view",
-        "finance:view",
       ],
     },
   },
@@ -490,8 +476,8 @@ const rootRoutes: RouteRecordRaw[] = [
     },
   },
   // Office
-  { path: "office", redirect: "/workbench/todos" },
-  { path: "office/approvals", redirect: "/workbench/todos?tab=approvals" },
+  { path: "office", redirect: "/collaboration?tab=todos" },
+  { path: "office/approvals", redirect: "/collaboration?tab=approvals" },
   {
     path: "office/approvals/:id",
     name: "office-approval-detail",
@@ -742,7 +728,7 @@ const rootRoutes: RouteRecordRaw[] = [
     component: () => import("@/views/self/SelfBalanceView.vue"),
     meta: { title: "\u6211\u7684\u989d\u5ea6" },
   },
-  { path: "self/approvals", redirect: "/workbench/todos?tab=approvals" },
+  { path: "self/approvals", redirect: "/collaboration?tab=approvals" },
 ];
 
 function canAccessRoute(

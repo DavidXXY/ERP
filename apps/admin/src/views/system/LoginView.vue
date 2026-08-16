@@ -39,7 +39,7 @@
           />
         </a-form-item>
         <a-form-item>
-          <a-checkbox v-model:checked="rememberMe">记住账号</a-checkbox>
+          <a-checkbox v-model:checked="rememberMe">记住用户名</a-checkbox>
         </a-form-item>
         <a-form-item
           v-if="mfaRequired"

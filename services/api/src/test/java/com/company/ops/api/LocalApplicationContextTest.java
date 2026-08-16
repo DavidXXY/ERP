@@ -466,11 +466,11 @@ class LocalApplicationContextTest {
 
   @Test
   void executesOptimizedBiQueriesAndValidatesDateRange() {
-    var dashboard = biService.dashboard();
+    LocalDate end = LocalDate.now();
+    var dashboard = biService.dashboard(end.minusMonths(1), end);
     assertThat(dashboard.summary()).isNotNull();
     assertThat(dashboard.monthlyTrends()).hasSize(6);
 
-    LocalDate end = LocalDate.now();
     var companyDashboard = biService.companyDashboard(end.minusMonths(1), end);
     assertThat(companyDashboard.startDate()).isEqualTo(end.minusMonths(1));
     assertThat(companyDashboard.endDate()).isEqualTo(end);

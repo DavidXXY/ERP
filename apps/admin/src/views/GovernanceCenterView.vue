@@ -1239,11 +1239,7 @@ async function submitTransition() {
 }
 async function handleReview(record: ControlRecord) {
   try {
-    await reviewControl(
-      record.id,
-      todayLocal(),
-      "周期复核完成",
-    );
+    await reviewControl(record.id, todayLocal(), "周期复核完成");
     message.success("复核日期已更新");
     await loadAll();
   } catch (error) {

@@ -770,7 +770,12 @@
       :confirm-loading="saving"
       @ok="saveCustomer"
     >
-      <a-form ref="modalFormRef" :model="formState" :rules="rules" layout="vertical">
+      <a-form
+        ref="modalFormRef"
+        :model="formState"
+        :rules="rules"
+        layout="vertical"
+      >
         <a-tabs v-model:active-key="formTab" class="customer-form-tabs">
           <a-tab-pane key="base" tab="基本资料">
             <a-row :gutter="16">

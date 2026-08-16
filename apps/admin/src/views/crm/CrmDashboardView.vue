@@ -1083,7 +1083,9 @@ async function loadData() {
     procurementMatchItems.value = procurementMatching;
     replenishmentItems.value = replenishmentSuggestions;
     const now = new Date();
-    const monthStart = toLocalDateString(new Date(now.getFullYear(), now.getMonth(), 1));
+    const monthStart = toLocalDateString(
+      new Date(now.getFullYear(), now.getMonth(), 1),
+    );
     const in30d = toLocalDateString(new Date(Date.now() + 30 * 86400000));
     const activeOpps = opps.filter(
       (o) => o.stage !== "WON" && o.stage !== "LOST",

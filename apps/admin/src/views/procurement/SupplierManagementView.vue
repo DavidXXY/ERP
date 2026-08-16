@@ -1723,7 +1723,9 @@ function changePortalAccountStatus(
         message.success(status === "SUSPENDED" ? "账号已停用" : "账号已恢复");
         await openPortalAccounts();
       } catch (error) {
-        message.error(error instanceof Error ? error.message : "门户账号状态更新失败");
+        message.error(
+          error instanceof Error ? error.message : "门户账号状态更新失败",
+        );
       }
     },
   });

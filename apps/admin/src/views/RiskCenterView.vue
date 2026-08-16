@@ -1264,11 +1264,7 @@ function exportRisks() {
     item.date || "",
     item.description,
   ]);
-  downloadCsv(
-    `risk-center-${todayLocal()}.csv`,
-    headers,
-    rows,
-  );
+  downloadCsv(`risk-center-${todayLocal()}.csv`, headers, rows);
 }
 
 async function loadSummary() {

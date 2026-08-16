@@ -10,7 +10,9 @@ function asDate(input: Date | string | number): Date {
 }
 
 /** Local YYYY-MM-DD for the given date (default: now). */
-export function toLocalDateString(input: Date | string | number = new Date()): string {
+export function toLocalDateString(
+  input: Date | string | number = new Date(),
+): string {
   const d = asDate(input);
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -24,7 +26,9 @@ export function todayLocal(): string {
 }
 
 /** Local YYYY-MM for the given date (default: now). */
-export function toLocalMonthString(input: Date | string | number = new Date()): string {
+export function toLocalMonthString(
+  input: Date | string | number = new Date(),
+): string {
   const d = asDate(input);
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");

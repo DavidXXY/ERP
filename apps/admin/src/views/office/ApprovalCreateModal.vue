@@ -92,7 +92,6 @@ const rules = {
   content: [{ required: true }],
 };
 
-
 watch(
   () => props.open,
   (isOpen) => {

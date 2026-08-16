@@ -438,8 +438,7 @@ const timelineEvents = computed(() => {
 
 const actionOverdue = computed(() =>
   Boolean(
-    record.value?.nextActionAt &&
-      record.value.nextActionAt < todayLocal(),
+    record.value?.nextActionAt && record.value.nextActionAt < todayLocal(),
   ),
 );
 const lastFollowUpDays = computed(() => {

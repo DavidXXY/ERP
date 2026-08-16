@@ -824,7 +824,9 @@ async function saveInvitations() {
     if (codeEntries.length) {
       const codeText = codeEntries
         .map(([supplierId, code]) => {
-          const supplier = suppliers.value.find((item) => item.id === supplierId);
+          const supplier = suppliers.value.find(
+            (item) => item.id === supplierId,
+          );
           return `${supplier?.name || supplierId}：${code}`;
         })
         .join("；");
@@ -991,7 +993,9 @@ function selectQuote(
         });
         await load();
       } catch (error) {
-        message.error(error instanceof Error ? error.message : "选定供应商失败");
+        message.error(
+          error instanceof Error ? error.message : "选定供应商失败",
+        );
       }
     },
   });

@@ -1045,11 +1045,7 @@ import {
 } from "@/api/crm";
 import { useAuthStore } from "@/stores/auth";
 import { generateCode } from "@/utils/code";
-import {
-  formatMoney,
-  quoteStatusColor,
-  quoteStatusLabel,
-} from "./crm-options";
+import { formatMoney, quoteStatusColor, quoteStatusLabel } from "./crm-options";
 import { deleteQuote } from "@/api/crm";
 import { listUsersApi, type UserResponse } from "@/api/system";
 import { loadOwnerDepartmentMap, ownerDepartment } from "./crm-department";

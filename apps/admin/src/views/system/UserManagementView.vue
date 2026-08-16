@@ -236,7 +236,12 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
-import { message, Modal, type FormInstance, type TableProps } from "ant-design-vue";
+import {
+  message,
+  Modal,
+  type FormInstance,
+  type TableProps,
+} from "ant-design-vue";
 import { PlusOutlined, ReloadOutlined } from "@ant-design/icons-vue";
 import {
   createUserApi,

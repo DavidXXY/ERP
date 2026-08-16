@@ -710,10 +710,7 @@ async function handleAdvance() {
 }
 
 function actionOverdue(record: Opportunity) {
-  return Boolean(
-    record.nextActionAt &&
-      record.nextActionAt < todayLocal(),
-  );
+  return Boolean(record.nextActionAt && record.nextActionAt < todayLocal());
 }
 
 function nextStage(stage: OpportunityStage): OpportunityStage {

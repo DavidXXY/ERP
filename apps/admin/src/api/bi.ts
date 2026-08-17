@@ -60,26 +60,6 @@ export type ExecutiveDashboard = {
   equipmentPerformance: EquipmentPerformance[];
   workforcePerformance: WorkforcePerformance[];
 };
-export type CompanyKpiDashboard = {
-  startDate: string;
-  endDate: string;
-  revenue: number;
-  grossProfit: number;
-  grossMarginRate: number;
-  cashIn: number;
-  cashOut: number;
-  netCashFlow: number;
-  projectBudget: number;
-  projectActualCost: number;
-  projectBudgetDeviationRate: number;
-  procurementAmount: number;
-  procurementRatio: number;
-  inventoryValue: number;
-  inventoryTurnover: number;
-  workforceOutputPerHour: number;
-  trends: MonthlyTrend[];
-  topCustomers: CustomerProfit[];
-};
 export function getExecutiveDashboard(params?: {
   startDate?: string;
   endDate?: string;
@@ -87,16 +67,6 @@ export function getExecutiveDashboard(params?: {
   return request<ExecutiveDashboard>({
     method: "GET",
     url: "/bi/dashboard",
-    params,
-  });
-}
-export function getCompanyKpiDashboard(params?: {
-  startDate?: string;
-  endDate?: string;
-}) {
-  return request<CompanyKpiDashboard>({
-    method: "GET",
-    url: "/bi/company-dashboard",
     params,
   });
 }

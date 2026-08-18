@@ -363,7 +363,10 @@
 
         <a-tab-pane key="audit" :tab="`经营审计 (${timeline.length})`">
           <a-timeline v-if="timeline.length">
-            <a-timeline-item v-for="item in timeline" :key="`${item.type}-${item.occurredAt}-${item.title}`">
+            <a-timeline-item
+              v-for="item in timeline"
+              :key="`${item.type}-${item.occurredAt}-${item.title}`"
+            >
               <a-tag :color="timelineTypeColor(item.type)">{{
                 timelineTypeLabel(item.type)
               }}</a-tag>
@@ -405,10 +408,7 @@
                 />
               </a-form-item>
               <a-form-item>
-                <a-input
-                  v-model:value="riskForm.dueDate"
-                  type="date"
-                />
+                <a-input v-model:value="riskForm.dueDate" type="date" />
               </a-form-item>
               <a-form-item>
                 <a-input
@@ -941,9 +941,12 @@ function riskSeverityLabel(value?: string) {
 }
 function riskSeverityColor(value?: string) {
   return (
-    ({ LOW: "default", MEDIUM: "orange", HIGH: "red" } as Record<string, string>)[
-      value || ""
-    ] || "default"
+    (
+      { LOW: "default", MEDIUM: "orange", HIGH: "red" } as Record<
+        string,
+        string
+      >
+    )[value || ""] || "default"
   );
 }
 function riskStatusLabel(value?: string) {

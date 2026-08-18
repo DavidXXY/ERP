@@ -327,7 +327,9 @@
         <section class="project-workbench">
           <div class="workbench-title">
             <div>
-              <h3>{{ preSalesShowArchived ? "售前支持 · 已留档" : "售前支持" }}</h3>
+              <h3>
+                {{ preSalesShowArchived ? "售前支持 · 已留档" : "售前支持" }}
+              </h3>
               <p>
                 销售发起售前支持后，由项目管理填写成本并完成审批；通过后报价板块才可以继续报价。
               </p>
@@ -449,7 +451,8 @@
                 <a-button
                   v-if="
                     !preSalesShowArchived &&
-                    auth.can('project:approve') && record.status === 'COSTING'
+                    auth.can('project:approve') &&
+                    record.status === 'COSTING'
                   "
                   type="link"
                   size="small"
@@ -458,8 +461,7 @@
                 >
                 <a-tag
                   v-if="
-                    !preSalesShowArchived &&
-                    record.status === 'COST_APPROVED'
+                    !preSalesShowArchived && record.status === 'COST_APPROVED'
                   "
                   color="green"
                   >销售可报价</a-tag
@@ -1769,9 +1771,24 @@ const columns = [
   { title: "项目负责人", key: "manager", width: 130 },
   { title: "阶段", key: "stage", width: 150 },
   { title: "项目经理分配", key: "approval", width: 220, responsive: ["xl"] },
-  { title: "合同金额（含税，元）", key: "contract", width: 190, responsive: ["xl"] },
-  { title: "预算 / 实际（含税，元）", key: "cost", width: 220, responsive: ["xl"] },
-  { title: "毛利 / 余额（含税，元）", key: "gross", width: 220, responsive: ["xl"] },
+  {
+    title: "合同金额（含税，元）",
+    key: "contract",
+    width: 190,
+    responsive: ["xl"],
+  },
+  {
+    title: "预算 / 实际（含税，元）",
+    key: "cost",
+    width: 220,
+    responsive: ["xl"],
+  },
+  {
+    title: "毛利 / 余额（含税，元）",
+    key: "gross",
+    width: 220,
+    responsive: ["xl"],
+  },
   { title: "操作", key: "action", width: 130, fixed: "right" },
 ];
 const budgetColumns = [
@@ -2234,9 +2251,7 @@ async function loadProjectManagerAssignmentData() {
 async function loadPreSalesSupport() {
   loading.value = true;
   try {
-    preSalesRows.value = await listPreSalesSupport(
-      preSalesShowArchived.value,
-    );
+    preSalesRows.value = await listPreSalesSupport(preSalesShowArchived.value);
   } catch (error) {
     errorMessage.value =
       error instanceof Error ? error.message : "售前支持加载失败";

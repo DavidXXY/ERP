@@ -146,6 +146,8 @@ class ProjectServiceWorkflowEnhancementTest {
   @Test
   void rollbackStageMovesToPreviousStageAndRecordsHistory() {
     project.setApprovalStatus(ProjectApprovalStatus.APPROVED);
+    project.setManagerUserId(UUID.randomUUID());
+    project.setManagerName("项目经理");
     project.setStage(ProjectStage.CONSTRUCTION);
     project.setProgress(20);
     when(stageRecordRepository.save(any(ProjectStageRecord.class)))
@@ -165,6 +167,8 @@ class ProjectServiceWorkflowEnhancementTest {
   @Test
   void entryStageCannotRollBack() {
     project.setApprovalStatus(ProjectApprovalStatus.APPROVED);
+    project.setManagerUserId(UUID.randomUUID());
+    project.setManagerName("项目经理");
     project.setStage(ProjectStage.ENTRY);
 
     assertThatThrownBy(() -> service.rollbackStage(project.getId(),
@@ -176,6 +180,8 @@ class ProjectServiceWorkflowEnhancementTest {
   @Test
   void closingProjectRequiresApprovedCloseoutReview() {
     project.setApprovalStatus(ProjectApprovalStatus.APPROVED);
+    project.setManagerUserId(UUID.randomUUID());
+    project.setManagerName("项目经理");
     project.setStage(ProjectStage.WARRANTY);
     when(closeoutReviewRepository.findFirstByProjectIdOrderByCreatedAtDesc(project.getId()))
         .thenReturn(Optional.empty());
@@ -189,6 +195,8 @@ class ProjectServiceWorkflowEnhancementTest {
   @Test
   void closeoutRequestBlockedWhenHandoverNotAccepted() {
     project.setApprovalStatus(ProjectApprovalStatus.APPROVED);
+    project.setManagerUserId(UUID.randomUUID());
+    project.setManagerName("项目经理");
     project.setStage(ProjectStage.WARRANTY);
     ProjectHandover handover = new ProjectHandover();
     handover.setStatus("PENDING");

@@ -163,7 +163,8 @@ public class SystemService {
         user.isEnabled(),
         List.of(),
         user.getCreatedAt() != null ? user.getCreatedAt().format(DT_FORMATTER) : null,
-        user.getUpdatedAt() != null ? user.getUpdatedAt().format(DT_FORMATTER) : null
+        user.getUpdatedAt() != null ? user.getUpdatedAt().format(DT_FORMATTER) : null,
+        user.getLastLoginAt() != null ? user.getLastLoginAt().format(DT_FORMATTER) : null
     );
   }
 
@@ -181,7 +182,8 @@ public class SystemService {
         user.isEnabled(),
         roles,
         user.getCreatedAt() != null ? user.getCreatedAt().format(DT_FORMATTER) : null,
-        user.getUpdatedAt() != null ? user.getUpdatedAt().format(DT_FORMATTER) : null
+        user.getUpdatedAt() != null ? user.getUpdatedAt().format(DT_FORMATTER) : null,
+        user.getLastLoginAt() != null ? user.getLastLoginAt().format(DT_FORMATTER) : null
     );
   }
 

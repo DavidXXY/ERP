@@ -6,6 +6,9 @@ import com.company.ops.api.modules.system.security.JwtService;
 import com.company.ops.api.modules.system.security.LoginAttemptService;
 import com.company.ops.api.modules.system.security.UserPrincipal;
 import com.company.ops.api.modules.system.domain.SystemUser;
+import com.company.ops.api.modules.system.repository.SystemUserRepository;
+import java.time.OffsetDateTime;
+import java.util.UUID;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -21,13 +24,16 @@ public class AuthService {
   private final JwtService jwtService;
   private final LoginAttemptService loginAttemptService;
   private final MfaService mfaService;
+  private final SystemUserRepository userRepository;
 
   public AuthService(AuthenticationManager authenticationManager, JwtService jwtService,
-      LoginAttemptService loginAttemptService, MfaService mfaService) {
+      LoginAttemptService loginAttemptService, MfaService mfaService,
+      SystemUserRepository userRepository) {
     this.authenticationManager = authenticationManager;
     this.jwtService = jwtService;
     this.loginAttemptService = loginAttemptService;
     this.mfaService = mfaService;
+    this.userRepository = userRepository;
   }
 
   @Transactional
@@ -65,6 +71,7 @@ public class AuthService {
     loginAttemptService.succeeded(accountKey);
     loginAttemptService.succeeded(attemptKey);
     loginAttemptService.succeeded(addressKey);
+    recordLogin(principal.id());
     return new LoginResponse(jwtService.createToken(principal), toCurrentUser(principal));
   }
 
@@ -77,7 +84,15 @@ public class AuthService {
 
   public LoginResponse issueSession(SystemUser user) {
     UserPrincipal principal = new UserPrincipal(user);
+    recordLogin(user.getId());
     return new LoginResponse(jwtService.createToken(principal), toCurrentUser(principal));
+  }
+
+  private void recordLogin(UUID userId) {
+    userRepository.findById(userId).ifPresent(user -> {
+      user.setLastLoginAt(OffsetDateTime.now());
+      userRepository.save(user);
+    });
   }
 
   private LoginResponse.CurrentUserResponse toCurrentUser(UserPrincipal principal) {

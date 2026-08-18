@@ -158,6 +158,8 @@ class ProjectServiceWorkflowTest {
   @Test
   void cancelledProjectCannotResume() {
     project.setApprovalStatus(ProjectApprovalStatus.APPROVED);
+    project.setManagerUserId(UUID.randomUUID());
+    project.setManagerName("项目经理");
     project.setExecutionStatus(ProjectExecutionStatus.CANCELLED);
 
     assertThatThrownBy(() -> service.changeExecutionStatus(project.getId(),
@@ -169,6 +171,8 @@ class ProjectServiceWorkflowTest {
   @Test
   void frameworkProjectCannotCancelWhileChildProjectIsActive() {
     project.setApprovalStatus(ProjectApprovalStatus.APPROVED);
+    project.setManagerUserId(UUID.randomUUID());
+    project.setManagerName("项目经理");
     Project child = new Project();
     child.setId(UUID.randomUUID());
     child.setParentProjectId(project.getId());

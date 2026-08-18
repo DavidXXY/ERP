@@ -583,16 +583,8 @@ const canAccessHumanResources = computed(() =>
     "workforce:view",
   ].some((permission) => auth.can(permission)),
 );
-const canAccessMaintenance = computed(() =>
-  [
-    "maintenance:view",
-    "maintenance:order:manage",
-    "maintenance:equipment:view",
-    "maintenance:plan:view",
-    "maintenance:certificate:view",
-    "maintenance:schedule:view",
-  ].some((permission) => auth.can(permission)),
-);
+// 售后维保模块已关闭（如需重新启用，恢复下方权限判断即可）
+const canAccessMaintenance = computed(() => false);
 const canAccessQualification = computed(() =>
   [
     "qualification:view",

@@ -65,7 +65,7 @@
         :loading="loading"
         :pagination="pagination"
         row-key="id"
-        :scroll="{ x: 1120 }"
+        :scroll="{ x: 1290 }"
         @change="handleTableChange"
       >
         <template #bodyCell="{ column, record }">
@@ -95,6 +95,9 @@
               record.enabled ? "启用" : "停用"
             }}</a-tag>
           </template>
+          <template v-else-if="column.key === 'lastLoginAt'">{{
+            formatDateTime(record.lastLoginAt)
+          }}</template>
           <template v-else-if="column.key === 'updatedAt'">{{
             formatDateTime(record.updatedAt)
           }}</template>
@@ -284,6 +287,7 @@ const columns = [
   { title: "所属组织", key: "organization", width: 210 },
   { title: "角色", key: "roles", width: 260 },
   { title: "状态", key: "enabled", width: 90 },
+  { title: "最后登录", key: "lastLoginAt", width: 170 },
   { title: "更新时间", key: "updatedAt", width: 170 },
   { title: "操作", key: "action", width: 250, fixed: "right" },
 ];

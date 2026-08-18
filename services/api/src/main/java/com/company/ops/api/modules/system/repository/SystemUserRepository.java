@@ -30,6 +30,9 @@ public interface SystemUserRepository extends JpaRepository<SystemUser, UUID> {
   @Query("select distinct u from SystemUser u join u.roles r where r.code = :roleCode and u.enabled = true order by u.displayName asc")
   List<SystemUser> findEnabledByRoleCode(@Param("roleCode") String roleCode);
 
+  @Query("select distinct u from SystemUser u join u.roles r where r.code in :roleCodes and u.enabled = true order by u.displayName asc")
+  List<SystemUser> findEnabledByRoleCodeIn(@Param("roleCodes") Set<String> roleCodes);
+
   @Query("select distinct u from SystemUser u join u.roles r join r.permissions p "
       + "where p.code = :permission and u.enabled = true order by u.displayName asc")
   List<SystemUser> findEnabledByPermission(@Param("permission") String permission);

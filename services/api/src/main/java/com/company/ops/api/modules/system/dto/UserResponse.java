@@ -13,7 +13,8 @@ public record UserResponse(
     boolean enabled,
     List<RoleSummary> roles,
     String createdAt,
-    String updatedAt
+    String updatedAt,
+    String lastLoginAt
 ) {
   public record RoleSummary(UUID id, String code, String name) {}
 }

@@ -737,7 +737,7 @@
         :loading="portalLoading"
         row-key="id"
         :pagination="{ pageSize: 10 }"
-        :scroll="{ x: 820 }"
+        :scroll="{ x: 1200 }"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'supplier'">
@@ -751,6 +751,9 @@
             <span class="table-subtitle"
               >{{ record.email }} · {{ record.phone || "-" }}</span
             >
+          </template>
+          <template v-else-if="column.key === 'lastLogin'">
+            {{ record.lastLoginAt ? formatDateTime(record.lastLoginAt) : "-" }}
           </template>
           <template v-else-if="column.key === 'status'">
             <a-tag :color="portalStatusColor(record.status)">{{
@@ -1413,6 +1416,7 @@ const portalAccountColumns = [
   { title: "供应商", key: "supplier", width: 210 },
   { title: "联系人", key: "contact", width: 260 },
   { title: "账号与准入", key: "status", width: 190 },
+  { title: "最后登录", key: "lastLogin", width: 170 },
   { title: "注册时间", dataIndex: "createdAt", width: 190 },
   { title: "操作", key: "action", width: 180, fixed: "right" },
 ];

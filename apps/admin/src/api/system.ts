@@ -11,6 +11,7 @@ export type UserResponse = {
   roles: { id: string; code: string; name: string }[];
   createdAt?: string;
   updatedAt?: string;
+  lastLoginAt?: string;
 };
 
 export type ApprovalConfigResponse = {

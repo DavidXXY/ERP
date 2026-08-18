@@ -13,8 +13,12 @@ import com.company.ops.api.modules.crm.repository.CustomerRepository;
 import com.company.ops.api.modules.crm.repository.QuoteCostRequestRepository;
 import com.company.ops.api.modules.crm.repository.ReceivableRepository;
 import com.company.ops.api.modules.crm.repository.ServiceContractRepository;
+import com.company.ops.api.modules.collaboration.domain.ProjectBudgetVersion;
 import com.company.ops.api.modules.collaboration.domain.ProjectHandover;
+import com.company.ops.api.modules.collaboration.domain.ProjectStaffAssignment;
+import com.company.ops.api.modules.collaboration.repository.ProjectBudgetVersionRepository;
 import com.company.ops.api.modules.collaboration.repository.ProjectHandoverRepository;
+import com.company.ops.api.modules.collaboration.repository.ProjectStaffAssignmentRepository;
 import com.company.ops.api.modules.office.domain.SystemNotification;
 import com.company.ops.api.modules.office.repository.SystemNotificationRepository;
 import com.company.ops.api.modules.project.domain.Project;
@@ -25,6 +29,11 @@ import com.company.ops.api.modules.project.domain.ProjectBudgetItem;
 import com.company.ops.api.modules.project.domain.ProjectCostCategory;
 import com.company.ops.api.modules.project.domain.ProjectCostEntry;
 import com.company.ops.api.modules.project.domain.ProjectExecutionStatus;
+import com.company.ops.api.modules.project.domain.MilestoneStatus;
+import com.company.ops.api.modules.project.domain.ProjectMilestone;
+import com.company.ops.api.modules.project.domain.ProjectRisk;
+import com.company.ops.api.modules.project.domain.RiskSeverity;
+import com.company.ops.api.modules.project.domain.RiskStatus;
 import com.company.ops.api.modules.project.domain.ProjectStage;
 import com.company.ops.api.modules.project.domain.ProjectStageRecord;
 import com.company.ops.api.modules.project.dto.AdvanceProjectStageRequest;
@@ -46,11 +55,19 @@ import com.company.ops.api.modules.project.dto.ProjectCostEntryResponse;
 import com.company.ops.api.modules.project.dto.ProjectDetailResponse;
 import com.company.ops.api.modules.project.dto.ProjectProfitabilityResponse;
 import com.company.ops.api.modules.project.dto.ProjectManagerOption;
+import com.company.ops.api.modules.project.dto.ProjectMilestoneRequest;
+import com.company.ops.api.modules.project.dto.ProjectMilestoneResponse;
+import com.company.ops.api.modules.project.dto.ProjectRiskRequest;
+import com.company.ops.api.modules.project.dto.ProjectRiskResponse;
 import com.company.ops.api.modules.project.dto.ProjectResponse;
 import com.company.ops.api.modules.project.dto.ProjectStageRecordResponse;
+import com.company.ops.api.modules.project.dto.ProjectTimelineEntryResponse;
+import com.company.ops.api.modules.project.dto.ProjectStaffResponse;
 import com.company.ops.api.modules.project.repository.ProjectBudgetItemRepository;
 import com.company.ops.api.modules.project.repository.ProjectCloseoutReviewRepository;
 import com.company.ops.api.modules.project.repository.ProjectCostEntryRepository;
+import com.company.ops.api.modules.project.repository.ProjectMilestoneRepository;
+import com.company.ops.api.modules.project.repository.ProjectRiskRepository;
 import com.company.ops.api.modules.project.repository.ProjectRepository;
 import com.company.ops.api.modules.project.repository.ProjectStageRecordRepository;
 import com.company.ops.api.modules.system.security.DataScopeService;
@@ -93,6 +110,10 @@ public class ProjectService {
   private final QuoteCostRequestRepository quoteCostRepository;
   private final ProjectHandoverRepository handoverRepository;
   private final ProjectCloseoutReviewRepository closeoutReviewRepository;
+  private final ProjectBudgetVersionRepository budgetVersionRepository;
+  private final ProjectStaffAssignmentRepository staffAssignmentRepository;
+  private final ProjectMilestoneRepository milestoneRepository;
+  private final ProjectRiskRepository riskRepository;
   private final DataScopeService dataScopeService;
   private final ServiceContractRepository contractRepository;
   private final ReceivableRepository receivableRepository;
@@ -109,6 +130,10 @@ public class ProjectService {
       QuoteCostRequestRepository quoteCostRepository,
       ProjectHandoverRepository handoverRepository,
       ProjectCloseoutReviewRepository closeoutReviewRepository,
+      ProjectBudgetVersionRepository budgetVersionRepository,
+      ProjectStaffAssignmentRepository staffAssignmentRepository,
+      ProjectMilestoneRepository milestoneRepository,
+      ProjectRiskRepository riskRepository,
       ProjectRepository projectRepository,
       ProjectBudgetItemRepository budgetRepository,
       ProjectCostEntryRepository costRepository,
@@ -130,6 +155,10 @@ public class ProjectService {
     this.quoteCostRepository = quoteCostRepository;
     this.handoverRepository = handoverRepository;
     this.closeoutReviewRepository = closeoutReviewRepository;
+    this.budgetVersionRepository = budgetVersionRepository;
+    this.staffAssignmentRepository = staffAssignmentRepository;
+    this.milestoneRepository = milestoneRepository;
+    this.riskRepository = riskRepository;
     this.dataScopeService = dataScopeService;
     this.contractRepository = contractRepository;
     this.receivableRepository = receivableRepository;
@@ -141,7 +170,8 @@ public class ProjectService {
 
   @Transactional(readOnly = true)
   public List<ProjectManagerOption> managerOptions() {
-    return userRepository.findEnabledByRoleCode("PROJECT_MANAGER").stream()
+    // 与 requireProjectManager 的角色判定保持一致（项目经理 + 管理员）
+    return userRepository.findEnabledByRoleCodeIn(Set.of("PROJECT_MANAGER", "ADMIN")).stream()
         .map(user -> new ProjectManagerOption(user.getId(), user.getUsername(), user.getDisplayName()))
         .toList();
   }
@@ -157,10 +187,17 @@ public class ProjectService {
     Specification<Project> specification = projectSpecification(
         keyword, approvalStatus, stage, executionStatus, deleteGovernanceService.hiddenIds("PROJECT"));
     Page<Project> projectPage = projectRepository.findAll(specification, pageable);
-    Map<UUID, String> customerNames = loadCustomerNames(projectPage.getContent());
-    Map<UUID, ServiceContract> contracts = loadContracts(projectPage.getContent());
+    List<Project> rows = projectPage.getContent();
+    Map<UUID, String> customerNames = loadCustomerNames(rows);
+    Map<UUID, ServiceContract> contracts = loadContracts(rows);
+    Map<UUID, ParentRef> parentRefs = loadParentRefs(rows);
+    Map<UUID, Long> childCounts = loadChildCounts(rows);
     return projectPage.map(project -> toResponse(
-        project, customerNames.get(project.getCustomerId()), contracts.get(project.getContractId())));
+        project,
+        customerNames.get(project.getCustomerId()),
+        contracts.get(project.getContractId()),
+        parentRefs.get(project.getParentProjectId()),
+        childCounts.getOrDefault(project.getId(), 0L)));
   }
 
   @Transactional(readOnly = true)
@@ -184,13 +221,17 @@ public class ProjectService {
         .collect(Collectors.groupingBy(ProjectStageRecord::getProjectId));
     Map<UUID, String> customerNames = loadCustomerNames(rows);
     Map<UUID, ServiceContract> contracts = loadContracts(rows);
+    Map<UUID, ParentRef> parentRefs = loadParentRefs(rows);
+    Map<UUID, Long> childCounts = loadChildCounts(rows);
     List<ProjectDetailResponse> content = rows.stream().map(project -> toDetail(
         project,
         customerNames.get(project.getCustomerId()),
         contracts.get(project.getContractId()),
         budgets.getOrDefault(project.getId(), List.of()),
         costs.getOrDefault(project.getId(), List.of()),
-        stages.getOrDefault(project.getId(), List.of()))).toList();
+        stages.getOrDefault(project.getId(), List.of()),
+        parentRefs.get(project.getParentProjectId()),
+        childCounts.getOrDefault(project.getId(), 0L))).toList();
     return new PageImpl<>(content, pageable, projectPage.getTotalElements());
   }
 
@@ -201,16 +242,178 @@ public class ProjectService {
   }
 
   @Transactional(readOnly = true)
+  public List<ProjectTimelineEntryResponse> projectTimeline(UUID id) {
+    Project project = requireVisibleProject(id);
+    List<ProjectTimelineEntryResponse> entries = new java.util.ArrayList<>();
+    stageRecordRepository.findByProjectIdOrderByChangedAtDesc(id).forEach(record ->
+        entries.add(new ProjectTimelineEntryResponse(
+            "STAGE", record.getChangedAt(), record.getOperatorName(),
+            "阶段推进 " + record.getFromStage() + " → " + record.getToStage(),
+            record.getComment())));
+    costRepository.findByProjectIdOrderByIncurredDateDescCreatedAtDesc(id).forEach(cost ->
+        entries.add(new ProjectTimelineEntryResponse(
+            "COST", cost.getCreatedAt(), cost.getCreatedBy(),
+            "成本归集 · " + cost.getCategory(),
+            cost.getAmount() + " 元 · " + cost.getDescription())));
+    closeoutReviewRepository.findByProjectIdOrderByCreatedAtDesc(id).forEach(review ->
+        entries.add(new ProjectTimelineEntryResponse(
+            "CLOSEOUT", review.getCreatedAt(),
+            review.getStatus() == CloseoutReviewStatus.APPROVED ? review.getReviewedBy() : review.getRequestedBy(),
+            review.getStatus() == CloseoutReviewStatus.APPROVED ? "结项复核通过" : "提交结项申请",
+            review.getStatus() == CloseoutReviewStatus.REJECTED ? review.getReviewComment() : review.getRequestComment())));
+    budgetVersionRepository.findByProjectIdOrderByVersionNoDesc(id).forEach(version ->
+        entries.add(new ProjectTimelineEntryResponse(
+            "BUDGET", version.getCreatedAt(), version.getRequestedByName(),
+            "预算变更 v" + version.getVersionNo(),
+            version.getPreviousAmount() + " → " + version.getRequestedAmount() + " · " + version.getReason())));
+    if (project.getManagerAssignedAt() != null) {
+      entries.add(new ProjectTimelineEntryResponse(
+          "MANAGER", project.getManagerAssignedAt(), project.getManagerAssignedByName(),
+          "项目负责人分配", project.getManagerName()));
+    }
+    entries.sort(java.util.Comparator.comparing(ProjectTimelineEntryResponse::occurredAt,
+        java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder())));
+    return entries;
+  }
+
+  @Transactional(readOnly = true)
+  public List<ProjectStaffResponse> projectStaff(UUID id) {
+    requireVisibleProject(id);
+    List<ProjectStaffAssignment> assignments = staffAssignmentRepository.findByProjectId(id);
+    if (assignments.isEmpty()) return List.of();
+    java.util.Map<UUID, String> names = userRepository.findAllById(
+            assignments.stream().map(ProjectStaffAssignment::getUserId).filter(java.util.Objects::nonNull).toList())
+        .stream().collect(java.util.stream.Collectors.toMap(SystemUser::getId, SystemUser::getDisplayName, (a, b) -> a));
+    return assignments.stream()
+        .map(item -> new ProjectStaffResponse(
+            item.getId(), item.getUserId(), names.get(item.getUserId()), item.getRoleName(),
+            item.getPlannedHours(), item.getActualHours(), item.getAllocationPercent(),
+            item.getStartDate(), item.getEndDate(), item.getCertificateStatus(), item.getStatus()))
+        .toList();
+  }
+
+  @Transactional(readOnly = true)
+  public List<ProjectMilestoneResponse> listMilestones(UUID id) {
+    requireVisibleProject(id);
+    return milestoneRepository.findByProjectIdOrderBySortOrderAsc(id).stream()
+        .map(this::toMilestone)
+        .toList();
+  }
+
+  @Transactional
+  public ProjectMilestoneResponse createMilestone(UUID id, ProjectMilestoneRequest request) {
+    requireManageableProject(id);
+    ProjectMilestone milestone = new ProjectMilestone();
+    milestone.setProjectId(id);
+    applyMilestone(milestone, request);
+    if (milestone.getStatus() == null) milestone.setStatus(MilestoneStatus.PENDING);
+    return toMilestone(milestoneRepository.save(milestone));
+  }
+
+  @Transactional
+  public ProjectMilestoneResponse updateMilestone(UUID id, UUID milestoneId, ProjectMilestoneRequest request) {
+    requireManageableProject(id);
+    ProjectMilestone milestone = requireMilestone(id, milestoneId);
+    applyMilestone(milestone, request);
+    return toMilestone(milestoneRepository.save(milestone));
+  }
+
+  @Transactional
+  public void deleteMilestone(UUID id, UUID milestoneId) {
+    requireManageableProject(id);
+    milestoneRepository.delete(requireMilestone(id, milestoneId));
+  }
+
+  private ProjectMilestone requireMilestone(UUID projectId, UUID milestoneId) {
+    ProjectMilestone milestone = milestoneRepository.findById(milestoneId)
+        .orElseThrow(() -> new BusinessException("里程碑不存在"));
+    if (!projectId.equals(milestone.getProjectId())) {
+      throw new BusinessException("里程碑不属于该项目");
+    }
+    return milestone;
+  }
+
+  private void applyMilestone(ProjectMilestone milestone, ProjectMilestoneRequest request) {
+    milestone.setName(request.name().trim());
+    milestone.setPlannedDate(request.plannedDate());
+    milestone.setActualDate(request.actualDate());
+    milestone.setStatus(request.status());
+    milestone.setSortOrder(request.sortOrder());
+    milestone.setRemark(request.remark());
+  }
+
+  private ProjectMilestoneResponse toMilestone(ProjectMilestone milestone) {
+    return new ProjectMilestoneResponse(
+        milestone.getId(), milestone.getProjectId(), milestone.getName(),
+        milestone.getPlannedDate(), milestone.getActualDate(), milestone.getStatus(),
+        milestone.getSortOrder(), milestone.getRemark());
+  }
+
+  @Transactional(readOnly = true)
+  public List<ProjectRiskResponse> listRisks(UUID id) {
+    requireVisibleProject(id);
+    return riskRepository.findByProjectIdOrderByCreatedAtDesc(id).stream()
+        .map(this::toRisk)
+        .toList();
+  }
+
+  @Transactional
+  public ProjectRiskResponse createRisk(UUID id, ProjectRiskRequest request) {
+    requireManageableProject(id);
+    ProjectRisk risk = new ProjectRisk();
+    risk.setProjectId(id);
+    applyRisk(risk, request);
+    if (risk.getStatus() == null) risk.setStatus(RiskStatus.OPEN);
+    if (risk.getSeverity() == null) risk.setSeverity(RiskSeverity.MEDIUM);
+    return toRisk(riskRepository.save(risk));
+  }
+
+  @Transactional
+  public ProjectRiskResponse updateRisk(UUID id, UUID riskId, ProjectRiskRequest request) {
+    requireManageableProject(id);
+    ProjectRisk risk = requireRisk(id, riskId);
+    applyRisk(risk, request);
+    return toRisk(riskRepository.save(risk));
+  }
+
+  @Transactional
+  public void deleteRisk(UUID id, UUID riskId) {
+    requireManageableProject(id);
+    riskRepository.delete(requireRisk(id, riskId));
+  }
+
+  private ProjectRisk requireRisk(UUID projectId, UUID riskId) {
+    ProjectRisk risk = riskRepository.findById(riskId)
+        .orElseThrow(() -> new BusinessException("风险条目不存在"));
+    if (!projectId.equals(risk.getProjectId())) {
+      throw new BusinessException("风险条目不属于该项目");
+    }
+    return risk;
+  }
+
+  private void applyRisk(ProjectRisk risk, ProjectRiskRequest request) {
+    risk.setTitle(request.title().trim());
+    risk.setDescription(request.description());
+    risk.setSeverity(request.severity());
+    risk.setStatus(request.status());
+    risk.setOwnerName(request.ownerName());
+    risk.setDueDate(request.dueDate());
+    risk.setResolution(request.resolution());
+  }
+
+  private ProjectRiskResponse toRisk(ProjectRisk risk) {
+    return new ProjectRiskResponse(
+        risk.getId(), risk.getProjectId(), risk.getTitle(), risk.getDescription(),
+        risk.getSeverity(), risk.getStatus(), risk.getOwnerName(), risk.getDueDate(),
+        risk.getResolution(), risk.getCreatedAt(), risk.getCreatedBy());
+  }
+
+  @Transactional(readOnly = true)
   public List<ProjectProfitabilityResponse> profitability() {
     Set<UUID> hiddenIds = deleteGovernanceService.hiddenIds("PROJECT");
-    boolean allScope = dataScopeService.hasAllDataScope();
-    Set<UUID> visibleUserIds = dataScopeService.visibleUserIds();
-    Set<String> visibleNames = dataScopeService.visibleOwnerNames();
-    boolean canApprove = dataScopeService.hasAuthority("project:approve");
-    List<Project> projects = projectRepository.findAllByOrderByCreatedAtDesc().stream()
-        .filter(project -> !hiddenIds.contains(project.getId()))
-        .filter(project -> canViewProject(project, allScope, visibleUserIds, visibleNames, canApprove))
-        .toList();
+    List<Project> projects = projectRepository.findAll(
+        projectSpecification(null, null, null, null, hiddenIds),
+        org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt"));
     Map<UUID, String> customerNames = loadCustomerNames(projects);
     return projects.stream()
         .map(project -> toProfitability(project, customerNames.get(project.getCustomerId())))
@@ -742,7 +945,9 @@ public class ProjectService {
     List<ProjectBudgetItem> budgetItems = budgetRepository.findByProjectIdOrderByCategoryAsc(project.getId());
     List<ProjectCostEntry> costEntries = costRepository.findByProjectIdOrderByIncurredDateDescCreatedAtDesc(project.getId());
     List<ProjectStageRecord> stageRecords = stageRecordRepository.findByProjectIdOrderByChangedAtDesc(project.getId());
-    return toDetail(project, customerName, contract, budgetItems, costEntries, stageRecords);
+    ParentRef parent = loadParentRef(project);
+    long childCount = projectRepository.countByParentProjectId(project.getId());
+    return toDetail(project, customerName, contract, budgetItems, costEntries, stageRecords, parent, childCount);
   }
 
   private ProjectDetailResponse toDetail(
@@ -751,7 +956,9 @@ public class ProjectService {
       ServiceContract contract,
       List<ProjectBudgetItem> budgetItems,
       List<ProjectCostEntry> costEntries,
-      List<ProjectStageRecord> stageRecords
+      List<ProjectStageRecord> stageRecords,
+      ParentRef parent,
+      long childCount
   ) {
     Map<ProjectCostCategory, BigDecimal> actualByCategory = new EnumMap<>(ProjectCostCategory.class);
     costEntries.forEach(item -> actualByCategory.merge(item.getCategory(), item.getAmount(), BigDecimal::add));
@@ -790,14 +997,15 @@ public class ProjectService {
             item.getChangedAt()
         ))
         .toList();
-    return new ProjectDetailResponse(toResponse(project, customerName, contract), budgets, costs, stages);
+    return new ProjectDetailResponse(toResponse(project, customerName, contract, parent, childCount), budgets, costs, stages);
   }
 
-  private ProjectResponse toResponse(Project project, String customerName, ServiceContract contract) {
-    BigDecimal actualCost = amount(project.getActualCost());
-    BigDecimal budgetAmount = amount(project.getBudgetAmount());
-    Project parent = project.getParentProjectId() == null ? null
-        : projectRepository.findById(project.getParentProjectId()).orElse(null);
+  private ProjectResponse toResponse(
+      Project project, String customerName, ServiceContract contract, ParentRef parent, long childCount
+  ) {
+    ProjectFinancials f = ProjectFinancials.of(project);
+    BigDecimal actualCost = f.actualCost();
+    BigDecimal budgetAmount = f.budgetAmount();
     return new ProjectResponse(
         project.getId(),
         project.getCustomerId(),
@@ -807,9 +1015,9 @@ public class ProjectService {
         contract == null ? null : contract.getProjectName(),
         contract == null ? null : contract.getStatus(),
         project.getParentProjectId(),
-        parent == null ? null : parent.getCode(),
-        parent == null ? null : parent.getName(),
-        Math.toIntExact(projectRepository.countByParentProjectId(project.getId())),
+        parent == null ? null : parent.code(),
+        parent == null ? null : parent.name(),
+        Math.toIntExact(childCount),
         project.getCode(),
         project.getName(),
         project.getProjectType(),
@@ -834,7 +1042,7 @@ public class ProjectService {
         project.getStatusChangedAt(),
         budgetAmount,
         actualCost,
-        amount(project.getContractAmount()).subtract(actualCost),
+        f.grossMargin(),
         budgetAmount.subtract(actualCost),
         project.getProgress(),
         project.getWarrantyEndDate(),
@@ -850,41 +1058,21 @@ public class ProjectService {
 
   private boolean canViewProject(Project project, boolean allScope, Set<UUID> visibleUserIds,
                                  Set<String> visibleNames, boolean canApprove) {
+    // 与 projectSpecification 的数据权限子句保持一致（用外键判定，而非显示名字符串）
     if (allScope) return true;
     if (project.getManagerUserId() != null && visibleUserIds.contains(project.getManagerUserId())) return true;
     if (project.getManagerUserId() == null && visibleNames.contains(project.getManagerName())) return true;
     return canApprove
         && (project.getApprovalStatus() == ProjectApprovalStatus.PENDING
-            || project.getManagerName() == null
-            || project.getManagerName().startsWith("待"));
+            || project.getManagerUserId() == null);
   }
 
   private ProjectProfitabilityResponse toProfitability(Project project, String customerName) {
-    BigDecimal contractAmount = amount(project.getContractAmount());
-    BigDecimal budgetAmount = amount(project.getBudgetAmount());
-    BigDecimal actualCost = amount(project.getActualCost());
-    BigDecimal grossMargin = contractAmount.subtract(actualCost);
-    BigDecimal grossMarginRate = contractAmount.compareTo(BigDecimal.ZERO) == 0
-        ? BigDecimal.ZERO
-        : grossMargin.multiply(BigDecimal.valueOf(100)).divide(contractAmount, 2, RoundingMode.HALF_UP);
-    BigDecimal budgetUsageRate = budgetAmount.compareTo(BigDecimal.ZERO) == 0
-        ? BigDecimal.ZERO
-        : actualCost.multiply(BigDecimal.valueOf(100)).divide(budgetAmount, 2, RoundingMode.HALF_UP);
-    String riskLevel = "LOW";
-    String riskMessage = "项目毛利和预算使用正常";
-    if (budgetAmount.compareTo(BigDecimal.ZERO) > 0 && actualCost.compareTo(budgetAmount) > 0) {
-      riskLevel = "HIGH";
-      riskMessage = "实际成本已超过预算";
-    } else if (grossMargin.compareTo(BigDecimal.ZERO) < 0) {
-      riskLevel = "HIGH";
-      riskMessage = "项目已亏损";
-    } else if (budgetUsageRate.compareTo(BigDecimal.valueOf(85)) >= 0) {
-      riskLevel = "MEDIUM";
-      riskMessage = "预算使用率较高";
-    }
+    ProjectFinancials f = ProjectFinancials.of(project);
     return new ProjectProfitabilityResponse(
         project.getId(), project.getCode(), project.getName(), customerName, project.getStage(), project.getApprovalStatus(),
-        contractAmount, budgetAmount, actualCost, grossMargin, grossMarginRate, budgetUsageRate, riskLevel, riskMessage
+        f.contractAmount(), f.budgetAmount(), f.actualCost(), f.grossMargin(), f.grossMarginRate(), f.budgetUsageRate(),
+        f.riskLevel(), f.riskMessage()
     );
   }
 
@@ -913,46 +1101,25 @@ public class ProjectService {
 
   private void requireApproved(Project project) {
     if (project.getApprovalStatus() != ProjectApprovalStatus.APPROVED) {
+      throw new BusinessException("项目审批通过后才能执行");
+    }
+    if (project.getManagerUserId() == null) {
       throw new BusinessException("项目经理分配后才能执行");
     }
   }
 
   private int progressForStage(ProjectStage stage) {
-    return switch (stage) {
-      case INITIATED, BIDDING, ENTRY -> 0;
-      case CONSTRUCTION -> 20;
-      case COMMISSIONING -> 45;
-      case INITIAL_ACCEPTANCE -> 65;
-      case FINAL_ACCEPTANCE -> 85;
-      case WARRANTY, CLOSED -> 100;
-    };
+    return stage.progress();
   }
 
   private ProjectStage nextStage(ProjectStage current) {
-    return switch (current) {
-      case INITIATED -> ProjectStage.BIDDING;
-      case BIDDING -> ProjectStage.ENTRY;
-      case ENTRY -> ProjectStage.CONSTRUCTION;
-      case CONSTRUCTION -> ProjectStage.COMMISSIONING;
-      case COMMISSIONING -> ProjectStage.INITIAL_ACCEPTANCE;
-      case INITIAL_ACCEPTANCE -> ProjectStage.FINAL_ACCEPTANCE;
-      case FINAL_ACCEPTANCE -> ProjectStage.WARRANTY;
-      case WARRANTY -> ProjectStage.CLOSED;
-      case CLOSED -> null;
-    };
+    return current.next();
   }
 
   private ProjectStage previousStage(ProjectStage current) {
-    return switch (current) {
-      case INITIATED, ENTRY -> null;
-      case BIDDING -> ProjectStage.INITIATED;
-      case CONSTRUCTION -> ProjectStage.ENTRY;
-      case COMMISSIONING -> ProjectStage.CONSTRUCTION;
-      case INITIAL_ACCEPTANCE -> ProjectStage.COMMISSIONING;
-      case FINAL_ACCEPTANCE -> ProjectStage.INITIAL_ACCEPTANCE;
-      case WARRANTY -> ProjectStage.FINAL_ACCEPTANCE;
-      case CLOSED -> null;
-    };
+    // 进场是执行起点，结项是终态，均不可回退
+    if (current == ProjectStage.ENTRY || current == ProjectStage.CLOSED) return null;
+    return current.previous();
   }
 
   private void validateBudgetItems(List<ProjectBudgetItemRequest> items) {
@@ -962,6 +1129,72 @@ public class ProjectService {
         throw new BusinessException("同一预算分类不能重复");
       }
     }
+  }
+
+  private record ParentRef(String code, String name) {}
+
+  private record ProjectFinancials(
+      BigDecimal contractAmount,
+      BigDecimal budgetAmount,
+      BigDecimal actualCost,
+      BigDecimal grossMargin,
+      BigDecimal grossMarginRate,
+      BigDecimal budgetUsageRate,
+      String riskLevel,
+      String riskMessage
+  ) {
+    static ProjectFinancials of(Project project) {
+      BigDecimal contractAmount = amount(project.getContractAmount());
+      BigDecimal budgetAmount = amount(project.getBudgetAmount());
+      BigDecimal actualCost = amount(project.getActualCost());
+      BigDecimal grossMargin = contractAmount.subtract(actualCost);
+      BigDecimal grossMarginRate = contractAmount.compareTo(BigDecimal.ZERO) == 0
+          ? BigDecimal.ZERO
+          : grossMargin.multiply(BigDecimal.valueOf(100)).divide(contractAmount, 2, RoundingMode.HALF_UP);
+      BigDecimal budgetUsageRate = budgetAmount.compareTo(BigDecimal.ZERO) == 0
+          ? BigDecimal.ZERO
+          : actualCost.multiply(BigDecimal.valueOf(100)).divide(budgetAmount, 2, RoundingMode.HALF_UP);
+      String riskLevel = "LOW";
+      String riskMessage = "项目毛利和预算使用正常";
+      if (budgetAmount.compareTo(BigDecimal.ZERO) > 0 && actualCost.compareTo(budgetAmount) > 0) {
+        riskLevel = "HIGH";
+        riskMessage = "实际成本已超过预算";
+      } else if (grossMargin.compareTo(BigDecimal.ZERO) < 0) {
+        riskLevel = "HIGH";
+        riskMessage = "项目已亏损";
+      } else if (budgetUsageRate.compareTo(BigDecimal.valueOf(85)) >= 0) {
+        riskLevel = "MEDIUM";
+        riskMessage = "预算使用率较高";
+      }
+      return new ProjectFinancials(
+          contractAmount, budgetAmount, actualCost, grossMargin, grossMarginRate, budgetUsageRate, riskLevel, riskMessage);
+    }
+  }
+
+  private ParentRef loadParentRef(Project project) {
+    if (project.getParentProjectId() == null) return null;
+    return projectRepository.findById(project.getParentProjectId())
+        .map(parent -> new ParentRef(parent.getCode(), parent.getName()))
+        .orElse(null);
+  }
+
+  private Map<UUID, ParentRef> loadParentRefs(List<Project> projects) {
+    List<UUID> parentIds = projects.stream()
+        .map(Project::getParentProjectId)
+        .filter(java.util.Objects::nonNull)
+        .distinct()
+        .toList();
+    if (parentIds.isEmpty()) return Map.of();
+    return projectRepository.findAllById(parentIds).stream()
+        .collect(Collectors.toMap(Project::getId,
+            parent -> new ParentRef(parent.getCode(), parent.getName()), (left, right) -> left));
+  }
+
+  private Map<UUID, Long> loadChildCounts(List<Project> projects) {
+    List<UUID> projectIds = projects.stream().map(Project::getId).toList();
+    if (projectIds.isEmpty()) return Map.of();
+    return projectRepository.countChildrenGroupByParent(projectIds).stream()
+        .collect(Collectors.toMap(row -> (UUID) row[0], row -> ((Number) row[1]).longValue()));
   }
 
   private Map<UUID, String> loadCustomerNames(List<Project> projects) {
@@ -1229,40 +1462,33 @@ public class ProjectService {
         throw new BusinessException("项目交接尚未完成，不能结项");
       }
     }
-    long openWorkOrders = nativeCount(
-        "SELECT COUNT(*) FROM work_orders WHERE project_id = ?1 AND status NOT IN ('ACCEPTED', 'CANCELLED')",
-        project.getId());
-    if (openWorkOrders > 0) throw new BusinessException("仍有未验收或未取消的工单，不能结项");
-    long openPurchaseOrders = nativeCount(
-        "SELECT COUNT(*) FROM procurement_purchase_orders WHERE project_id = ?1 AND status NOT IN ('CLOSED', 'CANCELLED')",
-        project.getId());
-    if (openPurchaseOrders > 0) throw new BusinessException("仍有未关闭采购订单，不能结项");
-    long outstandingPayables = nativeCount(
-        """
-        SELECT COUNT(*) FROM fin_procurement_payables payable
-        WHERE payable.amount > payable.paid_amount
-          AND (
-            payable.order_id IN (SELECT id FROM procurement_purchase_orders WHERE project_id = ?1)
-            OR payable.receipt_id IN (
-              SELECT receipt.id FROM procurement_goods_receipts receipt
-              JOIN procurement_purchase_orders purchase_order ON purchase_order.id = receipt.order_id
-              WHERE purchase_order.project_id = ?1
-            )
-          )
-        """,
-        project.getId());
-    if (outstandingPayables > 0) throw new BusinessException("项目仍有未结清采购应付，不能结项");
-    if (project.getContractId() != null) {
-      long outstandingReceivables = nativeCount(
-          "SELECT COUNT(*) FROM fin_receivables WHERE contract_id = ?1 AND status <> 'SETTLED'",
-          project.getContractId());
-      if (outstandingReceivables > 0) throw new BusinessException("关联合同仍有未结清应收，不能结项");
-    }
+    Object[] counts = (Object[]) entityManager.createNativeQuery("""
+        SELECT
+          (SELECT COUNT(*) FROM work_orders
+             WHERE project_id = :projectId AND status NOT IN ('ACCEPTED', 'CANCELLED')),
+          (SELECT COUNT(*) FROM procurement_purchase_orders
+             WHERE project_id = :projectId AND status NOT IN ('CLOSED', 'CANCELLED')),
+          (SELECT COUNT(*) FROM fin_procurement_payables payable
+             WHERE payable.amount > payable.paid_amount
+               AND (payable.order_id IN (SELECT id FROM procurement_purchase_orders WHERE project_id = :projectId)
+                 OR payable.receipt_id IN (
+                   SELECT receipt.id FROM procurement_goods_receipts receipt
+                   JOIN procurement_purchase_orders purchase_order ON purchase_order.id = receipt.order_id
+                   WHERE purchase_order.project_id = :projectId))),
+          (SELECT COUNT(*) FROM fin_receivables
+             WHERE contract_id = :contractId AND status <> 'SETTLED')
+        """)
+        .setParameter("projectId", project.getId())
+        .setParameter("contractId", project.getContractId())
+        .getSingleResult();
+    if (toLong(counts[0]) > 0) throw new BusinessException("仍有未验收或未取消的工单，不能结项");
+    if (toLong(counts[1]) > 0) throw new BusinessException("仍有未关闭采购订单，不能结项");
+    if (toLong(counts[2]) > 0) throw new BusinessException("项目仍有未结清采购应付，不能结项");
+    if (toLong(counts[3]) > 0) throw new BusinessException("关联合同仍有未结清应收，不能结项");
   }
 
-  private long nativeCount(String sql, UUID id) {
-    Number count = (Number) entityManager.createNativeQuery(sql).setParameter(1, id).getSingleResult();
-    return count.longValue();
+  private long toLong(Object value) {
+    return value == null ? 0L : ((Number) value).longValue();
   }
 
 

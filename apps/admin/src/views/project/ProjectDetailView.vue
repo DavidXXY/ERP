@@ -257,6 +257,231 @@
           </a-timeline>
           <a-empty v-else description="暂无阶段记录" />
         </a-tab-pane>
+
+        <a-tab-pane key="milestones" :tab="`里程碑 (${milestones.length})`">
+          <a-space direction="vertical" style="width: 100%">
+            <a-form layout="inline">
+              <a-form-item>
+                <a-input
+                  v-model:value="milestoneForm.name"
+                  placeholder="里程碑名称"
+                  style="width: 220px"
+                />
+              </a-form-item>
+              <a-form-item>
+                <a-input
+                  v-model:value="milestoneForm.plannedDate"
+                  type="date"
+                />
+              </a-form-item>
+              <a-form-item>
+                <a-select
+                  v-model:value="milestoneForm.status"
+                  :options="[
+                    { value: 'PENDING', label: '待开始' },
+                    { value: 'IN_PROGRESS', label: '进行中' },
+                    { value: 'COMPLETED', label: '已完成' },
+                  ]"
+                  style="width: 130px"
+                />
+              </a-form-item>
+              <a-form-item>
+                <a-input
+                  v-model:value="milestoneForm.remark"
+                  placeholder="说明（可选）"
+                  style="width: 200px"
+                />
+              </a-form-item>
+              <a-form-item>
+                <a-button
+                  type="primary"
+                  :loading="milestoneSaving"
+                  @click="addMilestone"
+                  >添加里程碑</a-button
+                >
+              </a-form-item>
+            </a-form>
+            <a-table
+              :columns="milestoneColumns"
+              :data-source="milestones"
+              row-key="id"
+              size="small"
+            >
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.key === 'name'">
+                  <strong>{{ record.name }}</strong>
+                </template>
+                <template v-else-if="column.key === 'status'">
+                  <a-tag :color="milestoneStatusColor(record.status)">{{
+                    milestoneStatusLabel(record.status)
+                  }}</a-tag>
+                </template>
+                <template v-else-if="column.key === 'action'">
+                  <a-space>
+                    <a-button
+                      type="link"
+                      size="small"
+                      @click="toggleMilestone(record)"
+                      >{{
+                        record.status === "COMPLETED" ? "重开" : "完成"
+                      }}</a-button
+                    >
+                    <a-button
+                      type="link"
+                      size="small"
+                      danger
+                      @click="removeMilestone(record)"
+                      >删除</a-button
+                    >
+                  </a-space>
+                </template>
+              </template>
+            </a-table>
+          </a-space>
+        </a-tab-pane>
+
+        <a-tab-pane key="staff" :tab="`项目成员 (${staff.length})`">
+          <a-table
+            :columns="staffColumns"
+            :data-source="staff"
+            row-key="id"
+            size="small"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'member'">
+                <strong>{{ record.displayName || "-" }}</strong>
+              </template>
+              <template v-else-if="column.key === 'allocation'">
+                {{ record.allocationPercent }}%
+              </template>
+              <template v-else-if="column.key === 'period'">
+                {{ record.startDate }} ~ {{ record.endDate }}
+              </template>
+            </template>
+          </a-table>
+        </a-tab-pane>
+
+        <a-tab-pane key="audit" :tab="`经营审计 (${timeline.length})`">
+          <a-timeline v-if="timeline.length">
+            <a-timeline-item
+              v-for="item in timeline"
+              :key="`${item.type}-${item.occurredAt}-${item.title}`"
+            >
+              <a-tag :color="timelineTypeColor(item.type)">{{
+                timelineTypeLabel(item.type)
+              }}</a-tag>
+              <strong>{{ item.title }}</strong>
+              <span v-if="item.actor" class="sub"> · {{ item.actor }}</span>
+              <p v-if="item.detail">{{ item.detail }}</p>
+              <small>{{ dateTime(item.occurredAt) }}</small>
+            </a-timeline-item>
+          </a-timeline>
+          <a-empty v-else description="暂无经营审计记录" />
+        </a-tab-pane>
+
+        <a-tab-pane key="risks" :tab="`风险跟踪 (${risks.length})`">
+          <a-space direction="vertical" style="width: 100%">
+            <a-form layout="inline">
+              <a-form-item>
+                <a-input
+                  v-model:value="riskForm.title"
+                  placeholder="风险标题"
+                  style="width: 220px"
+                />
+              </a-form-item>
+              <a-form-item>
+                <a-select
+                  v-model:value="riskForm.severity"
+                  :options="[
+                    { value: 'LOW', label: '低' },
+                    { value: 'MEDIUM', label: '中' },
+                    { value: 'HIGH', label: '高' },
+                  ]"
+                  style="width: 100px"
+                />
+              </a-form-item>
+              <a-form-item>
+                <a-input
+                  v-model:value="riskForm.ownerName"
+                  placeholder="责任人"
+                  style="width: 120px"
+                />
+              </a-form-item>
+              <a-form-item>
+                <a-input v-model:value="riskForm.dueDate" type="date" />
+              </a-form-item>
+              <a-form-item>
+                <a-input
+                  v-model:value="riskForm.description"
+                  placeholder="描述（可选）"
+                  style="width: 200px"
+                />
+              </a-form-item>
+              <a-form-item>
+                <a-button
+                  type="primary"
+                  danger
+                  :loading="riskSaving"
+                  @click="addRisk"
+                  >登记风险</a-button
+                >
+              </a-form-item>
+            </a-form>
+            <a-table
+              :columns="riskColumns"
+              :data-source="risks"
+              row-key="id"
+              size="small"
+            >
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.key === 'title'">
+                  <strong>{{ record.title }}</strong>
+                  <span v-if="record.description" class="sub">{{
+                    record.description
+                  }}</span>
+                </template>
+                <template v-else-if="column.key === 'severity'">
+                  <a-tag :color="riskSeverityColor(record.severity)">{{
+                    riskSeverityLabel(record.severity)
+                  }}</a-tag>
+                </template>
+                <template v-else-if="column.key === 'status'">
+                  <a-tag :color="riskStatusColor(record.status)">{{
+                    riskStatusLabel(record.status)
+                  }}</a-tag>
+                </template>
+                <template v-else-if="column.key === 'resolution'">
+                  {{ record.resolution || "-" }}
+                </template>
+                <template v-else-if="column.key === 'action'">
+                  <a-space>
+                    <a-button
+                      type="link"
+                      size="small"
+                      @click="cycleRiskStatus(record)"
+                      >{{
+                        riskStatusLabel(
+                          record.status === "OPEN"
+                            ? "MITIGATING"
+                            : record.status === "MITIGATING"
+                              ? "CLOSED"
+                              : "OPEN",
+                        )
+                      }}</a-button
+                    >
+                    <a-button
+                      type="link"
+                      size="small"
+                      danger
+                      @click="removeRisk(record)"
+                      >删除</a-button
+                    >
+                  </a-space>
+                </template>
+              </template>
+            </a-table>
+          </a-space>
+        </a-tab-pane>
       </a-tabs>
     </a-card>
 
@@ -340,9 +565,26 @@ import BusinessDetailPage, {
 import {
   getProject,
   updateProject,
+  getProjectTimeline,
+  getProjectStaff,
+  listProjectMilestones,
+  createProjectMilestone,
+  updateProjectMilestone,
+  deleteProjectMilestone,
+  listProjectRisks,
+  createProjectRisk,
+  updateProjectRisk,
+  deleteProjectRisk,
   type ProjectDetail,
   type ProjectCostCategory,
   type ProjectStage,
+  type ProjectMilestone,
+  type MilestoneStatus,
+  type ProjectStaff,
+  type ProjectTimelineEntry,
+  type ProjectRisk,
+  type RiskSeverity,
+  type RiskStatus,
 } from "@/api/project";
 import { listPurchaseOrders, type PurchaseOrder } from "@/api/procurement";
 import { listReceivablesByContract, type Receivable } from "@/api/crm";
@@ -356,6 +598,26 @@ const loading = ref(false);
 const detail = ref<ProjectDetail | null>(null);
 const orders = ref<PurchaseOrder[]>([]);
 const receivables = ref<Receivable[]>([]);
+const milestones = ref<ProjectMilestone[]>([]);
+const staff = ref<ProjectStaff[]>([]);
+const timeline = ref<ProjectTimelineEntry[]>([]);
+const risks = ref<ProjectRisk[]>([]);
+const riskForm = reactive({
+  title: "",
+  description: "",
+  severity: "MEDIUM" as RiskSeverity,
+  ownerName: "",
+  dueDate: "",
+  resolution: "",
+});
+const riskSaving = ref(false);
+const milestoneForm = reactive({
+  name: "",
+  plannedDate: "",
+  status: "PENDING" as MilestoneStatus,
+  remark: "",
+});
+const milestoneSaving = ref(false);
 const preparationOpen = ref(false);
 const preparationSaving = ref(false);
 const preparationCategories: Array<{
@@ -486,12 +748,45 @@ const receivableColumns = [
   { title: "到期日", dataIndex: "dueDate", width: 120 },
   { title: "状态", dataIndex: "status", width: 120 },
 ];
+const milestoneColumns = [
+  { title: "里程碑", key: "name", width: 220 },
+  { title: "计划日期", dataIndex: "plannedDate", width: 130 },
+  { title: "实际日期", dataIndex: "actualDate", width: 130 },
+  { title: "状态", key: "status", width: 120 },
+  { title: "说明", dataIndex: "remark" },
+  { title: "操作", key: "action", width: 160 },
+];
+const staffColumns = [
+  { title: "成员", key: "member", width: 160 },
+  { title: "角色", dataIndex: "roleName", width: 140 },
+  { title: "计划工时", dataIndex: "plannedHours", width: 110 },
+  { title: "实际工时", dataIndex: "actualHours", width: 110 },
+  { title: "投入占比", key: "allocation", width: 100 },
+  { title: "周期", key: "period", width: 210 },
+  { title: "状态", dataIndex: "status", width: 110 },
+];
+const riskColumns = [
+  { title: "风险项", key: "title", width: 240 },
+  { title: "等级", key: "severity", width: 90 },
+  { title: "状态", key: "status", width: 110 },
+  { title: "责任人", dataIndex: "ownerName", width: 110 },
+  { title: "到期日", dataIndex: "dueDate", width: 110 },
+  { title: "应对/处置", key: "resolution" },
+  { title: "操作", key: "action", width: 180 },
+];
 onMounted(loadData);
 async function loadData() {
   loading.value = true;
   try {
     const project = await getProject(projectId.value);
-    const [orderPage, receivablePage] = await Promise.all([
+    const [
+      orderPage,
+      receivablePage,
+      milestoneRows,
+      staffRows,
+      timelineRows,
+      riskRows,
+    ] = await Promise.all([
       auth.can("procurement:view")
         ? listPurchaseOrders({
             page: 0,
@@ -503,15 +798,226 @@ async function loadData() {
       auth.can("crm:receivable:view") && project.project.contractId
         ? listReceivablesByContract(project.project.contractId)
         : Promise.resolve({ content: [] } as { content: Receivable[] }),
+      listProjectMilestones(projectId.value),
+      getProjectStaff(projectId.value),
+      getProjectTimeline(projectId.value),
+      listProjectRisks(projectId.value),
     ]);
     detail.value = project;
     orders.value = orderPage.content;
     receivables.value = receivablePage.content;
+    milestones.value = milestoneRows;
+    staff.value = staffRows;
+    timeline.value = timelineRows;
+    risks.value = riskRows;
   } catch (error) {
     message.error(error instanceof Error ? error.message : "项目详情加载失败");
   } finally {
     loading.value = false;
   }
+}
+async function addMilestone() {
+  if (!milestoneForm.name.trim()) {
+    message.warning("请填写里程碑名称");
+    return;
+  }
+  milestoneSaving.value = true;
+  try {
+    await createProjectMilestone(projectId.value, {
+      name: milestoneForm.name.trim(),
+      plannedDate: milestoneForm.plannedDate || undefined,
+      status: milestoneForm.status,
+      sortOrder: milestones.value.length,
+      remark: milestoneForm.remark || undefined,
+    });
+    milestoneForm.name = "";
+    milestoneForm.plannedDate = "";
+    milestoneForm.remark = "";
+    milestones.value = await listProjectMilestones(projectId.value);
+    message.success("里程碑已添加");
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "里程碑添加失败");
+  } finally {
+    milestoneSaving.value = false;
+  }
+}
+async function toggleMilestone(record: ProjectMilestone) {
+  const next: MilestoneStatus =
+    record.status === "COMPLETED" ? "PENDING" : "COMPLETED";
+  try {
+    await updateProjectMilestone(projectId.value, record.id, {
+      name: record.name,
+      plannedDate: record.plannedDate,
+      actualDate: next === "COMPLETED" ? today() : undefined,
+      status: next,
+      sortOrder: record.sortOrder,
+      remark: record.remark,
+    });
+    milestones.value = await listProjectMilestones(projectId.value);
+    message.success(next === "COMPLETED" ? "里程碑已完成" : "里程碑已重新打开");
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "里程碑更新失败");
+  }
+}
+async function removeMilestone(record: ProjectMilestone) {
+  try {
+    await deleteProjectMilestone(projectId.value, record.id);
+    milestones.value = await listProjectMilestones(projectId.value);
+    message.success("里程碑已删除");
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "里程碑删除失败");
+  }
+}
+function today() {
+  return new Date().toISOString().slice(0, 10);
+}
+async function addRisk() {
+  if (!riskForm.title.trim()) {
+    message.warning("请填写风险标题");
+    return;
+  }
+  riskSaving.value = true;
+  try {
+    await createProjectRisk(projectId.value, {
+      title: riskForm.title.trim(),
+      description: riskForm.description || undefined,
+      severity: riskForm.severity,
+      status: "OPEN",
+      ownerName: riskForm.ownerName || undefined,
+      dueDate: riskForm.dueDate || undefined,
+      resolution: riskForm.resolution || undefined,
+    });
+    riskForm.title = "";
+    riskForm.description = "";
+    riskForm.ownerName = "";
+    riskForm.dueDate = "";
+    riskForm.resolution = "";
+    risks.value = await listProjectRisks(projectId.value);
+    message.success("风险已登记");
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "风险登记失败");
+  } finally {
+    riskSaving.value = false;
+  }
+}
+async function cycleRiskStatus(record: ProjectRisk) {
+  const next: RiskStatus =
+    record.status === "OPEN"
+      ? "MITIGATING"
+      : record.status === "MITIGATING"
+        ? "CLOSED"
+        : "OPEN";
+  try {
+    await updateProjectRisk(projectId.value, record.id, {
+      title: record.title,
+      description: record.description,
+      severity: record.severity,
+      status: next,
+      ownerName: record.ownerName,
+      dueDate: record.dueDate,
+      resolution: record.resolution,
+    });
+    risks.value = await listProjectRisks(projectId.value);
+    message.success("风险状态已更新");
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "风险状态更新失败");
+  }
+}
+async function removeRisk(record: ProjectRisk) {
+  try {
+    await deleteProjectRisk(projectId.value, record.id);
+    risks.value = await listProjectRisks(projectId.value);
+    message.success("风险已删除");
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "风险删除失败");
+  }
+}
+function riskSeverityLabel(value?: string) {
+  return (
+    ({ LOW: "低", MEDIUM: "中", HIGH: "高" } as Record<string, string>)[
+      value || ""
+    ] || "-"
+  );
+}
+function riskSeverityColor(value?: string) {
+  return (
+    (
+      { LOW: "default", MEDIUM: "orange", HIGH: "red" } as Record<
+        string,
+        string
+      >
+    )[value || ""] || "default"
+  );
+}
+function riskStatusLabel(value?: string) {
+  return (
+    (
+      {
+        OPEN: "待处置",
+        MITIGATING: "处置中",
+        CLOSED: "已关闭",
+      } as Record<string, string>
+    )[value || ""] || "-"
+  );
+}
+function riskStatusColor(value?: string) {
+  return (
+    (
+      {
+        OPEN: "red",
+        MITIGATING: "orange",
+        CLOSED: "default",
+      } as Record<string, string>
+    )[value || ""] || "default"
+  );
+}
+function milestoneStatusLabel(value?: string) {
+  return (
+    (
+      {
+        PENDING: "待开始",
+        IN_PROGRESS: "进行中",
+        COMPLETED: "已完成",
+      } as Record<string, string>
+    )[value || ""] || "-"
+  );
+}
+function milestoneStatusColor(value?: string) {
+  return (
+    (
+      {
+        PENDING: "default",
+        IN_PROGRESS: "processing",
+        COMPLETED: "success",
+      } as Record<string, string>
+    )[value || ""] || "default"
+  );
+}
+function timelineTypeLabel(type: string) {
+  return (
+    (
+      {
+        STAGE: "阶段",
+        COST: "成本",
+        CLOSEOUT: "结项",
+        BUDGET: "预算",
+        MANAGER: "负责人",
+      } as Record<string, string>
+    )[type] || type
+  );
+}
+function timelineTypeColor(type: string) {
+  return (
+    (
+      {
+        STAGE: "blue",
+        COST: "orange",
+        CLOSEOUT: "purple",
+        BUDGET: "cyan",
+        MANAGER: "green",
+      } as Record<string, string>
+    )[type] || "default"
+  );
 }
 function openPreparation() {
   if (!detail.value) return;

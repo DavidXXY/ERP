@@ -11,6 +11,7 @@ import jakarta.persistence.JoinTable;
 import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import java.time.OffsetDateTime;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
@@ -37,6 +38,9 @@ public class SystemUser extends BaseEntity {
 
   @Column(length = 120)
   private String email;
+
+  @Column(name = "last_login_at")
+  private OffsetDateTime lastLoginAt;
 
   @Column(nullable = false)
   private boolean enabled = true;
@@ -108,6 +112,14 @@ public class SystemUser extends BaseEntity {
 
   public void setEmail(String email) {
     this.email = email;
+  }
+
+  public OffsetDateTime getLastLoginAt() {
+    return lastLoginAt;
+  }
+
+  public void setLastLoginAt(OffsetDateTime lastLoginAt) {
+    this.lastLoginAt = lastLoginAt;
   }
 
   public boolean isEnabled() {

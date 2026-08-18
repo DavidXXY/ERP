@@ -73,6 +73,10 @@ public class QuotePlan extends BaseEntity {
   @Column(name = "customer_decided_at")
   private OffsetDateTime customerDecidedAt;
 
+  /** 售前支持已完成后由项目管理留档，留档记录不再进入售前支持待办，但可查。 */
+  @Column(nullable = false)
+  private boolean archived = false;
+
   public UUID getCustomerId() {
     return customerId;
   }
@@ -223,5 +227,13 @@ public class QuotePlan extends BaseEntity {
 
   public void setCustomerDecidedAt(OffsetDateTime customerDecidedAt) {
     this.customerDecidedAt = customerDecidedAt;
+  }
+
+  public boolean isArchived() {
+    return archived;
+  }
+
+  public void setArchived(boolean archived) {
+    this.archived = archived;
   }
 }

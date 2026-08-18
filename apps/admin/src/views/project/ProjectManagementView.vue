@@ -327,16 +327,26 @@
         <section class="project-workbench">
           <div class="workbench-title">
             <div>
-              <h3>售前支持</h3>
+              <h3>{{ preSalesShowArchived ? "售前支持 · 已留档" : "售前支持" }}</h3>
               <p>
                 销售发起售前支持后，由项目管理填写成本并完成审批；通过后报价板块才可以继续报价。
               </p>
             </div>
-            <a-button :loading="loading" @click="loadPreSalesSupport"
-              >刷新售前支持</a-button
-            >
+            <a-space>
+              <a-button
+                v-if="!preSalesShowArchived"
+                @click="togglePreSalesArchiveView"
+                >查看已留档</a-button
+              >
+              <a-button v-else @click="togglePreSalesArchiveView"
+                >返回待办</a-button
+              >
+              <a-button :loading="loading" @click="loadPreSalesSupport"
+                >刷新售前支持</a-button
+              >
+            </a-space>
           </div>
-          <div class="project-summary-grid">
+          <div v-if="!preSalesShowArchived" class="project-summary-grid">
             <button class="summary-card" type="button">
               <span>待填写成本</span>
               <strong>{{
@@ -427,6 +437,7 @@
               <a-space size="small">
                 <a-button
                   v-if="
+                    !preSalesShowArchived &&
                     auth.can('project:cost:create') &&
                     record.status === 'COST_REQUESTED'
                   "
@@ -437,6 +448,7 @@
                 >
                 <a-button
                   v-if="
+                    !preSalesShowArchived &&
                     auth.can('project:approve') && record.status === 'COSTING'
                   "
                   type="link"
@@ -444,8 +456,31 @@
                   @click="openPreSalesApproval(record)"
                   >成本审批</a-button
                 >
-                <a-tag v-if="record.status === 'COST_APPROVED'" color="green"
+                <a-tag
+                  v-if="
+                    !preSalesShowArchived &&
+                    record.status === 'COST_APPROVED'
+                  "
+                  color="green"
                   >销售可报价</a-tag
+                >
+                <a-button
+                  v-if="
+                    !preSalesShowArchived &&
+                    auth.can('project:approve') &&
+                    record.status === 'COST_APPROVED'
+                  "
+                  type="link"
+                  size="small"
+                  @click="archivePreSales(record)"
+                  >留档</a-button
+                >
+                <a-button
+                  v-if="preSalesShowArchived && auth.can('project:approve')"
+                  type="link"
+                  size="small"
+                  @click="unarchivePreSales(record)"
+                  >取消留档</a-button
                 >
               </a-space>
             </template>
@@ -1531,6 +1566,8 @@ import {
   listProjectProfitability,
   deleteProject,
   listPreSalesSupport,
+  archivePreSalesSupport,
+  unarchivePreSalesSupport,
   submitPreSalesCost,
   approvePreSalesCost,
   listProjectManagerOptions,
@@ -1645,6 +1682,7 @@ type ProjectStageOverviewRow = {
   latestRecord: ProjectStageRecord | null;
 };
 const preSalesRows = ref<QuotePlan[]>([]);
+const preSalesShowArchived = ref(false);
 const quoteOptions = computed(() =>
   preSalesRows.value
     .filter(
@@ -1727,13 +1765,13 @@ const pageTitle = computed(
 );
 const columns = [
   { title: "项目 / 客户", key: "name", width: 280 },
-  { title: "项目类型", key: "owner", width: 130 },
+  { title: "项目类型", key: "owner", width: 130, responsive: ["lg"] },
   { title: "项目负责人", key: "manager", width: 130 },
   { title: "阶段", key: "stage", width: 150 },
-  { title: "项目经理分配", key: "approval", width: 220 },
-  { title: "合同金额（含税，元）", key: "contract", width: 190 },
-  { title: "预算 / 实际（含税，元）", key: "cost", width: 220 },
-  { title: "毛利 / 余额（含税，元）", key: "gross", width: 220 },
+  { title: "项目经理分配", key: "approval", width: 220, responsive: ["xl"] },
+  { title: "合同金额（含税，元）", key: "contract", width: 190, responsive: ["xl"] },
+  { title: "预算 / 实际（含税，元）", key: "cost", width: 220, responsive: ["xl"] },
+  { title: "毛利 / 余额（含税，元）", key: "gross", width: 220, responsive: ["xl"] },
   { title: "操作", key: "action", width: 130, fixed: "right" },
 ];
 const budgetColumns = [
@@ -2196,12 +2234,36 @@ async function loadProjectManagerAssignmentData() {
 async function loadPreSalesSupport() {
   loading.value = true;
   try {
-    preSalesRows.value = await listPreSalesSupport();
+    preSalesRows.value = await listPreSalesSupport(
+      preSalesShowArchived.value,
+    );
   } catch (error) {
     errorMessage.value =
       error instanceof Error ? error.message : "售前支持加载失败";
   } finally {
     loading.value = false;
+  }
+}
+async function togglePreSalesArchiveView() {
+  preSalesShowArchived.value = !preSalesShowArchived.value;
+  await loadPreSalesSupport();
+}
+async function archivePreSales(record: QuotePlan) {
+  try {
+    await archivePreSalesSupport(record.id);
+    message.success(`「${record.code}」已留档`);
+    await loadPreSalesSupport();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "留档失败");
+  }
+}
+async function unarchivePreSales(record: QuotePlan) {
+  try {
+    await unarchivePreSalesSupport(record.id);
+    message.success(`「${record.code}」已取消留档`);
+    await loadPreSalesSupport();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "取消留档失败");
   }
 }
 async function handleProjectUpdated() {
@@ -2995,6 +3057,11 @@ function dateAfter(days: number) {
 .stage-card:hover {
   border-color: #91caff;
   background: #f6faff;
+}
+.summary-card:focus-visible,
+.stage-card:focus-visible {
+  outline: 2px solid #1677ff;
+  outline-offset: 2px;
 }
 .stage-card.active {
   border-color: #1677ff;

@@ -112,7 +112,7 @@
         >
           <a-form-item :label="`${item.label}预算（含税，元）`">
             <a-input-number
-              v-model:value="createForm.budgets[(item as any).value]"
+              v-model:value="createForm.budgets[item.value]"
               :min="0"
               :precision="2"
               class="full-input"
@@ -395,7 +395,7 @@
         >
           <a-form-item :label="`${item.label}预算（含税，元）`">
             <a-input-number
-              v-model:value="editForm.budgets[(item as any).value]"
+              v-model:value="editForm.budgets[item.value]"
               :min="0"
               :precision="2"
               class="full-input"
@@ -420,7 +420,15 @@ import {
   updateProject,
   advanceProjectStage,
   assignProjectManager,
+  type Project,
+  type ProjectType,
+  type ProjectDetail,
   type ProjectStage,
+  type ProjectCostCategory,
+  type ProjectCostSource,
+  type ProjectCostEntry,
+  type ProjectCloseoutReview,
+  type ProjectBudgetItem,
 } from "@/api/project";
 import {
   getErrorMessage,
@@ -429,41 +437,66 @@ import {
 } from "@/utils/budget-overrun";
 
 const router = useRouter();
-const emit = defineEmits([
-  "update:createOpen",
-  "update:approvalOpen",
-  "update:stageOpen",
-  "update:costOpen",
-  "update:editCostOpen",
-  "update:editOpen",
-  "created",
-  "updated",
-]);
-// @ts-ignore - props types are any for flexibility with option arrays
-const props: any = defineProps([
-  "createOpen",
-  "approvalOpen",
-  "stageOpen",
-  "costOpen",
-  "editCostOpen",
-  "editCostEntry",
-  "editOpen",
-  "editProject",
-  "quoteOptions",
-  "closeoutReview",
-  "saving",
-  "customerOptions",
-  "parentProjectOptions",
-  "defaultParentProjectId",
-  "defaultCustomerId",
-  "categoryOptions",
-  "projectTypeOptions",
-  "sourceOptions",
-  "userOptions",
-  "detail",
-  "activeProject",
-  "nextStage",
-]);
+
+interface SelectOption {
+  value: string;
+  label: string;
+}
+
+interface CategoryOption {
+  value: ProjectCostCategory;
+  label: string;
+}
+
+interface QuoteOption extends SelectOption {
+  costRequest?: {
+    laborCost?: number;
+    materialCost?: number;
+    subcontractCost?: number;
+    travelCost?: number;
+    equipmentCost?: number;
+    riskReserve?: number;
+    otherCost?: number;
+  };
+}
+
+interface Props {
+  createOpen: boolean;
+  approvalOpen: boolean;
+  stageOpen: boolean;
+  costOpen: boolean;
+  editCostOpen: boolean;
+  editCostEntry?: ProjectCostEntry | null;
+  editOpen: boolean;
+  editProject?: ProjectDetail | null;
+  quoteOptions: QuoteOption[];
+  closeoutReview?: ProjectCloseoutReview | null;
+  saving: boolean;
+  customerOptions: SelectOption[];
+  parentProjectOptions: SelectOption[];
+  defaultParentProjectId?: string;
+  defaultCustomerId?: string;
+  categoryOptions: CategoryOption[];
+  projectTypeOptions: SelectOption[];
+  sourceOptions: SelectOption[];
+  userOptions: SelectOption[];
+  detail?: ProjectDetail | null;
+  activeProject?: Project | null;
+  nextStage?: ProjectStage | null;
+}
+
+const emit = defineEmits<{
+  "update:createOpen": [value: boolean];
+  "update:approvalOpen": [value: boolean];
+  "update:stageOpen": [value: boolean];
+  "update:costOpen": [value: boolean];
+  "update:editCostOpen": [value: boolean];
+  "update:editOpen": [value: boolean];
+  created: [];
+  updated: [];
+}>();
+
+const props = defineProps<Props>();
 
 const createFormRef = ref();
 const approvalFormRef = ref();
@@ -479,7 +512,7 @@ const createForm = reactive({
   parentProjectId: undefined as string | undefined,
   code: "",
   name: "",
-  projectType: "RENOVATION",
+  projectType: "RENOVATION" as ProjectType,
   managerUserId: undefined as string | undefined,
   siteAddress: "",
   contractAmount: 0,
@@ -512,8 +545,8 @@ const editForm = reactive({
 });
 const costForm = reactive({
   costId: "",
-  category: "LABOR",
-  sourceType: "MANUAL",
+  category: "LABOR" as ProjectCostCategory,
+  sourceType: "MANUAL" as ProjectCostSource,
   sourceNo: "",
   description: "",
   amount: 0.01,
@@ -643,7 +676,7 @@ watch(
 function applyQuoteBudget(quoteId?: string) {
   if (!quoteId) return;
   const option = quoteOptions.value.find(
-    (item: any) => String(item.value) === String(quoteId),
+    (item) => String(item.value) === String(quoteId),
   );
   const cost = option?.costRequest;
   if (!cost) return;
@@ -714,14 +747,14 @@ async function handleCreate() {
       parentProjectId: createForm.parentProjectId,
       code: createForm.code,
       name: createForm.name,
-      projectType: createForm.projectType as any,
+      projectType: createForm.projectType,
       managerUserId: createForm.managerUserId,
       siteAddress: createForm.siteAddress,
       contractAmount: createForm.contractAmount,
       plannedStartDate: createForm.plannedStartDate,
       plannedEndDate: createForm.plannedEndDate,
       warrantyEndDate: createForm.warrantyEndDate || undefined,
-      budgetItems: props.categoryOptions.map((item: any) => ({
+      budgetItems: props.categoryOptions.map((item) => ({
         category: item.value,
         plannedAmount: createForm.budgets[item.value],
         remark: item.label + "预算",
@@ -798,7 +831,7 @@ async function handleCreateCost() {
   try {
     if (editingCost.value && costForm.costId) {
       await updateProjectCost(props.detail.project.id, costForm.costId, {
-        category: costForm.category as any,
+        category: costForm.category,
         description: costForm.description,
         amount: costForm.amount,
         incurredDate: costForm.incurredDate,
@@ -808,9 +841,13 @@ async function handleCreateCost() {
       message.success("项目成本已更正");
     } else {
       await createProjectCost(props.detail.project.id, {
-        ...costForm,
+        category: costForm.category,
+        sourceType: costForm.sourceType,
         sourceNo: costForm.sourceNo || undefined,
-      } as any);
+        description: costForm.description,
+        amount: costForm.amount,
+        incurredDate: costForm.incurredDate,
+      });
       emit("updated");
       emit("update:costOpen", false);
       message.success("项目成本已归集");
@@ -876,7 +913,7 @@ watch(
       TRAVEL: 0,
       OTHER: 0,
     };
-    (detail.budgetItems || []).forEach((item: any) => {
+    (detail.budgetItems || []).forEach((item) => {
       budgets[item.category] = Number(item.plannedAmount || 0);
     });
     Object.assign(editForm, {
@@ -910,7 +947,7 @@ async function handleEdit() {
       plannedStartDate: editForm.plannedStartDate,
       plannedEndDate: editForm.plannedEndDate,
       warrantyEndDate: editForm.warrantyEndDate || undefined,
-      budgetItems: props.categoryOptions.map((item: any) => ({
+      budgetItems: props.categoryOptions.map((item) => ({
         category: item.value,
         plannedAmount: editForm.budgets[item.value],
         remark: item.label + "预算",

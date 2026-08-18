@@ -18,13 +18,18 @@ import com.company.ops.api.modules.project.dto.UpdateProjectRequest;
 import com.company.ops.api.modules.project.dto.ProjectDetailResponse;
 import com.company.ops.api.modules.project.dto.ProjectProfitabilityResponse;
 import com.company.ops.api.modules.project.dto.ProjectManagerOption;
+import com.company.ops.api.modules.project.dto.ProjectMilestoneRequest;
+import com.company.ops.api.modules.project.dto.ProjectMilestoneResponse;
+import com.company.ops.api.modules.project.dto.ProjectRiskRequest;
+import com.company.ops.api.modules.project.dto.ProjectRiskResponse;
+import com.company.ops.api.modules.project.dto.ProjectStaffResponse;
+import com.company.ops.api.modules.project.dto.ProjectTimelineEntryResponse;
 import com.company.ops.api.modules.project.dto.ProjectResponse;
 import com.company.ops.api.modules.project.domain.ProjectApprovalStatus;
 import com.company.ops.api.modules.project.domain.ProjectExecutionStatus;
 import com.company.ops.api.modules.project.domain.ProjectStage;
 import com.company.ops.api.modules.project.service.ProjectService;
 import com.company.ops.api.modules.system.service.ApprovalFlowSecurity;
-import com.company.ops.api.modules.crm.domain.QuoteStatus;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ApproveQuoteCostRequest;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.QuoteCostRequestResponse;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.QuoteResponse;
@@ -109,12 +114,21 @@ public class ProjectController {
 
   @GetMapping("/presales-support")
   @PreAuthorize("hasAuthority('project:view')")
-  public ApiResponse<List<QuoteResponse>> preSalesSupport() {
-    return ApiResponse.ok(crmOperationsService.listQuotes().stream()
-        .filter(quote -> quote.status() == QuoteStatus.COST_REQUESTED
-            || quote.status() == QuoteStatus.COSTING
-            || quote.status() == QuoteStatus.COST_APPROVED)
-        .toList());
+  public ApiResponse<List<QuoteResponse>> preSalesSupport(
+      @RequestParam(defaultValue = "false") boolean archived) {
+    return ApiResponse.ok(crmOperationsService.listPreSalesSupport(archived));
+  }
+
+  @PostMapping("/presales-support/{id}/archive")
+  @PreAuthorize("hasAuthority('project:approve')")
+  public ApiResponse<QuoteResponse> archivePreSales(@PathVariable UUID id) {
+    return ApiResponse.ok(crmOperationsService.archiveQuote(id, true));
+  }
+
+  @PostMapping("/presales-support/{id}/unarchive")
+  @PreAuthorize("hasAuthority('project:approve')")
+  public ApiResponse<QuoteResponse> unarchivePreSales(@PathVariable UUID id) {
+    return ApiResponse.ok(crmOperationsService.archiveQuote(id, false));
   }
 
   @PostMapping("/presales-support/{id}/cost")
@@ -139,6 +153,72 @@ public class ProjectController {
   @PreAuthorize("hasAuthority('project:view')")
   public ApiResponse<ProjectDetailResponse> getProject(@PathVariable UUID id) {
     return ApiResponse.ok(projectService.getProject(id));
+  }
+
+  @GetMapping("/{id}/timeline")
+  @PreAuthorize("hasAuthority('project:view')")
+  public ApiResponse<List<ProjectTimelineEntryResponse>> projectTimeline(@PathVariable UUID id) {
+    return ApiResponse.ok(projectService.projectTimeline(id));
+  }
+
+  @GetMapping("/{id}/staff")
+  @PreAuthorize("hasAuthority('project:view')")
+  public ApiResponse<List<ProjectStaffResponse>> projectStaff(@PathVariable UUID id) {
+    return ApiResponse.ok(projectService.projectStaff(id));
+  }
+
+  @GetMapping("/{id}/milestones")
+  @PreAuthorize("hasAuthority('project:view')")
+  public ApiResponse<List<ProjectMilestoneResponse>> listMilestones(@PathVariable UUID id) {
+    return ApiResponse.ok(projectService.listMilestones(id));
+  }
+
+  @PostMapping("/{id}/milestones")
+  @PreAuthorize("hasAuthority('project:stage:update')")
+  public ApiResponse<ProjectMilestoneResponse> createMilestone(
+      @PathVariable UUID id, @Valid @RequestBody ProjectMilestoneRequest request) {
+    return ApiResponse.ok(projectService.createMilestone(id, request));
+  }
+
+  @PutMapping("/{id}/milestones/{milestoneId}")
+  @PreAuthorize("hasAuthority('project:stage:update')")
+  public ApiResponse<ProjectMilestoneResponse> updateMilestone(
+      @PathVariable UUID id, @PathVariable UUID milestoneId, @Valid @RequestBody ProjectMilestoneRequest request) {
+    return ApiResponse.ok(projectService.updateMilestone(id, milestoneId, request));
+  }
+
+  @DeleteMapping("/{id}/milestones/{milestoneId}")
+  @PreAuthorize("hasAuthority('project:stage:update')")
+  public ApiResponse<Void> deleteMilestone(@PathVariable UUID id, @PathVariable UUID milestoneId) {
+    projectService.deleteMilestone(id, milestoneId);
+    return ApiResponse.ok(null);
+  }
+
+  @GetMapping("/{id}/risks")
+  @PreAuthorize("hasAuthority('project:view')")
+  public ApiResponse<List<ProjectRiskResponse>> listRisks(@PathVariable UUID id) {
+    return ApiResponse.ok(projectService.listRisks(id));
+  }
+
+  @PostMapping("/{id}/risks")
+  @PreAuthorize("hasAuthority('project:stage:update')")
+  public ApiResponse<ProjectRiskResponse> createRisk(
+      @PathVariable UUID id, @Valid @RequestBody ProjectRiskRequest request) {
+    return ApiResponse.ok(projectService.createRisk(id, request));
+  }
+
+  @PutMapping("/{id}/risks/{riskId}")
+  @PreAuthorize("hasAuthority('project:stage:update')")
+  public ApiResponse<ProjectRiskResponse> updateRisk(
+      @PathVariable UUID id, @PathVariable UUID riskId, @Valid @RequestBody ProjectRiskRequest request) {
+    return ApiResponse.ok(projectService.updateRisk(id, riskId, request));
+  }
+
+  @DeleteMapping("/{id}/risks/{riskId}")
+  @PreAuthorize("hasAuthority('project:stage:update')")
+  public ApiResponse<Void> deleteRisk(@PathVariable UUID id, @PathVariable UUID riskId) {
+    projectService.deleteRisk(id, riskId);
+    return ApiResponse.ok(null);
   }
 
   @PostMapping

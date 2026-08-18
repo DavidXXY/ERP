@@ -198,6 +198,43 @@ public class CrmOperationsService {
     return quotes.stream().map(item -> toQuote(item, customers, opportunities)).toList();
   }
 
+  /** 售前支持待办/留档列表：成本核算阶段（COST_REQUESTED/COSTING/COST_APPROVED）的报价。 */
+  @Transactional(readOnly = true)
+  public List<QuoteResponse> listPreSalesSupport(boolean archived) {
+    List<QuotePlan> quotes = deleteGovernanceService.visible("QUOTE", quoteRepository.findAllByOrderByUpdatedAtDesc(), QuotePlan::getId)
+        .stream()
+        .filter(item -> canAccessCustomer(item.getCustomerId()))
+        .filter(item -> item.isArchived() == archived)
+        .filter(item -> item.getStatus() == QuoteStatus.COST_REQUESTED
+            || item.getStatus() == QuoteStatus.COSTING
+            || item.getStatus() == QuoteStatus.COST_APPROVED)
+        .toList();
+    Map<UUID, Customer> customers = customerMap(quotes.stream().map(QuotePlan::getCustomerId).toList());
+    Map<UUID, Opportunity> opportunities = opportunityMap(quotes.stream()
+        .map(QuotePlan::getOpportunityId)
+        .toList());
+    return quotes.stream().map(item -> toQuote(item, customers, opportunities)).toList();
+  }
+
+  /** 售前支持完成后留档/取消留档；留档只作用于成本已核对的报价。 */
+  @Transactional
+  public QuoteResponse archiveQuote(UUID id, boolean archived) {
+    QuotePlan quote = quoteRepository.findById(id)
+        .orElseThrow(() -> new BusinessException("报价方案不存在"));
+    assertCustomerAccess(quote.getCustomerId());
+    if (deleteGovernanceService.isHidden("QUOTE", id)) throw new BusinessException("报价不存在");
+    if (archived && quote.getStatus() != QuoteStatus.COST_APPROVED) {
+      throw new BusinessException("仅成本已核对的售前支持可留档");
+    }
+    quote.setArchived(archived);
+    QuotePlan saved = quoteRepository.save(quote);
+    return toQuote(
+        saved,
+        customerMap(nullableId(saved.getCustomerId())),
+        opportunityMap(nullableId(saved.getOpportunityId()))
+    );
+  }
+
   @Transactional(readOnly = true)
   public QuoteResponse getQuote(UUID id) {
     QuotePlan quote = quoteRepository.findById(id)

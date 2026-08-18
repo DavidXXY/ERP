@@ -157,6 +157,58 @@ export type ProjectStageRecord = {
   changedAt: string;
 };
 
+export type MilestoneStatus = "PENDING" | "IN_PROGRESS" | "COMPLETED";
+
+export type ProjectMilestone = {
+  id: string;
+  projectId: string;
+  name: string;
+  plannedDate?: string;
+  actualDate?: string;
+  status: MilestoneStatus;
+  sortOrder: number;
+  remark?: string;
+};
+
+export type ProjectTimelineEntry = {
+  type: "STAGE" | "COST" | "CLOSEOUT" | "BUDGET" | "MANAGER";
+  occurredAt: string;
+  actor?: string;
+  title: string;
+  detail?: string;
+};
+
+export type ProjectStaff = {
+  id: string;
+  userId?: string;
+  displayName?: string;
+  roleName: string;
+  plannedHours: number;
+  actualHours: number;
+  allocationPercent: number;
+  startDate: string;
+  endDate: string;
+  certificateStatus: string;
+  status: string;
+};
+
+export type RiskSeverity = "LOW" | "MEDIUM" | "HIGH";
+export type RiskStatus = "OPEN" | "MITIGATING" | "CLOSED";
+
+export type ProjectRisk = {
+  id: string;
+  projectId: string;
+  title: string;
+  description?: string;
+  severity: RiskSeverity;
+  status: RiskStatus;
+  ownerName?: string;
+  dueDate?: string;
+  resolution?: string;
+  createdAt: string;
+  createdBy?: string;
+};
+
 export type ProjectDetail = {
   project: Project;
   budgetItems: ProjectBudgetItem[];
@@ -233,10 +285,25 @@ export function getProjectManagerAssignmentCapability() {
   });
 }
 
-export function listPreSalesSupport() {
+export function listPreSalesSupport(archived = false) {
   return request<QuotePlan[]>({
     method: "GET",
     url: "/projects/presales-support",
+    params: { archived },
+  });
+}
+
+export function archivePreSalesSupport(id: string) {
+  return request<QuotePlan>({
+    method: "POST",
+    url: `/projects/presales-support/${id}/archive`,
+  });
+}
+
+export function unarchivePreSalesSupport(id: string) {
+  return request<QuotePlan>({
+    method: "POST",
+    url: `/projects/presales-support/${id}/unarchive`,
   });
 }
 
@@ -453,4 +520,122 @@ export function getProjectCloseoutReview(id: string) {
 
 export function deleteProject(id: string) {
   return request<void>({ method: "DELETE", url: `/projects/${id}` });
+}
+
+export function getProjectTimeline(id: string) {
+  return request<ProjectTimelineEntry[]>({
+    method: "GET",
+    url: `/projects/${id}/timeline`,
+  });
+}
+
+export function getProjectStaff(id: string) {
+  return request<ProjectStaff[]>({
+    method: "GET",
+    url: `/projects/${id}/staff`,
+  });
+}
+
+export function listProjectMilestones(id: string) {
+  return request<ProjectMilestone[]>({
+    method: "GET",
+    url: `/projects/${id}/milestones`,
+  });
+}
+
+export function createProjectMilestone(
+  id: string,
+  payload: {
+    name: string;
+    plannedDate?: string;
+    actualDate?: string;
+    status?: MilestoneStatus;
+    sortOrder?: number;
+    remark?: string;
+  },
+) {
+  return request<ProjectMilestone>({
+    method: "POST",
+    url: `/projects/${id}/milestones`,
+    data: payload,
+  });
+}
+
+export function updateProjectMilestone(
+  id: string,
+  milestoneId: string,
+  payload: {
+    name: string;
+    plannedDate?: string;
+    actualDate?: string;
+    status?: MilestoneStatus;
+    sortOrder?: number;
+    remark?: string;
+  },
+) {
+  return request<ProjectMilestone>({
+    method: "PUT",
+    url: `/projects/${id}/milestones/${milestoneId}`,
+    data: payload,
+  });
+}
+
+export function deleteProjectMilestone(id: string, milestoneId: string) {
+  return request<void>({
+    method: "DELETE",
+    url: `/projects/${id}/milestones/${milestoneId}`,
+  });
+}
+
+export function listProjectRisks(id: string) {
+  return request<ProjectRisk[]>({
+    method: "GET",
+    url: `/projects/${id}/risks`,
+  });
+}
+
+export function createProjectRisk(
+  id: string,
+  payload: {
+    title: string;
+    description?: string;
+    severity?: RiskSeverity;
+    status?: RiskStatus;
+    ownerName?: string;
+    dueDate?: string;
+    resolution?: string;
+  },
+) {
+  return request<ProjectRisk>({
+    method: "POST",
+    url: `/projects/${id}/risks`,
+    data: payload,
+  });
+}
+
+export function updateProjectRisk(
+  id: string,
+  riskId: string,
+  payload: {
+    title: string;
+    description?: string;
+    severity?: RiskSeverity;
+    status?: RiskStatus;
+    ownerName?: string;
+    dueDate?: string;
+    resolution?: string;
+  },
+) {
+  return request<ProjectRisk>({
+    method: "PUT",
+    url: `/projects/${id}/risks/${riskId}`,
+    data: payload,
+  });
+}
+
+export function deleteProjectRisk(id: string, riskId: string) {
+  return request<void>({
+    method: "DELETE",
+    url: `/projects/${id}/risks/${riskId}`,
+  });
 }

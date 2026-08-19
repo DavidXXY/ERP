@@ -4,6 +4,7 @@ import com.company.ops.api.modules.procurement.domain.PurchaseRequest;
 import com.company.ops.api.modules.procurement.domain.PurchaseRequestStatus;
 import com.company.ops.api.modules.procurement.domain.ApprovalStatus;
 import com.company.ops.api.modules.procurement.domain.ProcurementCostType;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -41,5 +42,19 @@ public interface PurchaseRequestRepository extends JpaRepository<PurchaseRequest
   boolean existsByCode(String code);
   List<PurchaseRequest> findByApprovalStatusAndStatusOrderByCreatedAtDesc(
       ApprovalStatus approvalStatus, PurchaseRequestStatus status);
+
+  @Query("""
+      SELECT COALESCE(SUM(COALESCE(r.totalAmount, 0)), 0)
+      FROM PurchaseRequest r
+      WHERE r.projectId = :projectId
+        AND (:excludedId IS NULL OR r.id <> :excludedId)
+        AND r.status <> :cancelled
+        AND r.approvalStatus <> :rejected
+  """)
+  BigDecimal sumProjectBudgetOccupied(
+      @Param("projectId") UUID projectId,
+      @Param("excludedId") UUID excludedId,
+      @Param("cancelled") PurchaseRequestStatus cancelled,
+      @Param("rejected") ApprovalStatus rejected);
 
 }

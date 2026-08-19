@@ -2,6 +2,7 @@ package com.company.ops.api.modules.office.service;
 
 import com.company.ops.api.common.exception.BusinessException;
 import com.company.ops.api.common.delete.DeleteGovernanceService;
+import com.company.ops.api.common.service.CodeGenerator;
 import com.company.ops.api.common.tenant.TenantContext;
 import com.company.ops.api.modules.maintenance.domain.WorkOrder;
 import com.company.ops.api.modules.maintenance.repository.WorkOrderRepository;
@@ -144,6 +145,7 @@ public class OfficeService {
   private final ApprovalFlowSecurity approvalFlowSecurity;
   private final DeleteGovernanceService deleteGovernanceService;
   private final OfficeDocumentService documentService;
+  private final CodeGenerator codeGenerator;
   @PersistenceContext
   private EntityManager entityManager;
 
@@ -156,7 +158,7 @@ public class OfficeService {
 	                       ProjectRepository projectRepository, WorkOrderRepository workOrderRepository,
 	                       ProjectService projectService, SystemUserRepository userRepository, SystemRoleRepository roleRepository, SystemOrganizationRepository organizationRepository, LedgerService ledgerService, SystemAuditLogRepository auditLogRepository, ApprovalFlowSecurity approvalFlowSecurity,
 	                       DeleteGovernanceService deleteGovernanceService,
-                       OfficeDocumentService documentService) {
+                       OfficeDocumentService documentService, CodeGenerator codeGenerator) {
     this.approvalRepository = approvalRepository; this.actionRepository = actionRepository; this.runtimeNodeRepository = runtimeNodeRepository;
     this.expenseRepository = expenseRepository; this.expenseLineRepository = expenseLineRepository; this.outsourceRepository = outsourceRepository;
     this.travelRepository = travelRepository; this.sealRepository = sealRepository;
@@ -170,7 +172,7 @@ public class OfficeService {
 	    this.auditLogRepository = auditLogRepository;
 	    this.approvalFlowSecurity = approvalFlowSecurity;
 	    this.deleteGovernanceService = deleteGovernanceService;
-    this.documentService = documentService;
+    this.documentService = documentService; this.codeGenerator = codeGenerator;
 	  }
 
   @Transactional(readOnly = true)
@@ -289,7 +291,8 @@ public class OfficeService {
 
   @Transactional
   public ApprovalResponse createApproval(CreateApprovalRequest request) {
-    ApprovalRequest saved = createApprovalEntity(request.code(), request.approvalType(), request.title(), request.sourceNo(), request.amount(), currentActorName(), request.content(),
+    String code = request.code() == null || request.code().isBlank() ? codeGenerator.generate("APPROVAL") : request.code().trim();
+    ApprovalRequest saved = createApprovalEntity(code, request.approvalType(), request.title(), request.sourceNo(), request.amount(), currentActorName(), request.content(),
         request.departmentName(), request.businessType(), request.projectCode(), request.supplierRisk(), request.customerLevel());
     notify("APPROVAL", "新的审批待办", saved.getTitle(), "APPROVAL", saved.getId());
     return toApproval(saved);
@@ -506,7 +509,8 @@ public class OfficeService {
 
   @Transactional
   public ExpenseResponse createExpense(CreateExpenseRequest request) {
-    if (expenseRepository.existsByCode(request.code())) throw new BusinessException("报销单号已存在");
+    String code = request.code() == null || request.code().isBlank() ? codeGenerator.generate("EXPENSE") : request.code().trim();
+    if (expenseRepository.existsByCode(code)) throw new BusinessException("报销单号已存在");
     Project project = request.projectId() == null ? null : projectRepository.findById(request.projectId()).orElseThrow(() -> new BusinessException("项目不存在"));
     WorkOrder order = request.workOrderId() == null ? null : workOrderRepository.findById(request.workOrderId()).orElseThrow(() -> new BusinessException("工单不存在"));
     List<CreateExpenseLineRequest> lineRequests = normalizeExpenseLines(request);
@@ -514,17 +518,17 @@ public class OfficeService {
     CreateExpenseLineRequest firstLine = lineRequests.get(0);
     UUID actorId = currentActorId();
     String actorName = currentActorName();
-    ExpenseClaim item = new ExpenseClaim(); item.setCode(request.code()); item.setClaimantId(actorId);
+    ExpenseClaim item = new ExpenseClaim(); item.setCode(code); item.setClaimantId(actorId);
     item.setClaimantName(actorName); item.setProjectId(request.projectId()); item.setWorkOrderId(request.workOrderId());
     item.setExpenseType(firstLine.expenseType()); item.setAmount(totalAmount); item.setExpenseDate(firstLine.expenseDate());
     item.setDescription(expenseSummary(lineRequests, request.description())); item.setStatus(ExpenseStatus.PENDING_APPROVAL);
     ExpenseClaim saved = expenseRepository.save(item);
     List<ExpenseClaimLine> savedLines = saveExpenseLines(saved.getId(), lineRequests);
-    ApprovalRequest approval = createApprovalEntity("SP-" + request.code(), ApprovalType.EXPENSE, "费用报销 " + request.code(), request.code(), totalAmount, actorName, saved.getDescription(),
+    ApprovalRequest approval = createApprovalEntity("SP-" + code, ApprovalType.EXPENSE, "费用报销 " + code, code, totalAmount, actorName, saved.getDescription(),
         null, firstLine.expenseType().name(), project == null ? null : project.getCode(), null, null);
     saved.setApprovalRequestId(approval.getId()); expenseRepository.save(saved);
     if (approval.getStatus() == ApprovalStatus.APPROVED) processExpenseSource(approval);
-    notify("APPROVAL", "费用报销待审批", request.code() + " · " + actorName, "EXPENSE", saved.getId());
+    notify("APPROVAL", "费用报销待审批", code + " · " + actorName, "EXPENSE", saved.getId());
     return toExpense(saved, project, order, savedLines);
   }
 
@@ -565,19 +569,20 @@ public class OfficeService {
 
   @Transactional
   public OutsourceResponse createOutsource(CreateOutsourceRequest request) {
-    if (outsourceRepository.existsByCode(request.code())) throw new BusinessException("外包单号已存在");
+    String code = request.code() == null || request.code().isBlank() ? codeGenerator.generate("OUTSOURCE") : request.code().trim();
+    if (outsourceRepository.existsByCode(code)) throw new BusinessException("外包单号已存在");
     Supplier supplier = supplierRepository.findById(request.supplierId()).orElseThrow(() -> new BusinessException("服务商不存在"));
     Project project = request.projectId() == null ? null : projectRepository.findById(request.projectId()).orElseThrow(() -> new BusinessException("项目不存在"));
     WorkOrder order = request.workOrderId() == null ? null : workOrderRepository.findById(request.workOrderId()).orElseThrow(() -> new BusinessException("工单不存在"));
-    OutsourceOrder item = new OutsourceOrder(); item.setCode(request.code()); item.setSupplierId(request.supplierId());
+    OutsourceOrder item = new OutsourceOrder(); item.setCode(code); item.setSupplierId(request.supplierId());
     item.setProjectId(request.projectId()); item.setWorkOrderId(request.workOrderId()); item.setServiceType(request.serviceType());
     item.setDescription(request.description()); item.setAmount(request.amount()); item.setPlannedDate(request.plannedDate());
     item.setStatus(OutsourceStatus.PENDING_APPROVAL); OutsourceOrder saved = outsourceRepository.save(item);
-    ApprovalRequest approval = createApprovalEntity("SP-" + request.code(), ApprovalType.OUTSOURCE, "外包服务 " + request.code(), request.code(), request.amount(), currentActorName(), request.description(),
+    ApprovalRequest approval = createApprovalEntity("SP-" + code, ApprovalType.OUTSOURCE, "外包服务 " + code, code, request.amount(), currentActorName(), request.description(),
         null, request.serviceType(), project == null ? null : project.getCode(), supplier.getRiskStatus() == null ? null : supplier.getRiskStatus().name(), null);
     saved.setApprovalRequestId(approval.getId()); outsourceRepository.save(saved);
     if (approval.getStatus() == ApprovalStatus.APPROVED) processOutsourceSource(approval);
-    notify("APPROVAL", "外包服务待审批", request.code() + " · " + supplier.getName(), "OUTSOURCE", saved.getId());
+    notify("APPROVAL", "外包服务待审批", code + " · " + supplier.getName(), "OUTSOURCE", saved.getId());
     return toOutsource(saved, supplier, project, order);
   }
 

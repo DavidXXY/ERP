@@ -9,4 +9,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface AccountingPeriodRepository extends JpaRepository<AccountingPeriod, UUID> {
   Optional<AccountingPeriod> findByFiscalYearAndPeriodNo(int fiscalYear, int periodNo);
   List<AccountingPeriod> findAllByOrderByFiscalYearDescPeriodNoDesc();
+  long countByStatus(com.company.ops.api.modules.governance.domain.AccountingPeriodStatus status);
 }

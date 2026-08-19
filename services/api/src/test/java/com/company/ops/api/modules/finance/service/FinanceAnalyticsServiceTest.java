@@ -138,11 +138,11 @@ class FinanceAnalyticsServiceTest {
     Receivable other = receivable("AR-DEPT-B", asOf.minusDays(5), "900", null);
     other.setId(UUID.randomUUID());
     other.setOrganizationId(otherOrganizationId);
-    when(receivables.findAll()).thenReturn(List.of(selected, other));
+    when(receivables.findByOrganizationIdIn(java.util.Set.of(selectedOrganizationId))).thenReturn(List.of(selected));
 
     ProcurementPayable selectedPayable = payable(asOf.minusDays(5), "30", selectedOrganizationId);
     ProcurementPayable otherPayable = payable(asOf.minusDays(5), "700", otherOrganizationId);
-    when(payables.findAll()).thenReturn(List.of(selectedPayable, otherPayable));
+    when(payables.findByOrganizationIdIn(java.util.Set.of(selectedOrganizationId))).thenReturn(List.of(selectedPayable));
     Scope selectedScope = new Scope(java.util.Set.of(selectedOrganizationId), false,
         new FinanceScopeInfo(selectedOrganizationId, "销售一部", "总部 / 销售一部",
             false, 1, false, true));

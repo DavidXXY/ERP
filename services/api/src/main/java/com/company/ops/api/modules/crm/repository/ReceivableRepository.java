@@ -62,9 +62,20 @@ public interface ReceivableRepository extends JpaRepository<Receivable, UUID> {
 
   @Query("select r.customerId, coalesce(sum(r.settledAmount), 0) from Receivable r group by r.customerId")
   List<Object[]> aggregateSettledByCustomer();
+
+  @Query("select r.customerId, coalesce(sum(coalesce(r.amount, 0) - coalesce(r.settledAmount, 0)), 0) from Receivable r group by r.customerId")
+  List<Object[]> aggregateOutstandingByCustomer();
+
+  @Query("select r.customerId, coalesce(sum(r.settledAmount), 0) from Receivable r where r.customerId in :customerIds group by r.customerId")
+  List<Object[]> aggregateSettledByCustomerIn(Collection<UUID> customerIds);
+
+  @Query("select r.customerId, coalesce(sum(coalesce(r.amount, 0) - coalesce(r.settledAmount, 0)), 0) from Receivable r where r.customerId in :customerIds group by r.customerId")
+  List<Object[]> aggregateOutstandingByCustomerIn(Collection<UUID> customerIds);
   List<Receivable> findByDueDateLessThanEqualOrderByDueDateAsc(LocalDate end);
   List<Receivable> findByContractIdNotNullAndStatusNot(
       com.company.ops.api.modules.crm.domain.ReceivableStatus status);
   List<Receivable> findByCustomerIdIn(Collection<UUID> customerIds);
+  List<Receivable> findByOrganizationIdIn(Collection<UUID> organizationIds);
+  List<Receivable> findBySalesOwnerUserId(UUID salesOwnerUserId);
 
 }

@@ -48,6 +48,9 @@ public interface ServiceContractRepository extends JpaRepository<ServiceContract
   @Query("select c.customerId, coalesce(sum(c.amount), 0) from ServiceContract c group by c.customerId")
   List<Object[]> aggregateAmountByCustomer();
 
+  @Query("select c.customerId, coalesce(sum(c.amount), 0) from ServiceContract c where c.customerId in :customerIds group by c.customerId")
+  List<Object[]> aggregateAmountByCustomerIn(Collection<UUID> customerIds);
+
   List<ServiceContract> findByCustomerIdIn(Collection<UUID> customerIds);
 
 }

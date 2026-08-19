@@ -118,14 +118,14 @@ class FinanceContributionServiceTest {
     otherReceivable.setSalesOwnerUserId(UUID.randomUUID());
     otherReceivable.setAmount(new BigDecimal("8000"));
     otherReceivable.setSettledAmount(BigDecimal.ZERO);
-    when(receivableRepository.findAll()).thenReturn(List.of(receivable, otherReceivable));
+    when(receivableRepository.findByOrganizationIdIn(java.util.Set.of(selectedOrganizationId))).thenReturn(List.of(receivable));
 
     ReceivableReceipt receipt = new ReceivableReceipt();
     receipt.setId(UUID.randomUUID());
     receipt.setReceivableId(receivableId);
     receipt.setAmount(new BigDecimal("600"));
     receipt.setReceivedDate(LocalDate.of(2026, 8, 2));
-    when(receiptRepository.findAll()).thenReturn(List.of(receipt));
+    when(receiptRepository.findByReceivableIdIn(java.util.Set.of(receivableId))).thenReturn(List.of(receipt));
 
     UUID orderId = UUID.randomUUID();
     PurchaseOrder order = new PurchaseOrder();
@@ -145,7 +145,7 @@ class FinanceContributionServiceTest {
     payment.setPayableId(payableId);
     payment.setAmount(new BigDecimal("200"));
     payment.setPaidDate(LocalDate.of(2026, 8, 3));
-    when(paymentRepository.findAll()).thenReturn(List.of(payment));
+    when(paymentRepository.findByPayableIdIn(java.util.Set.of(payableId))).thenReturn(List.of(payment));
 
     Customer customer = new Customer();
     customer.setId(customerId);

@@ -541,6 +541,47 @@ export function listCustomers() {
   });
 }
 
+export type CustomerPoolStats = {
+  total: number;
+  strategic: number;
+  risk: number;
+  reconciliationIssue: number;
+};
+
+export function listCustomersPage(params?: {
+  page?: number;
+  size?: number;
+  keyword?: string;
+  level?: CustomerLevel;
+  riskStatus?: RiskStatus;
+  ownerNames?: string;
+}) {
+  return request<PageResponse<CustomerSummary>>({
+    method: "GET",
+    url: "/crm/customers/page",
+    params,
+  });
+}
+
+export function listCustomersSummary() {
+  return request<CustomerPoolStats>({
+    method: "GET",
+    url: "/crm/customers/summary",
+  });
+}
+
+export function listCustomersPageAll(params?: {
+  keyword?: string;
+  level?: CustomerLevel;
+  riskStatus?: RiskStatus;
+  ownerNames?: string;
+}) {
+  return requestAllPages<CustomerSummary>(
+    { method: "GET", url: "/crm/customers/page", params },
+    200,
+  );
+}
+
 export function listOwnerDepartments() {
   return request<OwnerDepartment[]>({
     method: "GET",

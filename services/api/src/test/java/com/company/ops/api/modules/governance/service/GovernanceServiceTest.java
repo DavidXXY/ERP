@@ -123,7 +123,8 @@ class GovernanceServiceTest {
     period.setStatus(AccountingPeriodStatus.OPEN); period.setOpenedAt(java.time.OffsetDateTime.now());
     when(periods.findByFiscalYearAndPeriodNo(2026, 7)).thenReturn(Optional.of(period));
     when(periods.save(any(AccountingPeriod.class))).thenAnswer(invocation -> invocation.getArgument(0));
-    when(vouchers.findAll()).thenReturn(List.of()); when(controls.findAll()).thenReturn(List.of());
+    when(vouchers.countByVoucherDateBetweenAndStatusIn(any(), any(), anyCollection())).thenReturn(0L);
+    when(controls.countHighRiskDue(any(), anyCollection(), any())).thenReturn(0L);
     when(bankLines.countByReconciliationStatusNotAndTransactionDateLessThanEqual(any(), any())).thenReturn(1L);
     when(financeOperations.periodCloseBlockers(2026, 7)).thenReturn(List.of());
 

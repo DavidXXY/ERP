@@ -218,16 +218,16 @@ public class GovernanceService {
         sum(entry.getValue(), this::exposure))).toList();
     BigDecimal budget = sum(all, BusinessControlRecord::getBudgetAmount);
     BigDecimal forecast = sum(all, BusinessControlRecord::getForecastAmount);
-    List<BankStatementLine> allBankLines = bankLines.findAll();
+    long matchedBankLines = bankLines.countByReconciliationStatus(ReconciliationStatus.MATCHED);
+    long unmatchedBankLines = bankLines.count() - matchedBankLines;
     return new GovernanceOverview(
         all.size(), count(all, ControlStatus.ACTIVE), count(all, ControlStatus.BLOCKED),
         issues.stream().filter(item -> "OVERDUE".equals(item.exceptionType())).map(ControlExceptionResponse::controlId).distinct().count(),
         all.stream().filter(item -> "HIGH".equals(item.getRiskLevel()) && OPEN_STATUSES.contains(item.getStatus())).count(),
         budget, sum(all, BusinessControlRecord::getCommittedAmount), sum(all, BusinessControlRecord::getActualAmount),
         forecast, forecast.subtract(budget),
-        allBankLines.stream().filter(item -> item.getReconciliationStatus() != ReconciliationStatus.MATCHED).count(),
-        allBankLines.stream().filter(item -> item.getReconciliationStatus() == ReconciliationStatus.MATCHED).count(),
-        periods.findAll().stream().filter(item -> item.getStatus() == AccountingPeriodStatus.CLOSED).count(), domains);
+        unmatchedBankLines, matchedBankLines,
+        periods.countByStatus(AccountingPeriodStatus.CLOSED), domains);
   }
 
   @Transactional(readOnly = true)
@@ -252,14 +252,10 @@ public class GovernanceService {
     YearMonth ym = YearMonth.of(year, month);
     LocalDate from = ym.atDay(1), to = ym.atEndOfMonth();
     List<String> blockers = new ArrayList<>();
-    long draftVouchers = vouchers.findAll().stream().filter(item -> !item.getVoucherDate().isBefore(from)
-        && !item.getVoucherDate().isAfter(to)
-        && (item.getStatus() == VoucherStatus.DRAFT || item.getStatus() == VoucherStatus.REVIEWED)).count();
+    long draftVouchers = vouchers.countByVoucherDateBetweenAndStatusIn(from, to,
+        EnumSet.of(VoucherStatus.DRAFT, VoucherStatus.REVIEWED));
     if (draftVouchers > 0) blockers.add("存在 " + draftVouchers + " 张未记账凭证");
-    long highRisk = controls.findAll().stream().filter(item -> OPEN_STATUSES.contains(item.getStatus())
-        && "HIGH".equals(item.getRiskLevel())
-        && ((item.getPlannedEnd() != null && !item.getPlannedEnd().isAfter(to))
-            || (item.getNextReviewOn() != null && !item.getNextReviewOn().isAfter(to)))).count();
+    long highRisk = controls.countHighRiskDue("HIGH", OPEN_STATUSES, to);
     if (highRisk > 0) blockers.add("存在 " + highRisk + " 项到期未闭环的高风险经营控制");
     long unmatched = bankLines.countByReconciliationStatusNotAndTransactionDateLessThanEqual(ReconciliationStatus.MATCHED, to);
     if (unmatched > 0) blockers.add("截至期末仍有 " + unmatched + " 条银行流水未完成对账");

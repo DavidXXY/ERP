@@ -64,7 +64,7 @@
 
 ## 数据策略
 
-- 所有业务主表包含 `tenant_id`，JPA 查询和写入通过租户上下文隔离。
+- 所有业务主表包含 `tenant_id`。当前为单租户部署：`TenantContext` 默认返回 `default`，`TenantConfig` 仅注册了 `CurrentTenantIdentifierResolver` 钩子（未配置 `MultiTenantConnectionProvider` 与 `hibernate.multiTenancy`，因此该 resolver 处于惰性状态）。实际隔离依赖写入时显式设置的 `tenant_id` 与按租户的显式查询；`findAll()` 类无参查询会绕过租户，仅在单租户下安全。若要支持多租户，需补齐实体级租户过滤（`@Filter`/`@FilterDef`）或 Hibernate 多租户策略。
 - 软删除治理使用原生 SQL 的路径同样绑定当前租户，包括隐藏判断、回收站、审批、恢复和删除申请创建。
 - 所有核心表保留 `created_at`、`updated_at`、`created_by`、`updated_by`。
 - 使用 Flyway 管理数据库结构，禁止生产环境手工改表。

@@ -5,7 +5,7 @@
         <div>
           <div class="customer-title-row">
             <h2>客户池</h2>
-            <span>共 {{ customers.length }} 家客户</span>
+            <span>共 {{ total }} 家客户</span>
           </div>
           <div class="customer-summary">
             <span
@@ -50,6 +50,7 @@
           v-model:value="filters.keyword"
           allow-clear
           placeholder="搜索客户名称、编码、行业或负责人"
+          @pressEnter="applyFilters"
         >
           <template #prefix><SearchOutlined /></template>
         </a-input>
@@ -58,12 +59,14 @@
           allow-clear
           placeholder="全部客户等级"
           :options="levelOptions"
+          @change="applyFilters"
         />
         <a-select
           v-model:value="filters.riskStatus"
           allow-clear
           placeholder="全部风险状态"
           :options="riskOptions"
+          @change="applyFilters"
         />
         <a-select
           v-model:value="filters.ownerName"
@@ -72,6 +75,7 @@
           option-filter-prop="label"
           placeholder="全部负责人"
           :options="ownerOptions"
+          @change="applyFilters"
         />
         <a-select
           v-model:value="filters.department"
@@ -80,10 +84,10 @@
           option-filter-prop="label"
           placeholder="全部部门"
           :options="departmentOptions"
+          @change="applyFilters"
         />
-        <span class="customer-filter-result"
-          >当前 {{ filteredCustomers.length }} 家</span
-        >
+        <a-button type="primary" @click="applyFilters">搜索</a-button>
+        <span class="customer-filter-result">当前 {{ total }} 家</span>
       </div>
 
       <a-alert
@@ -98,12 +102,13 @@
         <a-table
           size="middle"
           :columns="columns"
-          :data-source="filteredCustomers"
+          :data-source="customers"
           :loading="loading"
-          :pagination="{ pageSize: 10, showSizeChanger: false }"
+          :pagination="pagination"
           :row-key="(record: CustomerSummary) => record.id"
           :custom-row="customerRow"
           :scroll="{ x: 1000 }"
+          @change="handleTableChange"
         >
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'name'">
@@ -205,12 +210,12 @@
       <div class="customer-mobile-list">
         <a-spin :spinning="loading">
           <a-empty
-            v-if="!loading && !filteredCustomers.length"
+            v-if="!loading && !customers.length"
             description="暂无符合条件的客户"
           />
           <div v-else class="customer-mobile-items">
             <article
-              v-for="record in filteredCustomers"
+              v-for="record in customers"
               :key="record.id"
               class="customer-mobile-item"
               role="button"
@@ -974,7 +979,9 @@ import DownloadOutlined from "@ant-design/icons-vue/DownloadOutlined";
 import {
   createCustomer,
   getCustomer,
-  listCustomers,
+  listCustomersPage,
+  listCustomersPageAll,
+  listCustomersSummary,
   deleteCustomer,
   transferCustomerOwner,
   updateCustomer,
@@ -986,7 +993,7 @@ import {
 } from "@/api/crm";
 import { listUserOptionsApi, type UserResponse } from "@/api/system";
 import { useAuthStore } from "@/stores/auth";
-import { loadOwnerDepartmentMap, ownerDepartment } from "./crm-department";
+import { loadOwnerDepartmentMap } from "./crm-department";
 import { downloadCsv, customerRowToCsv } from "./crm-export";
 import {
   contractStatusColor,
@@ -1036,10 +1043,20 @@ const auth = useAuthStore();
 const route = useRoute();
 const router = useRouter();
 const customers = ref<CustomerSummary[]>([]);
+const total = ref(0);
+const strategicCount = ref(0);
+const riskCount = ref(0);
+const reconciliationIssueCount = ref(0);
 const selectedDetail = ref<CustomerDetail | null>(null);
 const users = ref<UserResponse[]>([]);
 const departmentMap = ref<Map<string, string>>(new Map());
 const loading = ref(false);
+const pagination = reactive({
+  current: 1,
+  pageSize: 10,
+  total: 0,
+  showSizeChanger: false,
+});
 const detailLoading = ref(false);
 const saving = ref(false);
 const detailOpen = ref(false);
@@ -1131,9 +1148,6 @@ const ownerOptions = computed(() => {
     const name = item.displayName;
     if (name) names.add(name);
   });
-  customers.value.forEach((customer) => {
-    if (customer.ownerName) names.add(customer.ownerName);
-  });
   return Array.from(names)
     .sort((a, b) => a.localeCompare(b, "zh-CN"))
     .map((name) => ({ label: name, value: name }));
@@ -1142,35 +1156,6 @@ const departmentOptions = computed(() =>
   Array.from(new Set(departmentMap.value.values()))
     .sort((a, b) => a.localeCompare(b, "zh-CN"))
     .map((name) => ({ label: name, value: name })),
-);
-
-const filteredCustomers = computed(() => {
-  const term = filters.keyword.trim().toLowerCase();
-  return customers.value.filter((customer) => {
-    const text =
-      `${customer.name} ${customer.code} ${customer.industry} ${customer.ownerName} ${customer.primaryContact || ""}`.toLowerCase();
-    return (
-      (!filters.level || customer.level === filters.level) &&
-      (!filters.riskStatus || customer.riskStatus === filters.riskStatus) &&
-      (!filters.ownerName || customer.ownerName === filters.ownerName) &&
-      (!filters.department ||
-        ownerDepartment(customer.ownerName, departmentMap.value) ===
-          filters.department) &&
-      (!term || text.includes(term))
-    );
-  });
-});
-const strategicCount = computed(
-  () =>
-    customers.value.filter((customer) => customer.level === "STRATEGIC").length,
-);
-const riskCount = computed(
-  () =>
-    customers.value.filter((customer) => customer.riskStatus !== "NORMAL")
-      .length,
-);
-const reconciliationIssueCount = computed(
-  () => customers.value.filter(hasReconciliationIssue).length,
 );
 
 function hasReconciliationIssue(customer: CustomerSummary) {
@@ -1191,12 +1176,26 @@ async function loadCustomers() {
   loading.value = true;
   errorMessage.value = "";
   try {
-    const [customerRows, userPage, deptMap] = await Promise.all([
-      listCustomers(),
+    const ownerNames = effectiveOwnerNames();
+    const [page, stats, userPage, deptMap] = await Promise.all([
+      listCustomersPage({
+        page: pagination.current - 1,
+        size: pagination.pageSize,
+        keyword: filters.keyword.trim() || undefined,
+        level: filters.level,
+        riskStatus: filters.riskStatus,
+        ownerNames: ownerNames || undefined,
+      }),
+      listCustomersSummary().catch(() => null),
       listUserOptionsApi().catch(() => [] as UserResponse[]),
       loadOwnerDepartmentMap(),
     ]);
-    customers.value = customerRows;
+    customers.value = page.content;
+    pagination.total = page.totalElements;
+    total.value = stats?.total ?? page.totalElements;
+    strategicCount.value = stats?.strategic ?? 0;
+    riskCount.value = stats?.risk ?? 0;
+    reconciliationIssueCount.value = stats?.reconciliationIssue ?? 0;
     users.value = userPage;
     departmentMap.value = deptMap;
     const queryCustomerId =
@@ -1214,6 +1213,36 @@ async function loadCustomers() {
   } finally {
     loading.value = false;
   }
+}
+
+function effectiveOwnerNames(): string | undefined {
+  const names = new Set<string>();
+  if (filters.ownerName) names.add(filters.ownerName);
+  if (filters.department) {
+    const deptOwners = new Set<string>();
+    departmentMap.value.forEach((dept, owner) => {
+      if (dept === filters.department) deptOwners.add(owner);
+    });
+    if (names.size > 0) {
+      // 同时按负责人与部门过滤：负责人必须属于该部门，否则无结果
+      return deptOwners.has(filters.ownerName as string)
+        ? filters.ownerName
+        : "__NO_MATCH__";
+    }
+    deptOwners.forEach((owner) => names.add(owner));
+  }
+  return names.size ? Array.from(names).join(",") : undefined;
+}
+
+function applyFilters() {
+  pagination.current = 1;
+  loadCustomers();
+}
+
+function handleTableChange(pag: { current?: number; pageSize?: number }) {
+  pagination.current = pag.current ?? pagination.current;
+  pagination.pageSize = pag.pageSize ?? pagination.pageSize;
+  loadCustomers();
 }
 
 async function selectCustomer(id: string, syncRoute = true) {
@@ -1235,7 +1264,7 @@ async function selectCustomer(id: string, syncRoute = true) {
   }
 }
 
-function handleExportCsv() {
+async function handleExportCsv() {
   const headers = [
     "客户编码",
     "客户名称",
@@ -1247,7 +1276,14 @@ function handleExportCsv() {
     "付款习惯",
     "风险状态",
   ];
-  const rows = filteredCustomers.value.map((r) => customerRowToCsv(r));
+  const rows = (
+    await listCustomersPageAll({
+      keyword: filters.keyword.trim() || undefined,
+      level: filters.level,
+      riskStatus: filters.riskStatus,
+      ownerNames: effectiveOwnerNames(),
+    })
+  ).map((r) => customerRowToCsv(r));
   downloadCsv("客户池.csv", headers, rows);
 }
 

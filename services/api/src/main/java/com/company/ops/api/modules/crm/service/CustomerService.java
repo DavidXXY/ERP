@@ -4,11 +4,13 @@ import com.company.ops.api.common.delete.DeleteGovernanceService;
 import com.company.ops.api.common.exception.BusinessException;
 import com.company.ops.api.modules.crm.domain.Customer;
 import com.company.ops.api.modules.crm.domain.CustomerContact;
+import com.company.ops.api.modules.crm.domain.CustomerLevel;
 import com.company.ops.api.modules.crm.domain.CustomerSite;
 import com.company.ops.api.modules.crm.domain.ReceivableStatus;
 import com.company.ops.api.modules.crm.domain.RiskStatus;
 import com.company.ops.api.modules.crm.dto.CreateCustomerRequest;
 import com.company.ops.api.modules.crm.dto.CustomerDetailResponse;
+import com.company.ops.api.modules.crm.dto.CustomerPoolStats;
 import com.company.ops.api.common.service.CodeGenerator;
 import com.company.ops.api.modules.crm.dto.CustomerSummaryResponse;
 import com.company.ops.api.modules.crm.dto.UpdateCustomerRequest;
@@ -22,7 +24,12 @@ import com.company.ops.api.modules.project.repository.ProjectRepository;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import static com.company.ops.api.common.util.MoneyUtils.amount;
@@ -67,34 +74,79 @@ public class CustomerService {
 
   @Transactional(readOnly = true)
   public List<CustomerSummaryResponse> listCustomers() {
-    Map<UUID, BigDecimal> signedOrderAmounts = contractRepository.findAll().stream()
-        .collect(java.util.stream.Collectors.groupingBy(
-            contract -> contract.getCustomerId(),
-            java.util.stream.Collectors.reducing(BigDecimal.ZERO, contract -> amount(contract.getAmount()), BigDecimal::add)
-        ));
-    Map<UUID, BigDecimal> paidAmounts = receivableRepository.findAll().stream()
-        .collect(java.util.stream.Collectors.groupingBy(
-            receivable -> receivable.getCustomerId(),
-            java.util.stream.Collectors.reducing(BigDecimal.ZERO, receivable -> amount(receivable.getSettledAmount()), BigDecimal::add)
-        ));
-    Map<UUID, BigDecimal> pendingAmounts = receivableRepository.findAll().stream()
-        .collect(java.util.stream.Collectors.groupingBy(
-            receivable -> receivable.getCustomerId(),
-            java.util.stream.Collectors.reducing(
-                BigDecimal.ZERO,
-                receivable -> amount(receivable.getAmount()).subtract(amount(receivable.getSettledAmount())),
-                BigDecimal::add
-            )
-        ));
-    return deleteGovernanceService.visible("CUSTOMER", customerRepository.findAllByOrderByCreatedAtDesc(), Customer::getId).stream()
-        .filter(customer -> dataScopeService.canViewOwner(customer.getOwnerUserId()))
+    Set<UUID> visibleOwnerIds = dataScopeService.visibleUserIds();
+    List<Customer> customers = visibleOwnerIds.isEmpty()
+        ? List.of()
+        : customerRepository.findByOwnerUserIdInOrderByCreatedAtDesc(visibleOwnerIds);
+    return toSummaries(deleteGovernanceService.visible("CUSTOMER", customers, Customer::getId));
+  }
+
+  @Transactional(readOnly = true)
+  public Page<CustomerSummaryResponse> listCustomersPage(
+      Pageable pageable, String keyword, CustomerLevel level, RiskStatus riskStatus, String ownerNames) {
+    Set<UUID> visibleOwnerIds = dataScopeService.visibleUserIds();
+    if (visibleOwnerIds.isEmpty()) {
+      return new PageImpl<>(List.of(), pageable, 0);
+    }
+    String kw = keyword == null || keyword.isBlank() ? null : keyword.trim();
+    List<String> names = ownerNames == null || ownerNames.isBlank()
+        ? List.of()
+        : java.util.Arrays.stream(ownerNames.split(","))
+            .map(String::trim).filter(s -> !s.isEmpty()).toList();
+    Page<Customer> page = customerRepository.searchVisibleByOwnerUserIdIn(
+        visibleOwnerIds, kw, level, riskStatus, names, pageable);
+    return new PageImpl<>(
+        toSummaries(deleteGovernanceService.visible("CUSTOMER", page.getContent(), Customer::getId)),
+        pageable, page.getTotalElements());
+  }
+
+  @Transactional(readOnly = true)
+  public CustomerPoolStats summary() {
+    Set<UUID> visibleOwnerIds = dataScopeService.visibleUserIds();
+    if (visibleOwnerIds.isEmpty()) return new CustomerPoolStats(0, 0, 0, 0);
+    List<Customer> customers = deleteGovernanceService.visible("CUSTOMER",
+        customerRepository.findByOwnerUserIdInOrderByCreatedAtDesc(visibleOwnerIds), Customer::getId);
+    long total = customers.size();
+    long strategic = customers.stream().filter(c -> c.getLevel() == CustomerLevel.STRATEGIC).count();
+    long risk = customers.stream().filter(c -> c.getRiskStatus() != RiskStatus.NORMAL).count();
+    List<UUID> ids = customers.stream().map(Customer::getId).filter(Objects::nonNull).toList();
+    Map<UUID, BigDecimal> signed = toCustomerAmountMap(contractRepository.aggregateAmountByCustomerIn(ids));
+    Map<UUID, BigDecimal> settled = toCustomerAmountMap(receivableRepository.aggregateSettledByCustomerIn(ids));
+    Map<UUID, BigDecimal> outstanding = toCustomerAmountMap(receivableRepository.aggregateOutstandingByCustomerIn(ids));
+    long reconciliation = customers.stream().filter(c -> {
+      BigDecimal diff = signed.getOrDefault(c.getId(), BigDecimal.ZERO)
+          .subtract(settled.getOrDefault(c.getId(), BigDecimal.ZERO))
+          .subtract(outstanding.getOrDefault(c.getId(), BigDecimal.ZERO));
+      return diff.abs().compareTo(new BigDecimal("0.01")) >= 0;
+    }).count();
+    return new CustomerPoolStats(total, strategic, risk, reconciliation);
+  }
+
+  private List<CustomerSummaryResponse> toSummaries(List<Customer> customers) {
+    List<UUID> customerIds = customers.stream().map(Customer::getId)
+        .filter(Objects::nonNull).toList();
+    Map<UUID, BigDecimal> signedOrderAmounts = customerIds.isEmpty()
+        ? Map.of() : toCustomerAmountMap(contractRepository.aggregateAmountByCustomerIn(customerIds));
+    Map<UUID, BigDecimal> paidAmounts = customerIds.isEmpty()
+        ? Map.of() : toCustomerAmountMap(receivableRepository.aggregateSettledByCustomerIn(customerIds));
+    Map<UUID, BigDecimal> pendingAmounts = customerIds.isEmpty()
+        ? Map.of() : toCustomerAmountMap(receivableRepository.aggregateOutstandingByCustomerIn(customerIds));
+    return customers.stream()
         .map(customer -> toSummary(
             customer,
             signedOrderAmounts.getOrDefault(customer.getId(), BigDecimal.ZERO),
             paidAmounts.getOrDefault(customer.getId(), BigDecimal.ZERO),
-            pendingAmounts.getOrDefault(customer.getId(), BigDecimal.ZERO)
-        ))
+            pendingAmounts.getOrDefault(customer.getId(), BigDecimal.ZERO)))
         .toList();
+  }
+
+  private Map<UUID, BigDecimal> toCustomerAmountMap(List<Object[]> rows) {
+    Map<UUID, BigDecimal> map = new java.util.HashMap<>();
+    for (Object[] row : rows) {
+      if (row == null || row.length < 2 || row[0] == null) continue;
+      map.merge((UUID) row[0], amount((BigDecimal) row[1]), BigDecimal::add);
+    }
+    return map;
   }
 
   @Transactional(readOnly = true)

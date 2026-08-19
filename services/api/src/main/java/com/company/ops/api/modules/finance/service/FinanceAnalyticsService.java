@@ -122,27 +122,28 @@ public class FinanceAnalyticsService {
     if (year < 2000 || year > 2200) throw new BusinessException("财务年度必须在 2000 到 2200 之间");
 
     Scope scope = organizationScopeService.resolve(organizationId, includeDescendants);
-    List<Receivable> allReceivables = receivables.findAll().stream()
-        .filter(item -> scope.includes(item.getOrganizationId())).toList();
+    List<Receivable> allReceivables = scope.unrestricted()
+        ? receivables.findAll()
+        : receivables.findByOrganizationIdIn(scope.organizationIds());
     Set<UUID> receivableIds = allReceivables.stream().map(Receivable::getId)
         .filter(java.util.Objects::nonNull).collect(Collectors.toUnmodifiableSet());
-    List<ProcurementPayable> allPayables = payables.findAll().stream()
-        .filter(item -> scope.includes(item.getOrganizationId())).toList();
+    List<ProcurementPayable> allPayables = scope.unrestricted()
+        ? payables.findAll()
+        : payables.findByOrganizationIdIn(scope.organizationIds());
     Set<UUID> payableIds = allPayables.stream().map(ProcurementPayable::getId)
         .filter(java.util.Objects::nonNull).collect(Collectors.toUnmodifiableSet());
     Set<UUID> orderIds = allPayables.stream().map(ProcurementPayable::getOrderId)
         .filter(java.util.Objects::nonNull).collect(Collectors.toUnmodifiableSet());
-    List<ReceivableReceipt> allReceipts = receipts.findAll().stream()
-        .filter(item -> receivableIds.contains(item.getReceivableId())).toList();
-    List<PaymentRecord> allPayments = payments.findAll().stream()
-        .filter(item -> payableIds.contains(item.getPayableId())).toList();
-    List<PaymentApplication> allApplications = applications.findAll().stream()
-        .filter(item -> payableIds.contains(item.getPayableId())).toList();
-    List<SupplierInvoice> allSupplierInvoices = supplierInvoices.findAll().stream()
-        .filter(item -> scope.unrestricted()
-            || (item.getPayableId() != null && payableIds.contains(item.getPayableId()))
-            || (item.getOrderId() != null && orderIds.contains(item.getOrderId())))
-        .toList();
+    List<ReceivableReceipt> allReceipts = receivableIds.isEmpty()
+        ? List.of()
+        : receipts.findByReceivableIdIn(receivableIds);
+    List<PaymentRecord> allPayments = payableIds.isEmpty()
+        ? List.of()
+        : payments.findByPayableIdIn(payableIds);
+    List<PaymentApplication> allApplications = payableIds.isEmpty()
+        ? List.of()
+        : applications.findByPayableIdIn(payableIds);
+    List<SupplierInvoice> allSupplierInvoices = scopedInvoices(scope, payableIds, orderIds);
 
     Set<String> receivableCodes = allReceivables.stream().map(Receivable::getCode).collect(Collectors.toSet());
     Set<String> receiptNumbers = allReceipts.stream().map(ReceivableReceipt::getReferenceNo).collect(Collectors.toSet());
@@ -186,6 +187,17 @@ public class FinanceAnalyticsService {
     return new FinanceAnalyticsResponse(asOf, year, scope.info(), monthly, forecast, aging,
         reconciliation, tax, cashPlan, risks(asOf, allReceivables, allPayables,
             allBankLines, allSupplierInvoices, allApplications, cashPlan));
+  }
+
+  private List<SupplierInvoice> scopedInvoices(Scope scope, Set<UUID> payableIds, Set<UUID> orderIds) {
+    if (scope.unrestricted()) return supplierInvoices.findAll();
+    if (payableIds.isEmpty() && orderIds.isEmpty()) return List.of();
+    if (payableIds.isEmpty()) return supplierInvoices.findByOrderIdIn(orderIds);
+    if (orderIds.isEmpty()) return supplierInvoices.findByPayableIdIn(payableIds);
+    Map<UUID, SupplierInvoice> merged = new java.util.LinkedHashMap<>();
+    supplierInvoices.findByPayableIdIn(payableIds).forEach(item -> merged.putIfAbsent(item.getId(), item));
+    supplierInvoices.findByOrderIdIn(orderIds).forEach(item -> merged.putIfAbsent(item.getId(), item));
+    return new ArrayList<>(merged.values());
   }
 
   @Transactional(readOnly = true)

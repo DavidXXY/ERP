@@ -133,17 +133,14 @@ public class FinanceContributionService {
     List<ProjectCostEntry> costs = projectIds.isEmpty() ? List.of()
         : costRepository.findByProjectIdIn(projectIds).stream()
             .filter(item -> !item.getIncurredDate().isAfter(asOf)).toList();
-    List<Receivable> allReceivables = receivableRepository.findAll();
-    List<Receivable> selectedReceivables = allReceivables.stream()
-        .filter(item -> selection.includes(item.getOrganizationId(), item.getSalesOwnerUserId()))
-        .toList();
+    List<Receivable> selectedReceivables = scopedReceivables(selection);
     List<Receivable> projectReceivables = contractIds.isEmpty() ? List.of()
         : selectedReceivables.stream().filter(item -> contractIds.contains(item.getContractId())).toList();
     Set<UUID> receivableIds = selectedReceivables.stream().map(Receivable::getId)
         .filter(Objects::nonNull).collect(Collectors.toUnmodifiableSet());
-    List<ReceivableReceipt> receipts = receiptRepository.findAll().stream()
-        .filter(item -> receivableIds.contains(item.getReceivableId()))
-        .filter(item -> !item.getReceivedDate().isAfter(asOf)).toList();
+    List<ReceivableReceipt> receipts = receivableIds.isEmpty() ? List.of()
+        : receiptRepository.findByReceivableIdIn(receivableIds).stream()
+            .filter(item -> !item.getReceivedDate().isAfter(asOf)).toList();
 
     List<PurchaseOrder> orders = projectIds.isEmpty() ? List.of()
         : orderRepository.findByProjectIdIn(projectIds);
@@ -154,9 +151,9 @@ public class FinanceContributionService {
             .filter(item -> item.getStatus() != PayableStatus.CANCELLED).toList();
     Set<UUID> payableIds = payables.stream().map(ProcurementPayable::getId)
         .filter(Objects::nonNull).collect(Collectors.toUnmodifiableSet());
-    List<PaymentRecord> payments = paymentRepository.findAll().stream()
-        .filter(item -> payableIds.contains(item.getPayableId()))
-        .filter(item -> !item.getPaidDate().isAfter(asOf)).toList();
+    List<PaymentRecord> payments = payableIds.isEmpty() ? List.of()
+        : paymentRepository.findByPayableIdIn(payableIds).stream()
+            .filter(item -> !item.getPaidDate().isAfter(asOf)).toList();
 
     Map<UUID, BigDecimal> costByProject = sumBy(costs, ProjectCostEntry::getProjectId,
         ProjectCostEntry::getAmount);
@@ -202,13 +199,19 @@ public class FinanceContributionService {
                 || item.getSalesOrganizationId() == null).count()
             : 0,
         selection.unrestricted()
-            ? allReceivables.stream().filter(item -> item.getSalesOwnerUserId() == null
+            ? selectedReceivables.stream().filter(item -> item.getSalesOwnerUserId() == null
                 || item.getOrganizationId() == null).count()
             : 0,
         unlinkedReceivables,
         "利润按合同额减截至统计日的项目成本；现金按实际回款和项目采购实际付款归集");
     return new FinanceContributionResponse(asOf, year, selection.scope(), summary,
         monthly(year, asOf, receipts, payments), projectLines, dataQuality);
+  }
+
+  private List<Receivable> scopedReceivables(Selection selection) {
+    if (selection.unrestricted()) return receivableRepository.findAll();
+    if (USER.equals(selection.subjectType())) return receivableRepository.findBySalesOwnerUserId(selection.userId());
+    return receivableRepository.findByOrganizationIdIn(selection.organizationScope().organizationIds());
   }
 
   private Selection selection(String subjectType, UUID subjectId, boolean includeDescendants) {

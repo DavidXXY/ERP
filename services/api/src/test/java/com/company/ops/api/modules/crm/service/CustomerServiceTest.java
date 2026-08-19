@@ -29,6 +29,9 @@ import java.util.List;
 import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -147,11 +150,12 @@ class CustomerServiceTest {
     receivable.setSettledAmount(new BigDecimal("30.00"));
     List<Customer> customers = List.of(customer);
 
-    when(contractRepository.findAll()).thenReturn(List.of(contract));
-    when(receivableRepository.findAll()).thenReturn(List.of(receivable));
-    when(customerRepository.findAllByOrderByCreatedAtDesc()).thenReturn(customers);
+    when(contractRepository.aggregateAmountByCustomerIn(List.of(customerId))).thenReturn(java.util.Collections.singletonList(new Object[]{customerId, new BigDecimal("100.00")}));
+    when(receivableRepository.aggregateSettledByCustomerIn(List.of(customerId))).thenReturn(java.util.Collections.singletonList(new Object[]{customerId, new BigDecimal("30.00")}));
+    when(receivableRepository.aggregateOutstandingByCustomerIn(List.of(customerId))).thenReturn(java.util.Collections.singletonList(new Object[]{customerId, new BigDecimal("50.00")}));
+    when(customerRepository.findByOwnerUserIdInOrderByCreatedAtDesc(java.util.Set.of(customer.getOwnerUserId()))).thenReturn(customers);
     when(deleteGovernanceService.visible(eq("CUSTOMER"), eq(customers), any())).thenReturn(customers);
-    when(dataScopeService.canViewOwner(customer.getOwnerUserId())).thenReturn(true);
+    when(dataScopeService.visibleUserIds()).thenReturn(java.util.Set.of(customer.getOwnerUserId()));
 
     var result = customerService.listCustomers();
 
@@ -161,6 +165,58 @@ class CustomerServiceTest {
       assertThat(summary.pendingAmount()).isEqualByComparingTo("50.00");
       assertThat(summary.reconciliationDifference()).isEqualByComparingTo("20.00");
     });
+  }
+
+  @Test
+  void listCustomersPageReturnsPaginatedSummariesWithScopedAggregation() {
+    UUID customerId = UUID.randomUUID();
+    Customer customer = customer(customerId);
+    Pageable pageable = PageRequest.of(0, 20);
+
+    when(customerRepository.searchVisibleByOwnerUserIdIn(
+        java.util.Set.of(customer.getOwnerUserId()), null, null, null, List.of(), pageable))
+        .thenReturn(new PageImpl<>(List.of(customer), pageable, 1));
+    when(contractRepository.aggregateAmountByCustomerIn(List.of(customerId)))
+        .thenReturn(java.util.Collections.singletonList(new Object[]{customerId, new BigDecimal("100.00")}));
+    when(receivableRepository.aggregateSettledByCustomerIn(List.of(customerId)))
+        .thenReturn(java.util.Collections.singletonList(new Object[]{customerId, new BigDecimal("30.00")}));
+    when(receivableRepository.aggregateOutstandingByCustomerIn(List.of(customerId)))
+        .thenReturn(java.util.Collections.singletonList(new Object[]{customerId, new BigDecimal("50.00")}));
+    when(deleteGovernanceService.visible(eq("CUSTOMER"), any(), any())).thenReturn(List.of(customer));
+    when(dataScopeService.visibleUserIds()).thenReturn(java.util.Set.of(customer.getOwnerUserId()));
+
+    var result = customerService.listCustomersPage(pageable, null, null, null, null);
+
+    assertThat(result.getTotalElements()).isEqualTo(1);
+    assertThat(result.getContent()).singleElement().satisfies(summary -> {
+      assertThat(summary.name()).isEqualTo("华东轨交能源中心");
+      assertThat(summary.pendingAmount()).isEqualByComparingTo("50.00");
+    });
+  }
+
+  @Test
+  void summaryReturnsPoolCountsIncludingReconciliationIssues() {
+    UUID customerId = UUID.randomUUID();
+    Customer customer = customer(customerId);
+
+    when(customerRepository.findByOwnerUserIdInOrderByCreatedAtDesc(
+        java.util.Set.of(customer.getOwnerUserId()))).thenReturn(List.of(customer));
+    when(contractRepository.aggregateAmountByCustomerIn(List.of(customerId)))
+        .thenReturn(java.util.Collections.singletonList(new Object[]{customerId, new BigDecimal("100.00")}));
+    when(receivableRepository.aggregateSettledByCustomerIn(List.of(customerId)))
+        .thenReturn(java.util.Collections.singletonList(new Object[]{customerId, new BigDecimal("30.00")}));
+    when(receivableRepository.aggregateOutstandingByCustomerIn(List.of(customerId)))
+        .thenReturn(java.util.Collections.singletonList(new Object[]{customerId, new BigDecimal("50.00")}));
+    when(deleteGovernanceService.visible(eq("CUSTOMER"), any(), any())).thenReturn(List.of(customer));
+    when(dataScopeService.visibleUserIds()).thenReturn(java.util.Set.of(customer.getOwnerUserId()));
+
+    var result = customerService.summary();
+
+    assertThat(result.total()).isEqualTo(1);
+    assertThat(result.strategic()).isEqualTo(0);
+    assertThat(result.risk()).isEqualTo(0);
+    // 合同额 100 - 已回款 30 - 未回款 50 = 20，差异 >= 0.01 → 计入待勾稽
+    assertThat(result.reconciliationIssue()).isEqualTo(1);
   }
 
   private Customer customer(UUID id) {

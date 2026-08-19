@@ -32,6 +32,7 @@ import com.company.ops.api.modules.procurement.domain.SupplierInvoice;
 import com.company.ops.api.modules.procurement.domain.SupplierQuotation;
 import com.company.ops.api.modules.procurement.domain.SupplierQuotationLine;
 import com.company.ops.api.modules.procurement.domain.ProcurementInquiry;
+import com.company.ops.api.modules.procurement.domain.ProcurementInquiryRequest;
 import com.company.ops.api.modules.procurement.domain.ProcurementContract;
 import com.company.ops.api.modules.procurement.domain.ProcurementOrderDocument;
 import com.company.ops.api.modules.procurement.domain.ProcurementShipment;
@@ -99,6 +100,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.nio.charset.StandardCharsets;
 import java.util.HexFormat;
+import java.util.HashSet;
 import java.util.Set;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -826,12 +828,19 @@ public class ProcurementService {
 
     UUID inquiryId = request.inquiryId();
     if (inquiryId == null) {
-      List<ProcurementInquiry> awardedInquiries = inquiryRepository.findAll().stream()
-          .filter(inquiry -> "AWARDED".equals(inquiry.getStatus()))
-          .filter(inquiry -> inquiry.getRequestId().equals(purchaseRequest.getId())
-              || inquiryRequestRepository.existsByInquiryIdAndRequestId(
-                  inquiry.getId(), purchaseRequest.getId()))
-          .toList();
+      List<ProcurementInquiry> awardedInquiries = new ArrayList<>(
+          inquiryRepository.findByRequestIdAndStatus(purchaseRequest.getId(), "AWARDED"));
+      Set<UUID> seenInquiryIds = new HashSet<>();
+      for (ProcurementInquiry inquiry : awardedInquiries) {
+        if (inquiry.getId() != null) seenInquiryIds.add(inquiry.getId());
+      }
+      for (ProcurementInquiryRequest link : inquiryRequestRepository.findByRequestId(purchaseRequest.getId())) {
+        UUID linkedInquiryId = link.getInquiryId();
+        if (linkedInquiryId == null || !seenInquiryIds.add(linkedInquiryId)) continue;
+        inquiryRepository.findById(linkedInquiryId)
+            .filter(inquiry -> "AWARDED".equals(inquiry.getStatus()))
+            .ifPresent(awardedInquiries::add);
+      }
       if (awardedInquiries.size() == 1) {
         inquiryId = awardedInquiries.get(0).getId();
       } else if (awardedInquiries.size() > 1) {
@@ -1666,13 +1675,8 @@ public class ProcurementService {
     if (costType != ProcurementCostType.PROJECT || projectId == null) return;
     Project project = projectRepository.findById(projectId)
         .orElseThrow(() -> new BusinessException("关联项目不存在"));
-    BigDecimal occupied = requestRepository.findAll().stream()
-        .filter(item -> item.getProjectId() != null && item.getProjectId().equals(projectId))
-        .filter(item -> excludedRequestId == null || !item.getId().equals(excludedRequestId))
-        .filter(item -> item.getStatus() != PurchaseRequestStatus.CANCELLED)
-        .filter(item -> item.getApprovalStatus() != ApprovalStatus.REJECTED)
-        .map(item -> amount(item.getTotalAmount()))
-        .reduce(BigDecimal.ZERO, BigDecimal::add);
+    BigDecimal occupied = amount(requestRepository.sumProjectBudgetOccupied(
+        projectId, excludedRequestId, PurchaseRequestStatus.CANCELLED, ApprovalStatus.REJECTED));
     BigDecimal available = amount(project.getBudgetAmount()).subtract(occupied);
     if (requestedAmount.compareTo(available) > 0) {
       throw new BusinessException(

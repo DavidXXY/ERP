@@ -97,6 +97,7 @@ public interface ProcurementPayableRepository extends JpaRepository<ProcurementP
   }
   List<ProcurementPayable> findByDueDateLessThanEqualAndStatusNotOrderByDueDateAsc(
       LocalDate end, PayableStatus status);
+  List<ProcurementPayable> findByOrganizationIdIn(Collection<UUID> organizationIds);
   List<ProcurementPayable> findByDueDateBetweenAndStatusNotOrderByDueDateAsc(
       LocalDate start, LocalDate end, PayableStatus status);
 

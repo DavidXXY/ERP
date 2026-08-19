@@ -17,4 +17,5 @@ public interface BankStatementLineRepository extends JpaRepository<BankStatement
   Optional<BankStatementLine> findByAccountNoMaskedAndBankReference(String accountNoMasked, String bankReference);
   boolean existsByMatchedBizTypeAndMatchedBizIdAndReconciliationStatus(String type, UUID id, ReconciliationStatus status);
   long countByReconciliationStatusNotAndTransactionDateLessThanEqual(ReconciliationStatus status, LocalDate date);
+  long countByReconciliationStatus(ReconciliationStatus status);
 }

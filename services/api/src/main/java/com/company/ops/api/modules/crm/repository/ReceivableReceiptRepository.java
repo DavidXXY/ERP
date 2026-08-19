@@ -1,6 +1,7 @@
 package com.company.ops.api.modules.crm.repository;
 
 import com.company.ops.api.modules.crm.domain.ReceivableReceipt;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import java.util.Optional;
@@ -9,5 +10,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface ReceivableReceiptRepository extends JpaRepository<ReceivableReceipt, UUID> {
 
   List<ReceivableReceipt> findByReceivableIdOrderByReceivedDateDesc(UUID receivableId);
+  List<ReceivableReceipt> findByReceivableIdIn(Collection<UUID> receivableIds);
   Optional<ReceivableReceipt> findByReferenceNo(String referenceNo);
 }

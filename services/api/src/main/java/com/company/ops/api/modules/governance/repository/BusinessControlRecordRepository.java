@@ -26,6 +26,12 @@ public interface BusinessControlRecordRepository extends JpaRepository<BusinessC
       @Param("keyword") String keyword, Pageable pageable);
   long countByRiskLevelAndStatusInAndPlannedEndLessThanEqual(
       String riskLevel, Collection<ControlStatus> statuses, LocalDate date);
+  @Query("SELECT COUNT(c) FROM BusinessControlRecord c WHERE c.riskLevel = :riskLevel "
+      + "AND c.status IN :statuses "
+      + "AND ((c.plannedEnd IS NOT NULL AND c.plannedEnd <= :date) "
+      + "OR (c.nextReviewOn IS NOT NULL AND c.nextReviewOn <= :date))")
+  long countHighRiskDue(@Param("riskLevel") String riskLevel,
+      @Param("statuses") Collection<ControlStatus> statuses, @Param("date") LocalDate date);
   long countByControlTypeAndStatusIn(ControlType type, Collection<ControlStatus> statuses);
   boolean existsByControlCode(String code);
   List<BusinessControlRecord> findByControlTypeInOrderByCreatedAtDesc(Collection<ControlType> types);

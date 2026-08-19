@@ -1,7 +1,10 @@
 package com.company.ops.api.modules.ledger.repository;
 
 import com.company.ops.api.modules.ledger.domain.AccountingVoucher;
+import com.company.ops.api.modules.ledger.domain.VoucherStatus;
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.Collection;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -28,4 +31,7 @@ public interface AccountingVoucherRepository extends JpaRepository<AccountingVou
     BigDecimal getTotalDebit();
     BigDecimal getTotalCredit();
   }
+
+  long countByVoucherDateBetweenAndStatusIn(
+      LocalDate from, LocalDate to, Collection<VoucherStatus> statuses);
 }

@@ -1,8 +1,12 @@
 package com.company.ops.api.modules.crm.controller;
 
 import com.company.ops.api.common.api.ApiResponse;
+import com.company.ops.api.common.api.PageResponse;
+import com.company.ops.api.modules.crm.domain.CustomerLevel;
+import com.company.ops.api.modules.crm.domain.RiskStatus;
 import com.company.ops.api.modules.crm.dto.CreateCustomerRequest;
 import com.company.ops.api.modules.crm.dto.CustomerDetailResponse;
+import com.company.ops.api.modules.crm.dto.CustomerPoolStats;
 import com.company.ops.api.modules.crm.dto.CustomerSummaryResponse;
 import com.company.ops.api.modules.crm.dto.TransferCustomerOwnerRequest;
 import com.company.ops.api.modules.crm.dto.UpdateCustomerRequest;
@@ -11,7 +15,10 @@ import com.company.ops.api.modules.crm.service.CrmImportService;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -39,6 +46,24 @@ public class CustomerController {
   @PreAuthorize("hasAuthority('crm:customer:view')")
   public ApiResponse<List<CustomerSummaryResponse>> listCustomers() {
     return ApiResponse.ok(customerService.listCustomers());
+  }
+
+  @GetMapping("/page")
+  @PreAuthorize("hasAuthority('crm:customer:view')")
+  public ApiResponse<PageResponse<CustomerSummaryResponse>> listCustomersPage(
+      @PageableDefault(size = 20) Pageable pageable,
+      @RequestParam(required = false) String keyword,
+      @RequestParam(required = false) CustomerLevel level,
+      @RequestParam(required = false) RiskStatus riskStatus,
+      @RequestParam(required = false) String ownerNames) {
+    return ApiResponse.ok(PageResponse.from(
+        customerService.listCustomersPage(pageable, keyword, level, riskStatus, ownerNames)));
+  }
+
+  @GetMapping("/summary")
+  @PreAuthorize("hasAuthority('crm:customer:view')")
+  public ApiResponse<CustomerPoolStats> summary() {
+    return ApiResponse.ok(customerService.summary());
   }
 
   @GetMapping("/{id}")

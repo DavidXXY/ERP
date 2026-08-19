@@ -48,6 +48,8 @@ public interface PaymentApplicationRepository extends JpaRepository<PaymentAppli
 
   boolean existsByCode(String code);
 
+  List<PaymentApplication> findByPayableIdIn(Collection<UUID> payableIds);
+
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select application from PaymentApplication application where application.id = :id")
   Optional<PaymentApplication> findByIdForUpdate(@Param("id") UUID id);

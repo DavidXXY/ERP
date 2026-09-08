@@ -69,7 +69,9 @@
                 <a-tag v-if="record.reportStatus === 'CONFIRMED'" color="green"
                   >已确认</a-tag
                 >
-                <a-tag v-else-if="record.reportStatus === 'REJECTED'" color="red"
+                <a-tag
+                  v-else-if="record.reportStatus === 'REJECTED'"
+                  color="red"
                   >已驳回</a-tag
                 >
                 <a-tag v-else color="orange">待确认</a-tag>
@@ -249,9 +251,9 @@
             :options="hoursOptions"
             @change="onHoursChange"
           />
-          <div class="muted form-hint"
-            >最小为半日（4小时）；选半日可再添加一个项目（可不选）</div
-          >
+          <div class="muted form-hint">
+            最小为半日（4小时）；选半日可再添加一个项目（可不选）
+          </div>
         </a-form-item>
         <a-form-item
           v-if="
@@ -533,8 +535,7 @@ async function submit() {
         form.reportCategory === "ENGINEERING" && form.hours === 4
           ? form.additionalProjectId
           : undefined,
-      hours:
-        form.reportCategory === "ENGINEERING" ? form.hours : undefined,
+      hours: form.reportCategory === "ENGINEERING" ? form.hours : undefined,
     });
     message.success("汇报提交成功，已通知抄送人");
     drawer.open = false;

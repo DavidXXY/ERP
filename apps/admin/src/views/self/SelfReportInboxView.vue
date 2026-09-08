@@ -80,7 +80,9 @@
                 <a-tag v-if="record.reportStatus === 'CONFIRMED'" color="green"
                   >已确认</a-tag
                 >
-                <a-tag v-else-if="record.reportStatus === 'REJECTED'" color="red"
+                <a-tag
+                  v-else-if="record.reportStatus === 'REJECTED'"
+                  color="red"
                   >已驳回</a-tag
                 >
                 <a-tag v-else color="orange">待确认</a-tag>
@@ -173,9 +175,7 @@
           v-if="drawer.record.reportCategory === 'ENGINEERING'"
           label="确认状态"
         >
-          <a-tag
-            v-if="drawer.record.reportStatus === 'CONFIRMED'"
-            color="green"
+          <a-tag v-if="drawer.record.reportStatus === 'CONFIRMED'" color="green"
             >已确认</a-tag
           >
           <a-tag

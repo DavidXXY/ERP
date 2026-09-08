@@ -536,6 +536,31 @@ export function getProjectStaff(id: string) {
   });
 }
 
+export function addProjectStaff(
+  id: string,
+  data: {
+    userId: string;
+    roleName: string;
+    startDate: string;
+    endDate: string;
+    allocationPercent?: number;
+    plannedHours?: number;
+  },
+) {
+  return request<ProjectStaff>({
+    method: "POST",
+    url: `/projects/${id}/staff`,
+    data,
+  });
+}
+
+export function removeProjectStaff(id: string, assignmentId: string) {
+  return request<void>({
+    method: "DELETE",
+    url: `/projects/${id}/staff/${assignmentId}`,
+  });
+}
+
 export function listProjectMilestones(id: string) {
   return request<ProjectMilestone[]>({
     method: "GET",

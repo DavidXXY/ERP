@@ -270,7 +270,7 @@ public class CollaborationGovernanceService {
     }
   }
 
-  private void recalculateAssignment(UUID assignmentId){
+  public void recalculateAssignment(UUID assignmentId){
     ProjectStaffAssignment assignment=assignments.findById(assignmentId).orElseThrow(()->new BusinessException("派工不存在"));
     BigDecimal hours=timesheets.findByAssignmentIdAndStatus(assignmentId,"APPROVED").stream().map(ProjectTimesheet::getHours).reduce(BigDecimal.ZERO,BigDecimal::add);
     assignment.setActualHours(hours);assignment.setStatus(hours.compareTo(assignment.getPlannedHours())>=0?"COMPLETED":hours.signum()>0?"IN_PROGRESS":"PLANNED");assignments.save(assignment);

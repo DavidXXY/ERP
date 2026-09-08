@@ -37,6 +37,7 @@ import com.company.ops.api.modules.project.domain.RiskStatus;
 import com.company.ops.api.modules.project.domain.ProjectStage;
 import com.company.ops.api.modules.project.domain.ProjectStageRecord;
 import com.company.ops.api.modules.project.dto.AdvanceProjectStageRequest;
+import com.company.ops.api.modules.project.dto.AddProjectStaffRequest;
 import com.company.ops.api.modules.project.dto.AssignProjectManagerRequest;
 import com.company.ops.api.modules.project.dto.ChangeProjectExecutionStatusRequest;
 import com.company.ops.api.modules.project.dto.CreateProjectCostRequest;
@@ -290,6 +291,50 @@ public class ProjectService {
             item.getPlannedHours(), item.getActualHours(), item.getAllocationPercent(),
             item.getStartDate(), item.getEndDate(), item.getCertificateStatus(), item.getStatus()))
         .toList();
+  }
+
+  @Transactional
+  public ProjectStaffResponse addProjectStaff(UUID projectId, AddProjectStaffRequest request) {
+    Project project = requireManageableProject(projectId);
+    SystemUser user = userRepository.findById(request.userId())
+        .orElseThrow(() -> new BusinessException("员工账号不存在"));
+    if (!user.isEnabled()) throw new BusinessException("员工账号已停用");
+    if (request.endDate().isBefore(request.startDate())) {
+      throw new BusinessException("结束日期不能早于开始日期");
+    }
+    if (staffAssignmentRepository.existsByProjectIdAndUserIdAndRoleName(
+        projectId, user.getId(), request.roleName())) {
+      throw new BusinessException("该成员已以相同角色加入项目");
+    }
+    ProjectStaffAssignment item = new ProjectStaffAssignment();
+    item.setProjectId(projectId);
+    item.setUserId(user.getId());
+    item.setDepartmentId(user.getOrganization() == null ? null : user.getOrganization().getId());
+    item.setRoleName(request.roleName());
+    item.setPlannedHours(request.plannedHours() == null ? BigDecimal.ZERO : request.plannedHours());
+    item.setActualHours(BigDecimal.ZERO);
+    item.setHourlyCost(BigDecimal.ZERO);
+    item.setAllocationPercent(request.allocationPercent() == null ? BigDecimal.valueOf(100) : request.allocationPercent());
+    item.setStartDate(request.startDate());
+    item.setEndDate(request.endDate());
+    item.setCertificateStatus("VALID");
+    item.setStatus("PLANNED");
+    staffAssignmentRepository.save(item);
+    return projectStaff(projectId).stream()
+        .filter(s -> item.getId().equals(s.id()))
+        .findFirst()
+        .orElseThrow(() -> new BusinessException("成员添加失败"));
+  }
+
+  @Transactional
+  public void removeProjectStaff(UUID projectId, UUID assignmentId) {
+    requireManageableProject(projectId);
+    ProjectStaffAssignment item = staffAssignmentRepository.findById(assignmentId)
+        .orElseThrow(() -> new BusinessException("项目成员记录不存在"));
+    if (!projectId.equals(item.getProjectId())) {
+      throw new BusinessException("成员不属于该项目");
+    }
+    staffAssignmentRepository.delete(item);
   }
 
   @Transactional(readOnly = true)
@@ -1184,17 +1229,17 @@ public class ProjectService {
         .filter(java.util.Objects::nonNull)
         .distinct()
         .toList();
-    if (parentIds.isEmpty()) return Map.of();
+    if (parentIds.isEmpty()) return new java.util.HashMap<>();
     return projectRepository.findAllById(parentIds).stream()
         .collect(Collectors.toMap(Project::getId,
-            parent -> new ParentRef(parent.getCode(), parent.getName()), (left, right) -> left));
+            parent -> new ParentRef(parent.getCode(), parent.getName()), (left, right) -> left, java.util.HashMap::new));
   }
 
   private Map<UUID, Long> loadChildCounts(List<Project> projects) {
     List<UUID> projectIds = projects.stream().map(Project::getId).toList();
-    if (projectIds.isEmpty()) return Map.of();
+    if (projectIds.isEmpty()) return new java.util.HashMap<>();
     return projectRepository.countChildrenGroupByParent(projectIds).stream()
-        .collect(Collectors.toMap(row -> (UUID) row[0], row -> ((Number) row[1]).longValue()));
+        .collect(Collectors.toMap(row -> (UUID) row[0], row -> ((Number) row[1]).longValue(), (a, b) -> a, java.util.HashMap::new));
   }
 
   private Map<UUID, String> loadCustomerNames(List<Project> projects) {
@@ -1204,10 +1249,10 @@ public class ProjectService {
         .distinct()
         .toList();
     if (customerIds.isEmpty()) {
-      return Map.of();
+      return new java.util.HashMap<>();
     }
     return customerRepository.findAllById(customerIds).stream()
-        .collect(Collectors.toMap(Customer::getId, Customer::getName, (left, right) -> left));
+        .collect(Collectors.toMap(Customer::getId, Customer::getName, (left, right) -> left, java.util.HashMap::new));
   }
 
   private Map<UUID, ServiceContract> loadContracts(List<Project> projects) {
@@ -1216,9 +1261,9 @@ public class ProjectService {
         .filter(java.util.Objects::nonNull)
         .distinct()
         .toList();
-    if (contractIds.isEmpty()) return Map.of();
+    if (contractIds.isEmpty()) return new java.util.HashMap<>();
     return contractRepository.findAllById(contractIds).stream()
-        .collect(Collectors.toMap(ServiceContract::getId, contract -> contract));
+        .collect(Collectors.toMap(ServiceContract::getId, contract -> contract, (a, b) -> a, java.util.HashMap::new));
   }
 
   private Specification<Project> projectSpecification(

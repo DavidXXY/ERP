@@ -341,6 +341,15 @@
         </a-tab-pane>
 
         <a-tab-pane key="staff" :tab="`项目成员 (${staff.length})`">
+          <div class="staff-toolbar">
+            <a-button
+              v-if="canManageStaff"
+              type="primary"
+              size="small"
+              @click="openAddStaffModal"
+              ><PlusOutlined />添加成员</a-button
+            >
+          </div>
           <a-table
             :columns="staffColumns"
             :data-source="staff"
@@ -356,6 +365,20 @@
               </template>
               <template v-else-if="column.key === 'period'">
                 {{ record.startDate }} ~ {{ record.endDate }}
+              </template>
+              <template v-else-if="column.key === 'action'">
+                <a-popconfirm
+                  title="确认将该成员移出项目组？"
+                  @confirm="removeStaff(record)"
+                >
+                  <a-button
+                    v-if="canManageStaff"
+                    type="link"
+                    size="small"
+                    danger
+                    >移除</a-button
+                  >
+                </a-popconfirm>
               </template>
             </template>
           </a-table>
@@ -552,6 +575,69 @@
         </a-row>
       </a-form>
     </a-modal>
+
+    <a-modal
+      v-model:open="staffModal.open"
+      title="添加项目成员"
+      :confirm-loading="staffModal.saving"
+      @ok="addStaff"
+    >
+      <a-form layout="vertical">
+        <a-form-item
+          label="成员账号"
+          :required="true"
+          :rules="[{ required: true, message: '请选择成员' }]"
+        >
+          <a-select
+            v-model:value="staffForm.userId"
+            :options="
+              userOptions.map((u) => ({ value: u.id, label: u.displayName }))
+            "
+            placeholder="选择要加入项目组的员工账号"
+            show-search
+            option-filter-prop="label"
+          />
+        </a-form-item>
+        <a-form-item label="项目角色">
+          <a-input v-model:value="staffForm.roleName" />
+        </a-form-item>
+        <a-row :gutter="12">
+          <a-col :span="12">
+            <a-form-item label="开始日期" :required="true">
+              <a-date-picker
+                v-model:value="staffForm.startDate"
+                value-format="YYYY-MM-DD"
+                style="width: 100%"
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="结束日期" :required="true">
+              <a-date-picker
+                v-model:value="staffForm.endDate"
+                value-format="YYYY-MM-DD"
+                style="width: 100%"
+              />
+            </a-form-item>
+          </a-col>
+        </a-row>
+        <a-form-item label="投入占比（%）">
+          <a-input-number
+            v-model:value="staffForm.allocationPercent"
+            :min="1"
+            :max="100"
+            style="width: 100%"
+          />
+        </a-form-item>
+        <a-form-item label="计划工时">
+          <a-input-number
+            v-model:value="staffForm.plannedHours"
+            :min="0"
+            style="width: 100%"
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </BusinessDetailPage>
 </template>
 
@@ -559,6 +645,7 @@
 import { computed, onMounted, reactive, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { message } from "ant-design-vue";
+import { PlusOutlined } from "@ant-design/icons-vue";
 import BusinessDetailPage, {
   type DetailMetric,
 } from "@/components/BusinessDetailPage.vue";
@@ -567,6 +654,8 @@ import {
   updateProject,
   getProjectTimeline,
   getProjectStaff,
+  addProjectStaff,
+  removeProjectStaff,
   listProjectMilestones,
   createProjectMilestone,
   updateProjectMilestone,
@@ -588,6 +677,7 @@ import {
 } from "@/api/project";
 import { listPurchaseOrders, type PurchaseOrder } from "@/api/procurement";
 import { listReceivablesByContract, type Receivable } from "@/api/crm";
+import { listUserOptionsApi, type UserResponse } from "@/api/system";
 import { useAuthStore } from "@/stores/auth";
 
 const route = useRoute();
@@ -643,6 +733,28 @@ const preparationForm = reactive({
     OTHER: 0,
   } as Record<ProjectCostCategory, number>,
 });
+const userOptions = ref<UserResponse[]>([]);
+const staffModal = reactive<{
+  open: boolean;
+  saving: boolean;
+}>({ open: false, saving: false });
+const staffForm = reactive({
+  userId: undefined as string | undefined,
+  roleName: "项目成员",
+  startDate: "",
+  endDate: "",
+  allocationPercent: 100,
+  plannedHours: 0,
+});
+
+// 项目经理或具备阶段管理权限者可维护项目组成员
+const canManageStaff = computed(
+  () =>
+    auth.can("project:stage:update") ||
+    auth.can("project:create") ||
+    detail.value?.project.managerUserId === auth.user?.id,
+);
+
 const canEditProject = computed(
   () =>
     detail.value?.project.approvalStatus !== "APPROVED" &&
@@ -764,6 +876,7 @@ const staffColumns = [
   { title: "投入占比", key: "allocation", width: 100 },
   { title: "周期", key: "period", width: 210 },
   { title: "状态", dataIndex: "status", width: 110 },
+  { title: "操作", key: "action", width: 90 },
 ];
 const riskColumns = [
   { title: "风险项", key: "title", width: 240 },
@@ -774,6 +887,70 @@ const riskColumns = [
   { title: "应对/处置", key: "resolution" },
   { title: "操作", key: "action", width: 180 },
 ];
+async function openAddStaffModal() {
+  staffModal.open = true;
+  staffForm.userId = undefined;
+  staffForm.roleName = "项目成员";
+  staffForm.startDate = detail.value?.project.plannedStartDate || todayLocal();
+  staffForm.endDate = detail.value?.project.plannedEndDate || todayLocal();
+  staffForm.allocationPercent = 100;
+  staffForm.plannedHours = 0;
+  try {
+    if (!userOptions.value.length) {
+      userOptions.value = await listUserOptionsApi();
+    }
+  } catch {
+    message.warning("加载可选成员失败");
+  }
+}
+
+async function addStaff() {
+  if (!staffForm.userId) {
+    message.warning("请选择成员");
+    return;
+  }
+  if (!staffForm.startDate || !staffForm.endDate) {
+    message.warning("请选择成员周期");
+    return;
+  }
+  staffModal.saving = true;
+  try {
+    const added = await addProjectStaff(projectId.value, {
+      userId: staffForm.userId,
+      roleName: staffForm.roleName || "项目成员",
+      startDate: staffForm.startDate,
+      endDate: staffForm.endDate,
+      allocationPercent: staffForm.allocationPercent,
+      plannedHours: staffForm.plannedHours || 0,
+    });
+    staff.value = [...staff.value, added];
+    staffModal.open = false;
+    message.success("成员已加入项目组");
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "添加成员失败");
+  } finally {
+    staffModal.saving = false;
+  }
+}
+
+async function removeStaff(record: ProjectStaff) {
+  try {
+    await removeProjectStaff(projectId.value, record.id);
+    staff.value = staff.value.filter((item) => item.id !== record.id);
+    message.success("成员已移出项目组");
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "移除成员失败");
+  }
+}
+
+function todayLocal() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 onMounted(loadData);
 async function loadData() {
   loading.value = true;
@@ -1166,6 +1343,11 @@ function categoryLabel(value: string) {
 <style scoped>
 .section-gap {
   margin-top: 16px;
+}
+.staff-toolbar {
+  margin-bottom: 12px;
+  display: flex;
+  justify-content: flex-end;
 }
 .danger {
   color: #cf1322;

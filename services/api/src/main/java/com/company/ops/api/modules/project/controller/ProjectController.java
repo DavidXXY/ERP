@@ -2,6 +2,7 @@ package com.company.ops.api.modules.project.controller;
 
 import com.company.ops.api.common.api.ApiResponse;
 import com.company.ops.api.common.api.PageResponse;
+import com.company.ops.api.modules.project.dto.AddProjectStaffRequest;
 import com.company.ops.api.modules.project.dto.AdvanceProjectStageRequest;
 import com.company.ops.api.modules.project.dto.AssignProjectManagerRequest;
 import com.company.ops.api.modules.project.dto.ChangeProjectExecutionStatusRequest;
@@ -165,6 +166,21 @@ public class ProjectController {
   @PreAuthorize("hasAuthority('project:view')")
   public ApiResponse<List<ProjectStaffResponse>> projectStaff(@PathVariable UUID id) {
     return ApiResponse.ok(projectService.projectStaff(id));
+  }
+
+  @PostMapping("/{id}/staff")
+  @PreAuthorize("hasAnyAuthority('project:stage:update','project:create','system:user:view')")
+  @ResponseStatus(HttpStatus.CREATED)
+  public ApiResponse<ProjectStaffResponse> addProjectStaff(@PathVariable UUID id,
+      @Valid @RequestBody AddProjectStaffRequest request) {
+    return ApiResponse.ok(projectService.addProjectStaff(id, request));
+  }
+
+  @DeleteMapping("/{id}/staff/{assignmentId}")
+  @PreAuthorize("hasAnyAuthority('project:stage:update','project:create','system:user:view')")
+  public ApiResponse<Void> removeProjectStaff(@PathVariable UUID id, @PathVariable UUID assignmentId) {
+    projectService.removeProjectStaff(id, assignmentId);
+    return ApiResponse.ok();
   }
 
   @GetMapping("/{id}/milestones")

@@ -322,6 +322,8 @@
           <a-menu-item key="/self/profile">我的档案</a-menu-item>
           <a-menu-item key="/self/leaves">我的请假</a-menu-item>
           <a-menu-item key="/self/balances">我的额度</a-menu-item>
+          <a-menu-item key="/self/reports">我的汇报</a-menu-item>
+          <a-menu-item key="/self/reports/inbox">下属汇报</a-menu-item>
         </a-sub-menu>
       </a-menu>
       <div

@@ -176,6 +176,7 @@ function relatedRoute(item: NotificationRecord) {
   if (type.includes("APPEAL") || type.includes("RECEIPT"))
     return "/procurement/receipts";
   if (type.includes("PROCUREMENT")) return "/procurement/workbench";
+  if (type.includes("REPORT")) return "/self/reports/inbox";
   return "";
 }
 async function goRelated(item: NotificationRecord) {
@@ -199,6 +200,7 @@ function typeLabel(type?: string) {
         PROCUREMENT: "采购",
         INVENTORY: "库存",
         OUTSOURCE: "外包",
+        REPORT: "汇报",
       } as Record<string, string>
     )[type || ""] ||
     type ||
@@ -211,6 +213,7 @@ function typeColor(type?: string) {
   if (type.includes("SLA") || type.includes("ESCALATED")) return "red";
   if (type === "FINANCE") return "green";
   if (type.includes("PROCUREMENT")) return "blue";
+  if (type.includes("REPORT")) return "cyan";
   if (type === "INVENTORY") return "orange";
   return "default";
 }

@@ -24,6 +24,8 @@ public class ProjectTimesheet extends BaseEntity {
   @Column(name="reviewed_by_name",length=80) private String reviewedByName;
   @Column(name="review_comment",length=500) private String reviewComment;
   @Column(name="reviewed_at") private OffsetDateTime reviewedAt;
+  @Column(name="source_report_id") private java.util.UUID sourceReportId;
+  @Column(name="source_approval_id") private java.util.UUID sourceApprovalId;
   public UUID getAssignmentId(){return assignmentId;} public void setAssignmentId(UUID v){assignmentId=v;}
   public UUID getProjectId(){return projectId;} public void setProjectId(UUID v){projectId=v;}
   public UUID getUserId(){return userId;} public void setUserId(UUID v){userId=v;}
@@ -36,4 +38,6 @@ public class ProjectTimesheet extends BaseEntity {
   public String getReviewedByName(){return reviewedByName;} public void setReviewedByName(String v){reviewedByName=v;}
   public String getReviewComment(){return reviewComment;} public void setReviewComment(String v){reviewComment=v;}
   public OffsetDateTime getReviewedAt(){return reviewedAt;} public void setReviewedAt(OffsetDateTime v){reviewedAt=v;}
+  public java.util.UUID getSourceReportId(){return sourceReportId;} public void setSourceReportId(java.util.UUID v){sourceReportId=v;}
+  public java.util.UUID getSourceApprovalId(){return sourceApprovalId;} public void setSourceApprovalId(java.util.UUID v){sourceApprovalId=v;}
 }

@@ -728,6 +728,18 @@ const rootRoutes: RouteRecordRaw[] = [
     component: () => import("@/views/self/SelfBalanceView.vue"),
     meta: { title: "\u6211\u7684\u989d\u5ea6" },
   },
+  {
+    path: "self/reports",
+    name: "self-reports",
+    component: () => import("@/views/self/SelfReportListView.vue"),
+    meta: { title: "\u6211\u7684\u6c47\u62a5" },
+  },
+  {
+    path: "self/reports/inbox",
+    name: "self-reports-inbox",
+    component: () => import("@/views/self/SelfReportInboxView.vue"),
+    meta: { title: "\u4e0b\u5c5e\u6c47\u62a5" },
+  },
   { path: "self/approvals", redirect: "/collaboration?tab=approvals" },
 ];
 

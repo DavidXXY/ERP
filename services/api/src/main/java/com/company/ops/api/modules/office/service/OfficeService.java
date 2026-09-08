@@ -81,6 +81,7 @@ import com.company.ops.api.modules.project.domain.ProjectCostSource;
 import com.company.ops.api.modules.project.dto.CreateProjectCostRequest;
 import com.company.ops.api.modules.project.repository.ProjectRepository;
 import com.company.ops.api.modules.project.service.ProjectService;
+import com.company.ops.api.modules.reporting.service.ReportHoursService;
 import com.company.ops.api.modules.system.domain.SystemAuditLog;
 import com.company.ops.api.modules.system.domain.SystemRole;
 import com.company.ops.api.modules.system.security.UserPrincipal;
@@ -144,6 +145,7 @@ public class OfficeService {
   private final ApprovalFlowSecurity approvalFlowSecurity;
   private final DeleteGovernanceService deleteGovernanceService;
   private final OfficeDocumentService documentService;
+  private final ReportHoursService reportHoursService;
   @PersistenceContext
   private EntityManager entityManager;
 
@@ -156,7 +158,8 @@ public class OfficeService {
 	                       ProjectRepository projectRepository, WorkOrderRepository workOrderRepository,
 	                       ProjectService projectService, SystemUserRepository userRepository, SystemRoleRepository roleRepository, SystemOrganizationRepository organizationRepository, LedgerService ledgerService, SystemAuditLogRepository auditLogRepository, ApprovalFlowSecurity approvalFlowSecurity,
 	                       DeleteGovernanceService deleteGovernanceService,
-                       OfficeDocumentService documentService) {
+                       OfficeDocumentService documentService,
+                       ReportHoursService reportHoursService) {
     this.approvalRepository = approvalRepository; this.actionRepository = actionRepository; this.runtimeNodeRepository = runtimeNodeRepository;
     this.expenseRepository = expenseRepository; this.expenseLineRepository = expenseLineRepository; this.outsourceRepository = outsourceRepository;
     this.travelRepository = travelRepository; this.sealRepository = sealRepository;
@@ -171,6 +174,7 @@ public class OfficeService {
 	    this.approvalFlowSecurity = approvalFlowSecurity;
 	    this.deleteGovernanceService = deleteGovernanceService;
     this.documentService = documentService;
+    this.reportHoursService = reportHoursService;
 	  }
 
   @Transactional(readOnly = true)
@@ -337,6 +341,7 @@ public class OfficeService {
     if (saved.getApprovalType() == ApprovalType.SEAL) processSealSource(saved);
     if (saved.getApprovalType() == ApprovalType.PURCHASE) processPurchaseSource(saved);
     if ("DELETE".equals(saved.getBusinessType())) processDeleteApproval(saved);
+    if (saved.getApprovalType() == ApprovalType.OTHER) reportHoursService.onApprovalProcessed(saved);
     notify("APPROVAL_RESULT", "审批结果：" + saved.getTitle(), request.decision() == ApprovalStatus.APPROVED ? "审批已通过" : "审批已驳回", "APPROVAL", saved.getId());
     return toApproval(saved);
   }

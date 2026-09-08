@@ -19,6 +19,9 @@
             ><template #icon><CheckSquareOutlined /></template
             >业务待办</a-button
           >
+          <a-button @click="$router.push('/self/reports')"
+            ><template #icon><EditOutlined /></template>我的汇报</a-button
+          >
           <a-button type="primary" @click="$router.push('/self/leaves/new')"
             ><template #icon><PlusOutlined /></template>提交请假</a-button
           >
@@ -46,6 +49,46 @@
             <span>待审批请假</span><strong>{{ pendingLeaveCount }}</strong>
           </div></a-col
         >
+      </a-row>
+    </a-card>
+
+    <a-card title="我的汇报" class="report-card">
+      <template #extra
+        ><a-button type="link" @click="$router.push('/self/reports')"
+          >查看全部</a-button
+        ></template
+      >
+      <a-row :gutter="16">
+        <a-col :xs="24" :md="6">
+          <div class="report-stat">
+            <span>今日日报</span>
+            <strong :class="todayReported ? 'done' : 'todo'">{{
+              todayReported ? "已填写" : "待填写"
+            }}</strong>
+          </div>
+        </a-col>
+        <a-col :xs="24" :md="6">
+          <div class="report-stat">
+            <span>本周周报</span>
+            <strong :class="weekReported ? 'done' : 'todo'">{{
+              weekReported ? "已填写" : "待填写"
+            }}</strong>
+          </div>
+        </a-col>
+        <a-col :xs="24" :md="6">
+          <div class="report-stat">
+            <span>本月月报</span>
+            <strong :class="monthReported ? 'done' : 'todo'">{{
+              monthReported ? "已填写" : "待填写"
+            }}</strong>
+          </div>
+        </a-col>
+        <a-col :xs="24" :md="6">
+          <div class="report-stat">
+            <span>下属汇报收件</span>
+            <strong>{{ receivedReportCount }}</strong>
+          </div>
+        </a-col>
       </a-row>
     </a-card>
 
@@ -107,6 +150,11 @@
                 @click="$router.push('/collaboration?tab=approvals')"
                 ><template #icon><CheckSquareOutlined /></template
                 >业务待办</a-button
+              ></a-col
+            >
+            <a-col :xs="12"
+              ><a-button block @click="$router.push('/self/reports')"
+                ><template #icon><EditOutlined /></template>我的汇报</a-button
               ></a-col
             >
             <a-col :xs="12"
@@ -232,11 +280,13 @@ import { computed, onMounted, ref } from "vue";
 import { toLocalMonthString } from "@/utils/date";
 import {
   PlusOutlined,
+  EditOutlined,
   OrderedListOutlined,
   UserOutlined,
   BarChartOutlined,
   CheckSquareOutlined,
 } from "@ant-design/icons-vue";
+import { getMyReports, getReceivedReports } from "@/api/reporting";
 import {
   getSelfProfile,
   getSelfLeaveBalances,
@@ -259,6 +309,15 @@ const balances = ref<LeaveBalanceRecord[]>([]);
 const recentLeaves = ref<LeaveRecord[]>([]);
 const todos = ref<TodoItem[]>([]);
 
+function startOfWeekLocal(d: Date) {
+  const day = (d.getDay() + 6) % 7; // Monday = 0
+  const copy = new Date(d.getFullYear(), d.getMonth(), d.getDate() - day);
+  const y = copy.getFullYear();
+  const m = String(copy.getMonth() + 1).padStart(2, "0");
+  const dd = String(copy.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
 const greeting = computed(() => {
   const h = new Date().getHours();
   if (h < 6) return "夜深了";
@@ -270,6 +329,15 @@ const greeting = computed(() => {
 const approvalTodoCount = computed(
   () => todos.value.filter((item) => item.type === "APPROVAL_PENDING").length,
 );
+const reportToday = ref(false);
+const reportThisWeek = ref(false);
+const reportThisMonth = ref(false);
+const receivedReportCount = ref(0);
+
+const todayReported = computed(() => reportToday.value);
+const weekReported = computed(() => reportThisWeek.value);
+const monthReported = computed(() => reportThisMonth.value);
+
 const pendingLeaveCount = computed(
   () => recentLeaves.value.filter((item) => item.status === "PENDING").length,
 );
@@ -324,12 +392,15 @@ const leafCols = [
 async function loadData() {
   loading.value = true;
   try {
-    const [profile, bal, leaves, todosData] = await Promise.all([
-      getSelfProfile().catch(() => null),
-      getSelfLeaveBalances().catch(() => []),
-      getSelfLeaves().catch(() => []),
-      getSelfTodos().catch(() => []),
-    ]);
+    const [profile, bal, leaves, todosData, myReports, receivedReports] =
+      await Promise.all([
+        getSelfProfile().catch(() => null),
+        getSelfLeaveBalances().catch(() => []),
+        getSelfLeaves().catch(() => []),
+        getSelfTodos().catch(() => []),
+        getMyReports().catch(() => []),
+        getReceivedReports().catch(() => []),
+      ]);
     todos.value = todosData || [];
     if (profile)
       employee.value = {
@@ -341,6 +412,20 @@ async function loadData() {
       };
     balances.value = bal;
     recentLeaves.value = leaves.slice(0, 10);
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const monday = startOfWeekLocal(now);
+    const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    reportToday.value = myReports.some(
+      (r) => r.reportType === "DAILY" && r.reportDate === today,
+    );
+    reportThisWeek.value = myReports.some(
+      (r) => r.reportType === "WEEKLY" && r.reportDate >= monday,
+    );
+    reportThisMonth.value = myReports.some(
+      (r) => r.reportType === "MONTHLY" && r.reportDate.startsWith(month),
+    );
+    receivedReportCount.value = receivedReports.length;
   } catch {
   } finally {
     loading.value = false;
@@ -387,6 +472,27 @@ onMounted(loadData);
 }
 .balance-num {
   color: #65717e;
+}
+.report-card {
+  margin-top: 0;
+}
+.report-stat {
+  padding: 10px 2px;
+}
+.report-stat span {
+  display: block;
+  color: #65717e;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+.report-stat strong {
+  font-size: 18px;
+}
+.report-stat strong.done {
+  color: #52c41a;
+}
+.report-stat strong.todo {
+  color: #fa8c16;
 }
 .quick-actions :deep(.ant-btn) {
   text-align: left;

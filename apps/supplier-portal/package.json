@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "overrides": {
+    "js-yaml": "4.3.2"
+  },
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 5176",
     "build": "vite build",

@@ -2,6 +2,7 @@ node_modules/
 dist/
 apps/admin/dist/
 apps/admin/coverage/
+apps/admin/coverage */
 apps/mobile/dist/
 .logs/
 apps/admin/vite.config.ts.timestamp-*.mjs

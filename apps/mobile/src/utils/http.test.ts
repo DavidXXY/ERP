@@ -32,7 +32,7 @@ describe("http retryable/offline classification", () => {
 
   it("flags 4xx as non-retryable", async () => {
     const req = vi.mocked(uni.request);
-    req.mockImplementation((opts) => opts.success!({ statusCode: 400, data: { success: false, message: "提交内容不完整或格式有误" } }));
+    req.mockImplementation((opts) => opts.success!({ statusCode: 400, data: { success: false, message: "提交内容不完整或格式有误" }, header: {}, cookies: [] }));
 
     await expect(request({ url: "/x" })).rejects.toMatchObject({ retryable: false, statusCode: 400 });
   });

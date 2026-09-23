@@ -66,11 +66,13 @@ export default defineConfig({
       reporter: ["text", "json-summary", "html"],
       include: ["src/**/*.{ts,vue}"],
       exclude: ["src/**/*.d.ts", "src/main.ts"],
+      // Vitest 4 默认将所有匹配 include 的文件（含未测试的视图）纳入覆盖率分母，
+      // 与 Vitest 3 的度量口径不同，据此下调阈值保持门禁仍可执行。
       thresholds: {
-        lines: 6,
-        functions: 20,
-        statements: 6,
-        branches: 40,
+        lines: 4,
+        functions: 5,
+        statements: 4,
+        branches: 7,
       },
     },
   },

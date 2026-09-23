@@ -1913,7 +1913,9 @@ async function loadActive() {
     }
   } catch (error) {
     if (token === activeLoadToken)
-      message.error(error instanceof Error ? error.message : "资质数据加载失败");
+      message.error(
+        error instanceof Error ? error.message : "资质数据加载失败",
+      );
   } finally {
     if (token === activeLoadToken) loading.value = false;
   }

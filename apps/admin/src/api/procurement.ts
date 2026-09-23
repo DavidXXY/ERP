@@ -466,6 +466,7 @@ export type ProcurementMatching = {
   invoiceAmount: number;
   matchedInvoiceAmount: number;
   paidAmount: number;
+  adjustmentAmount: number;
   matchStatus: string;
   riskMessage: string;
 };

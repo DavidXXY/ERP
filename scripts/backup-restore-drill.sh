@@ -30,8 +30,34 @@ cleanup() {
 }
 trap cleanup EXIT
 
-RESTORE_TARGET="$target" RESTORE_CONFIRM="$target" RESTORE_OBJECTS=false \
+# 可选对象存储恢复演练：恢复到独立演练桶（绝不触碰生产桶），验证对象恢复链路
+restore_env=(RESTORE_OBJECTS=false)
+drill_bucket="${RESTORE_DRILL_OBJECTS_BUCKET:-}"
+if [[ -n "$drill_bucket" ]]; then
+  [[ "$drill_bucket" =~ ^[A-Za-z0-9._-]+$ ]] || {
+    echo "RESTORE_DRILL_OBJECTS_BUCKET may only contain [A-Za-z0-9._-]." >&2; exit 1;
+  }
+  command -v mc >/dev/null 2>&1 || { echo "mc is required for RESTORE_DRILL_OBJECTS_BUCKET." >&2; exit 1; }
+  : "${MINIO_ENDPOINT:?MINIO_ENDPOINT is required for object drill}"
+  : "${MINIO_ACCESS_KEY:?MINIO_ACCESS_KEY is required for object drill}"
+  : "${MINIO_SECRET_KEY:?MINIO_SECRET_KEY is required for object drill}"
+  restore_env=(RESTORE_OBJECTS=true RESTORE_OBJECTS_BUCKET="$drill_bucket" RESTORE_OBJECTS_CONFIRM="$drill_bucket")
+  mc_config="$(mktemp -d "${TMPDIR:-/tmp}/ops-erp-drill-mc.XXXXXX")"
+  MC_CONFIG_DIR="$mc_config" mc alias set erp-drill "$MINIO_ENDPOINT" "$MINIO_ACCESS_KEY" "$MINIO_SECRET_KEY" >/dev/null
+  MC_CONFIG_DIR="$mc_config" mc rb --force "erp-drill/$drill_bucket" >/dev/null 2>&1 || true
+  rm -rf -- "$mc_config"
+fi
+
+RESTORE_TARGET="$target" RESTORE_CONFIRM="$target" "${restore_env[@]}" \
   "$root_dir/scripts/restore-backup.sh" "$latest"
+
+if [[ -n "$drill_bucket" ]]; then
+  mc_config="$(mktemp -d "${TMPDIR:-/tmp}/ops-erp-drill-mc.XXXXXX")"
+  MC_CONFIG_DIR="$mc_config" mc alias set erp-drill "$MINIO_ENDPOINT" "$MINIO_ACCESS_KEY" "$MINIO_SECRET_KEY" >/dev/null
+  MC_CONFIG_DIR="$mc_config" mc rb --force "erp-drill/$drill_bucket" >/dev/null 2>&1 || true
+  rm -rf -- "$mc_config"
+fi
+
 row_count="$(psql "${db_args[@]}" --dbname "$target" --tuples-only --no-align \
   --command 'select count(*) from flyway_schema_history where success = true')"
 [[ "$row_count" =~ ^[1-9][0-9]*$ ]] || { echo "Restore drill schema verification failed." >&2; exit 1; }

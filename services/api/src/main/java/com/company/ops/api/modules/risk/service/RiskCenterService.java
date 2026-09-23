@@ -20,6 +20,16 @@ import com.company.ops.api.modules.office.service.OfficeService;
 import com.company.ops.api.modules.procurement.dto.ProcurementMatchingResponse;
 import com.company.ops.api.modules.procurement.service.ProcurementService;
 import com.company.ops.api.modules.project.dto.ProjectProfitabilityResponse;
+import com.company.ops.api.modules.project.domain.MilestoneStatus;
+import com.company.ops.api.modules.project.domain.Project;
+import com.company.ops.api.modules.project.domain.ProjectApprovalStatus;
+import com.company.ops.api.modules.project.domain.ProjectMilestone;
+import com.company.ops.api.modules.project.domain.ProjectRisk;
+import com.company.ops.api.modules.project.domain.ProjectStage;
+import com.company.ops.api.modules.project.domain.RiskStatus;
+import com.company.ops.api.modules.project.repository.ProjectMilestoneRepository;
+import com.company.ops.api.modules.project.repository.ProjectRepository;
+import com.company.ops.api.modules.project.repository.ProjectRiskRepository;
 import com.company.ops.api.modules.project.service.ProjectService;
 import com.company.ops.api.modules.qualification.domain.QualificationEmployee;
 import com.company.ops.api.modules.qualification.dto.QualificationDtos.WarningResponse;
@@ -54,6 +64,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -79,6 +90,9 @@ public class RiskCenterService {
   private final SystemRoleRepository roleRepository;
   private final SystemUserRepository userRepository;
   private final QualificationEmployeeRepository employeeRepository;
+  private final ProjectMilestoneRepository milestoneRepository;
+  private final ProjectRiskRepository projectRiskRepository;
+  private final ProjectRepository projectRepository;
 
   public RiskCenterService(
       OfficeService officeService,
@@ -95,7 +109,10 @@ public class RiskCenterService {
       SystemNotificationRepository notificationRepository,
       SystemRoleRepository roleRepository,
       SystemUserRepository userRepository,
-      QualificationEmployeeRepository employeeRepository) {
+      QualificationEmployeeRepository employeeRepository,
+      ProjectMilestoneRepository milestoneRepository,
+      ProjectRiskRepository projectRiskRepository,
+      ProjectRepository projectRepository) {
     this.officeService = officeService;
     this.inventoryService = inventoryService;
     this.procurementService = procurementService;
@@ -111,6 +128,9 @@ public class RiskCenterService {
     this.roleRepository = roleRepository;
     this.userRepository = userRepository;
     this.employeeRepository = employeeRepository;
+    this.milestoneRepository = milestoneRepository;
+    this.projectRiskRepository = projectRiskRepository;
+    this.projectRepository = projectRepository;
   }
 
   @Transactional(readOnly = true)
@@ -354,6 +374,9 @@ public class RiskCenterService {
     loadInventory(items::add, workflows, rules);
     loadProcurement(items::add, workflows, rules);
     loadProjects(items::add, workflows, rules);
+    loadProjectMilestones(items::add, workflows, rules);
+    loadProjectRisks(items::add, workflows, rules);
+    loadProjectDelivery(items::add, workflows, rules);
     loadFinance(items::add, workflows, rules);
     loadQualification(items::add, workflows, rules);
     loadRenewals(items::add, workflows, rules);
@@ -415,6 +438,81 @@ public class RiskCenterService {
           "毛利率 " + percent(item.grossMarginRate()) + "，预算使用 " + percent(item.budgetUsageRate()),
           severity(riskLevel), "OPEN", item.grossMargin(), null, "/projects/list", "project_profitability", null, workflows, rules));
     }
+  }
+
+  private void loadProjectMilestones(Consumer<RiskItemResponse> sink, Map<String, RiskWorkflowResponse> workflows, Map<String, RiskRuleConfig> rules) {
+    if (!can("project:view")) return;
+    LocalDate today = LocalDate.now();
+    Set<UUID> visibleIds = projectService.visibleProjectIds();
+    if (visibleIds != null && visibleIds.isEmpty()) return;
+    List<ProjectMilestone> milestones = visibleIds == null
+        ? milestoneRepository.findByPlannedDateBeforeAndStatusNot(today, MilestoneStatus.COMPLETED)
+        : milestoneRepository.findByPlannedDateBeforeAndStatusNotAndProjectIdIn(today, MilestoneStatus.COMPLETED, visibleIds);
+    Map<UUID, Project> projects = projectsById(milestones.stream()
+        .map(ProjectMilestone::getProjectId).toList());
+    for (ProjectMilestone milestone : milestones) {
+      long days = java.time.temporal.ChronoUnit.DAYS.between(milestone.getPlannedDate(), today);
+      String key = "project-milestone-" + milestone.getId();
+      Project project = projects.get(milestone.getProjectId());
+      String subject = project == null ? "-" : project.getCode() + " · " + project.getName();
+      sink.accept(item(key, "project", "项目管理", "里程碑逾期", milestone.getName() + " · " + subject,
+          "计划完成 " + milestone.getPlannedDate() + "，已逾期 " + days + " 天",
+          days >= 7 ? "HIGH" : "MEDIUM", "OVERDUE", null, date(milestone.getPlannedDate()),
+          "/projects/list", "project_milestone_overdue", startAt(milestone.getPlannedDate()), workflows, rules));
+    }
+  }
+
+  private void loadProjectRisks(Consumer<RiskItemResponse> sink, Map<String, RiskWorkflowResponse> workflows, Map<String, RiskRuleConfig> rules) {
+    if (!can("project:view")) return;
+    LocalDate today = LocalDate.now();
+    Set<UUID> visibleIds = projectService.visibleProjectIds();
+    if (visibleIds != null && visibleIds.isEmpty()) return;
+    List<ProjectRisk> risks = visibleIds == null
+        ? projectRiskRepository.findByDueDateBeforeAndStatusNot(today, RiskStatus.CLOSED)
+        : projectRiskRepository.findByDueDateBeforeAndStatusNotAndProjectIdIn(today, RiskStatus.CLOSED, visibleIds);
+    Map<UUID, Project> projects = projectsById(risks.stream()
+        .map(ProjectRisk::getProjectId).toList());
+    for (ProjectRisk risk : risks) {
+      long days = java.time.temporal.ChronoUnit.DAYS.between(risk.getDueDate(), today);
+      String key = "project-risk-" + risk.getId();
+      Project project = projects.get(risk.getProjectId());
+      String subject = project == null ? risk.getTitle() : project.getCode() + " · " + project.getName() + " · " + risk.getTitle();
+      sink.accept(item(key, "project", "项目管理", "项目风险逾期", risk.getTitle() + " · " + subject,
+          "责任处理截止 " + risk.getDueDate() + "，已逾期 " + days + " 天",
+          "HIGH".equals(risk.getSeverity() == null ? null : risk.getSeverity().name()) ? "HIGH" : "MEDIUM",
+          "OVERDUE", null, date(risk.getDueDate()), "/projects/list", "project_risk_overdue",
+          startAt(risk.getDueDate()), workflows, rules));
+    }
+  }
+
+  private void loadProjectDelivery(Consumer<RiskItemResponse> sink, Map<String, RiskWorkflowResponse> workflows, Map<String, RiskRuleConfig> rules) {
+    if (!can("project:view")) return;
+    LocalDate today = LocalDate.now();
+    Set<UUID> visibleIds = projectService.visibleProjectIds();
+    if (visibleIds != null && visibleIds.isEmpty()) return;
+    List<Project> deliveryProjects = visibleIds == null
+        ? projectRepository.findDeliveryRiskProjects(
+            ProjectApprovalStatus.APPROVED, ProjectStage.CLOSED, today, today.plusDays(14))
+        : projectRepository.findDeliveryRiskProjectsAndProjectIdIn(
+            ProjectApprovalStatus.APPROVED, ProjectStage.CLOSED, today, today.plusDays(14), visibleIds);
+    for (Project project : deliveryProjects) {
+      boolean overdue = project.getPlannedEndDate() != null && project.getPlannedEndDate().isBefore(today);
+      long days = Math.abs(java.time.temporal.ChronoUnit.DAYS.between(today, project.getPlannedEndDate()));
+      String key = "project-delivery-" + project.getId();
+      sink.accept(item(key, "project", "项目管理", overdue ? "项目交付逾期" : "项目临近交付",
+          project.getCode() + " · " + project.getName(),
+          overdue ? "计划完成已逾期 " + days + " 天" : "计划完成 " + project.getPlannedEndDate(),
+          overdue ? "HIGH" : "MEDIUM", overdue ? "OVERDUE" : "OPEN", null,
+          date(project.getPlannedEndDate()), "/projects/list", "project_delivery",
+          startAt(project.getPlannedEndDate()), workflows, rules));
+    }
+  }
+
+  private Map<UUID, Project> projectsById(List<UUID> projectIds) {
+    List<UUID> ids = projectIds.stream().filter(java.util.Objects::nonNull).distinct().toList();
+    if (ids.isEmpty()) return Map.of();
+    return projectRepository.findAllById(ids).stream()
+        .collect(Collectors.toMap(Project::getId, project -> project, (a, b) -> a));
   }
 
   private void loadFinance(Consumer<RiskItemResponse> sink, Map<String, RiskWorkflowResponse> workflows, Map<String, RiskRuleConfig> rules) {
@@ -566,6 +664,9 @@ public class RiskCenterService {
     putDefault(rules, "inventory_replenishment", "库存补货", "inventory", null, null, null, 72, "仓库管理员", "运营负责人");
     putDefault(rules, "procurement_matching", "采购三单匹配", "procurement", null, null, null, 48, "采购负责人", "运营负责人");
     putDefault(rules, "project_profitability", "项目利润风险", "project", BigDecimal.valueOf(0), BigDecimal.valueOf(10), null, 72, "项目经理", "项目总监");
+    putDefault(rules, "project_milestone_overdue", "项目里程碑逾期", "project", null, null, null, 24, "项目经理", "项目总监");
+    putDefault(rules, "project_risk_overdue", "项目风险逾期", "project", null, null, null, 24, "项目经理", "项目总监");
+    putDefault(rules, "project_delivery", "项目交付预警", "project", null, null, 14, 72, "项目经理", "项目总监");
     putDefault(rules, "finance_receivable_overdue", "应收逾期", "finance", null, null, null, 24, "财务经理", "总经理");
     putDefault(rules, "finance_payable_overdue", "应付逾期", "finance", null, null, null, 48, "财务经理", "总经理");
     putDefault(rules, "qualification_expiry", "资质到期", "qualification", null, null, 30, 72, "资质管理员", "综合负责人");

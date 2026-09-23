@@ -993,7 +993,9 @@ const snapshotColumns = [
   { title: "固化时间", key: "time", width: 170 },
 ];
 
+let loadSeq = 0;
 async function loadAll() {
+  const seq = ++loadSeq;
   loading.value = true;
   try {
     const [o, j, b, c, p, t, co, s, v, projects] = await Promise.all([
@@ -1008,6 +1010,7 @@ async function loadAll() {
       listVoucherRequests(),
       listProjectProfitability(),
     ]);
+    if (seq !== loadSeq) return;
     Object.assign(overview, o);
     periodJobs.value = j;
     budgetRows.value = b;
@@ -1019,9 +1022,9 @@ async function loadAll() {
     voucherRequests.value = v;
     projectRows.value = projects;
   } catch (e: any) {
-    message.error(e?.message || "财务运营数据加载失败");
+    if (seq === loadSeq) message.error(e?.message || "财务运营数据加载失败");
   } finally {
-    loading.value = false;
+    if (seq === loadSeq) loading.value = false;
   }
 }
 async function loadPartners() {

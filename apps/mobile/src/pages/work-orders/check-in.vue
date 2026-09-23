@@ -2,7 +2,8 @@
 import { ref } from "vue";
 import { onLoad } from "@dcloudio/uni-app";
 import { checkInWorkOrder, uploadWorkOrderAttachment } from "@/api/maintenance";
-import { createOperationId, persistOfflineFile, queueOperation } from "@/utils/offline";
+import { createOperationId, queueOfflineUpload, queueOperation } from "@/utils/offline";
+import { isRetryableError } from "@/utils/http";
 
 const id = ref("");
 const address = ref("");
@@ -36,19 +37,20 @@ async function submit() {
   try {
     await checkInWorkOrder(id.value, payload);
     let queued = 0;
+    let skipped = 0;
     for (const path of photos.value) {
       try { await uploadWorkOrderAttachment(id.value, "SITE_PHOTO", path); }
-      catch { const savedPath = await persistOfflineFile(path); queueOperation({ label: "签到现场照片", kind: "UPLOAD", upload: { url: `/maintenance/mobile/work-orders/${id.value}/attachments`, filePath: savedPath, formData: { category: "SITE_PHOTO" }, savedFile: savedPath !== path } }); queued++; }
+      catch (e) { if (!isRetryableError(e)) continue; if (await queueOfflineUpload({ label: "签到现场照片", url: `/maintenance/mobile/work-orders/${id.value}/attachments`, filePath: path, formData: { category: "SITE_PHOTO" } })) queued++; else skipped++; }
     }
-    uni.showToast({ title: queued ? "签到成功，照片稍后同步" : "签到成功", icon: "success" });
+    uni.showToast({ title: skipped ? "签到成功，部分照片需联网提交" : (queued ? "签到成功，照片稍后同步" : "签到成功"), icon: "success" });
     setTimeout(() => uni.navigateBack(), 700);
   } catch (e) {
-    const message = (e as Error).message;
-    if (message.includes("网络")) {
-      for (const path of photos.value) { const savedPath = await persistOfflineFile(path); queueOperation({ label: "签到现场照片", kind: "UPLOAD", upload: { url: `/maintenance/mobile/work-orders/${id.value}/attachments`, filePath: savedPath, formData: { category: "SITE_PHOTO" }, savedFile: savedPath !== path } }); }
+    if (isRetryableError(e)) {
+      let skipped = 0;
+      for (const path of photos.value) if (!await queueOfflineUpload({ label: "签到现场照片", url: `/maintenance/mobile/work-orders/${id.value}/attachments`, filePath: path, formData: { category: "SITE_PHOTO" } })) skipped++;
       queueOperation({ label: "工单现场签到", kind: "REQUEST", request: { url: `/maintenance/mobile/work-orders/${id.value}/check-in`, method: "PUT", data: payload } });
-      uni.showToast({ title: "已保存，联网后自动同步", icon: "none" }); setTimeout(() => uni.navigateBack(), 900);
-    } else uni.showToast({ title: message, icon: "none" });
+      uni.showToast({ title: skipped ? "记录已保存，照片需联网提交" : "已保存，联网后自动同步", icon: "none" }); setTimeout(() => uni.navigateBack(), 900);
+    } else uni.showToast({ title: (e as Error).message, icon: "none" });
   } finally { submitting.value = false; }
 }
 onLoad((query) => { id.value = String(query?.id || ""); setTimeout(locate, 300); });

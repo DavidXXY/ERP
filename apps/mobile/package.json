@@ -10,7 +10,7 @@
     "@babel/core": "7.29.7",
     "@intlify/core-base": "9.14.5",
     "@intlify/message-resolver": "9.1.11",
-    "adm-zip": "0.6.0",
+    "adm-zip": "0.6.1",
     "body-parser": "1.20.6",
     "brace-expansion": "5.0.9",
     "cookie": "0.7.2",
@@ -47,10 +47,11 @@
     "@dcloudio/types": "3.4.31",
     "@dcloudio/vite-plugin-uni": "3.0.0-5020420260813001",
     "@types/node": "^22.10.2",
+    "@vitest/coverage-v8": "^4.1.11",
     "sass": "^1.83.0",
     "typescript": "5.5.4",
     "vite": "6.4.3",
-    "vitest": "^3.2.6",
+    "vitest": "^4.1.11",
     "vue-tsc": "2.1.10"
   }
 }

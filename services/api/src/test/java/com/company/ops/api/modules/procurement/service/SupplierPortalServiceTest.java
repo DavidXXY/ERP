@@ -360,6 +360,26 @@ class SupplierPortalServiceTest {
   }
 
   @Test
+  void registrationBindsToExistingSupplierByNormalizedNameWhenCreditCodeMissing() {
+    Fixture fixture = fixture();
+    fixture.supplier.setName("江苏智联电气设备有限公司");
+    fixture.supplier.setUnifiedSocialCreditCode(null);
+    when(suppliers.findFirstByUnifiedSocialCreditCodeIgnoreCase("91310000TEST000002"))
+        .thenReturn(Optional.empty());
+    when(suppliers.findAllByOrderByCreatedAtDesc()).thenReturn(List.of(fixture.supplier));
+    when(invitations.findBySupplierIdOrderByInvitedAtDesc(fixture.supplier.getId()))
+        .thenReturn(List.of());
+
+    // 名称能匹配到既有供应商时，不应重复建档，而是进入“已有供应商”绑定分支（要求邀请注册码）。
+    assertThatThrownBy(() -> service.register(new RegisterRequest(
+        "江苏智联电气设备有限公司", "91310000test000002", null, "联系人", "portal@example.com",
+        "13800000000", "password123", "ANY-CODE", null, null, null), "1.2.3.4"))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("注册码无效或已过期");
+    verify(suppliers, never()).save(any());
+  }
+
+  @Test
   void supplierCanSubmitInformationChangeRequest() {
     Fixture fixture = fixture();
     when(suppliers.findById(fixture.supplier.getId())).thenReturn(Optional.of(fixture.supplier));

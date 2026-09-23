@@ -59,7 +59,6 @@ infra                 本地 PostgreSQL、Redis、对象存储配置
 deploy                Nginx、systemd、备份和生产部署脚本
 docs                  架构、使用和业务流程文档
 scripts                本地开发、验证、备份和恢复脚本
-src                   React 原型（仅作交互参考保留）
 ```
 
 ## 本地开发
@@ -94,7 +93,7 @@ npm run supplier:dev  # 供应商门户，5176
 npm run mobile:dev    # 移动 H5，5180
 ```
 
-首次本地登录的管理端账号由后端启动配置创建，默认值为：用户名 `admin`，密码 `Admin@123`。该账号仅用于开发，生产环境必须通过 `BOOTSTRAP_ADMIN_PASSWORD` 设置随机密码并及时修改。供应商既可通过门户注册，也可由系统管理员或采购经理从已有供应商主档直接开通门户账号；自行绑定已有主档时仍需采购邀请生成的 7 天一次性注册码。
+首次本地登录的管理端账号由后端在启动时创建，且只有在设置了 `BOOTSTRAP_ADMIN_PASSWORD`（至少 12 位）时才会创建，默认用户名为 `admin`。未设置该变量时不会创建任何账号。本地开发请先导出该变量（例如 `export BOOTSTRAP_ADMIN_PASSWORD='ChangeMe_12345'`）再启动后端；账号仅在用户名不存在时创建，后续重启不会覆盖已修改的密码。生产环境必须使用随机强密码。供应商既可通过门户注册，也可由系统管理员或采购经理从已有供应商主档直接开通门户账号；自行绑定已有主档时仍需采购邀请生成的 7 天一次性注册码。
 
 常用命令：
 
@@ -128,7 +127,7 @@ npm run test:e2e:install
 npm run test:e2e
 ```
 
-CI 还会执行依赖漏洞审查、Secret scan、CodeQL、SBOM 生成、迁移测试和前端 bundle 预算检查。四个前端目录各自保留锁文件，更新依赖时请同步运行对应的 typecheck、lint 和 build。
+CI 还会执行依赖漏洞审查、Secret scan、CodeQL、Trivy 容器与配置扫描、SBOM 生成、迁移测试、主库/H2 迁移一致性检查和前端 bundle 预算检查。三个前端目录各自保留锁文件，更新依赖时请同步运行对应的 typecheck、lint 和 build。
 
 ## 生产部署
 
@@ -145,6 +144,8 @@ CI 还会执行依赖漏洞审查、Secret scan、CodeQL、SBOM 生成、迁移�
 
 - [超详细使用教程（带实际界面截图）](docs/使用教程-带截图.md)
 - [系统详细使用教程](docs/system-usage.md)
+- [员工汇报：日报/周报/月报与工程工时确认](docs/employee-reports.md)
+- [项目风险负责人指派](docs/system-usage.md#65-项目风险与负责人)
 - [系统架构说明](docs/architecture.md)
 - [供应商门户与双通道报价说明](docs/supplier-portal.md)
 - [流程控制闭环说明](docs/process-control-optimization-2026-08-05.md)

@@ -54,6 +54,19 @@ public class DataScopeService {
     return ownerUserId;
   }
 
+  /**
+   * 校验负责人用户 ID 是否合法且在当前用户的数据范围内，并返回其显示名（用于同步 ownerName 快照）。
+   */
+  @Transactional(readOnly = true)
+  public String requireVisibleOwnerName(UUID ownerUserId) {
+    if (ownerUserId == null) throw new BusinessException("负责人不能为空");
+    if (!canViewAssignee(ownerUserId, false)) throw new BusinessException("无权分配给该负责人");
+    SystemUser user = userRepository.findById(ownerUserId)
+        .orElseThrow(() -> new BusinessException("负责人必须是组织架构中的启用用户"));
+    if (!user.isEnabled()) throw new BusinessException("负责人必须是组织架构中的启用用户");
+    return user.getDisplayName();
+  }
+
   public String currentActorName() {
     UserPrincipal principal = principal();
     if (principal == null) throw new BusinessException("无法识别当前操作人");

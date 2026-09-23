@@ -343,7 +343,7 @@
             :title="
               matching?.matchStatus === 'MATCHED'
                 ? '订单、收货、应付三单匹配'
-                : '存在数量或金额差异'
+                : matchingRiskLabel || '存在数量或金额差异'
             "
             :sub-title="matching?.riskMessage || '等待业务数据形成完整匹配结果'"
           />
@@ -924,9 +924,26 @@ const currentStep = computed(() =>
             ? 1
             : 0,
 );
+const matchingRiskLabel = computed(() => {
+  const status = matching.value?.matchStatus;
+  if (!status || status === "MATCHED") return "";
+  return (
+    (
+      {
+        RECEIVING: "收货数量不足（收货 < 订单）",
+        PAYABLE_MISSING: "应付少于入库金额",
+        AMOUNT_MISMATCH: "金额不一致",
+        INVOICE_PENDING: "发票未开齐（发票 < 应付）",
+        INVOICE_MISMATCH: "发票超额（发票 > 应付）",
+        INVOICE_REVIEW: "发票待匹配审核",
+        CANCELLED: "订单已取消",
+      } as Record<string, string>
+    )[status] || "三单匹配差异"
+  );
+});
 const riskLabel = computed(() =>
-  matching.value && matching.value.matchStatus !== "MATCHED"
-    ? "三单匹配存在差异"
+  matchingRiskLabel.value
+    ? matchingRiskLabel.value
     : receipts.value.some((i) => Number(i.rejectedQty || 0) > 0)
       ? "到货存在不合格品"
       : order.value?.expectedDeliveryDate &&
@@ -935,10 +952,10 @@ const riskLabel = computed(() =>
         ? "采购交付已逾期"
         : "",
 );
-const riskDescription = computed(
-  () =>
-    matching.value?.riskMessage ||
-    "请处理退货、补货或供应商质量改进，确认后再进入发票和付款环节。",
+const riskDescription = computed(() =>
+  matchingRiskLabel.value
+    ? matching.value?.riskMessage || ""
+    : "请处理退货、补货或供应商质量改进，确认后再进入发票和付款环节。",
 );
 const quotationColumns = [
   { title: "供应商", key: "supplier", width: 240 },

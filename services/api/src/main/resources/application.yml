@@ -110,6 +110,7 @@ ops:
     portal-url: ${SUPPLIER_PORTAL_URL:http://localhost:5176}
   supplier-portal:
     # 仅开发联调使用：SMTP 未启用时把密码重置验证码直接回传给前端；生产必须关闭。
-    dev-password-reset-code: ${DEV_PASSWORD_RESET_CODE_RETURN:true}
+    # 默认关闭（opt-in），仅当显式设置 DEV_PASSWORD_RESET_CODE_RETURN=true 时才回传。
+    dev-password-reset-code: ${DEV_PASSWORD_RESET_CODE_RETURN:false}
   maintenance:
     plan-generation-cron: ${MAINTENANCE_PLAN_GENERATION_CRON:0 5 1 * * *}

@@ -441,7 +441,7 @@ const http = axios.create({
 });
 
 http.interceptors.request.use((config) => {
-  const token = localStorage.getItem(SUPPLIER_TOKEN_KEY);
+  const token = sessionStorage.getItem(SUPPLIER_TOKEN_KEY);
   if (token && !config.url?.startsWith("/auth/")) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -452,13 +452,13 @@ http.interceptors.response.use(
   (response) => {
     if (response.config.url?.endsWith("/me")) {
       const token = response.data?.data?.token;
-      if (token) localStorage.setItem(SUPPLIER_TOKEN_KEY, token);
+      if (token) sessionStorage.setItem(SUPPLIER_TOKEN_KEY, token);
     }
     return response;
   },
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem(SUPPLIER_TOKEN_KEY);
+      sessionStorage.removeItem(SUPPLIER_TOKEN_KEY);
       if (location.pathname !== "/login") location.href = "/login";
     }
     return Promise.reject(
@@ -510,14 +510,42 @@ export const uploadDocument = (data: FormData) =>
   request<PortalDocument>({ url: "/documents", method: "POST", data });
 export const deleteDocument = (id: string) =>
   request<void>({ url: `/documents/${id}`, method: "DELETE" });
-const withToken = (url: string) => {
-  const token = localStorage.getItem(SUPPLIER_TOKEN_KEY);
-  return token ? `${url}?token=${encodeURIComponent(token)}` : url;
-};
-export const documentDownloadUrl = (id: string) =>
-  withToken(`${http.defaults.baseURL}/documents/${id}/download`);
+
+/**
+ * 通过带 Authorization 头的 blob 请求下载文件，避免把 token 拼进 URL
+ * （防止 token 泄漏到浏览器历史、服务器/代理访问日志与 Referer）。
+ */
+export async function downloadFile(url: string, filename?: string) {
+  const response = await http.get<Blob>(url, { responseType: "blob" });
+  const disposition = response.headers?.["content-disposition"] as
+    | string
+    | undefined;
+  const objectUrl = URL.createObjectURL(response.data);
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = filename || fileNameFromDisposition(disposition) || "";
+  anchor.click();
+  URL.revokeObjectURL(objectUrl);
+}
+
+function fileNameFromDisposition(disposition?: string) {
+  if (!disposition) return undefined;
+  const utf = /filename\*=UTF-8''([^;]+)/i.exec(disposition);
+  if (utf) {
+    try {
+      return decodeURIComponent(utf[1]);
+    } catch {
+      return utf[1];
+    }
+  }
+  const plain = /filename="?([^";]+)"?/i.exec(disposition);
+  return plain ? plain[1] : undefined;
+}
+
+// 以下 *Url 函数返回相对 API 路径，配合 downloadFile 使用（不再内嵌 token）。
+export const documentDownloadUrl = (id: string) => `/documents/${id}/download`;
 export const contractDocumentDownloadUrl = (id: string) =>
-  withToken(`${http.defaults.baseURL}/contract-documents/${id}/download`);
+  `/contract-documents/${id}/download`;
 export type NotificationPage = {
   items: PortalNotification[];
   hasMore: boolean;
@@ -549,11 +577,11 @@ export const uploadInvoiceSubmission = (data: FormData) =>
 export const deleteInvoiceSubmission = (id: string) =>
   request<void>({ url: `/invoices/submissions/${id}`, method: "DELETE" });
 export const invoiceSubmissionDownloadUrl = (id: string) =>
-  withToken(`${http.defaults.baseURL}/invoices/submissions/${id}/download`);
+  `/invoices/submissions/${id}/download`;
 export const listPayables = () =>
   request<PortalPayable[]>({ url: "/payables" });
 export const paymentReceiptDownloadUrl = (id: string) =>
-  withToken(`${http.defaults.baseURL}/payables/${id}/receipt/download`);
+  `/payables/${id}/receipt/download`;
 export const getFinanceSummary = () =>
   request<FinanceSummary>({ url: "/finance/summary" });
 export const createShipment = (
@@ -603,9 +631,7 @@ export const deleteShipmentAttachment = (shipmentId: string, id: string) =>
     method: "DELETE",
   });
 export const shipmentAttachmentDownloadUrl = (shipmentId: string, id: string) =>
-  withToken(
-    `${http.defaults.baseURL}/shipments/${shipmentId}/attachments/${id}/download`,
-  );
+  `/shipments/${shipmentId}/attachments/${id}/download`;
 export const respondOrderChange = (
   orderId: string,
   changeId: string,
@@ -709,19 +735,14 @@ export const deleteQuoteAttachment = (inquiryId: string, id: string) =>
     method: "DELETE",
   });
 export const quoteAttachmentDownloadUrl = (inquiryId: string, id: string) =>
-  withToken(
-    `${http.defaults.baseURL}/inquiries/${inquiryId}/attachments/${id}/download`,
-  );
+  `/inquiries/${inquiryId}/attachments/${id}/download`;
 export const quotePdfUrl = (inquiryId: string) =>
-  withToken(`${http.defaults.baseURL}/inquiries/${inquiryId}/quote/pdf`);
-export const orderPdfUrl = (orderId: string) =>
-  withToken(`${http.defaults.baseURL}/orders/${orderId}/pdf`);
+  `/inquiries/${inquiryId}/quote/pdf`;
+export const orderPdfUrl = (orderId: string) => `/orders/${orderId}/pdf`;
 export const quoteExcelUrl = (inquiryId: string) =>
-  withToken(`${http.defaults.baseURL}/inquiries/${inquiryId}/quote/excel`);
-export const orderExcelUrl = (orderId: string) =>
-  withToken(`${http.defaults.baseURL}/orders/${orderId}/excel`);
-export const financeExcelUrl = () =>
-  withToken(`${http.defaults.baseURL}/finance/excel`);
+  `/inquiries/${inquiryId}/quote/excel`;
+export const orderExcelUrl = (orderId: string) => `/orders/${orderId}/excel`;
+export const financeExcelUrl = () => `/finance/excel`;
 export const askClarification = (id: string, question: string) =>
   request<Clarification>({
     url: `/inquiries/${id}/clarifications`,

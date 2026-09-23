@@ -1059,15 +1059,20 @@ function matchText(v: string) {
     )[v] || v
   );
 }
+let loadSeq = 0;
 async function loadData() {
+  const seq = ++loadSeq;
   loading.value = true;
   try {
-    Object.assign(data, await getCollaborationOverview(filters));
-    Object.assign(references, await getCollaborationReferences());
+    const overview = await getCollaborationOverview(filters);
+    const refs = await getCollaborationReferences();
+    if (seq !== loadSeq) return;
+    Object.assign(data, overview);
+    Object.assign(references, refs);
   } catch (e: any) {
-    message.error(e.message || "加载失败");
+    if (seq === loadSeq) message.error(e.message || "加载失败");
   } finally {
-    loading.value = false;
+    if (seq === loadSeq) loading.value = false;
   }
 }
 

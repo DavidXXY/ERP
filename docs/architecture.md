@@ -29,6 +29,7 @@
 - `modules.risk`：统一风险项、规则、责任人、SLA、升级、闭环和快照。
 - `modules.governance`：跨模块经营控制、会计期间、关账守卫、银行流水和对账。
 - `modules.mobile`：移动工作台聚合。
+- `modules.reporting`：员工日报/周报/月报、工程汇报工时校验、项目经理确认审批联动和下属汇报收件箱。
 - `modules.bi`：经营驾驶舱和跨模块分析。
 - `modules.system`：组织、用户、角色、权限、数据范围、认证版本和系统运行状态。
 
@@ -88,7 +89,7 @@
 - 强制关账和反结账共用 `governance:period:close` 权限，但必须由一名用户发起、另一名用户复核；普通且已满足检查项的关账仍可直接完成。
 - 业务闭环提供可复用聚合接口：OA 统一待办/预警、采购三单匹配、库存补货建议、项目利润摘要，前端可直接接入形成经营看板和异常处理入口。
 - 当前种子角色包括 `ADMIN` 和 `CRM_MANAGER`；`ADMIN` 拥有全部已落地权限。
-- 开发环境默认管理员为 `admin / Admin@123`，生产环境必须改为正式密码策略和用户初始化流程。
+- 后端只在设置了 `BOOTSTRAP_ADMIN_PASSWORD`（至少 12 位）时创建首次管理员账号，默认用户名 `admin`（可用 `BOOTSTRAP_ADMIN_USERNAME`、`BOOTSTRAP_ADMIN_DISPLAY_NAME` 覆盖）；未设置时不创建账号。账号仅在用户名不存在时创建，重启不会覆盖已修改的密码。生产环境必须使用随机强密码并替换全部默认密钥。
 
 ## API 约定
 
@@ -128,9 +129,9 @@
 - 管理端单元测试只收集 `src`，浏览器关键流程由 Playwright 分别在 Chromium 桌面和移动视口验证登录、路由权限和按钮权限。
 - CI 安装 Chromium、上传 Playwright 报告，并检查 PostgreSQL Testcontainers 测试报告的 `skipped="0"`，防止 Docker 缺失导致迁移测试被误判为通过。
 
-## 前端原型说明
+## 前端说明
 
-`src/` 目录下的 React 原型仅作为早期产品交互参考，不是当前生产管理端。生产管理端是 `apps/admin`，移动端是 `apps/mobile`；两者均通过 `/api` 与 Spring Boot 后端通信。
+生产管理端是 `apps/admin`，供应商门户是 `apps/supplier-portal`，移动端是 `apps/mobile`；三者均通过 `/api` 与 Spring Boot 后端通信。
 
 ### 财务模块 API 示例
 

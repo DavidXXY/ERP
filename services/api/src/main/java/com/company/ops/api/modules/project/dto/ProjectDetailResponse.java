@@ -6,5 +6,9 @@ public record ProjectDetailResponse(
     ProjectResponse project,
     List<ProjectBudgetItemResponse> budgetItems,
     List<ProjectCostEntryResponse> costEntries,
-    List<ProjectStageRecordResponse> stageRecords
+    List<ProjectStageRecordResponse> stageRecords,
+    List<ProjectMilestoneResponse> milestones,
+    List<ProjectRiskResponse> risks,
+    List<ProjectStaffResponse> staff,
+    List<ProjectTimelineEntryResponse> timeline
 ) {}

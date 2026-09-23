@@ -7,6 +7,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.Collection;
 import java.time.LocalDate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -54,5 +55,37 @@ public interface ProjectRepository extends JpaRepository<Project, UUID>, JpaSpec
   List<Project> findByApprovalStatus(ProjectApprovalStatus status);
 
   List<Project> findByApprovalStatusAndCreatedAtBefore(ProjectApprovalStatus status, java.time.OffsetDateTime before);
+
+  @Query("""
+      select p from Project p
+      where p.approvalStatus = :status
+        and p.stage <> :closedStage
+        and (
+          p.plannedEndDate < :today
+          or (:plannedEndDate is not null and p.plannedEndDate between :today and :plannedEndDate)
+        )
+      """)
+  List<Project> findDeliveryRiskProjects(
+      @Param("status") ProjectApprovalStatus status,
+      @Param("closedStage") ProjectStage closedStage,
+      @Param("today") LocalDate today,
+      @Param("plannedEndDate") LocalDate plannedEndDate);
+
+  @Query("""
+      select p from Project p
+      where p.approvalStatus = :status
+        and p.stage <> :closedStage
+        and p.id in :projectIds
+        and (
+          p.plannedEndDate < :today
+          or (:plannedEndDate is not null and p.plannedEndDate between :today and :plannedEndDate)
+        )
+      """)
+  List<Project> findDeliveryRiskProjectsAndProjectIdIn(
+      @Param("status") ProjectApprovalStatus status,
+      @Param("closedStage") ProjectStage closedStage,
+      @Param("today") LocalDate today,
+      @Param("plannedEndDate") LocalDate plannedEndDate,
+      @Param("projectIds") java.util.Collection<UUID> projectIds);
 
 }

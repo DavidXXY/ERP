@@ -1,6 +1,8 @@
 import { defineStore } from "pinia";
 import type { CurrentUser } from "@/types/domain";
 import { currentUserApi, loginApi, wechatLoginApi } from "@/api/auth";
+import { setOnUnauthorized } from "@/utils/http";
+import { clearQueue } from "@/utils/offline";
 import { TOKEN_KEY, USER_KEY, readStorage, removeStorage, writeStorage } from "@/utils/storage";
 
 export const useAuthStore = defineStore("mobile-auth", {
@@ -11,6 +13,10 @@ export const useAuthStore = defineStore("mobile-auth", {
   },
   actions: {
     restore() {
+      // A 401 must clear Pinia state, not just storage, otherwise the offline
+      // queue keeps flushing without a token. Registered here (not at module
+      // scope) so it always binds the active store instance.
+      setOnUnauthorized(() => this.logout(false));
       this.token = readStorage(TOKEN_KEY, "");
       this.user = readStorage<CurrentUser | null>(USER_KEY, null);
       this.initialized = true;
@@ -49,6 +55,9 @@ export const useAuthStore = defineStore("mobile-auth", {
       this.user = null;
       removeStorage(TOKEN_KEY);
       removeStorage(USER_KEY);
+      // Queued operations belong to the previous session and cannot be flushed
+      // without its token, so drop them instead of leaking them to the next login.
+      clearQueue();
       if (navigate) uni.reLaunch({ url: "/pages/login/index" });
     },
   },

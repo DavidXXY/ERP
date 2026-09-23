@@ -33,22 +33,30 @@ fi
 echo ""
 
 FRONTEND_DIST="$ROOT_DIR/apps/admin/dist"
-if [ -d "$FRONTEND_DIST" ]; then
-  DIST_SIZE=$(du -sh "$FRONTEND_DIST" | cut -f1)
-  echo "  ✅ 前端构建完成: $DIST_SIZE"
-else
-  echo "  ❌ 前端 dist/ 未生成，构建失败"
-  exit 1
-fi
+SUPPLIER_DIST="$ROOT_DIR/apps/supplier-portal/dist"
+MOBILE_H5_DIST="$ROOT_DIR/apps/mobile/dist/build/h5"
+for pair in "管理后台:$FRONTEND_DIST" "供应商门户:$SUPPLIER_DIST" "移动端 H5:$MOBILE_H5_DIST"; do
+  name="${pair%%:*}"
+  dist="${pair#*:}"
+  if [ -d "$dist" ]; then
+    DIST_SIZE=$(du -sh "$dist" | cut -f1)
+    echo "  ✅ $name 构建完成: $DIST_SIZE"
+  else
+    echo "  ❌ $name dist/ 未生成，构建失败"
+    exit 1
+  fi
+done
 
 echo ""
 echo "═══════════════════════════════════════════"
 echo "  构建产物"
 echo "═══════════════════════════════════════════"
 echo "  后端 JAR: $BACKEND_JAR"
-echo "  前端目录: $FRONTEND_DIST/"
+echo "  管理后台: $FRONTEND_DIST/"
+echo "  供应商门户: $SUPPLIER_DIST/"
+echo "  移动端 H5: $MOBILE_H5_DIST/"
 echo "  后端配置: services/api/src/main/resources/application-prod.yml"
-echo "  Nginx 配置: deploy/ops-erp.nginx.conf"
+echo "  Nginx 配置: deploy/ops-erp.nginx.conf / deploy/ops-erp-ports.nginx.conf"
 echo "  Systemd 单元: deploy/ops-erp-api.service"
 echo "  Docker 环境: deploy/docker-compose.yml"
 echo ""

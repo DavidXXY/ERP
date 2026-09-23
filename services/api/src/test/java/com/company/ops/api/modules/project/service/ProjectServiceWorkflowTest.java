@@ -15,7 +15,10 @@ import com.company.ops.api.modules.crm.repository.QuoteCostRequestRepository;
 import com.company.ops.api.modules.crm.repository.ReceivableRepository;
 import com.company.ops.api.modules.crm.repository.ServiceContractRepository;
 import com.company.ops.api.modules.collaboration.repository.ProjectHandoverRepository;
+import com.company.ops.api.modules.collaboration.repository.ProjectBudgetVersionRepository;
+import com.company.ops.api.modules.collaboration.repository.ProjectStaffAssignmentRepository;
 import com.company.ops.api.modules.office.repository.SystemNotificationRepository;
+import com.company.ops.api.modules.office.service.OfficeDocumentService;
 import com.company.ops.api.modules.project.domain.Project;
 import com.company.ops.api.modules.project.domain.ProjectApprovalStatus;
 import com.company.ops.api.modules.project.domain.ProjectExecutionStatus;
@@ -28,6 +31,8 @@ import com.company.ops.api.modules.project.repository.ProjectBudgetItemRepositor
 import com.company.ops.api.modules.project.repository.ProjectCloseoutReviewRepository;
 import com.company.ops.api.modules.project.repository.ProjectCostEntryRepository;
 import com.company.ops.api.modules.project.repository.ProjectRepository;
+import com.company.ops.api.modules.project.repository.ProjectMilestoneRepository;
+import com.company.ops.api.modules.project.repository.ProjectRiskRepository;
 import com.company.ops.api.modules.project.repository.ProjectStageRecordRepository;
 import com.company.ops.api.modules.system.domain.SystemRole;
 import com.company.ops.api.modules.system.domain.SystemUser;
@@ -56,6 +61,10 @@ class ProjectServiceWorkflowTest {
   @Mock private QuoteCostRequestRepository quoteCostRepository;
   @Mock private ProjectHandoverRepository handoverRepository;
   @Mock private ProjectCloseoutReviewRepository closeoutReviewRepository;
+  @Mock private ProjectBudgetVersionRepository budgetVersionRepository;
+  @Mock private ProjectStaffAssignmentRepository staffAssignmentRepository;
+  @Mock private ProjectMilestoneRepository milestoneRepository;
+  @Mock private ProjectRiskRepository riskRepository;
   @Mock private ProjectRepository projectRepository;
   @Mock private ProjectBudgetItemRepository budgetRepository;
   @Mock private ProjectCostEntryRepository costRepository;
@@ -67,6 +76,7 @@ class ProjectServiceWorkflowTest {
   @Mock private SystemUserRepository userRepository;
   @Mock private SystemNotificationRepository notificationRepository;
   @Mock private CodeGenerator codeGenerator;
+  @Mock private OfficeDocumentService documentService;
   @InjectMocks private ProjectService service;
 
   private Project project;

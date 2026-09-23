@@ -7,12 +7,13 @@
   "transformPx": false,
   "h5": { "router": { "mode": "hash" }, "title": "工程运维ERP" },
   "mp-weixin": {
-    "appid": "wx0000000000000000",
+    "//appid": "游客模式占位 appid：正式发布前请替换为真实小程序 appid",
+    "appid": "touristappid",
     "setting": { "urlCheck": true, "es6": true, "postcss": true, "minified": true },
     "usingComponents": true,
     "permission": {
       "scope.userLocation": { "desc": "用于外勤工单现场签到并记录服务地点" }
     },
-    "requiredPrivateInfos": ["getLocation", "chooseLocation", "chooseMedia"]
+    "requiredPrivateInfos": ["getLocation", "chooseLocation"]
   }
 }

@@ -31,3 +31,10 @@ components.d.ts
 # db migration backup (main PostgreSQL migrations)
 db-main-backup/
 prototypes/
+
+# generated import/export preview artifacts
+outputs/
+
+# local scratch/debug scripts
+_*.cjs
+_verify_*

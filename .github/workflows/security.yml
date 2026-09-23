@@ -48,6 +48,7 @@ jobs:
   secrets:
     name: Secret scan
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
         with:
@@ -55,3 +56,66 @@ jobs:
       - uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Report-only container/config scan. `exit-code: "0"` keeps the build green on
+  # first introduction while results still land in the Security tab.
+  trivy-image:
+    name: Trivy image scan (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        # Images referenced by deploy/docker-compose.yml
+        include:
+          - name: postgres
+            image: postgres:16-alpine
+          - name: redis
+            image: redis:7-alpine
+          - name: minio
+            image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    steps:
+      - uses: actions/checkout@v5
+      - name: Run Trivy on ${{ matrix.image }}
+        uses: aquasecurity/trivy-action@0.30.0
+        with:
+          scan-type: image
+          image-ref: ${{ matrix.image }}
+          format: sarif
+          output: trivy-image.sarif
+          severity: CRITICAL,HIGH
+          exit-code: "0"
+      - name: Upload Trivy image results to the Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-image.sarif
+          category: trivy-image-${{ matrix.name }}
+
+  trivy-config:
+    name: Trivy config scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v5
+      - name: Run Trivy on deploy/docker-compose.yml
+        uses: aquasecurity/trivy-action@0.30.0
+        with:
+          scan-type: config
+          scan-ref: deploy/docker-compose.yml
+          format: sarif
+          output: trivy-config.sarif
+          severity: CRITICAL,HIGH
+          exit-code: "0"
+      - name: Upload Trivy config results to the Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-config.sarif
+          category: trivy-config

@@ -12,18 +12,18 @@ export const usePortalStore = defineStore("supplier-portal", {
   },
   actions: {
     async restore() {
-      if (!localStorage.getItem(api.SUPPLIER_TOKEN_KEY)) return false;
+      if (!sessionStorage.getItem(api.SUPPLIER_TOKEN_KEY)) return false;
       this.session = await api.getSession();
-      localStorage.setItem(api.SUPPLIER_TOKEN_KEY, this.session.token);
+      sessionStorage.setItem(api.SUPPLIER_TOKEN_KEY, this.session.token);
       return true;
     },
     setSession(session: api.Session) {
       this.session = session;
-      localStorage.setItem(api.SUPPLIER_TOKEN_KEY, session.token);
+      sessionStorage.setItem(api.SUPPLIER_TOKEN_KEY, session.token);
     },
     logout() {
       this.session = null;
-      localStorage.removeItem(api.SUPPLIER_TOKEN_KEY);
+      sessionStorage.removeItem(api.SUPPLIER_TOKEN_KEY);
     },
   },
 });

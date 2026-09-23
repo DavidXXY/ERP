@@ -988,13 +988,13 @@ async function askQuestion() {
 }
 async function downloadAttachment(attachment: api.QuoteAttachment) {
   if (!selected.value) return;
-  window.location.href = api.quoteAttachmentDownloadUrl(
-    selected.value.id,
-    attachment.id,
+  await api.downloadFile(
+    api.quoteAttachmentDownloadUrl(selected.value.id, attachment.id),
+    attachment.fileName,
   );
 }
 async function downloadContractDocument(doc: api.ContractDocument) {
-  window.location.href = api.contractDocumentDownloadUrl(doc.id);
+  await api.downloadFile(api.contractDocumentDownloadUrl(doc.id), doc.fileName);
 }
 async function acknowledge() {
   if (!selected.value?.contract) return;
@@ -1039,11 +1039,11 @@ function completion(item: api.PortalInquiry) {
 
 function exportQuotePdf() {
   if (!selected.value) return;
-  window.location.href = api.quotePdfUrl(selected.value.id);
+  void api.downloadFile(api.quotePdfUrl(selected.value.id), "报价单.pdf");
 }
 
 function exportQuoteExcel() {
   if (!selected.value) return;
-  window.location.href = api.quoteExcelUrl(selected.value.id);
+  void api.downloadFile(api.quoteExcelUrl(selected.value.id), "报价单.xlsx");
 }
 </script>

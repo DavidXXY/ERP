@@ -199,6 +199,19 @@ public class SupplierPortalService {
     }
     String creditCode = request.unifiedSocialCreditCode().trim().toUpperCase();
     Supplier supplier = suppliers.findFirstByUnifiedSocialCreditCodeIgnoreCase(creditCode).orElse(null);
+    if (supplier == null) {
+      // 供应商主档可能未登记统一社会信用代码（历史/演示数据），此时按规范化企业名称回退匹配，
+      // 避免为同一供应商重复建档导致门户账号看不到其名下已建立的采购订单与合同。
+      final String normalizedName = normalizeCompanyName(request.companyName());
+      List<Supplier> nameMatches = suppliers.findAllByOrderByCreatedAtDesc().stream()
+          .filter(item -> normalizeCompanyName(item.getName()).equals(normalizedName))
+          .toList();
+      if (nameMatches.size() == 1) {
+        supplier = nameMatches.get(0);
+      } else if (nameMatches.size() > 1) {
+        throw new BusinessException("系统中存在多个同名供应商，请联系采购管理员绑定门户账号");
+      }
+    }
     ProcurementInquiryInvitation registrationInvitation = null;
     if (supplier == null) {
       supplier = createPendingSupplier(request, creditCode);

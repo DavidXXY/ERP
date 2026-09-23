@@ -426,6 +426,18 @@ test("finance operations lock a reconciled tax period with an evidence reference
       });
       return;
     }
+    if (url.pathname.endsWith("/projects/profitability")) {
+      await route.fulfill({
+        json: ok({
+          content: [],
+          totalElements: 0,
+          totalPages: 1,
+          number: 0,
+          size: 200,
+        }),
+      });
+      return;
+    }
     await route.fulfill({ json: ok([]) });
   });
   await page.addInitScript(() =>

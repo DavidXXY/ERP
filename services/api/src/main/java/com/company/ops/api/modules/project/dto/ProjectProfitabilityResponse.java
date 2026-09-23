@@ -18,6 +18,9 @@ public record ProjectProfitabilityResponse(
     BigDecimal grossMargin,
     BigDecimal grossMarginRate,
     BigDecimal budgetUsageRate,
+    BigDecimal earnedValue,
+    BigDecimal costPerformanceIndex,
+    BigDecimal schedulePerformanceIndex,
     String riskLevel,
     String riskMessage
 ) {}

@@ -69,6 +69,10 @@ public class ProcurementChangeService {
     if (quantityAfter.compareTo(amount(order.getReceivedQty())) < 0) {
       throw new BusinessException("变更后数量不能小于已到货数量 " + order.getReceivedQty());
     }
+    if (priceAfter.compareTo(amount(order.getUnitPrice())) < 0
+        && amount(order.getReceivedQty()).signum() > 0) {
+      throw new BusinessException("该订单已收货，不能直接降低订单单价；请先在应付上做冲减（财务→应付详情→手动冲减），避免三单金额不一致");
+    }
     boolean qtyChanged = quantityAfter.compareTo(amount(order.getOrderedQty())) != 0;
     boolean priceChanged = priceAfter.compareTo(amount(order.getUnitPrice())) != 0;
     boolean dateChanged = !Objects.equals(dateAfter, order.getExpectedDeliveryDate());
@@ -137,6 +141,11 @@ public class ProcurementChangeService {
     if (change.getQuantityAfter() != null
         && change.getQuantityAfter().compareTo(amount(order.getReceivedQty())) < 0) {
       throw new BusinessException("变更后数量不能小于已到货数量");
+    }
+    if (change.getUnitPriceAfter() != null
+        && change.getUnitPriceAfter().compareTo(amount(order.getUnitPrice())) < 0
+        && amount(order.getReceivedQty()).signum() > 0) {
+      throw new BusinessException("该订单已收货，不能直接降低订单单价；请先在应付上做冲减（财务→应付详情→手动冲减），避免三单金额不一致");
     }
     order.setOrderedQty(change.getQuantityAfter() == null
         ? order.getOrderedQty() : amount(change.getQuantityAfter()));

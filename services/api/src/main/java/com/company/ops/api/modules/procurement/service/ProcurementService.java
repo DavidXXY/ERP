@@ -1378,9 +1378,13 @@ public class ProcurementService {
       List<SupplierInvoice> invoices
   ) {
     BigDecimal receiptAmount = receipts.stream().map(GoodsReceipt::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
-    BigDecimal payableAmount = payables.stream()
-        .map(item -> amount(item.getAmount()).subtract(amount(item.getAdjustedAmount())))
+    BigDecimal grossPayableAmount = payables.stream()
+        .map(item -> amount(item.getAmount()))
         .reduce(BigDecimal.ZERO, BigDecimal::add);
+    BigDecimal adjustmentAmount = payables.stream()
+        .map(item -> amount(item.getAdjustedAmount()))
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
+    BigDecimal payableAmount = grossPayableAmount.subtract(adjustmentAmount);
     BigDecimal paidAmount = payables.stream().map(ProcurementPayable::getPaidAmount).map(this::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
     BigDecimal invoiceAmount = invoices.stream()
         .filter(item -> !"REJECTED".equals(item.getApprovalStatus()))
@@ -1396,27 +1400,44 @@ public class ProcurementService {
     if (order.getStatus() == PurchaseOrderStatus.CANCELLED) {
       status = "CANCELLED"; risk = "订单已取消";
     } else if (receivedQty.compareTo(orderedQty) < 0) {
-      status = "RECEIVING"; risk = "尚未收齐";
-    } else if (payableAmount.compareTo(receiptAmount) < 0) {
-      status = "PAYABLE_MISSING"; risk = "应付金额少于入库金额";
-    } else if (payableAmount.compareTo(receiptAmount) > 0) {
-      status = "AMOUNT_MISMATCH"; risk = "应付金额超过入库金额";
+      status = "RECEIVING";
+      risk = "收货数量不足：已入库 " + fmtQty(receivedQty) + " / 订购 " + fmtQty(orderedQty)
+          + "，尚欠 " + fmtQty(orderedQty.subtract(receivedQty));
+    } else if (grossPayableAmount.compareTo(receiptAmount) < 0) {
+      status = "PAYABLE_MISSING";
+      risk = "应付尚未生成完整：应付 " + fmtMoney(grossPayableAmount) + " < 入库 " + fmtMoney(receiptAmount)
+          + "，缺 " + fmtMoney(receiptAmount.subtract(grossPayableAmount));
+    } else if (grossPayableAmount.compareTo(receiptAmount) > 0) {
+      status = "AMOUNT_MISMATCH";
+      risk = "应付超过入库金额：应付 " + fmtMoney(grossPayableAmount) + " > 入库 " + fmtMoney(receiptAmount)
+          + "，超 " + fmtMoney(grossPayableAmount.subtract(receiptAmount));
     } else if (invoiceAmount.compareTo(payableAmount) < 0) {
-      status = "INVOICE_PENDING"; risk = "供应商发票尚未收齐";
+      status = "INVOICE_PENDING";
+      risk = "发票金额少于应付金额：发票 " + fmtMoney(invoiceAmount) + " < 应付 " + fmtMoney(payableAmount)
+          + "，尚欠 " + fmtMoney(payableAmount.subtract(invoiceAmount));
     } else if (invoiceAmount.compareTo(payableAmount) > 0) {
-      status = "INVOICE_MISMATCH"; risk = "供应商发票金额超过应付金额";
+      status = "INVOICE_MISMATCH";
+      risk = "发票金额超过应付金额：发票 " + fmtMoney(invoiceAmount) + " > 应付 " + fmtMoney(payableAmount)
+          + "，超 " + fmtMoney(invoiceAmount.subtract(payableAmount));
     } else if (matchedInvoiceAmount.compareTo(payableAmount) < 0) {
-      status = "INVOICE_REVIEW"; risk = "发票尚未完成匹配审核";
+      status = "INVOICE_REVIEW";
+      risk = "发票尚未完成匹配审核：已匹配 " + fmtMoney(matchedInvoiceAmount) + " < 应付 " + fmtMoney(payableAmount)
+          + "，待审核 " + fmtMoney(payableAmount.subtract(matchedInvoiceAmount));
     } else if (receiptAmount.compareTo(orderAmount) != 0) {
-      status = "AMOUNT_MISMATCH"; risk = "入库金额与订单金额不一致";
+      status = "AMOUNT_MISMATCH";
+      risk = "入库金额与订单金额不一致：入库 " + fmtMoney(receiptAmount) + " vs 订单 " + fmtMoney(orderAmount)
+          + "，差 " + fmtMoney(receiptAmount.subtract(orderAmount).abs());
     } else {
-      status = "MATCHED"; risk = "三单一致";
+      status = "MATCHED";
+      risk = adjustmentAmount.signum() > 0
+          ? "订单、入库、应付、发票金额相符（已核减 " + fmtMoney(adjustmentAmount) + "）"
+          : "订单、入库、应付、发票金额全部相符";
     }
     return new ProcurementMatchingResponse(
         order.getId(), order.getCode(), order.getResponsibleName(),
         supplier == null ? null : supplier.getName(), order.getPartName(),
         orderedQty, receivedQty, orderAmount, receiptAmount, payableAmount,
-        invoiceAmount, matchedInvoiceAmount, paidAmount, status, risk
+        invoiceAmount, matchedInvoiceAmount, paidAmount, adjustmentAmount, status, risk
     );
   }
 
@@ -1726,6 +1747,14 @@ public class ProcurementService {
 
   private BigDecimal amount(BigDecimal value) {
     return value == null ? BigDecimal.ZERO : value;
+  }
+
+  private String fmtQty(BigDecimal value) {
+    return (value == null ? BigDecimal.ZERO : value).stripTrailingZeros().toPlainString();
+  }
+
+  private String fmtMoney(BigDecimal value) {
+    return fmtQty(value) + " 元";
   }
 
   private InventoryPart autoCreatePart(String partName, BigDecimal unitPrice) {

@@ -34,6 +34,9 @@ public class ProjectRisk extends BaseEntity {
   @Column(name = "owner_name", length = 80)
   private String ownerName;
 
+  @Column(name = "owner_user_id")
+  private UUID ownerUserId;
+
   @Column(name = "due_date")
   private LocalDate dueDate;
 
@@ -52,6 +55,8 @@ public class ProjectRisk extends BaseEntity {
   public void setStatus(RiskStatus status) { this.status = status; }
   public String getOwnerName() { return ownerName; }
   public void setOwnerName(String ownerName) { this.ownerName = ownerName; }
+  public UUID getOwnerUserId() { return ownerUserId; }
+  public void setOwnerUserId(UUID ownerUserId) { this.ownerUserId = ownerUserId; }
   public LocalDate getDueDate() { return dueDate; }
   public void setDueDate(LocalDate dueDate) { this.dueDate = dueDate; }
   public String getResolution() { return resolution; }

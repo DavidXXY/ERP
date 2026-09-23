@@ -1,12 +1,31 @@
 <script setup lang="ts">
-import { getCurrentInstance, ref } from "vue";
+import { getCurrentInstance, onMounted, ref } from "vue";
 
 const emit = defineEmits<{ change: [path: string] }>();
 const canvasId = `signature-${Math.random().toString(16).slice(2)}`;
 const instance = getCurrentInstance();
 const hasInk = ref(false);
+const canvasSize = ref({ width: 0, height: 0 });
 let context: UniApp.CanvasContext | null = null;
 let drawing = false;
+
+// The canvas is sized with rpx in CSS, so its real pixel size differs per
+// device. Measure the rendered node and use those pixels for both clearing and
+// exporting, instead of hardcoded values that crop or scale the signature.
+function measure() {
+  uni.createSelectorQuery()
+    .in(instance)
+    .select(`#${canvasId}`)
+    .boundingClientRect((rect) => {
+      const info = rect as UniApp.NodeInfo | null;
+      if (info?.width && info?.height) canvasSize.value = { width: info.width, height: info.height };
+    })
+    .exec();
+}
+onMounted(measure);
+
+function canvasWidth() { return canvasSize.value.width || 700; }
+function canvasHeight() { return canvasSize.value.height || 280; }
 
 function ensureContext() {
   if (!context) {
@@ -46,7 +65,7 @@ function end() { drawing = false; }
 
 function clear() {
   const ctx = ensureContext();
-  ctx.clearRect(0, 0, 700, 280);
+  ctx.clearRect(0, 0, canvasWidth(), canvasHeight());
   ctx.draw();
   hasInk.value = false;
   emit("change", "");
@@ -54,8 +73,16 @@ function clear() {
 
 function save() {
   if (!hasInk.value) { uni.showToast({ title: "请先完成签字", icon: "none" }); return; }
+  const width = canvasWidth();
+  const height = canvasHeight();
   uni.canvasToTempFilePath({
     canvasId,
+    x: 0,
+    y: 0,
+    width,
+    height,
+    destWidth: width,
+    destHeight: height,
     fileType: "png",
     quality: 1,
     success: (result) => emit("change", result.tempFilePath),

@@ -1079,19 +1079,19 @@ function cancelEditShipment() {
 }
 
 function downloadContractDocument(doc: AttachmentItem) {
-  window.location.href = doc.downloadUrl;
+  void api.downloadFile(doc.downloadUrl, doc.fileName);
 }
 
 function exportOrderPdf() {
   const order = detailEntry.value?.order;
   if (!order) return;
-  window.location.href = api.orderPdfUrl(order.id);
+  void api.downloadFile(api.orderPdfUrl(order.id), "采购订单.pdf");
 }
 
 function exportOrderExcel() {
   const order = detailEntry.value?.order;
   if (!order) return;
-  window.location.href = api.orderExcelUrl(order.id);
+  void api.downloadFile(api.orderExcelUrl(order.id), "采购订单.xlsx");
 }
 
 function canRespondChange(change: api.PortalOrderChange) {
@@ -1289,9 +1289,9 @@ async function uploadShipmentAttachment(file: File) {
 }
 
 function downloadShipmentAttachment(item: api.ShipmentAttachment) {
-  window.location.href = api.shipmentAttachmentDownloadUrl(
-    item.shipmentId,
-    item.id,
+  void api.downloadFile(
+    api.shipmentAttachmentDownloadUrl(item.shipmentId, item.id),
+    item.fileName,
   );
 }
 

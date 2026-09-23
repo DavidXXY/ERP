@@ -80,7 +80,7 @@ function selectFile(file: File) {
 }
 async function upload() { if (!selectedFile.value) { message.warning("请选择文件"); return; } uploading.value = true; try { const data = new FormData(); data.append("documentType", uploadForm.documentType); if (uploadForm.validTo) data.append("validTo", uploadForm.validTo); data.append("file", selectedFile.value); await api.uploadDocument(data); uploadOpen.value = false; selectedFile.value = undefined; fileList.value = []; await load(); message.success("文件已上传并进入审核"); } catch (e) { message.error(e instanceof Error ? e.message : "上传失败"); } finally { uploading.value = false; } }
 async function remove(id: string) { try { await api.deleteDocument(id); await load(); message.success("文件已删除"); } catch (e) { message.error(e instanceof Error ? e.message : "删除失败"); } }
-function download(doc: api.PortalDocument) { window.location.href = api.documentDownloadUrl(doc.id); }
+function download(doc: api.PortalDocument) { void api.downloadFile(api.documentDownloadUrl(doc.id), doc.documentName); }
 const typeLabel = (v: string) => ({ BUSINESS_LICENSE: "营业执照", QUALIFICATION: "行业资质", BANK_PROOF: "银行证明", TAX_DOCUMENT: "税务资料", OTHER: "其他" })[v] || v;
 const reviewText = (v: string) => ({ PENDING: "待审核", APPROVED: "已通过", REJECTED: "已退回" })[v] || v;
 const reviewColor = (v: string) => ({ PENDING: "orange", APPROVED: "green", REJECTED: "red" })[v] || "default";

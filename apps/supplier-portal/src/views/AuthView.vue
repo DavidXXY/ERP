@@ -96,7 +96,7 @@
     </template>
     <template v-else>
       <a-alert
-        v-if="devResetCode"
+        v-if="isDev && devResetCode"
         type="info"
         show-icon
         :message="`开发模式验证码：${devResetCode}`"
@@ -143,6 +143,8 @@ const resetOpen = ref(false);
 const resetStep = ref<"request" | "reset">("request");
 const resetSending = ref(false);
 const devResetCode = ref("");
+// 仅在开发构建中展示回传的验证码，生产构建一律忽略，避免配置失误导致账号被接管
+const isDev = import.meta.env.DEV;
 const resetForm = reactive({
   email: "",
   code: "",
@@ -204,7 +206,7 @@ async function sendResetCode() {
   resetSending.value = true;
   try {
     const code = await api.forgotPassword(resetForm.email);
-    devResetCode.value = code || "";
+    devResetCode.value = isDev ? code || "" : "";
     resetStep.value = "reset";
     message.success(code ? "已生成验证码，请在下方输入" : "验证码已发送至邮箱");
   } catch (error) {

@@ -16,7 +16,8 @@ work_dir="$(mktemp -d "$BACKUP_DIR/.ops-erp-backup-$STAMP.XXXXXX")"
 cleanup() { rm -rf -- "$work_dir"; }
 trap cleanup EXIT
 
-PGPASSWORD="${DB_PASSWORD:-ops_erp}" pg_dump \
+: "${DB_PASSWORD:?DB_PASSWORD is required for backups}"
+PGPASSWORD="$DB_PASSWORD" pg_dump \
   --host "${DB_HOST:-localhost}" \
   --port "${DB_PORT:-5432}" \
   --username "${DB_USERNAME:-ops_erp}" \
@@ -51,12 +52,44 @@ if [[ "$object_mode" != "skip" ]]; then
   fi
 fi
 
+# ── 配置打包（env/nginx/systemd，归档已用 age 加密，含密钥也安全） ──
+config_mode="${BACKUP_CONFIG:-auto}"
+case "$config_mode" in
+  auto|true|false) ;;
+  *) echo "BACKUP_CONFIG must be auto, true, or false." >&2; exit 1 ;;
+esac
+config_included=false
+if [[ "$config_mode" != "false" ]]; then
+  config_paths="${BACKUP_CONFIG_PATHS:-/etc/ops-erp /etc/nginx/sites-available/ops-erp /etc/nginx/sites-available/ops-erp-ports /etc/nginx/snippets/ops-erp-common.conf /etc/nginx/snippets/ops-erp-proxy.conf /etc/systemd/system/ops-erp-api.service /etc/systemd/system/ops-erp-backup.service /etc/systemd/system/ops-erp-backup.timer /etc/systemd/system/ops-erp-restore-drill.service /etc/systemd/system/ops-erp-restore-drill.timer}"
+  mkdir -p "$work_dir/config"
+  : > "$work_dir/config/PATHS.txt"
+  found=false
+  for src in $config_paths; do
+    [[ -e "$src" ]] || continue
+    dest="$work_dir/config${src}"
+    mkdir -p "$(dirname "$dest")"
+    cp -a "$src" "$dest"
+    printf '%s\n' "$src" >> "$work_dir/config/PATHS.txt"
+    found=true
+  done
+  if [[ "$found" == "true" ]]; then
+    config_included=true
+  else
+    if [[ "$config_mode" == "true" ]]; then
+      echo "BACKUP_CONFIG=true but none of BACKUP_CONFIG_PATHS exist." >&2
+      exit 1
+    fi
+    rm -rf -- "$work_dir/config"
+  fi
+fi
+
 {
   echo "format=ops-erp-backup-v2"
   echo "created_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo "database=${DB_NAME:-ops_erp}"
   echo "object_bucket=${MINIO_BUCKET:-ops-erp}"
   echo "objects_included=$objects_included"
+  echo "config_included=$config_included"
 } > "$work_dir/manifest.env"
 
 (
@@ -65,12 +98,16 @@ fi
   if [[ -d objects ]]; then
     find objects -type f -exec shasum -a 256 {} + >> checksums.sha256
   fi
+  if [[ -d config ]]; then
+    find config -type f -exec shasum -a 256 {} + >> checksums.sha256
+  fi
 )
 
 plain_archive="$work_dir/ops-erp-backup-$STAMP.tar.gz"
 output="$BACKUP_DIR/ops-erp-backup-$STAMP.tar.gz.age"
 tar_items=(manifest.env checksums.sha256 postgres.dump)
 if [[ -d "$work_dir/objects" ]]; then tar_items+=(objects); fi
+if [[ -d "$work_dir/config" ]]; then tar_items+=(config); fi
 tar -C "$work_dir" -czf "$plain_archive" "${tar_items[@]}"
 "$ROOT_DIR/scripts/verify-backup.sh" "$plain_archive"
 age --encrypt --recipient "$BACKUP_ENCRYPTION_RECIPIENT" --output "$output" "$plain_archive"

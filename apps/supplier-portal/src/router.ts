@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from "vue-router";
 import { SUPPLIER_TOKEN_KEY } from "./api";
+import { usePortalStore } from "./store";
 
 const router = createRouter({
   history: createWebHistory(),
@@ -23,10 +24,25 @@ const router = createRouter({
   ],
 });
 
-router.beforeEach((to) => {
-  const hasToken = Boolean(localStorage.getItem(SUPPLIER_TOKEN_KEY));
+router.beforeEach(async (to) => {
+  const hasToken = Boolean(sessionStorage.getItem(SUPPLIER_TOKEN_KEY));
   if (!hasToken && to.path !== "/login") return "/login";
   if (hasToken && to.path === "/login") return "/dashboard";
+  if (!hasToken) return true;
+  const store = usePortalStore();
+  // 校验令牌有效性（而非仅校验存在性），并强制必须改密的账号先完成改密
+  if (!store.session) {
+    try {
+      await store.restore();
+    } catch {
+      store.logout();
+      return "/login";
+    }
+  }
+  if (store.session?.account.mustChangePassword && to.path !== "/account") {
+    return "/account";
+  }
+  return true;
 });
 
 export default router;

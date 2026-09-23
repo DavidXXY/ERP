@@ -46,7 +46,7 @@ case "$backup_file" in
     done < <(tar -tvzf "$backup_file")
     while IFS= read -r entry; do
       case "$entry" in
-        manifest.env|checksums.sha256|postgres.dump|objects|objects/*) ;;
+        manifest.env|checksums.sha256|postgres.dump|objects|objects/*|config|config/*) ;;
         *) echo "Backup contains an unsafe or unexpected path: $entry" >&2; exit 1 ;;
       esac
       case "/$entry/" in
@@ -66,6 +66,13 @@ case "$backup_file" in
       false) [[ ! -d "$verify_dir/objects" ]] || { echo "Unexpected object payload." >&2; exit 1; } ;;
       *) echo "Backup manifest has an invalid objects_included value." >&2; exit 1 ;;
     esac
+    # config_included 为新增字段：旧备份缺省视为 false（不强制校验，保持向后兼容）
+    config_included="$(sed -n 's/^config_included=//p' "$verify_dir/manifest.env")"
+    case "$config_included" in
+      true) [[ -d "$verify_dir/config" ]] || { echo "Config payload is missing." >&2; exit 1; } ;;
+      false|"") [[ ! -d "$verify_dir/config" ]] || { echo "Unexpected config payload." >&2; exit 1; } ;;
+      *) echo "Backup manifest has an invalid config_included value." >&2; exit 1 ;;
+    esac
     while IFS= read -r checksum_entry; do
       checksum="${checksum_entry%% *}"
       checksum_path="${checksum_entry#"$checksum"}"
@@ -74,7 +81,7 @@ case "$backup_file" in
         echo "Backup contains an invalid internal checksum." >&2; exit 1;
       }
       case "$checksum_path" in
-        manifest.env|postgres.dump|objects/*) ;;
+        manifest.env|postgres.dump|objects/*|config/*) ;;
         *) echo "Backup checksum references an unsafe path: $checksum_path" >&2; exit 1 ;;
       esac
       case "/$checksum_path/" in

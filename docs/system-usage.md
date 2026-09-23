@@ -21,7 +21,6 @@ Engineering Ops ERP 是一套企业一体化经营管理系统，覆盖 CRM、�
 | `infra` | 本地 PostgreSQL、Redis、MinIO 基础设施 |
 | `deploy` | 生产构建、部署、Nginx、systemd 与环境变量模板 |
 | `docs` | 架构、使用说明与业务文档 |
-| `src` | 早期 React 原型，保留作交互参考，不是当前主后台 |
 
 ## 2. 快速启动
 
@@ -56,14 +55,18 @@ npm run supplier:dev
 | Redis | `localhost:6379` | 无 | 无 |
 | MinIO | `localhost:9000` | `ops_erp_minio` | `ops_erp_minio_password` |
 
-### 2.2 默认登录
+### 2.2 首次管理员账号
 
-开发环境默认管理员：
+后端只有在设置了 `BOOTSTRAP_ADMIN_PASSWORD`（至少 12 位）时才会创建首次管理员账号，默认用户名为 `admin`（可用 `BOOTSTRAP_ADMIN_USERNAME` 覆盖，显示名可用 `BOOTSTRAP_ADMIN_DISPLAY_NAME` 覆盖）。未设置该变量时不会创建任何账号，日志会提示首次部署需要设置它。
 
-- 用户名：`admin`
-- 密码：`Admin@123`
+本地开发在启动后端前导出该变量即可：
 
-生产环境必须修改默认密码、JWT 密钥、数据库密码和对象存储密钥。
+```bash
+export BOOTSTRAP_ADMIN_PASSWORD='ChangeMe_12345'
+npm run api:dev
+```
+
+账号只在用户名不存在时创建，后续重启不会覆盖已经修改过的密码。生产环境必须使用随机强密码，并同时替换 JWT 密钥、数据库密码和对象存储密钥。
 
 ### 2.3 常用命令
 
@@ -230,6 +233,15 @@ CRM 侧可从合同视角查看应收，支持开票申请、登记发票、记�
 
 `预算执行`、`成本明细`、`阶段履历` 目前共用项目管理视图，通过路由或页面 Tab 展示不同业务切面。成本写入后会影响项目利润、采购成本归集、财务和 BI 指标。
 
+### 6.5 项目风险与负责人
+
+项目风险条目（`project_risks`）支持指定负责人。负责人有两层表示：
+
+- `owner_user_id`：组织架构中的用户 ID（`sys_users.id`，带外键）。填写用户 ID 时，后端先做数据范围可见性校验（`DataScopeService.requireVisibleOwnerName`），要求该用户是组织架构中的启用用户且对当前操作人可见，随后把负责人姓名 `owner_name` 同步为该用户的显示名快照。
+- `owner_name`：自由文本姓名快照。仅当未提供 `owner_user_id` 时保留手工填写的姓名。
+
+提交风险时优先使用 `ownerUserId`；不传时则清空用户 ID 并保留手工 `ownerName`。V147 增加 `owner_user_id` 列及风险到期/里程碑/项目计划结束等索引，V148 清理了指向不存在用户的无效引用，按“同租户、启用、姓名一致”规则用姓名回填用户 ID，并补齐外键与索引。
+
 ## 7. 供应链采购使用教程
 
 入口：`供应链采购`
@@ -343,6 +355,14 @@ CRM 侧可从合同视角查看应收，支持开票申请、登记发票、记�
 - 我的额度：查看假期余额。
 
 员工自助接口位于 `/api/hr/self/**`，后端会按当前登录用户匹配人员档案。
+
+### 9.4 员工汇报（日报/周报/月报）
+
+入口：`员工自助 / 我的汇报`（`self/reports`）与 `下属汇报`（`self/reports/inbox`）。
+
+员工可提交日报、周报、月报，并抄送其他用户；抄送人收到 `REPORT` 通知。汇报分“日常汇报”和“工程汇报”两类：工程汇报必须选择本人已加入且未关闭/取消的项目并填写工时（半日 4 小时至全日 8 小时，半日可另选第二个项目），当日累计工时不得超过 8 小时；提交后自动生成项目经理确认审批，审批通过后工时计入项目实际工时，驳回则不计入。管理者可在下属汇报收件箱中查看下级组织员工汇报及抄送给本人的汇报。
+
+权限：`report:view`、`report:create` 默认授予全部内置业务角色，`report:approve`（工程汇报工时确认）授予 `ADMIN`、`PROJECT_MANAGER`、`PROJECT_DIRECTOR`。接口位于 `/api/reports/**`。完整规则见 [`employee-reports.md`](employee-reports.md)。
 
 ## 10. 资质管理使用教程
 
@@ -623,6 +643,7 @@ main.ts
 | 库存 | `/api/inventory` | 物料、流水、领料、退料、补货建议 |
 | 人事 | `/api/hr` | 员工履历、请假、额度、导入导出 |
 | 员工自助 | `/api/hr/self` | 我的档案、请假、待办、审批 |
+| 员工汇报 | `/api/reports` | 我的汇报、新建汇报、下属汇报收件箱、可汇报项目 |
 | 资质 | `/api/qualifications` | 公司资质、人员、证书、业绩、投标、预警 |
 | 资质文件 | `/qualification-files` | 资质附件访问 |
 | OA | `/api/office` | 审批、费用、外包、档案、消息、审计 |
@@ -712,7 +733,7 @@ main.ts
 
 ### 19.1 数据库
 
-运行环境统一使用 PostgreSQL，并通过 Flyway 管理结构迁移。迁移文件位于 `services/api/src/main/resources/db/migration`。当前增量迁移到 V105；H2 仅作为自动化测试的内存数据库，不提供开发运行入口。升级前必须核对 `flyway_schema_history`；已执行旧版 V101 的环境可能因本分支 V101 兼容逻辑产生校验和不一致，必须先比对结构并采用经审核的迁移或 repair 方案，禁止直接执行 `flyway repair`。
+运行环境统一使用 PostgreSQL，并通过 Flyway 管理结构迁移。迁移文件位于 `services/api/src/main/resources/db/migration`。当前增量迁移到 V148；H2 仅作为自动化测试的内存数据库，不提供开发运行入口。升级前必须核对 `flyway_schema_history`；已执行旧版 V101 的环境可能因本分支 V101 兼容逻辑产生校验和不一致，必须先比对结构并采用经审核的迁移或 repair 方案，禁止直接执行 `flyway repair`。
 
 所有核心表按当前设计预留租户、创建人、更新人、创建时间和更新时间等字段，为后续多公司、多账套扩展留接口。
 

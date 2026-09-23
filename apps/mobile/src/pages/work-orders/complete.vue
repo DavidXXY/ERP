@@ -8,9 +8,10 @@ import {
 } from "@/api/maintenance";
 import {
   createOperationId,
-  persistOfflineFile,
+  queueOfflineUpload,
   queueOperation,
 } from "@/utils/offline";
+import { isRetryableError } from "@/utils/http";
 
 const id = ref("");
 const submitting = ref(false);
@@ -104,44 +105,32 @@ async function submit() {
       amount: Number(m.quantity) * Number(m.unitCost),
     })),
   };
+  const uploadedPhotos = new Set<number>();
+  let signatureUploaded = false;
   try {
-    for (const path of photos.value)
-      await uploadWorkOrderAttachment(id.value, "RESULT_PHOTO", path);
+    for (let i = 0; i < photos.value.length; i++) {
+      await uploadWorkOrderAttachment(id.value, "RESULT_PHOTO", photos.value[i]);
+      uploadedPhotos.add(i);
+    }
     await uploadWorkOrderAttachment(
       id.value,
       "CUSTOMER_SIGNATURE",
       signaturePath.value,
     );
+    signatureUploaded = true;
     await completeWorkOrder(id.value, payload);
     uni.showToast({ title: "完工已提交", icon: "success" });
     setTimeout(() => uni.navigateBack(), 800);
   } catch (e) {
-    const message = (e as Error).message;
-    if (message.includes("网络")) {
-      for (const path of photos.value) {
-        const savedPath = await persistOfflineFile(path);
-        queueOperation({
-          label: "完工现场照片",
-          kind: "UPLOAD",
-          upload: {
-            url: `/maintenance/mobile/work-orders/${id.value}/attachments`,
-            filePath: savedPath,
-            formData: { category: "RESULT_PHOTO" },
-            savedFile: savedPath !== path,
-          },
-        });
+    if (isRetryableError(e)) {
+      let missingAttachments = false;
+      // Only queue uploads that did not already succeed, so a retry never
+      // re-uploads attachments the backend already stored.
+      for (let i = 0; i < photos.value.length; i++) {
+        if (uploadedPhotos.has(i)) continue;
+        if (!await queueOfflineUpload({ label: "完工现场照片", url: `/maintenance/mobile/work-orders/${id.value}/attachments`, filePath: photos.value[i], formData: { category: "RESULT_PHOTO" } })) missingAttachments = true;
       }
-      const savedSignature = await persistOfflineFile(signaturePath.value);
-      queueOperation({
-        label: "客户签字",
-        kind: "UPLOAD",
-        upload: {
-          url: `/maintenance/mobile/work-orders/${id.value}/attachments`,
-          filePath: savedSignature,
-          formData: { category: "CUSTOMER_SIGNATURE" },
-          savedFile: savedSignature !== signaturePath.value,
-        },
-      });
+      if (!signatureUploaded && !await queueOfflineUpload({ label: "客户签字", url: `/maintenance/mobile/work-orders/${id.value}/attachments`, filePath: signaturePath.value, formData: { category: "CUSTOMER_SIGNATURE" } })) missingAttachments = true;
       queueOperation({
         label: "工单完工记录",
         kind: "REQUEST",
@@ -151,9 +140,9 @@ async function submit() {
           data: payload,
         },
       });
-      uni.showToast({ title: "已保存，联网后自动同步", icon: "none" });
+      uni.showToast({ title: missingAttachments ? "记录已保存，附件需联网提交" : "已保存，联网后自动同步", icon: "none" });
       setTimeout(() => uni.navigateBack(), 900);
-    } else uni.showToast({ title: message, icon: "none", duration: 2500 });
+    } else uni.showToast({ title: (e as Error).message, icon: "none", duration: 2500 });
   } finally {
     submitting.value = false;
   }

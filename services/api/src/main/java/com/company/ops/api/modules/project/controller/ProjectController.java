@@ -29,6 +29,7 @@ import com.company.ops.api.modules.project.dto.ProjectResponse;
 import com.company.ops.api.modules.project.domain.ProjectApprovalStatus;
 import com.company.ops.api.modules.project.domain.ProjectExecutionStatus;
 import com.company.ops.api.modules.project.domain.ProjectStage;
+import com.company.ops.api.modules.project.domain.ProjectType;
 import com.company.ops.api.modules.project.service.ProjectService;
 import com.company.ops.api.modules.system.service.ApprovalFlowSecurity;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.ApproveQuoteCostRequest;
@@ -36,23 +37,31 @@ import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.QuoteCostRequestRes
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.QuoteResponse;
 import com.company.ops.api.modules.crm.dto.CrmOperationsDtos.SubmitQuoteCostRequest;
 import com.company.ops.api.modules.crm.service.CrmOperationsService;
+import com.company.ops.api.modules.office.dto.OfficeDtos.DocumentResponse;
 import jakarta.validation.Valid;
 import java.util.List;
+import java.time.LocalDate;
+import java.nio.charset.StandardCharsets;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import java.util.UUID;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/projects")
@@ -76,10 +85,17 @@ public class ProjectController {
       @RequestParam(required = false) ProjectApprovalStatus approvalStatus,
       @RequestParam(required = false) ProjectStage stage,
       @RequestParam(required = false) ProjectExecutionStatus executionStatus,
+      @RequestParam(required = false) ProjectType projectType,
+      @RequestParam(required = false) UUID managerUserId,
+      @RequestParam(required = false) UUID customerId,
+      @RequestParam(required = false) LocalDate plannedStartFrom,
+      @RequestParam(required = false) LocalDate plannedStartTo,
+      @RequestParam(required = false) Boolean overdue,
       @PageableDefault(size = 20, sort = "createdAt", direction = org.springframework.data.domain.Sort.Direction.DESC) Pageable pageable
   ) {
     return ApiResponse.ok(PageResponse.from(
-        projectService.listProjects(keyword, approvalStatus, stage, executionStatus, pageable)));
+        projectService.listProjects(keyword, approvalStatus, stage, executionStatus, projectType,
+            managerUserId, customerId, plannedStartFrom, plannedStartTo, overdue, pageable)));
   }
 
   @GetMapping("/portfolio")
@@ -89,16 +105,53 @@ public class ProjectController {
       @RequestParam(required = false) ProjectApprovalStatus approvalStatus,
       @RequestParam(required = false) ProjectStage stage,
       @RequestParam(required = false) ProjectExecutionStatus executionStatus,
+      @RequestParam(required = false) ProjectType projectType,
+      @RequestParam(required = false) UUID managerUserId,
+      @RequestParam(required = false) UUID customerId,
+      @RequestParam(required = false) LocalDate plannedStartFrom,
+      @RequestParam(required = false) LocalDate plannedStartTo,
+      @RequestParam(required = false) Boolean overdue,
       @PageableDefault(size = 20, sort = "createdAt", direction = org.springframework.data.domain.Sort.Direction.DESC) Pageable pageable
   ) {
     return ApiResponse.ok(PageResponse.from(
-        projectService.listPortfolio(keyword, approvalStatus, stage, executionStatus, pageable)));
+        projectService.listPortfolio(keyword, approvalStatus, stage, executionStatus, projectType,
+            managerUserId, customerId, plannedStartFrom, plannedStartTo, overdue, pageable)));
   }
 
   @GetMapping("/profitability")
   @PreAuthorize("hasAuthority('project:view')")
-  public ApiResponse<List<ProjectProfitabilityResponse>> profitability() {
-    return ApiResponse.ok(projectService.profitability());
+  public ApiResponse<PageResponse<ProjectProfitabilityResponse>> profitability(
+      @RequestParam(required = false) String keyword,
+      @RequestParam(required = false) ProjectStage stage,
+      @RequestParam(required = false) ProjectExecutionStatus executionStatus,
+      @RequestParam(required = false) UUID managerUserId,
+      @RequestParam(required = false) Boolean onlyAtRisk,
+      @PageableDefault(size = 20, sort = "createdAt", direction = org.springframework.data.domain.Sort.Direction.DESC) Pageable pageable
+  ) {
+    return ApiResponse.ok(PageResponse.from(projectService.profitability(keyword, stage, executionStatus, managerUserId, onlyAtRisk, pageable)));
+  }
+
+  @GetMapping("/export")
+  @PreAuthorize("hasAuthority('project:view')")
+  public ResponseEntity<byte[]> exportProjects(
+      @RequestParam(required = false) String keyword,
+      @RequestParam(required = false) ProjectApprovalStatus approvalStatus,
+      @RequestParam(required = false) ProjectStage stage,
+      @RequestParam(required = false) ProjectExecutionStatus executionStatus,
+      @RequestParam(required = false) ProjectType projectType,
+      @RequestParam(required = false) UUID managerUserId,
+      @RequestParam(required = false) UUID customerId,
+      @RequestParam(required = false) LocalDate plannedStartFrom,
+      @RequestParam(required = false) LocalDate plannedStartTo,
+      @RequestParam(required = false) Boolean overdue
+  ) {
+    String csv = projectService.exportProjectListCsv(keyword, approvalStatus, stage, executionStatus,
+        projectType, managerUserId, customerId, plannedStartFrom, plannedStartTo, overdue);
+    byte[] bytes = ("\uFEFF" + csv).getBytes(StandardCharsets.UTF_8);
+    return ResponseEntity.ok()
+        .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=projects.csv")
+        .contentType(MediaType.parseMediaType("text/csv;charset=UTF-8"))
+        .body(bytes);
   }
 
   @GetMapping("/manager-options")
@@ -158,8 +211,9 @@ public class ProjectController {
 
   @GetMapping("/{id}/timeline")
   @PreAuthorize("hasAuthority('project:view')")
-  public ApiResponse<List<ProjectTimelineEntryResponse>> projectTimeline(@PathVariable UUID id) {
-    return ApiResponse.ok(projectService.projectTimeline(id));
+  public ApiResponse<List<ProjectTimelineEntryResponse>> projectTimeline(
+      @PathVariable UUID id, @RequestParam(defaultValue = "200") int limit) {
+    return ApiResponse.ok(projectService.projectTimeline(id, limit));
   }
 
   @GetMapping("/{id}/staff")
@@ -234,6 +288,33 @@ public class ProjectController {
   @PreAuthorize("hasAuthority('project:stage:update')")
   public ApiResponse<Void> deleteRisk(@PathVariable UUID id, @PathVariable UUID riskId) {
     projectService.deleteRisk(id, riskId);
+    return ApiResponse.ok(null);
+  }
+
+  @GetMapping("/{id}/attachments")
+  @PreAuthorize("hasAuthority('project:view')")
+  public ApiResponse<List<DocumentResponse>> listAttachments(
+      @PathVariable UUID id,
+      @RequestParam String bizType,
+      @RequestParam(required = false) UUID bizId) {
+    return ApiResponse.ok(projectService.listProjectAttachments(id, bizType, bizId));
+  }
+
+  @PostMapping(value = "/{id}/attachments", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  @ResponseStatus(HttpStatus.CREATED)
+  @PreAuthorize("hasAnyAuthority('project:stage:update','project:approve')")
+  public ApiResponse<DocumentResponse> uploadAttachment(
+      @PathVariable UUID id,
+      @RequestParam String bizType,
+      @RequestParam(required = false) UUID bizId,
+      @RequestPart MultipartFile file) {
+    return ApiResponse.ok(projectService.uploadProjectAttachment(id, bizType, bizId, file));
+  }
+
+  @DeleteMapping("/{id}/attachments/{attachmentId}")
+  @PreAuthorize("hasAnyAuthority('project:stage:update','project:approve')")
+  public ApiResponse<Void> deleteAttachment(@PathVariable UUID id, @PathVariable UUID attachmentId) {
+    projectService.deleteProjectAttachment(id, attachmentId);
     return ApiResponse.ok(null);
   }
 

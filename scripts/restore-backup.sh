@@ -40,7 +40,8 @@ if [[ "$backup_file" == *.tar.gz ]]; then
     : "${MINIO_ENDPOINT:?MINIO_ENDPOINT is required for object restore}"
     : "${MINIO_ACCESS_KEY:?MINIO_ACCESS_KEY is required for object restore}"
     : "${MINIO_SECRET_KEY:?MINIO_SECRET_KEY is required for object restore}"
-    bucket="${MINIO_BUCKET:-ops-erp}"
+    # 允许恢复到独立目标桶（恢复演练用），默认恢复回原桶
+    bucket="${RESTORE_OBJECTS_BUCKET:-${MINIO_BUCKET:-ops-erp}}"
     [[ "${RESTORE_OBJECTS_CONFIRM:-}" == "$bucket" ]] || {
       echo "Refusing object restore: set RESTORE_OBJECTS_CONFIRM=$bucket" >&2; exit 1;
     }
@@ -51,9 +52,20 @@ if [[ "$backup_file" == *.tar.gz ]]; then
     MC_CONFIG_DIR="$mc_config" mc mirror --overwrite "$restore_dir/objects" "erp-restore/$bucket"
     rm -rf -- "$mc_config"
   fi
+  # 配置只解包到指定目录，绝不自动覆盖 /etc（需人工比对后再应用）
+  if [[ -d "$restore_dir/config" ]]; then
+    if [[ -n "${RESTORE_CONFIG_DIR:-}" ]]; then
+      mkdir -p "$RESTORE_CONFIG_DIR"
+      cp -a "$restore_dir/config/." "$RESTORE_CONFIG_DIR/"
+      echo "Configuration extracted to $RESTORE_CONFIG_DIR (review before applying to /etc)."
+    else
+      echo "Backup contains configuration; set RESTORE_CONFIG_DIR=/path/to/dir to extract it (never applied automatically)." >&2
+    fi
+  fi
 fi
 
-PGPASSWORD="${DB_PASSWORD:-ops_erp}" pg_restore \
+: "${DB_PASSWORD:?DB_PASSWORD is required for restore}"
+PGPASSWORD="$DB_PASSWORD" pg_restore \
   --host "${DB_HOST:-localhost}" \
   --port "${DB_PORT:-5432}" \
   --username "${DB_USERNAME:-ops_erp}" \

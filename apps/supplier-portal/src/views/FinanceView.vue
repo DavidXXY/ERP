@@ -760,10 +760,10 @@ async function submitUpload() {
   }
 }
 function downloadSubmission(item: api.InvoiceSubmission) {
-  window.location.href = api.invoiceSubmissionDownloadUrl(item.id);
+  void api.downloadFile(api.invoiceSubmissionDownloadUrl(item.id));
 }
 function downloadPaymentReceipt(item: api.PortalPayable) {
-  window.location.href = api.paymentReceiptDownloadUrl(item.id);
+  void api.downloadFile(api.paymentReceiptDownloadUrl(item.id));
 }
 async function removeSubmission(id: string) {
   try {
@@ -775,7 +775,7 @@ async function removeSubmission(id: string) {
   }
 }
 function exportExcel() {
-  window.location.href = api.financeExcelUrl();
+  void api.downloadFile(api.financeExcelUrl(), "财务对账.xlsx");
 }
 </script>
 

@@ -101,9 +101,14 @@
           <template v-else-if="column.key === 'receiptAmount'">{{
             formatMoney(record.receiptAmount)
           }}</template>
-          <template v-else-if="column.key === 'payableAmount'">{{
-            formatMoney(record.payableAmount)
-          }}</template>
+          <template v-else-if="column.key === 'payableAmount'">
+            {{ formatMoney(record.payableAmount) }}
+            <span
+              v-if="Number(record.adjustmentAmount || 0) > 0"
+              class="table-subtitle"
+              >已核减 {{ formatMoney(record.adjustmentAmount) }}</span
+            >
+          </template>
           <template v-else-if="column.key === 'invoiceAmount'">
             {{ formatMoney(record.invoiceAmount) }}
             <span class="table-subtitle"

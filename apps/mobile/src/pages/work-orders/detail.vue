@@ -5,7 +5,8 @@ import StateView from "@/components/StateView.vue";
 import { acceptWorkOrder, downloadWorkOrderAttachment, getWorkOrder, listAssignees, reassignWorkOrder, uploadWorkOrderAttachment } from "@/api/maintenance";
 import { useAuthStore } from "@/stores/auth";
 import type { WorkOrder } from "@/types/domain";
-import { createOperationId, persistOfflineFile, queueOperation } from "@/utils/offline";
+import { createOperationId, queueOfflineUpload } from "@/utils/offline";
+import { isRetryableError } from "@/utils/http";
 import { dateText, shortDate, statusClass, statusLabels } from "@/utils/format";
 
 const id = ref("");
@@ -58,16 +59,16 @@ async function reassign() {
 
 function addPhoto() {
   uni.chooseMedia({ count: 6, mediaType: ["image"], sourceType: ["camera", "album"], success: async (result) => {
-    let queued = 0;
+    let queued = 0, skipped = 0, failed = 0;
     for (const file of result.tempFiles) {
       try { await uploadWorkOrderAttachment(id.value, "SITE_PHOTO", file.tempFilePath); }
-      catch {
-        const savedPath = await persistOfflineFile(file.tempFilePath);
-        queueOperation({ label: `${record.value?.code || "工单"}现场照片`, kind: "UPLOAD", upload: { url: `/maintenance/mobile/work-orders/${id.value}/attachments`, filePath: savedPath, formData: { category: "SITE_PHOTO" }, savedFile: savedPath !== file.tempFilePath } });
-        queued++;
+      catch (e) {
+        if (!isRetryableError(e)) { failed++; continue; }
+        if (await queueOfflineUpload({ label: `${record.value?.code || "工单"}现场照片`, url: `/maintenance/mobile/work-orders/${id.value}/attachments`, filePath: file.tempFilePath, formData: { category: "SITE_PHOTO" } })) queued++;
+        else skipped++;
       }
     }
-    uni.showToast({ title: queued ? `${queued}张照片等待同步` : "照片已上传", icon: queued ? "none" : "success" });
+    uni.showToast({ title: failed ? `${failed}张上传失败，请重试` : (skipped ? "需联网提交，请联网后重试" : (queued ? `${queued}张照片等待同步` : "照片已上传")), icon: queued || skipped || failed ? "none" : "success" });
     await load();
   } });
 }

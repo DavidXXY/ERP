@@ -14,6 +14,7 @@ public record ProjectRiskResponse(
     RiskSeverity severity,
     RiskStatus status,
     String ownerName,
+    UUID ownerUserId,
     LocalDate dueDate,
     String resolution,
     OffsetDateTime createdAt,

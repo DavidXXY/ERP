@@ -1888,44 +1888,54 @@ async function ensureReferences() {
   if (!references.subjectCompanies.length)
     Object.assign(references, await getQualificationReferences());
 }
+// 单调递增令牌：切换模式/筛选时使在途请求失效，避免过期响应覆盖当前数据
+let activeLoadToken = 0;
 async function loadActive() {
+  const token = ++activeLoadToken;
   loading.value = true;
   try {
     await ensureReferences();
-    if (mode.value === "dashboard")
-      Object.assign(dashboard, await getQualificationDashboard());
-    else if (mode.value === "companies") await loadCompanies();
+    if (token !== activeLoadToken) return;
+    if (mode.value === "dashboard") {
+      const result = await getQualificationDashboard();
+      if (token !== activeLoadToken) return;
+      Object.assign(dashboard, result);
+    } else if (mode.value === "companies") await loadCompanies(token);
     else if (mode.value === "employees")
-      await Promise.all([loadEmployees(), loadAccountReferences()]);
-    else if (mode.value === "certificates") await loadCertificates();
-    else if (mode.value === "performances") await loadPerformances();
-    else if (mode.value === "tender") await loadTender();
-    else if (mode.value === "warnings")
-      warnings.value = await listQualificationWarnings();
+      await Promise.all([loadEmployees(token), loadAccountReferences()]);
+    else if (mode.value === "certificates") await loadCertificates(token);
+    else if (mode.value === "performances") await loadPerformances(token);
+    else if (mode.value === "tender") await loadTender(token);
+    else if (mode.value === "warnings") {
+      const result = await listQualificationWarnings();
+      if (token !== activeLoadToken) return;
+      warnings.value = result;
+    }
   } catch (error) {
-    message.error(error instanceof Error ? error.message : "资质数据加载失败");
+    if (token === activeLoadToken)
+      message.error(error instanceof Error ? error.message : "资质数据加载失败");
   } finally {
-    loading.value = false;
+    if (token === activeLoadToken) loading.value = false;
   }
 }
-async function loadCompanies() {
+async function loadCompanies(token = ++activeLoadToken) {
   loading.value = true;
   try {
-    companies.value = await listCompanyQualifications(
-      cleanParams(companyFilters),
-    );
+    const rows = await listCompanyQualifications(cleanParams(companyFilters));
+    if (token !== activeLoadToken) return;
+    companies.value = rows;
   } finally {
-    loading.value = false;
+    if (token === activeLoadToken) loading.value = false;
   }
 }
-async function loadEmployees() {
+async function loadEmployees(token = ++activeLoadToken) {
   loading.value = true;
   try {
-    employees.value = await listQualificationEmployees(
-      cleanParams(employeeFilters),
-    );
+    const rows = await listQualificationEmployees(cleanParams(employeeFilters));
+    if (token !== activeLoadToken) return;
+    employees.value = rows;
   } finally {
-    loading.value = false;
+    if (token === activeLoadToken) loading.value = false;
   }
 }
 async function loadAccountReferences() {
@@ -1936,34 +1946,40 @@ async function loadAccountReferences() {
   if (auth.can("system:organization:view"))
     accountOrganizations.value = await listOrganizationsFlatApi();
 }
-async function loadCertificates() {
+async function loadCertificates(token = ++activeLoadToken) {
   loading.value = true;
   try {
-    certificates.value = await listPersonnelCertificates(
+    const rows = await listPersonnelCertificates(
       cleanParams(certificateFilters),
     );
+    if (token !== activeLoadToken) return;
+    certificates.value = rows;
   } finally {
-    loading.value = false;
+    if (token === activeLoadToken) loading.value = false;
   }
 }
-async function loadPerformances() {
+async function loadPerformances(token = ++activeLoadToken) {
   loading.value = true;
   try {
-    performances.value = await listQualificationPerformances(
+    const rows = await listQualificationPerformances(
       cleanParams(performanceFilters),
     );
+    if (token !== activeLoadToken) return;
+    performances.value = rows;
   } finally {
-    loading.value = false;
+    if (token === activeLoadToken) loading.value = false;
   }
 }
-async function loadTender() {
+async function loadTender(token = ++activeLoadToken) {
   loading.value = true;
   try {
-    tenderEmployees.value = await searchTenderQualifications({
+    const rows = await searchTenderQualifications({
       ...tenderFilters,
     });
+    if (token !== activeLoadToken) return;
+    tenderEmployees.value = rows;
   } finally {
-    loading.value = false;
+    if (token === activeLoadToken) loading.value = false;
   }
 }
 

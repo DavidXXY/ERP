@@ -19,14 +19,24 @@
 
 ```
 deploy/
-├── README.md              ← 本文档
-├── build.sh               ← 本地构建脚本
-├── deploy.sh              ← 部署推送脚本
-├── ops-erp.nginx.conf     ← Nginx 站点配置
-├── ops-erp-api.service    ← systemd 服务单元
-├── ops-erp.env.example    ← 环境变量模板
-├── docker-compose.yml     ← Docker 基础设施（PostgreSQL / Redis / MinIO）
-└── docker-daemon.json     ← Docker 镜像加速配置
+├── README.md                      ← 本文档
+├── build.sh                       ← 本地构建脚本（前后端 + 质量门禁）
+├── build-mobile.sh                ← 移动端（H5 / 微信小程序）构建脚本
+├── deploy.sh                      ← 部署推送脚本（软链接原子切换 + 回滚）
+├── ops-erp.nginx.conf             ← Nginx 站点配置
+├── ops-erp-common.conf            ← Nginx 公共配置片段
+├── ops-erp-ports.nginx.conf       ← Nginx 端口/指标访问控制
+├── ops-erp-api.service            ← 后端 systemd 服务单元
+├── ops-erp-backup.service         ← 每日联合备份 systemd 单元
+├── ops-erp-backup.timer           ← 每日备份定时器
+├── ops-erp-restore-drill.service  ← 每周隔离恢复演练 systemd 单元
+├── ops-erp-restore-drill.timer    ← 每周恢复演练定时器
+├── ops-erp.env.example            ← 环境变量模板
+├── docker-compose.yml             ← Docker 基础设施（PostgreSQL / Redis / MinIO）
+├── docker-daemon.json             ← Docker 镜像加速配置
+└── monitoring/                    ← Prometheus 抓取与告警规则
+    ├── prometheus.yml
+    └── alerts.yml
 ```
 
 ## 两种部署方式
@@ -105,9 +115,9 @@ docker compose -f docker-compose.yml up -d
 
 微信小程序的 AppID、域名、构建和审核步骤见 `docs/WECHAT_MINIPROGRAM_DEPLOYMENT.md`。小程序使用同一套 Spring Boot API，不需要单独部署应用服务器。
 
-全新空库首先执行 `B77__fresh_install_baseline.sql`，一次性创建截至 V77 的完整结构和基础权限配置，随后继续执行 V78 之后的增量迁移。当前增量版本为 V100。
+全新空库首先执行 `B77__fresh_install_baseline.sql`，一次性创建截至 V77 的完整结构和基础权限配置，随后继续执行 V78 之后的增量迁移。当前增量版本为 V148。
 
-已有 V77 数据库会跳过 B77 基线并继续执行增量迁移。应用默认仅忽略已合并且不再随包发布的历史迁移缺失记录，仍校验当前发布迁移的顺序和校验和。升级前必须备份数据库，并先在预发布副本验证 V78 至 V100；不要关闭 Flyway 当前迁移校验。
+已有 V77 数据库会跳过 B77 基线并继续执行增量迁移。应用默认仅忽略已合并且不再随包发布的历史迁移缺失记录，仍校验当前发布迁移的顺序和校验和。升级前必须备份数据库，并先在预发布副本验证 V78 至 V148；不要关闭 Flyway 当前迁移校验。
 
 ```bash
 # 后端健康检查

@@ -290,8 +290,18 @@ public class CollaborationService {
       boolean taxMatch=orderInvoices.stream().allMatch(i->amount(i.getTaxRate()).compareTo(amount(o.getTaxRate()))==0);
       boolean duplicateInvoice=orderInvoices.stream().anyMatch(i->invoiceNoCounts.getOrDefault(i.getInvoiceNo(),0L)>1);
       String match=received.signum()==0&&invoiced.signum()==0?"WAITING_RECEIPT":amountMatch&&taxMatch&&!duplicateInvoice?(quantityComplete?"MATCHED":"PARTIAL"):"MISMATCH";
-      List<String> differences=new ArrayList<>();if(!quantityComplete)differences.add("未完全收货");
-      if(!amountMatch)differences.add("收货/发票/应付金额不一致");if(!taxMatch)differences.add("税率不一致");if(duplicateInvoice)differences.add("发票号码重复");
+      List<String> differences=new ArrayList<>();
+      if(!quantityComplete)differences.add("收货数量不足：已收 "+fmtQty(receivedQty)+" / 订购 "+fmtQty(amount(o.getOrderedQty()))+"，尚欠 "+fmtQty(amount(o.getOrderedQty()).subtract(receivedQty)));
+      if(received.subtract(invoiced).abs().compareTo(tolerance)>0)differences.add("收货与发票金额不一致：收货 "+fmtMoney(received)+" / 发票 "+fmtMoney(invoiced)+"，差 "+fmtMoney(received.subtract(invoiced).abs()));
+      if(invoiced.subtract(payable).abs().compareTo(tolerance)>0)differences.add("发票与应付金额不一致：发票 "+fmtMoney(invoiced)+" / 应付 "+fmtMoney(payable)+"，差 "+fmtMoney(invoiced.subtract(payable).abs()));
+      if(!taxMatch){
+        String invoiceTax=orderInvoices.stream().map(i->fmtQty(amount(i.getTaxRate()))+"%").distinct().collect(Collectors.joining("、"));
+        differences.add("税率不一致：订单 "+fmtQty(amount(o.getTaxRate()))+"% vs 发票 "+(invoiceTax.isEmpty()?"无":invoiceTax));
+      }
+      if(duplicateInvoice){
+        String duplicatedNos=orderInvoices.stream().filter(i->invoiceNoCounts.getOrDefault(i.getInvoiceNo(),0L)>1).map(SupplierInvoice::getInvoiceNo).filter(Objects::nonNull).distinct().collect(Collectors.joining("、"));
+        differences.add("发票号码重复："+duplicatedNos);
+      }
       Map<String,Object> m=new LinkedHashMap<>();m.put("orderId",o.getId());m.put("orderCode",o.getCode());m.put("supplierName",Optional.ofNullable(supplierMap.get(o.getSupplierId())).map(Supplier::getName).orElse("-"));
       m.put("orderAmount",amount(o.getOrderAmount()));m.put("receivedAmount",received);m.put("invoiceAmount",invoiced);m.put("payableAmount",payable);m.put("paidAmount",paid);
       m.put("orderedQty",amount(o.getOrderedQty()));m.put("receivedQty",receivedQty);m.put("taxRate",o.getTaxRate());m.put("toleranceAmount",tolerance);
@@ -299,6 +309,14 @@ public class CollaborationService {
       m.put("businessDate",o.getCreatedAt());m.put("departmentId",o.getProjectId()!=null?responsibilityDepartmentId("PROJECT",o.getProjectId()):o.getDepartmentId());
       m.put("outstandingAmount",payable.subtract(paid));m.put("matchStatus",match);m.put("paymentStatus",paid.signum()==0?"UNPAID":paid.compareTo(payable)>=0?"PAID":"PARTIAL_PAID");m.put("status",o.getStatus().name());return m;
     }).toList();
+  }
+
+  private String fmtQty(BigDecimal value) {
+    return (value == null ? BigDecimal.ZERO : value).stripTrailingZeros().toPlainString();
+  }
+
+  private String fmtMoney(BigDecimal value) {
+    return fmtQty(value) + " 元";
   }
 
   @Transactional

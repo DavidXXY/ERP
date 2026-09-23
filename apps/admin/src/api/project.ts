@@ -1,4 +1,4 @@
-import { request } from "./http";
+import { request, requestAllPages } from "./http";
 import { type PageResponse } from "./system";
 import type { ApprovalDecision, QuoteCostRequest, QuotePlan } from "./crm";
 
@@ -229,6 +229,9 @@ export type ProjectProfitability = {
   grossMargin: number;
   grossMarginRate: number;
   budgetUsageRate: number;
+  earnedValue?: number;
+  costPerformanceIndex?: number;
+  schedulePerformanceIndex?: number;
   riskLevel: string;
   riskMessage: string;
 };
@@ -265,7 +268,8 @@ export function listProjectPortfolio(params?: ProjectListParams) {
 }
 
 export function listProjectProfitability() {
-  return request<ProjectProfitability[]>({
+  // 后端已改为分页返回；这里拉取全部分页，保持既有调用方的数组语义。
+  return requestAllPages<ProjectProfitability>({
     method: "GET",
     url: "/projects/profitability",
   });

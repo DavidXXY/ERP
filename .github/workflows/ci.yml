@@ -5,12 +5,19 @@ on:
     branches: [main]
   pull_request:
 
+# One run per workflow + ref: a new push to the same branch cancels the
+# in-flight run instead of queuing another full frontend/backend matrix.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
 jobs:
   frontend:
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -71,8 +78,11 @@ jobs:
 
   backend:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
+      - name: Check migration parity (main vs H2)
+        run: node scripts/check-migration-parity.mjs
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -99,6 +109,7 @@ jobs:
   dependency-review:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
       - uses: actions/dependency-review-action@v4

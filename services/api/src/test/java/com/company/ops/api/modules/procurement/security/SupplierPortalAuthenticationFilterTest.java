@@ -41,4 +41,18 @@ class SupplierPortalAuthenticationFilterTest {
         .hasMessage("downstream failure");
     verify(chain).doFilter(request, response);
   }
+
+  @Test
+  void queryParamTokenIsIgnoredSoJwtNeverLeaksIntoUrl() throws Exception {
+    // 即便下载端点收到 ?token=...，也不再据其认证：令牌只允许走 Authorization 头。
+    MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/supplier-portal/orders/1/pdf");
+    request.setParameter("token", "leaked-token");
+    MockHttpServletResponse response = new MockHttpServletResponse();
+    FilterChain chain = org.mockito.Mockito.mock(FilterChain.class);
+
+    filter.doFilter(request, response, chain);
+
+    org.mockito.Mockito.verifyNoInteractions(jwtService);
+    verify(chain).doFilter(request, response);
+  }
 }

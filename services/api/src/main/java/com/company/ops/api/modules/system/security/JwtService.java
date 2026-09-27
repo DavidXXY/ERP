@@ -82,6 +82,7 @@ public class JwtService {
     Number tokenVersion = claims.get("ver", Number.class);
     return !"REJECTED".equals(account.getStatus())
         && !"SUSPENDED".equals(account.getStatus())
+        && account.getTenantId().equals(claims.get("tenant", String.class))
         && account.getEmail().equalsIgnoreCase(claims.getSubject())
         && account.getId().toString().equals(claims.get("aid", String.class))
         && account.getSupplierId().toString().equals(claims.get("sid", String.class))
@@ -93,8 +94,11 @@ public class JwtService {
   public boolean isValid(String token, UserPrincipal principal) {
     Claims claims = parseClaims(token);
     Number tokenVersion = claims.get("ver", Number.class);
+    String tokenTenant = claims.get("tenant", String.class);
     return principal.isEnabled()
         && principal.getUsername().equals(claims.getSubject())
+        && tokenTenant != null
+        && tokenTenant.equals(principal.tenantId())
         && tokenVersion != null
         && tokenVersion.longValue() == principal.authVersion()
         && claims.getExpiration().after(new Date());

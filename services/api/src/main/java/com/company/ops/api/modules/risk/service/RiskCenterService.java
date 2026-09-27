@@ -139,7 +139,7 @@ public class RiskCenterService {
   }
 
   @Transactional(readOnly = true)
-  @Cacheable(value = "riskSummary", key = "#days")
+  @Cacheable(value = "riskSummary", key = "{T(com.company.ops.api.common.tenant.TenantContext).currentTenant(), #days}")
   public RiskSummaryResponse summary(int days) {
     List<RiskItemResponse> items = collectItems(workflowMap(), ruleMap());
     List<RiskModuleSummaryResponse> modules = items.stream()

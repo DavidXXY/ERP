@@ -7,6 +7,7 @@ import com.company.ops.api.modules.reporting.dto.ReportingDtos.ReportResponse;
 import com.company.ops.api.modules.reporting.dto.ReportingDtos.ReportUserOption;
 import com.company.ops.api.modules.reporting.service.ReportService;
 import com.company.ops.api.modules.system.security.UserPrincipal;
+import jakarta.validation.Valid;
 import java.time.LocalDate;
 import java.util.List;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -40,7 +41,7 @@ public class ReportController {
   @PostMapping
   @ResponseStatus(HttpStatus.CREATED)
   public ApiResponse<ReportResponse> create(@AuthenticationPrincipal UserPrincipal principal,
-                                            @RequestBody ReportCreateRequest request) {
+                                            @Valid @RequestBody ReportCreateRequest request) {
     return ApiResponse.ok(reportService.createReport(principal.id(), request));
   }
 

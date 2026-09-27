@@ -3,6 +3,7 @@ package com.company.ops.api.modules.project.service;
 import com.company.ops.api.common.delete.DeleteGovernanceService;
 import com.company.ops.api.common.exception.BusinessException;
 import com.company.ops.api.common.service.CodeGenerator;
+import com.company.ops.api.common.tenant.TenantContext;
 import com.company.ops.api.common.util.CsvUtils;
 import com.company.ops.api.modules.crm.domain.Customer;
 import com.company.ops.api.modules.crm.domain.ServiceContract;
@@ -1795,21 +1796,25 @@ public class ProjectService {
     Object[] counts = (Object[]) entityManager.createNativeQuery("""
         SELECT
           (SELECT COUNT(*) FROM work_orders
-             WHERE project_id = :projectId AND status NOT IN ('ACCEPTED', 'CANCELLED')),
+             WHERE project_id = :projectId AND tenant_id = :tenantId
+               AND status NOT IN ('ACCEPTED', 'CANCELLED')),
           (SELECT COUNT(*) FROM procurement_purchase_orders
-             WHERE project_id = :projectId AND status NOT IN ('CLOSED', 'CANCELLED')),
+             WHERE project_id = :projectId AND tenant_id = :tenantId
+               AND status NOT IN ('CLOSED', 'CANCELLED')),
           (SELECT COUNT(*) FROM fin_procurement_payables payable
-             WHERE payable.amount > payable.paid_amount
-               AND (payable.order_id IN (SELECT id FROM procurement_purchase_orders WHERE project_id = :projectId)
+             WHERE payable.tenant_id = :tenantId
+               AND payable.amount > payable.paid_amount
+               AND (payable.order_id IN (SELECT id FROM procurement_purchase_orders WHERE project_id = :projectId AND tenant_id = :tenantId)
                  OR payable.receipt_id IN (
                    SELECT receipt.id FROM procurement_goods_receipts receipt
                    JOIN procurement_purchase_orders purchase_order ON purchase_order.id = receipt.order_id
-                   WHERE purchase_order.project_id = :projectId))),
+                   WHERE purchase_order.project_id = :projectId AND purchase_order.tenant_id = :tenantId))),
           (SELECT COUNT(*) FROM fin_receivables
-             WHERE contract_id = :contractId AND status <> 'SETTLED')
+             WHERE contract_id = :contractId AND tenant_id = :tenantId AND status <> 'SETTLED')
         """)
         .setParameter("projectId", project.getId())
         .setParameter("contractId", project.getContractId())
+        .setParameter("tenantId", TenantContext.currentTenant())
         .getSingleResult();
     if (toLong(counts[0]) > 0) throw new BusinessException("仍有未验收或未取消的工单，不能结项");
     if (toLong(counts[1]) > 0) throw new BusinessException("仍有未关闭采购订单，不能结项");

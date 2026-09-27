@@ -24,6 +24,10 @@ updates:
     directory: /deploy
     schedule:
       interval: weekly
+  - package-ecosystem: docker
+    directory: /infra
+    schedule:
+      interval: weekly
   - package-ecosystem: github-actions
     directory: /
     schedule:

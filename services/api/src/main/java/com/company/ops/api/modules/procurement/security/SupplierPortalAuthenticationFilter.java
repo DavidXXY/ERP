@@ -42,25 +42,18 @@ public class SupplierPortalAuthenticationFilter extends OncePerRequestFilter {
       HttpServletResponse response,
       FilterChain filterChain
   ) throws ServletException, IOException {
+    // 供应商门户令牌只允许通过 Authorization: Bearer 请求头携带。
+    // 前端下载已统一用带请求头的 blob 请求，不再把 JWT 拼进 URL，
+    // 避免令牌进入浏览器历史、代理/访问日志与 Referer。
     String authorization = request.getHeader(HttpHeaders.AUTHORIZATION);
-    String token = null;
     if (authorization == null || !authorization.startsWith("Bearer ")) {
-      // 大文件下载使用 <a> 链接，无法携带请求头；仅允许 GET 下载端点通过查询参数携带令牌。
-      if ("GET".equalsIgnoreCase(request.getMethod())
-          && (request.getRequestURI().endsWith("/download")
-              || request.getRequestURI().endsWith("/excel")
-              || request.getRequestURI().endsWith("/pdf"))) {
-        String queryToken = request.getParameter("token");
-        if (queryToken != null && !queryToken.isBlank()) {
-          token = queryToken;
-        }
-      }
-      if (token == null) {
-        filterChain.doFilter(request, response);
-        return;
-      }
-    } else {
-      token = authorization.substring(7);
+      filterChain.doFilter(request, response);
+      return;
+    }
+    String token = authorization.substring(7).trim();
+    if (token.isEmpty()) {
+      filterChain.doFilter(request, response);
+      return;
     }
     String tenantId;
     try {

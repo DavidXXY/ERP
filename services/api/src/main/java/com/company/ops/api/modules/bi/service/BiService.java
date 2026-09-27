@@ -66,7 +66,7 @@ public class BiService {
   }
 
   @Transactional(readOnly = true)
-  @Cacheable(value = "biDashboard", key = "{#startDate, #endDate}")
+  @Cacheable(value = "biDashboard", key = "{T(com.company.ops.api.common.tenant.TenantContext).currentTenant(), #startDate, #endDate}")
   public ExecutiveDashboard dashboard(LocalDate startDate, LocalDate endDate) {
     try {
     BigDecimal contractRevenue = amount(contracts.sumContractAmount());
@@ -102,7 +102,7 @@ public class BiService {
   }
 
   @Transactional(readOnly = true)
-  @Cacheable(value = "biCompanyDashboard", key = "{#startDate, #endDate}")
+  @Cacheable(value = "biCompanyDashboard", key = "{T(com.company.ops.api.common.tenant.TenantContext).currentTenant(), #startDate, #endDate}")
   public CompanyKpiDashboard companyDashboard(LocalDate startDate, LocalDate endDate) {
     LocalDate end = endDate == null ? LocalDate.now() : endDate;
     LocalDate start = startDate == null ? end.minusMonths(6).withDayOfMonth(1) : startDate;

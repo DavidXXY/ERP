@@ -58,7 +58,7 @@ public class SystemUser extends BaseEntity {
   @Column(name = "mfa_recovery_codes", columnDefinition = "text")
   private String mfaRecoveryCodes;
 
-  @ManyToMany(fetch = FetchType.EAGER)
+  @ManyToMany(fetch = FetchType.LAZY)
   @JoinTable(
       name = "sys_user_roles",
       joinColumns = @JoinColumn(name = "user_id"),

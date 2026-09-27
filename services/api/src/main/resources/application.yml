@@ -21,7 +21,9 @@ spring:
     enabled: true
     baseline-on-migrate: true
     # V1-V77 were consolidated into B77; existing databases retain those history rows.
-    ignore-migration-patterns: "*:missing"
+    # Ignore only MISSING *versioned* migrations (not repeatable/baseline/undo), so other
+    # migration gaps still fail the build. (Flyway pattern format is <type>:<status>.)
+    ignore-migration-patterns: "versioned:missing"
   data:
     redis:
       host: ${REDIS_HOST:localhost}

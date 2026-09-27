@@ -17,6 +17,7 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class VoucherGenerationService {
@@ -31,6 +32,7 @@ public class VoucherGenerationService {
     this.accounts = accounts;
   }
 
+  @Transactional
   public UUID generate(String idempotencyKey, String sourceType, String businessNo,
       LocalDate date, String description, String debitCode, String creditCode, BigDecimal amount) {
     String tenant = tenant();
@@ -43,9 +45,21 @@ public class VoucherGenerationService {
           "select voucher_id from fin_voucher_generation_requests where tenant_id=? and id=?",
           UUID.class, tenant, requestId);
     }
-    jdbc.update("update fin_voucher_generation_requests set status='PROCESSING', attempt_count=attempt_count+1, "
-        + "last_attempt_at=?, last_error=null, updated_at=? where tenant_id=? and id=?",
+    int claimed = jdbc.update("update fin_voucher_generation_requests set status='PROCESSING', attempt_count=attempt_count+1, "
+        + "last_attempt_at=?, last_error=null, updated_at=? where tenant_id=? and id=? and status in ('PENDING','FAILED')",
         OffsetDateTime.now(), OffsetDateTime.now(), tenant, requestId);
+    if (claimed == 0) {
+      // 并发场景：另一请求已抢占或已完成。已完成则幂等返回；处理中则提示重试。
+      String current = jdbc.queryForObject(
+          "select status from fin_voucher_generation_requests where tenant_id=? and id=?",
+          String.class, tenant, requestId);
+      if ("SUCCEEDED".equals(current)) {
+        return jdbc.queryForObject(
+            "select voucher_id from fin_voucher_generation_requests where tenant_id=? and id=?",
+            UUID.class, tenant, requestId);
+      }
+      throw new BusinessException("凭证正在生成中，请稍后重试");
+    }
     try {
       AccountingAccount debit = requireAccount(debitCode);
       AccountingAccount credit = requireAccount(creditCode);
@@ -62,6 +76,7 @@ public class VoucherGenerationService {
     }
   }
 
+  @Transactional
   public UUID compensate(String idempotencyKey, LocalDate reversalDate, String reason) {
     String tenant = tenant();
     var rows = jdbc.query("select id,source_type,business_no,status from fin_voucher_generation_requests "

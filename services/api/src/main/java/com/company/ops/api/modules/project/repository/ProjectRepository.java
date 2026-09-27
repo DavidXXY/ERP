@@ -38,8 +38,13 @@ public interface ProjectRepository extends JpaRepository<Project, UUID>, JpaSpec
 
   @Query("select p.parentProjectId, count(p) from Project p where p.parentProjectId in :ids group by p.parentProjectId")
   List<Object[]> countChildrenGroupByParent(@Param("ids") java.util.Collection<UUID> ids);
-  @Query(value = "select * from project_projects where contract_id = :contractId order by created_at desc limit 1", nativeQuery = true)
-  Optional<Project> findLatestByContractId(@Param("contractId") UUID contractId);
+  @Query("select p from Project p where p.contractId = :contractId order by p.createdAt desc")
+  List<Project> findByContractIdOrderByCreatedAtDesc(@Param("contractId") UUID contractId);
+
+  default Optional<Project> findLatestByContractId(UUID contractId) {
+    return findByContractIdOrderByCreatedAtDesc(contractId).stream().findFirst();
+  }
+
   List<Project> findByContractIdIn(java.util.Collection<UUID> contractIds);
   List<Project> findByPlannedStartDateBetween(LocalDate startDate,LocalDate endDate);
 

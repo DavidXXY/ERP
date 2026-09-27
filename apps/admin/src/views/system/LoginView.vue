@@ -130,6 +130,25 @@ const formState = reactive({
   mfaCode: "",
 });
 
+// 仅允许站内相对路径（单斜杠开头且不含协议/双斜杠），并经路由解析命中内部路由，
+// 否则回退到 /dashboard，避免开放重定向（如 /login?redirect=//evil.com）。
+function isSafeInternalRedirect(target: string): boolean {
+  if (
+    !target.startsWith("/") ||
+    target.startsWith("//") ||
+    target.includes("\\")
+  ) {
+    return false;
+  }
+  const resolved = router.resolve(target);
+  return (
+    resolved.matched.length > 0 &&
+    resolved.matched.every(
+      (record) => record.name !== undefined || record.path !== undefined,
+    )
+  );
+}
+
 async function handleLogin() {
   loading.value = true;
   errorMessage.value = "";
@@ -145,10 +164,13 @@ async function handleLogin() {
       return;
     }
     saveRememberedCredentials();
-    const redirect =
+    const requested =
       typeof route.query.redirect === "string"
         ? route.query.redirect
         : "/dashboard";
+    const redirect = isSafeInternalRedirect(requested)
+      ? requested
+      : "/dashboard";
     await router.replace(redirect);
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : "登录失败";

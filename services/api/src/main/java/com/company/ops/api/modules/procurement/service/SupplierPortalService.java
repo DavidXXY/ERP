@@ -7,6 +7,8 @@ import com.company.ops.api.common.service.CodeGenerator;
 import com.company.ops.api.common.storage.FileStorageService;
 import com.company.ops.api.common.storage.FileStorageService.FilePolicy;
 import com.company.ops.api.common.tenant.TenantContext;
+import com.company.ops.api.common.util.CsvUtils;
+import com.company.ops.api.common.validation.PasswordPolicy;
 import com.company.ops.api.modules.procurement.domain.*;
 import com.company.ops.api.modules.procurement.dto.ProcurementShipmentResponse;
 import com.company.ops.api.modules.procurement.dto.SupplierPortalNotificationResponse;
@@ -230,6 +232,7 @@ public class SupplierPortalService {
     account.setEmail(email);
     account.setPhone(trim(request.phone()));
     account.setContactName(request.contactName().trim());
+    PasswordPolicy.requireValid(request.password(), email);
     account.setPasswordHash(passwordEncoder.encode(request.password()));
     account.setStatus("PENDING_REVIEW");
     SupplierPortalAccount saved = accounts.save(account);
@@ -371,6 +374,7 @@ public class SupplierPortalService {
     if (passwordEncoder.matches(request.newPassword(), account.getPasswordHash())) {
       throw new BusinessException("新密码不能与当前密码相同");
     }
+    PasswordPolicy.requireValid(request.newPassword(), account.getEmail());
     account.setPasswordHash(passwordEncoder.encode(request.newPassword()));
     account.setMustChangePassword(false);
     account.setPasswordChangedAt(OffsetDateTime.now());
@@ -991,7 +995,7 @@ public class SupplierPortalService {
     if (accounts.existsByEmailIgnoreCase(email)) {
       throw new BusinessException("该邮箱已经绑定其他供应商门户账号");
     }
-    String temporaryPassword = temporaryPassword();
+    String temporaryPassword = temporaryPassword(email);
     SupplierPortalAccount account = new SupplierPortalAccount();
     account.setTenantId(TenantContext.currentTenant());
     account.setSupplierId(supplierId);
@@ -1054,7 +1058,7 @@ public class SupplierPortalService {
   @Transactional
   public ResetPasswordResponse resetPassword(UUID id) {
     SupplierPortalAccount account = requireAccount(id);
-    String temporaryPassword = temporaryPassword();
+    String temporaryPassword = temporaryPassword(account.getEmail());
     account.setPasswordHash(passwordEncoder.encode(temporaryPassword));
     account.setMustChangePassword(true);
     account.setPasswordChangedAt(OffsetDateTime.now());
@@ -1407,7 +1411,7 @@ public class SupplierPortalService {
     } else if (value instanceof OffsetDateTime dateTime) {
       cell.setCellValue(dateTime.toLocalDateTime().toString().replace("T", " "));
     } else {
-      cell.setCellValue(value.toString());
+      cell.setCellValue(CsvUtils.sanitizeCell(value.toString()));
     }
   }
 
@@ -1961,8 +1965,8 @@ public class SupplierPortalService {
     return contractView(contract);
   }
 
-  private String temporaryPassword() {
-    return "Tmp" + UUID.randomUUID().toString().replace("-", "").substring(0, 9) + "!";
+  private String temporaryPassword(String username) {
+    return PasswordPolicy.generate(username);
   }
 
   @Transactional(readOnly = true)

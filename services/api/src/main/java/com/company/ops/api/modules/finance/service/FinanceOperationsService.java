@@ -101,6 +101,7 @@ public class FinanceOperationsService {
     return jdbc.query(sql, this::mapPeriodJob, args.toArray());
   }
 
+  @Transactional
   public PeriodJobResponse createPeriodJob(SavePeriodJobRequest request) {
     String type = upper(request.processType());
     if (!PERIOD_TYPES.contains(type)) throw new BusinessException("不支持的期末处理类型");
@@ -120,6 +121,7 @@ public class FinanceOperationsService {
     return requirePeriodJob(id);
   }
 
+  @Transactional
   public PeriodJobResponse executePeriodJob(UUID id) {
     PeriodJobResponse job = requirePeriodJob(id);
     if (Set.of("COMPLETED", "REVERSED").contains(job.status())) return job;
@@ -136,6 +138,7 @@ public class FinanceOperationsService {
     return requirePeriodJob(id);
   }
 
+  @Transactional
   public List<PeriodJobResponse> reverseDueJobs(LocalDate requestedAsOf) {
     LocalDate asOf = requestedAsOf == null ? LocalDate.now() : requestedAsOf;
     List<PeriodJobResponse> due = periodJobs(null, null).stream()
@@ -204,6 +207,7 @@ public class FinanceOperationsService {
         }).sorted(Comparator.comparing(PartnerStatementResponse::partnerName)).toList();
   }
 
+  @Transactional
   public PartnerStatementResponse confirmPartner(String typeValue, UUID partnerId, LocalDate periodEnd, ConfirmPartnerRequest request) {
     String type = upper(typeValue); String status = upper(request.status());
     if (!Set.of("CUSTOMER", "SUPPLIER").contains(type)) throw new BusinessException("往来类型无效");
@@ -225,6 +229,7 @@ public class FinanceOperationsService {
     return partnerStatements(type, periodEnd).stream().filter(item -> item.partnerId().equals(partnerId)).findFirst().orElseThrow();
   }
 
+  @Transactional
   public CashScenarioResponse createCashScenario(SaveCashScenarioRequest request) {
     LocalDate horizon = request.asOfDate().plusDays(request.horizonDays());
     BigDecimal expectedReceipts = receivables.findByDueDateBetweenOrderByDueDateAsc(request.asOfDate(), horizon).stream()
@@ -255,6 +260,7 @@ public class FinanceOperationsService {
     return jdbc.query("select * from fin_tax_filings where tenant_id=? order by fiscal_year desc,period_no desc", this::mapTaxFiling, tenant());
   }
 
+  @Transactional
   public TaxFilingResponse reconcileTax(int year, int month) {
     YearMonth period = YearMonth.of(year, month); LocalDate from = period.atDay(1), to = period.atEndOfMonth();
     List<TaxInvoiceLine> lines = analytics.taxLedger(from, to, null, "NORMAL");
@@ -277,6 +283,7 @@ public class FinanceOperationsService {
     return taxFilings().stream().filter(item -> item.id().equals(id)).findFirst().orElseThrow();
   }
 
+  @Transactional
   public TaxFilingResponse lockTax(int year, int month, LockTaxFilingRequest request) {
     TaxFilingResponse filing = taxFilings().stream().filter(item -> item.fiscalYear() == year && item.periodNo() == month).findFirst()
         .orElseThrow(() -> new BusinessException("请先完成税务勾稽"));
@@ -296,6 +303,7 @@ public class FinanceOperationsService {
         rs.getObject("snapshot_id", UUID.class), rs.getObject("completed_at", OffsetDateTime.class), rs.getString("completed_by")), tenant());
   }
 
+  @Transactional
   public ConsolidationResponse createConsolidation(SaveConsolidationRequest request) {
     BigDecimal revenue = request.entities().stream().map(ConsolidationEntityInput::revenue).reduce(BigDecimal.ZERO, BigDecimal::add);
     BigDecimal expense = request.entities().stream().map(ConsolidationEntityInput::expense).reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -309,6 +317,7 @@ public class FinanceOperationsService {
     return consolidations().stream().filter(item -> item.id().equals(id)).findFirst().orElseThrow();
   }
 
+  @Transactional
   public ConsolidationResponse completeConsolidation(UUID id) {
     ConsolidationResponse run = consolidations().stream().filter(item -> item.id().equals(id)).findFirst()
         .orElseThrow(() -> new BusinessException("合并批次不存在"));
@@ -319,6 +328,7 @@ public class FinanceOperationsService {
     return consolidations().stream().filter(item -> item.id().equals(id)).findFirst().orElseThrow();
   }
 
+  @Transactional
   public ReportSnapshotResponse captureSnapshot(CaptureSnapshotRequest request) {
     String hash = sha256(request.payload()); String tenant = tenant();
     var existing = jdbc.query("select * from fin_report_snapshots where tenant_id=? and report_type=? and scope_key=? and content_hash=?",
@@ -356,6 +366,7 @@ public class FinanceOperationsService {
     return blockers;
   }
 
+  @Transactional
   public ReportSnapshotResponse capturePeriodClose(int year, int month, Object payload) {
     return captureSnapshot(new CaptureSnapshotRequest("PERIOD_CLOSE", year + "-" + String.format("%02d", month), year, month,
         json(payload), "月结控制与关账结果"));

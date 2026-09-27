@@ -13,6 +13,11 @@ ExecStart=/usr/bin/java -XX:MaxRAMPercentage=50 -jar /opt/engineering-ops-erp/cu
 Restart=on-failure
 RestartSec=5
 SuccessExitStatus=143
+# 资源上限：内存上限（不设硬 MemoryMax 以免 OOM 直接 kill，配合 -XX:MaxRAMPercentage 使用）、
+# CPU 份额与文件描述符上限，防止失控占满宿主。
+MemoryHigh=2G
+CPUQuota=200%
+LimitNOFILE=65536
 NoNewPrivileges=true
 PrivateTmp=true
 PrivateDevices=true

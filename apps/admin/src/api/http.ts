@@ -52,6 +52,8 @@ http.interceptors.response.use(
       message = "当前账号没有执行此操作的权限。";
     } else if (status === 504 || error.code === "ECONNABORTED") {
       message = "后端 API 响应超时，请检查后端服务和数据库连接。";
+    } else if (typeof status === "number" && status >= 500) {
+      message = "系统繁忙，请稍后再试";
     } else if (!error.response) {
       message =
         "无法连接后端 API，请检查网络、后端服务或 VITE_API_BASE_URL 配置。";

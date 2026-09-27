@@ -117,6 +117,9 @@ if [[ -n "${BACKUP_OFFSITE_REMOTE:-}" ]]; then
   command -v rclone >/dev/null 2>&1 || { echo "rclone is required for BACKUP_OFFSITE_REMOTE." >&2; exit 1; }
   rclone copyto "$output" "${BACKUP_OFFSITE_REMOTE%/}/$(basename "$output")"
   rclone copyto "${output}.sha256" "${BACKUP_OFFSITE_REMOTE%/}/$(basename "${output}.sha256")"
+elif [[ "${BACKUP_REQUIRE_OFFSITE:-false}" == "true" ]]; then
+  echo "BACKUP_REQUIRE_OFFSITE=true but BACKUP_OFFSITE_REMOTE is not configured." >&2
+  exit 1
 fi
 
 while IFS= read -r -d '' expired; do

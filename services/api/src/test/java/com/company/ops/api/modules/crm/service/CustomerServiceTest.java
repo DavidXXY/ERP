@@ -147,8 +147,12 @@ class CustomerServiceTest {
     receivable.setSettledAmount(new BigDecimal("30.00"));
     List<Customer> customers = List.of(customer);
 
-    when(contractRepository.findAll()).thenReturn(List.of(contract));
-    when(receivableRepository.findAll()).thenReturn(List.of(receivable));
+    when(contractRepository.aggregateAmountByCustomer())
+        .thenReturn(java.util.List.<Object[]>of(new Object[] { customerId, new BigDecimal("100.00") }));
+    when(receivableRepository.aggregateSettledByCustomer())
+        .thenReturn(java.util.List.<Object[]>of(new Object[] { customerId, new BigDecimal("30.00") }));
+    when(receivableRepository.aggregateOutstandingByCustomer())
+        .thenReturn(java.util.List.<Object[]>of(new Object[] { customerId, new BigDecimal("50.00") }));
     when(customerRepository.findAllByOrderByCreatedAtDesc()).thenReturn(customers);
     when(deleteGovernanceService.visible(eq("CUSTOMER"), eq(customers), any())).thenReturn(customers);
     when(dataScopeService.canViewOwner(customer.getOwnerUserId())).thenReturn(true);

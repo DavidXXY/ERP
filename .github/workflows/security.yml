@@ -26,16 +26,16 @@ jobs:
           - language: javascript-typescript
             build-mode: none
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - name: Set up Java
         if: matrix.language == 'java-kotlin'
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: temurin
           java-version: "17"
           cache: maven
           cache-dependency-path: services/api/pom.xml
-      - uses: github/codeql-action/init@v4
+      - uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
@@ -43,22 +43,56 @@ jobs:
         if: matrix.language == 'java-kotlin'
         working-directory: services/api
         run: mvn --batch-mode --no-transfer-progress -DskipTests compile
-      - uses: github/codeql-action/analyze@v4
+      - uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
 
   secrets:
     name: Secret scan
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@v2
+      - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # Report-only container/config scan. `exit-code: "0"` keeps the build green on
-  # first introduction while results still land in the Security tab.
+  # Blocking container/config scan on CRITICAL/HIGH. Fail the build when such
+  # findings exist; results still land in the Security tab.
+  sca-backend:
+    name: Java dependency scan (Trivy SBOM)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+          cache-dependency-path: services/api/pom.xml
+      - name: Generate CycloneDX SBOM
+        working-directory: services/api
+        run: mvn --batch-mode --no-transfer-progress -DskipTests cyclonedx:makeAggregateBom
+      - name: Run Trivy SBOM scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: sbom
+          sbom: services/api/target/bom.json
+          format: sarif
+          output: trivy-backend.sarif
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+      - name: Upload Trivy SBOM results to the Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
+        with:
+          sarif_file: trivy-backend.sarif
+          category: trivy-backend
+
   trivy-image:
     name: Trivy image scan (${{ matrix.name }})
     runs-on: ubuntu-latest
@@ -78,19 +112,19 @@ jobs:
           - name: minio
             image: minio/minio:RELEASE.2025-04-22T22-12-26Z
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - name: Run Trivy on ${{ matrix.image }}
-        uses: aquasecurity/trivy-action@0.30.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: image
           image-ref: ${{ matrix.image }}
           format: sarif
           output: trivy-image.sarif
           severity: CRITICAL,HIGH
-          exit-code: "0"
+          exit-code: "1"
       - name: Upload Trivy image results to the Security tab
         if: always()
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
         with:
           sarif_file: trivy-image.sarif
           category: trivy-image-${{ matrix.name }}
@@ -103,19 +137,19 @@ jobs:
       contents: read
       security-events: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - name: Run Trivy on deploy/docker-compose.yml
-        uses: aquasecurity/trivy-action@0.30.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: config
           scan-ref: deploy/docker-compose.yml
           format: sarif
           output: trivy-config.sarif
           severity: CRITICAL,HIGH
-          exit-code: "0"
+          exit-code: "1"
       - name: Upload Trivy config results to the Security tab
         if: always()
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
         with:
           sarif_file: trivy-config.sarif
           category: trivy-config

@@ -1,5 +1,6 @@
 package com.company.ops.api.common.service;
 
+import com.company.ops.api.common.tenant.TenantContext;
 import com.company.ops.api.modules.system.domain.CodeSequence;
 import com.company.ops.api.modules.system.repository.CodeSequenceRepository;
 import java.time.LocalDate;
@@ -60,8 +61,9 @@ public class CodeGenerator {
     if (prefix == null) {
       throw new IllegalArgumentException("Unknown entity type: " + entityType);
     }
-    CodeSequence seq = codeSequenceRepository.findByEntityTypeForUpdate(entityType)
-        .orElseGet(() -> codeSequenceRepository.save(new CodeSequence(entityType, prefix)));
+    String tenant = TenantContext.currentTenant();
+    CodeSequence seq = codeSequenceRepository.findByEntityTypeAndTenantIdForUpdate(entityType, tenant)
+        .orElseGet(() -> codeSequenceRepository.save(new CodeSequence(entityType, tenant, prefix)));
     long number = seq.getNextNumber();
     seq.setNextNumber(number + 1);
     codeSequenceRepository.save(seq);

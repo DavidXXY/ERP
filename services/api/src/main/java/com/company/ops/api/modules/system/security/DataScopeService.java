@@ -187,7 +187,7 @@ public class DataScopeService {
 
   protected Set<UUID> visibleUserIds(UserPrincipal principal) {
     if (principal.dataScopes().contains("ALL")) {
-      return userRepository.findAll().stream().map(SystemUser::getId).collect(Collectors.toSet());
+      return new HashSet<>(userRepository.findAllIds());
     }
     Set<UUID> visible = new HashSet<>();
     visible.add(principal.id());
@@ -206,9 +206,7 @@ public class DataScopeService {
       organizationIds.addAll(principal.dataScopeOrganizationIds());
     }
     if (!organizationIds.isEmpty()) {
-      visible.addAll(userRepository.findByOrganization_IdIn(organizationIds).stream()
-          .map(SystemUser::getId)
-          .toList());
+      visible.addAll(userRepository.findIdsByOrganization_IdIn(organizationIds));
     }
     return visible;
   }

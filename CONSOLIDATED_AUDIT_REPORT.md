@@ -15,7 +15,7 @@
 - 前端：登录开放重定向加固（仅站内相对路径 + 路由命中校验）；mobile `requestAllPages` 4 路并发上限 + `maxPages` 有界拉取；审批/通知列表上限 10 页；后端 5xx 统一泛化文案（admin/supplier/mobile）。
 - 会话/令牌：供应商门户 JWT 仅允许 `Authorization: Bearer` 头，删除 URL query 参数读取路径（`SupplierPortalAuthenticationFilter`）。
 - 性能：`SystemUser.roles` / `SystemRole.permissions` 改 `FetchType.LAZY`（安全路径由 `@EntityGraph` 显式加载）；`CustomerService.listCustomers` 与 `FinanceContributionService` 收款/付款从 `findAll()` 全表 JVM 聚合改为按 ID 集合查询 + `GROUP BY` 聚合。
-- CI/监控：Trivy 阻断（exit-code 1）+ Java SBOM SCA 扫描；Flyway `ignore-migration-patterns` 收紧为 `versioned:missing`；Dependabot 覆盖 `/infra`；Prometheus `alerting:` + `alertmanager.yml`；备份 `BACKUP_REQUIRE_OFFSITE` fail-closed；Nginx 安全头重复声明消除继承丢失 + 内网端口 allow/deny；微信 AppID 占位守卫修正；GH Action 全部固定到 commit SHA（并修正 `trivy-action@0.30.0` 为实际 `v0.30.0` 提交）。
+- CI/监控：Trivy 阻断（exit-code 1）+ Java SBOM SCA 扫描；Flyway `ignore-migration-patterns` 收紧为 `versioned:missing`；Dependabot 覆盖 `/infra`；Prometheus `alerting:` + `alertmanager.yml`；备份 `BACKUP_REQUIRE_OFFSITE` fail-closed；Nginx 安全头重复声明消除继承丢失 + 内网端口 allow/deny；微信 AppID 占位守卫修正；GH Action 全部固定到 commit SHA（`trivy-action` 由坏掉的 `v0.30.0`——其内部引用不存在的 `setup-trivy@v0.2.2`——升级到 `v0.36.0` 提交）。
 - 验证：`mvn test` 全绿（260 用例，0 失败 0 错误）；admin/mobile/supplier `typecheck` 全绿；迁移一致性检查通过。
 
 **遗留建议 ⬜（未改动，需产品/部署决策或较大重构）**

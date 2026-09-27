@@ -67,24 +67,20 @@ public class CustomerService {
 
   @Transactional(readOnly = true)
   public List<CustomerSummaryResponse> listCustomers() {
-    Map<UUID, BigDecimal> signedOrderAmounts = contractRepository.findAll().stream()
-        .collect(java.util.stream.Collectors.groupingBy(
-            contract -> contract.getCustomerId(),
-            java.util.stream.Collectors.reducing(BigDecimal.ZERO, contract -> amount(contract.getAmount()), BigDecimal::add)
+    Map<UUID, BigDecimal> signedOrderAmounts = contractRepository.aggregateAmountByCustomer().stream()
+        .collect(java.util.stream.Collectors.toMap(
+            row -> (UUID) row[0],
+            row -> amount((BigDecimal) row[1])
         ));
-    Map<UUID, BigDecimal> paidAmounts = receivableRepository.findAll().stream()
-        .collect(java.util.stream.Collectors.groupingBy(
-            receivable -> receivable.getCustomerId(),
-            java.util.stream.Collectors.reducing(BigDecimal.ZERO, receivable -> amount(receivable.getSettledAmount()), BigDecimal::add)
+    Map<UUID, BigDecimal> paidAmounts = receivableRepository.aggregateSettledByCustomer().stream()
+        .collect(java.util.stream.Collectors.toMap(
+            row -> (UUID) row[0],
+            row -> amount((BigDecimal) row[1])
         ));
-    Map<UUID, BigDecimal> pendingAmounts = receivableRepository.findAll().stream()
-        .collect(java.util.stream.Collectors.groupingBy(
-            receivable -> receivable.getCustomerId(),
-            java.util.stream.Collectors.reducing(
-                BigDecimal.ZERO,
-                receivable -> amount(receivable.getAmount()).subtract(amount(receivable.getSettledAmount())),
-                BigDecimal::add
-            )
+    Map<UUID, BigDecimal> pendingAmounts = receivableRepository.aggregateOutstandingByCustomer().stream()
+        .collect(java.util.stream.Collectors.toMap(
+            row -> (UUID) row[0],
+            row -> amount((BigDecimal) row[1])
         ));
     return deleteGovernanceService.visible("CUSTOMER", customerRepository.findAllByOrderByCreatedAtDesc(), Customer::getId).stream()
         .filter(customer -> dataScopeService.canViewOwner(customer.getOwnerUserId()))

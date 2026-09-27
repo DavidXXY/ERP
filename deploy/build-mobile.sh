@@ -9,7 +9,7 @@ if [ -z "${MOBILE_API_BASE_URL:-}" ]; then
   exit 1
 fi
 
-if rg -q 'wx0000000000000000' "$MANIFEST"; then
+if rg -q '"appid"\s*:\s*"(touristappid|wx0000000000000000)"' "$MANIFEST"; then
   echo "Replace the placeholder mp-weixin AppID in apps/mobile/src/manifest.json before release"
   exit 1
 fi

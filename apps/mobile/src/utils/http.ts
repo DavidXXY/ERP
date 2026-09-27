@@ -58,7 +58,9 @@ export function request<T>(options: RequestOptions): Promise<T> {
           reject(unauthorized(payload?.message || statusMessage(status)));
           return;
         }
-        reject(new RequestError(payload?.message || statusMessage(status), {
+        // 5xx 一律泛化文案，避免网关/代理响应体泄露内部细节；4xx 保留业务 message。
+        const message = status >= 500 ? statusMessage(status) : payload?.message || statusMessage(status);
+        reject(new RequestError(message, {
           retryable: status >= 500,
           offline: false,
           statusCode: status,
@@ -75,20 +77,43 @@ export function request<T>(options: RequestOptions): Promise<T> {
   });
 }
 
-export async function requestAllPages<T>(url: string, size = 200): Promise<T[]> {
+export async function requestAllPages<T>(
+  url: string,
+  size = 200,
+  options?: { maxPages?: number; concurrency?: number },
+): Promise<T[]> {
   const separator = url.includes("?") ? "&" : "?";
   const first = await request<{ content: T[]; totalPages: number }>({
     url: `${url}${separator}page=0&size=${size}`,
   });
   if (first.totalPages <= 1) return first.content;
-  const rest = await Promise.all(
-    Array.from({ length: first.totalPages - 1 }, (_, index) =>
-      request<{ content: T[] }>({
-        url: `${url}${separator}page=${index + 1}&size=${size}`,
-      }),
-    ),
+
+  const totalPages = options?.maxPages
+    ? Math.min(first.totalPages, options.maxPages)
+    : first.totalPages;
+  if (totalPages <= 1) return first.content;
+
+  const restPages = totalPages - 1;
+  const pages: T[][] = new Array<T[]>(restPages);
+  let nextPage = 1;
+  const concurrency = Math.max(1, options?.concurrency ?? 4);
+
+  const worker = async () => {
+    while (nextPage < totalPages) {
+      const page = nextPage++;
+      pages[page - 1] = (
+        await request<{ content: T[] }>({
+          url: `${url}${separator}page=${page}&size=${size}`,
+        })
+      ).content;
+    }
+  };
+
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, restPages) }, worker),
   );
-  return [...first.content, ...rest.flatMap((page) => page.content)];
+
+  return [...first.content, ...pages.flat()];
 }
 
 export function upload<T>(url: string, filePath: string, name = "file", formData: Record<string, string> = {}): Promise<T> {
@@ -105,11 +130,16 @@ export function upload<T>(url: string, filePath: string, name = "file", formData
         try { payload = JSON.parse(response.data) as ApiEnvelope<T>; } catch { /* handled below */ }
         if (response.statusCode >= 200 && response.statusCode < 300 && payload?.success) resolve(payload.data);
         else if (response.statusCode === 401) reject(unauthorized(payload?.message || statusMessage(response.statusCode)));
-        else reject(new RequestError(payload?.message || statusMessage(response.statusCode), {
-          retryable: response.statusCode >= 500,
-          offline: false,
-          statusCode: response.statusCode,
-        }));
+        else reject(new RequestError(
+          response.statusCode >= 500
+            ? statusMessage(response.statusCode)
+            : payload?.message || statusMessage(response.statusCode),
+          {
+            retryable: response.statusCode >= 500,
+            offline: false,
+            statusCode: response.statusCode,
+          },
+        ));
       },
       fail(error) {
         const timedOut = error.errMsg?.includes("timeout") ?? false;

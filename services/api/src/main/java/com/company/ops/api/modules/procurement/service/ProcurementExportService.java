@@ -1,5 +1,6 @@
 package com.company.ops.api.modules.procurement.service;
 
+import com.company.ops.api.common.util.CsvUtils;
 import com.company.ops.api.modules.procurement.domain.PurchaseOrder;
 import com.company.ops.api.modules.procurement.domain.PurchaseRequest;
 import com.company.ops.api.modules.procurement.domain.Supplier;
@@ -214,7 +215,7 @@ public class ProcurementExportService {
     } else if (value instanceof OffsetDateTime dateTime) {
       cell.setCellValue(dateTime.format(DATE_TIME));
     } else {
-      cell.setCellValue(value.toString());
+      cell.setCellValue(CsvUtils.sanitizeCell(value.toString()));
     }
   }
 

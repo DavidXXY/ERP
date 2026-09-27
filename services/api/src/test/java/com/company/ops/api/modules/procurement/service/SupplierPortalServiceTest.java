@@ -13,6 +13,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import com.company.ops.api.common.service.CodeGenerator;
 import com.company.ops.api.common.storage.FileStorageService;
 import com.company.ops.api.common.exception.BusinessException;
+import com.company.ops.api.common.validation.PasswordPolicy;
 import com.company.ops.api.modules.procurement.domain.ProcurementInquiry;
 import com.company.ops.api.modules.procurement.domain.ProcurementInquiryInvitation;
 import com.company.ops.api.modules.procurement.domain.ProcurementContract;
@@ -218,7 +219,9 @@ class SupplierPortalServiceTest {
     var result = service.openAccount(fixture.supplier.getId(),
         new OpenAccountRequest(" Buyer@Example.com ", null, "供应商联系人"));
 
-    assertThat(result.temporaryPassword()).startsWith("Tmp").endsWith("!");
+    assertThat(result.temporaryPassword()).hasSize(16);
+    assertThat(PasswordPolicy.hasRequiredStructure(result.temporaryPassword())).isTrue();
+    assertThat(result.temporaryPassword().toLowerCase()).doesNotContain("buyer@example.com");
     assertThat(result.account().email()).isEqualTo("buyer@example.com");
     assertThat(result.account().phone()).isEqualTo("13800000000");
     assertThat(result.account().status()).isEqualTo("ACTIVE");

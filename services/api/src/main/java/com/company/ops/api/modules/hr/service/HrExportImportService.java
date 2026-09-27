@@ -1,5 +1,6 @@
 package com.company.ops.api.modules.hr.service;
 
+import com.company.ops.api.common.util.CsvUtils;
 import com.company.ops.api.modules.hr.domain.EmployeeEducation;
 import com.company.ops.api.modules.hr.repository.EmployeeEducationRepository;
 import com.company.ops.api.modules.qualification.domain.QualificationEmployee;
@@ -86,26 +87,26 @@ public class HrExportImportService {
       for (QualificationEmployee emp : employees) {
         Row row = sheet.createRow(rowNum++);
         row.createCell(0).setCellValue(rowNum - 1);
-        row.createCell(1).setCellValue(emp.getName() != null ? emp.getName() : "");
-        row.createCell(2).setCellValue(emp.getPhone() != null ? emp.getPhone() : "");
-        row.createCell(3).setCellValue(emp.getIdCard() != null ? emp.getIdCard() : "");
+        row.createCell(1).setCellValue(CsvUtils.sanitizeCell(emp.getName()));
+        row.createCell(2).setCellValue(CsvUtils.sanitizeCell(emp.getPhone()));
+        row.createCell(3).setCellValue(CsvUtils.sanitizeCell(emp.getIdCard()));
         row.createCell(4).setCellValue("");
         String highestDegree = educationRepository.findByEmployeeIdOrderByStartDateDesc(emp.getId())
             .stream().filter(EmployeeEducation::isHighest)
             .map(EmployeeEducation::getDegree)
             .findFirst().orElse("");
-        row.createCell(5).setCellValue(highestDegree);
-        row.createCell(6).setCellValue(emp.getPosition() != null ? emp.getPosition() : "");
-        row.createCell(7).setCellValue(
+        row.createCell(5).setCellValue(CsvUtils.sanitizeCell(highestDegree));
+        row.createCell(6).setCellValue(CsvUtils.sanitizeCell(emp.getPosition()));
+        row.createCell(7).setCellValue(CsvUtils.sanitizeCell(
             emp.getOrganization() != null && emp.getOrganization().getName() != null
-                ? emp.getOrganization().getName() : "");
+                ? emp.getOrganization().getName() : ""));
         row.createCell(8).setCellValue(
             emp.getEntryDate() != null ? emp.getEntryDate().toString() : "");
         String statusLabel = switch (emp.getEmploymentStatus()) {
           case "ACTIVE" -> "在职"; case "LEFT" -> "离职"; case "DISABLED" -> "停用";
           default -> emp.getEmploymentStatus() != null ? emp.getEmploymentStatus() : "";
         };
-        row.createCell(9).setCellValue(statusLabel);
+        row.createCell(9).setCellValue(CsvUtils.sanitizeCell(statusLabel));
         row.createCell(10).setCellValue("");
       }
 

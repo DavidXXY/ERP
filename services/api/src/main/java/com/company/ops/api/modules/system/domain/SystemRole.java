@@ -27,7 +27,7 @@ public class SystemRole extends BaseEntity {
   @Column(name = "built_in", nullable = false)
   private boolean builtIn;
 
-  @ManyToMany(fetch = FetchType.EAGER)
+  @ManyToMany(fetch = FetchType.LAZY)
   @JoinTable(
       name = "sys_role_permissions",
       joinColumns = @JoinColumn(name = "role_id"),

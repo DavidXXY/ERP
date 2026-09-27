@@ -36,6 +36,8 @@ import com.company.ops.api.modules.office.domain.ApprovalStatus;
 import com.company.ops.api.modules.office.repository.ApprovalRequestRepository;
 import com.company.ops.api.modules.maintenance.domain.WorkOrder;
 import com.company.ops.api.modules.maintenance.repository.WorkOrderRepository;
+import com.company.ops.api.modules.system.domain.SystemOrganization;
+import com.company.ops.api.modules.system.repository.SystemOrganizationRepository;
 import com.company.ops.api.modules.system.security.UserPrincipal;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -69,6 +71,7 @@ public class HrService {
     private final LeaveBalanceRepository leaveBalanceRepository;
     private final ObjectMapper objectMapper;
     private final DeleteGovernanceService deleteGovernanceService;
+    private final SystemOrganizationRepository organizationRepository;
 
     public HrService(QualificationEmployeeRepository employeeRepository,
                      EmployeeEducationRepository educationRepository,
@@ -83,7 +86,8 @@ public class HrService {
                      ApprovalRequestRepository approvalRequestRepository,
                      WorkOrderRepository workOrderRepository,
                      ReceivableRepository receivableRepository,
-                     DeleteGovernanceService deleteGovernanceService) {
+                     DeleteGovernanceService deleteGovernanceService,
+                     SystemOrganizationRepository organizationRepository) {
         this.employeeRepository = employeeRepository;
         this.educationRepository = educationRepository;
         this.workExperienceRepository = workExperienceRepository;
@@ -98,6 +102,7 @@ public class HrService {
         this.workOrderRepository = workOrderRepository;
         this.receivableRepository = receivableRepository;
         this.deleteGovernanceService = deleteGovernanceService;
+        this.organizationRepository = organizationRepository;
     }
 
     private QualificationEmployee findEmployee(UUID id) {
@@ -279,8 +284,14 @@ public class HrService {
             var emp = entity.getEmployee();
             if ("TRANSFER".equals(entity.getLifecycleType())) {
                 if (entity.getToOrganizationId() != null) {
-                    try { emp.setOrganization(new com.company.ops.api.modules.system.domain.SystemOrganization());
-                        emp.getOrganization().setId(UUID.fromString(entity.getToOrganizationId())); } catch (Exception ignored) {}
+                    UUID targetOrgId;
+                    try {
+                        targetOrgId = UUID.fromString(entity.getToOrganizationId());
+                    } catch (IllegalArgumentException ex) {
+                        throw new BusinessException("目标组织标识无效: " + entity.getToOrganizationId());
+                    }
+                    emp.setOrganization(organizationRepository.findById(targetOrgId)
+                        .orElseThrow(() -> new BusinessException("目标组织不存在")));
                 }
                 if (entity.getToPosition() != null) emp.setPosition(entity.getToPosition());
             } else if ("RESIGNATION".equals(entity.getLifecycleType())) {
@@ -586,11 +597,17 @@ public class HrService {
 
     private void deductLeaveBalance(QualificationEmployee emp, String leaveType, double days) {
         int year = LocalDate.now().getYear();
-        var balance = leaveBalanceRepository.findByEmployee_IdAndLeaveTypeAndYear(emp.getId(), leaveType, year);
-        balance.ifPresent(b -> {
-            b.setUsedDays(b.getUsedDays() + days);
-            leaveBalanceRepository.save(b);
-        });
+        // 余额未初始化时按原语义跳过扣减（审批不因缺余额记录而失败）；
+        // 已有余额则校验不足，避免扣成负数。
+        leaveBalanceRepository.findByEmployee_IdAndLeaveTypeAndYear(emp.getId(), leaveType, year)
+            .ifPresent(b -> {
+                double remaining = b.getTotalDays() - b.getUsedDays();
+                if (remaining + 1e-9 < days) {
+                    throw new BusinessException("假期余额不足，剩余 " + remaining + " 天");
+                }
+                b.setUsedDays(b.getUsedDays() + days);
+                leaveBalanceRepository.save(b);
+            });
     }
 
     private LeaveBalanceResponse toBalanceResponse(LeaveBalance b) {

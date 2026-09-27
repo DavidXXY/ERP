@@ -114,7 +114,7 @@ public class FinanceAnalyticsService {
   }
 
   @Transactional(readOnly = true)
-  @Cacheable(value = "financeAnalytics", key = "{#requestedAsOf, #requestedYear, #organizationId, #includeDescendants}")
+  @Cacheable(value = "financeAnalytics", key = "{T(com.company.ops.api.common.tenant.TenantContext).currentTenant(), #requestedAsOf, #requestedYear, #organizationId, #includeDescendants}")
   public FinanceAnalyticsResponse analytics(LocalDate requestedAsOf, Integer requestedYear,
       UUID organizationId, boolean includeDescendants) {
     LocalDate asOf = requestedAsOf == null ? LocalDate.now() : requestedAsOf;

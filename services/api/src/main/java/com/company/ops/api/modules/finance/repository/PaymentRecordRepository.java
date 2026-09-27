@@ -1,6 +1,7 @@
 package com.company.ops.api.modules.finance.repository;
 
 import com.company.ops.api.modules.finance.domain.PaymentRecord;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -11,6 +12,7 @@ public interface PaymentRecordRepository extends JpaRepository<PaymentRecord, UU
 
   List<PaymentRecord> findAllByOrderByPaidDateDescCreatedAtDesc();
   Page<PaymentRecord> findAllByOrderByPaidDateDescCreatedAtDesc(Pageable pageable);
+  List<PaymentRecord> findByPayableIdIn(Collection<UUID> payableIds);
 
   boolean existsByCode(String code);
 }

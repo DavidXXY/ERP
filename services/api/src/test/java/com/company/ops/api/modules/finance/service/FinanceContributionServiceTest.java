@@ -125,7 +125,7 @@ class FinanceContributionServiceTest {
     receipt.setReceivableId(receivableId);
     receipt.setAmount(new BigDecimal("600"));
     receipt.setReceivedDate(LocalDate.of(2026, 8, 2));
-    when(receiptRepository.findAll()).thenReturn(List.of(receipt));
+    when(receiptRepository.findByReceivableIdIn(any())).thenReturn(List.of(receipt));
 
     UUID orderId = UUID.randomUUID();
     PurchaseOrder order = new PurchaseOrder();
@@ -145,7 +145,7 @@ class FinanceContributionServiceTest {
     payment.setPayableId(payableId);
     payment.setAmount(new BigDecimal("200"));
     payment.setPaidDate(LocalDate.of(2026, 8, 3));
-    when(paymentRepository.findAll()).thenReturn(List.of(payment));
+    when(paymentRepository.findByPayableIdIn(any())).thenReturn(List.of(payment));
 
     Customer customer = new Customer();
     customer.setId(customerId);

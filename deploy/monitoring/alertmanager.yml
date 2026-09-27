@@ -1,0 +1,14 @@
+# Alertmanager 接收告警并路由到真实接收器。
+# 生产环境请将 webhook/email 替换为实际接收端点（如企业微信、钉钉、Slack、邮件）。
+route:
+  receiver: default-webhook
+  group_by: ["alertname", "severity"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+receivers:
+  - name: default-webhook
+    webhook_configs:
+      - url: "http://127.0.0.1:9094/alerts"
+        send_resolved: true

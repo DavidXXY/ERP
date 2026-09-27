@@ -1,5 +1,6 @@
 package com.company.ops.api.config;
 
+import com.company.ops.api.common.tenant.TenantAwareKeyGenerator;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -8,8 +9,10 @@ import java.time.Duration;
 import java.util.Map;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.cache.CacheManager;
+import org.springframework.cache.annotation.CachingConfigurer;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
+import org.springframework.cache.interceptor.KeyGenerator;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
@@ -25,7 +28,13 @@ import org.springframework.data.redis.serializer.RedisSerializationContext;
 @Configuration
 @EnableCaching
 @ConditionalOnProperty(name = "ops.cache.enabled", havingValue = "true", matchIfMissing = true)
-public class CacheConfig {
+public class CacheConfig implements CachingConfigurer {
+
+  @Override
+  public KeyGenerator keyGenerator() {
+    // 所有未显式指定 key 的 @Cacheable 都会把租户并入缓存键，防止跨租户共享条目。
+    return new TenantAwareKeyGenerator();
+  }
 
   private static final Map<String, Duration> TTL_BY_CACHE = Map.of(
       "biDashboard", Duration.ofSeconds(60),

@@ -1,5 +1,6 @@
 package com.company.ops.api.modules.crm.service;
 
+import com.company.ops.api.common.util.CsvUtils;
 import com.company.ops.api.modules.crm.domain.Customer;
 import com.company.ops.api.modules.crm.domain.ServiceContract;
 import com.company.ops.api.modules.crm.repository.CustomerRepository;
@@ -52,14 +53,14 @@ public class CrmExportService {
       int rowNum = 1;
       for (Customer c : customers) {
         Row row = sheet.createRow(rowNum++);
-        row.createCell(0).setCellValue(c.getCode() != null ? c.getCode() : "");
-        row.createCell(1).setCellValue(c.getName() != null ? c.getName() : "");
-        row.createCell(2).setCellValue(c.getIndustry() != null ? c.getIndustry() : "");
-        row.createCell(3).setCellValue(c.getLevel() != null ? c.getLevel().name() : "");
-        row.createCell(4).setCellValue(c.getOwnerName() != null ? c.getOwnerName() : "");
+        row.createCell(0).setCellValue(CsvUtils.sanitizeCell(c.getCode()));
+        row.createCell(1).setCellValue(CsvUtils.sanitizeCell(c.getName()));
+        row.createCell(2).setCellValue(CsvUtils.sanitizeCell(c.getIndustry()));
+        row.createCell(3).setCellValue(CsvUtils.sanitizeCell(c.getLevel() != null ? c.getLevel().name() : ""));
+        row.createCell(4).setCellValue(CsvUtils.sanitizeCell(c.getOwnerName()));
         row.createCell(5).setCellValue("");
-        row.createCell(6).setCellValue(c.getPaymentHabit() != null ? c.getPaymentHabit() : "");
-        row.createCell(7).setCellValue(c.getRiskStatus() != null ? c.getRiskStatus().name() : "");
+        row.createCell(6).setCellValue(CsvUtils.sanitizeCell(c.getPaymentHabit()));
+        row.createCell(7).setCellValue(CsvUtils.sanitizeCell(c.getRiskStatus() != null ? c.getRiskStatus().name() : ""));
       }
 
       ByteArrayOutputStream bos = new ByteArrayOutputStream();
@@ -91,18 +92,18 @@ public class CrmExportService {
       int rowNum = 1;
       for (ServiceContract c : contracts) {
         Row row = sheet.createRow(rowNum++);
-        row.createCell(0).setCellValue(c.getCode() != null ? c.getCode() : "");
-        row.createCell(1).setCellValue(c.getCustomerId() != null ? c.getCustomerId().toString() : "");
-        row.createCell(2).setCellValue(c.getProjectName() != null ? c.getProjectName() : "");
+        row.createCell(0).setCellValue(CsvUtils.sanitizeCell(c.getCode()));
+        row.createCell(1).setCellValue(CsvUtils.sanitizeCell(c.getCustomerId()));
+        row.createCell(2).setCellValue(CsvUtils.sanitizeCell(c.getProjectName()));
         row.createCell(3).setCellValue(c.getAmount() != null ? c.getAmount().doubleValue() : 0);
-        row.createCell(4).setCellValue(c.getContractType() != null ? c.getContractType() : "");
-        row.createCell(5).setCellValue(c.getStartDate() != null ? c.getStartDate().toString() : "");
-        row.createCell(6).setCellValue(c.getEndDate() != null ? c.getEndDate().toString() : "");
+        row.createCell(4).setCellValue(CsvUtils.sanitizeCell(c.getContractType()));
+        row.createCell(5).setCellValue(CsvUtils.sanitizeCell(c.getStartDate()));
+        row.createCell(6).setCellValue(CsvUtils.sanitizeCell(c.getEndDate()));
         String statusLabel = switch (c.getStatus()) {
           case ACTIVE -> "履约中"; case RENEWAL_PENDING -> "待续约"; case OVERDUE_RISK -> "履约风险"; case CLOSED -> "已关闭";
           default -> c.getStatus() != null ? c.getStatus().name() : "";
         };
-        row.createCell(7).setCellValue(statusLabel);
+        row.createCell(7).setCellValue(CsvUtils.sanitizeCell(statusLabel));
       }
       ByteArrayOutputStream bos = new ByteArrayOutputStream();
       wb.write(bos);

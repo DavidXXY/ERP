@@ -457,13 +457,17 @@ http.interceptors.response.use(
     return response;
   },
   (error) => {
-    if (error.response?.status === 401) {
+    const status = error.response?.status;
+    if (status === 401) {
       sessionStorage.removeItem(SUPPLIER_TOKEN_KEY);
       if (location.pathname !== "/login") location.href = "/login";
     }
-    return Promise.reject(
-      new Error(error.response?.data?.message || error.message || "请求失败"),
-    );
+    // 5xx 一律给泛化文案，避免网关/代理响应体泄露内部细节；4xx 保留业务 message。
+    const message =
+      typeof status === "number" && status >= 500
+        ? "服务暂时不可用，请稍后重试"
+        : error.response?.data?.message || error.message || "请求失败";
+    return Promise.reject(new Error(message));
   },
 );
 

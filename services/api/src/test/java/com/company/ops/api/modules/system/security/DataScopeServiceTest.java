@@ -63,8 +63,8 @@ class DataScopeServiceTest {
     when(userRepository.findById(current.getId())).thenReturn(Optional.of(current));
     when(organizationRepository.findByTenantIdOrderBySortOrderAsc("default"))
         .thenReturn(List.of(department, team, unrelated));
-    when(userRepository.findByOrganization_IdIn(anySet()))
-        .thenReturn(List.of(departmentUser, teamUser));
+    when(userRepository.findIdsByOrganization_IdIn(anySet()))
+        .thenReturn(List.of(departmentUser.getId(), teamUser.getId()));
 
     Set<UUID> visible = dataScopeService.visibleUserIds(new UserPrincipal(current));
 
@@ -84,8 +84,8 @@ class DataScopeServiceTest {
     SystemUser selectedUser = user("采购专员", selectedDepartment, "SELF");
 
     when(userRepository.findById(current.getId())).thenReturn(Optional.of(current));
-    when(userRepository.findByOrganization_IdIn(Set.of(selectedDepartment.getId())))
-        .thenReturn(List.of(selectedUser));
+    when(userRepository.findIdsByOrganization_IdIn(Set.of(selectedDepartment.getId())))
+        .thenReturn(List.of(selectedUser.getId()));
 
     Set<UUID> visible = dataScopeService.visibleUserIds(new UserPrincipal(current));
 

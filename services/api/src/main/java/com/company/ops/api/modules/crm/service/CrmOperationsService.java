@@ -3,6 +3,7 @@ package com.company.ops.api.modules.crm.service;
 import com.company.ops.api.common.delete.DeleteGovernanceService;
 import com.company.ops.api.common.exception.BusinessException;
 import com.company.ops.api.common.service.CodeGenerator;
+import com.company.ops.api.common.tenant.TenantContext;
 import com.company.ops.api.modules.crm.domain.ApprovalDecision;
 import com.company.ops.api.modules.crm.domain.ContractStatus;
 import com.company.ops.api.modules.crm.domain.ContractKind;
@@ -1862,11 +1863,12 @@ public class CrmOperationsService {
     Object value = entityManager.createNativeQuery("""
         SELECT COALESCE(SUM(item.planned_amount), 0)
         FROM project_budget_items item
-        JOIN project_projects project ON project.id = item.project_id
-        JOIN crm_service_contracts contract ON contract.id = project.contract_id
-        WHERE contract.quote_id = ?1
+        JOIN project_projects project ON project.id = item.project_id AND project.tenant_id = ?2
+        JOIN crm_service_contracts contract ON contract.id = project.contract_id AND contract.tenant_id = ?2
+        WHERE item.tenant_id = ?2 AND contract.quote_id = ?1
         """)
         .setParameter(1, quote.getId())
+        .setParameter(2, TenantContext.currentTenant())
         .getSingleResult();
     if (value instanceof BigDecimal amount) {
       return amount;

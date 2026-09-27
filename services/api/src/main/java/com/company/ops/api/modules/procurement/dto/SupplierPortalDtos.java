@@ -27,7 +27,7 @@ public final class SupplierPortalDtos {
       @NotBlank @Size(max = 80) String contactName,
       @NotBlank @Email @Size(max = 160) String email,
       @NotBlank @Size(max = 40) String phone,
-      @NotBlank @Size(min = 8, max = 100) String password,
+      @NotBlank @Size(min = 12, max = 100) String password,
       @Size(max = 80) String registrationCode,
       LocalDate licenseValidTo,
       LocalDate qualificationValidTo,

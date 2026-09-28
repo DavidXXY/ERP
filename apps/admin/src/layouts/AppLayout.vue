@@ -129,9 +129,7 @@
             key="/inventory/stocktakes"
             >库存盘点</a-menu-item
           >
-          <a-menu-item
-            v-if="auth.can('sales:order:manage')"
-            key="/sales/orders"
+          <a-menu-item v-if="auth.can('sales:order:manage')" key="/sales/orders"
             >销售管理</a-menu-item
           >
         </a-sub-menu>

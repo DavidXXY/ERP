@@ -87,7 +87,7 @@ const returns = ref<SalesReturn[]>([]);
 const orderColumns = [
   { title: "单号", dataIndex: "code", width: 150 },
   { title: "客户", dataIndex: "customerName", width: 160 },
-  { title: "金额", dataIndex: "totalAmount", width: 120 },
+  { title: "金额（含税，元）", dataIndex: "totalAmount", width: 120 },
   { title: "状态", key: "status", width: 110 },
   { title: "日期", dataIndex: "orderDate", width: 120 },
   { title: "操作", key: "actions", width: 140 },
@@ -103,7 +103,7 @@ const returnColumns = [
   { title: "单号", dataIndex: "code", width: 150 },
   { title: "订单", dataIndex: "orderCode", width: 150 },
   { title: "客户", dataIndex: "customerName", width: 160 },
-  { title: "金额", dataIndex: "totalAmount", width: 120 },
+  { title: "金额（含税，元）", dataIndex: "totalAmount", width: 120 },
   { title: "日期", dataIndex: "returnDate", width: 120 },
 ];
 

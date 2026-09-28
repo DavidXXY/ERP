@@ -76,7 +76,7 @@ const payments = ref<AdvancePayment[]>([]);
 const receiptColumns = [
   { title: "单号", dataIndex: "code", width: 150 },
   { title: "客户", dataIndex: "customerName", width: 160 },
-  { title: "金额", dataIndex: "amount", width: 120 },
+  { title: "金额（含税，元）", dataIndex: "amount", width: 120 },
   { title: "已核销", dataIndex: "settledAmount", width: 120 },
   { title: "可用", dataIndex: "available", width: 120 },
   { title: "状态", key: "status", width: 100 },
@@ -85,7 +85,7 @@ const receiptColumns = [
 const paymentColumns = [
   { title: "单号", dataIndex: "code", width: 150 },
   { title: "供应商", dataIndex: "supplierName", width: 160 },
-  { title: "金额", dataIndex: "amount", width: 120 },
+  { title: "金额（含税，元）", dataIndex: "amount", width: 120 },
   { title: "已核销", dataIndex: "settledAmount", width: 120 },
   { title: "可用", dataIndex: "available", width: 120 },
   { title: "状态", key: "status", width: 100 },

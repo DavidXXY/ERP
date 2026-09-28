@@ -32,7 +32,7 @@ const recognitions = ref<RevenueRecognition[]>([]);
 const columns = [
   { title: "单号", dataIndex: "code", width: 150 },
   { title: "合同", dataIndex: "contractId", width: 260 },
-  { title: "金额", dataIndex: "amount", width: 120 },
+  { title: "金额（未税，元）", dataIndex: "amount", width: 120 },
   { title: "确认日", dataIndex: "recognizeDate", width: 120 },
   { title: "确认人", dataIndex: "recognizedBy", width: 120 },
   { title: "备注", dataIndex: "remark" },

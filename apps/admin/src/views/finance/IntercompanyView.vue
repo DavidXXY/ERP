@@ -60,7 +60,7 @@ const txColumns = [
   { title: "单号", dataIndex: "code", width: 150 },
   { title: "发起法人", dataIndex: "fromEntityName", width: 160 },
   { title: "接收法人", dataIndex: "toEntityName", width: 160 },
-  { title: "金额", dataIndex: "amount", width: 120 },
+  { title: "金额（税价不适用，元）", dataIndex: "amount", width: 120 },
   { title: "方向", dataIndex: "direction", width: 120 },
   { title: "日期", dataIndex: "transactionDate", width: 120 },
   { title: "事由", dataIndex: "reason" },

@@ -12,5 +12,6 @@ public record InventoryPartResponse(
     BigDecimal stockQty,
     BigDecimal safetyQty,
     BigDecimal unitCost,
+    BigDecimal stockValue,
     boolean lowStock
 ) {}

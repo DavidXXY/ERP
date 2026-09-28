@@ -10,6 +10,8 @@ public record StockMovementResponse(
     UUID partId,
     StockMovementType movementType,
     BigDecimal quantity,
+    BigDecimal unitCost,
+    BigDecimal amount,
     String sourceNo,
     String remark,
     String operatorName,

@@ -124,6 +124,16 @@
           <a-menu-item key="/inventory/issues">领料管理</a-menu-item>
           <a-menu-item key="/inventory/movements">库存移动</a-menu-item>
           <a-menu-item key="/inventory/analytics">库存分析</a-menu-item>
+          <a-menu-item
+            v-if="auth.can('inventory:stocktake:manage')"
+            key="/inventory/stocktakes"
+            >库存盘点</a-menu-item
+          >
+          <a-menu-item
+            v-if="auth.can('sales:order:manage')"
+            key="/sales/orders"
+            >销售管理</a-menu-item
+          >
         </a-sub-menu>
         <a-sub-menu v-if="canAccessMaintenance" key="maintenance">
           <template #icon><ToolOutlined /></template>
@@ -157,6 +167,9 @@
             v-if="auth.can('qualification:employee:manage')"
             key="/hr/leave-balances"
             >请假额度</a-menu-item
+          >
+          <a-menu-item v-if="auth.can('payroll:view')" key="/hr/payroll"
+            >薪酬核算</a-menu-item
           >
         </a-sub-menu>
         <a-sub-menu v-if="canAccessQualification" key="qualification">
@@ -261,6 +274,26 @@
             "
             key="/finance/operations"
             >财务运营</a-menu-item
+          >
+          <a-menu-item
+            v-if="auth.can('finance:advance:manage')"
+            key="/finance/advance"
+            >预收预付</a-menu-item
+          >
+          <a-menu-item
+            v-if="auth.can('finance:revenue:recognize')"
+            key="/finance/revenue-recognition"
+            >收入确认</a-menu-item
+          >
+          <a-menu-item
+            v-if="auth.can('fixedasset:view')"
+            key="/finance/fixed-assets"
+            >固定资产</a-menu-item
+          >
+          <a-menu-item
+            v-if="auth.can('ledger:entity:manage')"
+            key="/finance/intercompany"
+            >账套法人</a-menu-item
           >
         </a-sub-menu>
 

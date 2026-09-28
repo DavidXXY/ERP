@@ -349,6 +349,48 @@ const rootRoutes: RouteRecordRaw[] = [
     component: () => import("@/views/inventory/StockMovementsView.vue"),
     meta: { title: "库存移动", permission: "inventory:view" },
   },
+  {
+    path: "inventory/stocktakes",
+    name: "inventory-stocktakes",
+    component: () => import("@/views/inventory/StocktakeView.vue"),
+    meta: { title: "库存盘点", permission: "inventory:stocktake:manage" },
+  },
+  {
+    path: "sales/orders",
+    name: "sales-orders",
+    component: () => import("@/views/sales/SalesView.vue"),
+    meta: { title: "销售管理", permission: "sales:order:manage" },
+  },
+  {
+    path: "finance/advance",
+    name: "finance-advance",
+    component: () => import("@/views/finance/AdvanceView.vue"),
+    meta: { title: "预收预付", permission: "finance:advance:manage" },
+  },
+  {
+    path: "finance/revenue-recognition",
+    name: "finance-revenue-recognition",
+    component: () => import("@/views/finance/RevenueRecognitionView.vue"),
+    meta: { title: "收入确认", permission: "finance:revenue:recognize" },
+  },
+  {
+    path: "finance/fixed-assets",
+    name: "finance-fixed-assets",
+    component: () => import("@/views/finance/FixedAssetView.vue"),
+    meta: { title: "固定资产", permission: "fixedasset:view" },
+  },
+  {
+    path: "finance/intercompany",
+    name: "finance-intercompany",
+    component: () => import("@/views/finance/IntercompanyView.vue"),
+    meta: { title: "账套法人", permission: "ledger:entity:manage" },
+  },
+  {
+    path: "hr/payroll",
+    name: "hr-payroll",
+    component: () => import("@/views/hr/PayrollView.vue"),
+    meta: { title: "薪酬核算", permission: "payroll:view" },
+  },
   // Maintenance
   {
     path: "maintenance",

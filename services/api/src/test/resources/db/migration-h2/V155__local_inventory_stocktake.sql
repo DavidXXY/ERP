@@ -1,0 +1,1 @@
+-- 库存盘点（H2 测试库镜像）：新表由 ddl-auto=update 按实体补齐，权限由 DataInitializer 回补

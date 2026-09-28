@@ -45,7 +45,20 @@ public class DataInitializer implements CommandLineRunner {
       new RequiredPermission("finance:account:manage", "会计科目与期初余额维护", "finance"),
       new RequiredPermission("finance:operations:view", "财务运营工作台查看", "finance"),
       new RequiredPermission("finance:operations:manage", "财务运营处理", "finance"),
-      new RequiredPermission("system:health:view", "系统运行状态查看", "system")
+      new RequiredPermission("system:health:view", "系统运行状态查看", "system"),
+      new RequiredPermission("inventory:cost:view", "库存成本查看", "inventory"),
+      new RequiredPermission("inventory:stocktake:manage", "库存盘点管理", "inventory"),
+      new RequiredPermission("sales:order:manage", "销售订单管理", "sales"),
+      new RequiredPermission("sales:shipment:manage", "销售发货管理", "sales"),
+      new RequiredPermission("sales:return:manage", "销售退货管理", "sales"),
+      new RequiredPermission("finance:advance:manage", "预收预付管理", "finance"),
+      new RequiredPermission("finance:revenue:recognize", "收入确认", "finance"),
+      new RequiredPermission("crm:credit:manage", "客户信用管理", "crm"),
+      new RequiredPermission("fixedasset:view", "固定资产查看", "fixedasset"),
+      new RequiredPermission("fixedasset:manage", "固定资产管理", "fixedasset"),
+      new RequiredPermission("payroll:view", "薪酬管理查看", "payroll"),
+      new RequiredPermission("payroll:manage", "薪酬核算与发放", "payroll"),
+      new RequiredPermission("ledger:entity:manage", "账套法人管理", "system")
   );
 
   private final SystemPermissionRepository permissionRepository;

@@ -148,7 +148,8 @@ public class ProcurementMaterialService {
   private InventoryPartResponse toResponse(InventoryPart part) {
     return new InventoryPartResponse(
         part.getId(), part.getCode(), part.getName(), part.getModel(), part.getCategory(),
-        part.getStockQty(), part.getSafetyQty(), part.getUnitCost(), part.isLowStock()
+        part.getStockQty(), part.getSafetyQty(), part.getUnitCost(),
+        part.getStockQty().multiply(part.getUnitCost()), part.isLowStock()
     );
   }
 

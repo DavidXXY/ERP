@@ -10,6 +10,7 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -39,6 +40,12 @@ public class Customer extends BaseEntity {
 
   @Column(name = "payment_habit", length = 200)
   private String paymentHabit;
+
+  @Column(name = "credit_limit", precision = 18, scale = 2)
+  private BigDecimal creditLimit;
+
+  @Column(name = "credit_blocked", nullable = false)
+  private boolean creditBlocked = false;
 
   @Enumerated(EnumType.STRING)
   @Column(name = "risk_status", nullable = false, length = 32)
@@ -138,6 +145,11 @@ public class Customer extends BaseEntity {
   public void setPaymentHabit(String paymentHabit) {
     this.paymentHabit = paymentHabit;
   }
+
+  public BigDecimal getCreditLimit() { return creditLimit; }
+  public void setCreditLimit(BigDecimal creditLimit) { this.creditLimit = creditLimit; }
+  public boolean isCreditBlocked() { return creditBlocked; }
+  public void setCreditBlocked(boolean creditBlocked) { this.creditBlocked = creditBlocked; }
 
   public RiskStatus getRiskStatus() {
     return riskStatus;

@@ -1,0 +1,2 @@
+-- 销售订单/发货/退货（H2 测试库镜像）：新表（sales_orders 等）由 ddl-auto=update 按实体补齐
+-- 权限由 DataInitializer 在运行时回补 ADMIN 角色

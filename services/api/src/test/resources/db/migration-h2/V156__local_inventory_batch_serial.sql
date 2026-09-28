@@ -1,0 +1,2 @@
+-- 批次/序列号（H2 测试库镜像）：inventory_batches / inventory_serial_numbers 新表由 ddl-auto=update 补齐
+-- inventory_stock_movements.batch_no / serial_no 为 DDL-only 预留字段（实体未映射），无需镜像

@@ -175,7 +175,18 @@ public class InventoryService {
     if (nextQty.compareTo(BigDecimal.ZERO) < 0) {
       throw new BusinessException("库存不足，无法完成出库");
     }
-    saveMovement(partId, request.movementType(), request.quantity(), request.sourceNo(), request.remark());
+    BigDecimal unitCost = part.getUnitCost();
+    if (request.movementType() == StockMovementType.INBOUND) {
+      BigDecimal inboundCost = request.unitCost() != null && request.unitCost().signum() > 0
+          ? request.unitCost() : part.getUnitCost();
+      unitCost = nextQty.signum() == 0 ? inboundCost
+          : part.getStockQty().multiply(part.getUnitCost())
+              .add(request.quantity().multiply(inboundCost))
+              .divide(nextQty, 4, java.math.RoundingMode.HALF_UP);
+      part.setUnitCost(unitCost);
+    }
+    saveMovement(partId, request.movementType(), request.quantity(), unitCost,
+        request.sourceNo(), request.remark());
     part.setStockQty(nextQty);
     return toPartResponse(partRepository.save(part));
   }
@@ -236,8 +247,8 @@ public class InventoryService {
       line.setUnitCost(amount(part.getUnitCost()));
       line.setAmount(lineAmount);
       part.setStockQty(part.getStockQty().subtract(item.quantity()));
-      saveMovement(part.getId(), StockMovementType.OUTBOUND, item.quantity(), issueCode,
-          "项目领料 " + project.getCode() + " · " + request.purpose());
+      saveMovement(part.getId(), StockMovementType.OUTBOUND, item.quantity(), line.getUnitCost(),
+          issueCode, "项目领料 " + project.getCode() + " · " + request.purpose());
       return line;
     }).toList();
     issueLineRepository.saveAll(lines);
@@ -335,8 +346,8 @@ public class InventoryService {
       line.setAmount(lineAmount);
       issueLine.setReturnedQty(issueLine.getReturnedQty().add(item.quantity()));
       part.setStockQty(part.getStockQty().add(item.quantity()));
-      saveMovement(part.getId(), StockMovementType.RETURN, item.quantity(), returnCode,
-          "项目退料 " + project.getCode() + " · 原领料单 " + issue.getCode()
+      saveMovement(part.getId(), StockMovementType.RETURN, item.quantity(), line.getUnitCost(),
+          returnCode, "项目退料 " + project.getCode() + " · 原领料单 " + issue.getCode()
               + " · " + request.reason().trim());
       return line;
     }).toList();
@@ -498,17 +509,29 @@ public class InventoryService {
       UUID partId,
       StockMovementType type,
       BigDecimal quantity,
+      BigDecimal unitCost,
       String sourceNo,
       String remark
   ) {
+    BigDecimal cost = amount(unitCost);
     StockMovement movement = new StockMovement();
     movement.setPartId(partId);
     movement.setMovementType(type);
     movement.setQuantity(quantity);
+    movement.setUnitCost(cost);
+    movement.setAmount(signedAmount(type, quantity, cost));
     movement.setSourceNo(sourceNo);
     movement.setRemark(remark);
     movement.setOperatorName(currentName());
     movementRepository.save(movement);
+  }
+
+  private BigDecimal signedAmount(StockMovementType type, BigDecimal quantity, BigDecimal unitCost) {
+    BigDecimal value = quantity.multiply(unitCost);
+    return switch (type) {
+      case OUTBOUND, SCRAP -> value.negate();
+      default -> value;
+    };
   }
 
   private BigDecimal toDelta(StockMovementType movementType, BigDecimal quantity) {
@@ -521,7 +544,8 @@ public class InventoryService {
   private InventoryPartResponse toPartResponse(InventoryPart part) {
     return new InventoryPartResponse(
         part.getId(), part.getCode(), part.getName(), part.getModel(), part.getCategory(),
-        part.getStockQty(), part.getSafetyQty(), part.getUnitCost(), part.isLowStock()
+        part.getStockQty(), part.getSafetyQty(), part.getUnitCost(),
+        amount(part.getStockQty()).multiply(amount(part.getUnitCost())), part.isLowStock()
     );
   }
 
@@ -559,6 +583,7 @@ public class InventoryService {
   private StockMovementResponse toMovementResponse(StockMovement movement, String partName) {
     return new StockMovementResponse(
         movement.getId(), movement.getPartId(), movement.getMovementType(), movement.getQuantity(),
+        movement.getUnitCost(), movement.getAmount(),
         movement.getSourceNo(), movement.getRemark(), movement.getOperatorName(), movement.getCreatedAt(),
         partName
     );

@@ -7,6 +7,7 @@ import java.util.Collection;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import jakarta.persistence.LockModeType;
 import java.util.Optional;
 import java.time.LocalDate;
@@ -44,6 +45,9 @@ public interface ReceivableRepository extends JpaRepository<Receivable, UUID> {
 
   @Query("select coalesce(sum(r.amount - r.settledAmount), 0) from Receivable r")
   BigDecimal sumOutstandingAmount();
+
+  @Query("select coalesce(sum(r.amount - r.settledAmount), 0) from Receivable r where r.customerId = :customerId")
+  BigDecimal sumOutstandingByCustomer(@Param("customerId") UUID customerId);
 
   @Query("""
       select coalesce(sum(r.amount), 0) as totalAmount,

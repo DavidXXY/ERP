@@ -383,6 +383,46 @@ class SupplierPortalServiceTest {
   }
 
   @Test
+  void registrationBindsToExistingSupplierWhenCreditCodeHasFormattingDifferences() {
+    Fixture fixture = fixture();
+    fixture.supplier.setName("江苏智联电气设备有限公司");
+    fixture.supplier.setUnifiedSocialCreditCode("9131 0000 TEST 0000 02");
+    when(suppliers.findFirstByUnifiedSocialCreditCodeIgnoreCase("91310000TEST000002"))
+        .thenReturn(Optional.empty());
+    when(suppliers.findAllByOrderByCreatedAtDesc()).thenReturn(List.of(fixture.supplier));
+    when(invitations.findBySupplierIdOrderByInvitedAtDesc(fixture.supplier.getId()))
+        .thenReturn(List.of());
+
+    // 主档信用代码含空格/连字符等格式差异时，应按规范化信用代码回退匹配既有供应商，而非重复建档。
+    assertThatThrownBy(() -> service.register(new RegisterRequest(
+        "江苏智联电气设备有限公司", "91310000test000002", null, "联系人", "portal@example.com",
+        "13800000000", "password123", "ANY-CODE", null, null, null), "1.2.3.4"))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("注册码无效或已过期");
+    verify(suppliers, never()).save(any());
+  }
+
+  @Test
+  void registrationBindsToExistingSupplierWhenCompanyNameHasFullWidthCharacters() {
+    Fixture fixture = fixture();
+    fixture.supplier.setName("江苏智联电气设备（上海）有限公司");
+    fixture.supplier.setUnifiedSocialCreditCode(null);
+    when(suppliers.findFirstByUnifiedSocialCreditCodeIgnoreCase("91310000TEST000002"))
+        .thenReturn(Optional.empty());
+    when(suppliers.findAllByOrderByCreatedAtDesc()).thenReturn(List.of(fixture.supplier));
+    when(invitations.findBySupplierIdOrderByInvitedAtDesc(fixture.supplier.getId()))
+        .thenReturn(List.of());
+
+    // 全角/半角括号差异不应导致重复建档，应回退匹配既有供应商。
+    assertThatThrownBy(() -> service.register(new RegisterRequest(
+        "江苏智联电气设备(上海)有限公司", "91310000test000002", null, "联系人", "portal@example.com",
+        "13800000000", "password123", "ANY-CODE", null, null, null), "1.2.3.4"))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("注册码无效或已过期");
+    verify(suppliers, never()).save(any());
+  }
+
+  @Test
   void supplierCanSubmitInformationChangeRequest() {
     Fixture fixture = fixture();
     when(suppliers.findById(fixture.supplier.getId())).thenReturn(Optional.of(fixture.supplier));

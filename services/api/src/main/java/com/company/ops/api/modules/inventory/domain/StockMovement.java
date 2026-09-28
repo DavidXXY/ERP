@@ -26,6 +26,12 @@ public class StockMovement extends BaseEntity {
   @Column(name = "source_no", length = 64)
   private String sourceNo;
 
+  @Column(name = "unit_cost", nullable = false, precision = 14, scale = 4)
+  private BigDecimal unitCost = BigDecimal.ZERO;
+
+  @Column(nullable = false, precision = 14, scale = 2)
+  private BigDecimal amount = BigDecimal.ZERO;
+
   @Column(length = 300)
   private String remark;
 
@@ -62,6 +68,22 @@ public class StockMovement extends BaseEntity {
 
   public void setSourceNo(String sourceNo) {
     this.sourceNo = sourceNo;
+  }
+
+  public BigDecimal getUnitCost() {
+    return unitCost;
+  }
+
+  public void setUnitCost(BigDecimal unitCost) {
+    this.unitCost = unitCost;
+  }
+
+  public BigDecimal getAmount() {
+    return amount;
+  }
+
+  public void setAmount(BigDecimal amount) {
+    this.amount = amount;
   }
 
   public String getRemark() {

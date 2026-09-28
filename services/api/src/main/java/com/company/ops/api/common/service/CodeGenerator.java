@@ -44,7 +44,21 @@ public class CodeGenerator {
     Map.entry("CODE_SEQUENCE", "SEQ"),
     Map.entry("PURCHASE_ORDER_CHANGE", "BGD"),
     Map.entry("FRAMEWORK_AGREEMENT", "KJXY"),
-    Map.entry("CENTRAL_PLAN", "JCJH")
+    Map.entry("CENTRAL_PLAN", "JCJH"),
+    Map.entry("FIXED_ASSET", "GDZC"),
+    Map.entry("FIXED_ASSET_DEPRECIATION", "GDZJ"),
+    Map.entry("FIXED_ASSET_TRANSFER", "ZCDB"),
+    Map.entry("FIXED_ASSET_DISPOSAL", "ZCBF"),
+    Map.entry("FIXED_ASSET_COUNT", "ZCPD"),
+    Map.entry("PAYROLL_RUN", "GZFF"),
+    Map.entry("SALES_ORDER", "XSDD"),
+    Map.entry("SALES_SHIPMENT", "XSFH"),
+    Map.entry("SALES_RETURN", "XSTH"),
+    Map.entry("STOCKTAKE", "PD"),
+    Map.entry("ADVANCE_RECEIPT", "YSK"),
+    Map.entry("ADVANCE_PAYMENT", "YFK"),
+    Map.entry("REVENUE_RECOGNITION", "SRQR"),
+    Map.entry("INTERCOMPANY", "NBJY")
   );
 
   private static final int DEFAULT_WIDTH = 4;

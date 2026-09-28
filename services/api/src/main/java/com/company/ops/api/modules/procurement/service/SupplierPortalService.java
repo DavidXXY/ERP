@@ -199,21 +199,8 @@ public class SupplierPortalService {
       loginAttempts.failed(registerIpKey);
       throw new BusinessException("该邮箱已经注册，请直接登录；如忘记密码请联系采购管理员重置");
     }
-    String creditCode = request.unifiedSocialCreditCode().trim().toUpperCase();
-    Supplier supplier = suppliers.findFirstByUnifiedSocialCreditCodeIgnoreCase(creditCode).orElse(null);
-    if (supplier == null) {
-      // 供应商主档可能未登记统一社会信用代码（历史/演示数据），此时按规范化企业名称回退匹配，
-      // 避免为同一供应商重复建档导致门户账号看不到其名下已建立的采购订单与合同。
-      final String normalizedName = normalizeCompanyName(request.companyName());
-      List<Supplier> nameMatches = suppliers.findAllByOrderByCreatedAtDesc().stream()
-          .filter(item -> normalizeCompanyName(item.getName()).equals(normalizedName))
-          .toList();
-      if (nameMatches.size() == 1) {
-        supplier = nameMatches.get(0);
-      } else if (nameMatches.size() > 1) {
-        throw new BusinessException("系统中存在多个同名供应商，请联系采购管理员绑定门户账号");
-      }
-    }
+    String creditCode = normalizeCreditCode(request.unifiedSocialCreditCode());
+    Supplier supplier = matchExistingSupplier(creditCode, request.companyName());
     ProcurementInquiryInvitation registrationInvitation = null;
     if (supplier == null) {
       supplier = createPendingSupplier(request, creditCode);
@@ -2032,6 +2019,31 @@ public class SupplierPortalService {
     return clarification(saved);
   }
 
+  private Supplier matchExistingSupplier(String creditCode, String companyName) {
+    Supplier supplier = suppliers.findFirstByUnifiedSocialCreditCodeIgnoreCase(creditCode).orElse(null);
+    if (supplier != null) return supplier;
+    List<Supplier> all = suppliers.findAllByOrderByCreatedAtDesc();
+    // 历史/演示数据可能未登记统一社会信用代码，或登记时含空格、连字符等格式差异，先按规范化信用代码回退匹配。
+    List<Supplier> creditMatches = all.stream()
+        .filter(item -> creditCode.equals(normalizeCreditCode(item.getUnifiedSocialCreditCode())))
+        .toList();
+    if (creditMatches.size() == 1) return creditMatches.get(0);
+    if (creditMatches.size() > 1) {
+      throw new BusinessException("系统中存在多个统一社会信用代码相同的供应商，请联系采购管理员绑定门户账号");
+    }
+    // 信用代码缺失或不一致时，按规范化企业名称回退匹配，
+    // 避免为同一供应商重复建档导致门户账号看不到其名下已建立的采购订单与合同。
+    String normalizedName = normalizeCompanyName(companyName);
+    List<Supplier> nameMatches = all.stream()
+        .filter(item -> normalizedName.equals(normalizeCompanyName(item.getName())))
+        .toList();
+    if (nameMatches.size() == 1) return nameMatches.get(0);
+    if (nameMatches.size() > 1) {
+      throw new BusinessException("系统中存在多个同名供应商，请联系采购管理员绑定门户账号");
+    }
+    return null;
+  }
+
   private Supplier createPendingSupplier(RegisterRequest request, String creditCode) {
     Supplier supplier = new Supplier();
     supplier.setCode(codeGenerator.generate("SUPPLIER"));
@@ -2386,7 +2398,21 @@ public class SupplierPortalService {
   }
 
   private static String normalizeCompanyName(String value) {
-    return value == null ? "" : value.replaceAll("[\\s　]", "").toUpperCase();
+    if (value == null) return "";
+    // 全角字符（含全角空格、括号、字母数字等）转半角后再去除空白并统一大写，
+    // 容忍历史数据中的全角/半角与空格差异，避免同一供应商因名称格式差异被重复建档。
+    StringBuilder half = new StringBuilder(value.length());
+    for (int i = 0; i < value.length(); i++) {
+      char c = value.charAt(i);
+      if (c == '　') { half.append(' '); continue; }
+      if (c >= '！' && c <= '～') { half.append((char) (c - 0xFEE0)); continue; }
+      half.append(c);
+    }
+    return half.toString().replaceAll("\\s+", "").toUpperCase();
+  }
+
+  private static String normalizeCreditCode(String value) {
+    return value == null ? null : value.replaceAll("[^0-9A-Za-z]", "").toUpperCase();
   }
 
   private static String normalizeAttachmentType(String value) {

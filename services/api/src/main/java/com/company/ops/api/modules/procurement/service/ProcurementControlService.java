@@ -1013,6 +1013,8 @@ public class ProcurementControlService {
     movement.setPartId(part.getId());
     movement.setMovementType(StockMovementType.INBOUND);
     movement.setQuantity(request.qualifiedQty());
+    movement.setUnitCost(part.getUnitCost());
+    movement.setAmount(request.qualifiedQty().multiply(order.getUnitPrice()));
     movement.setSourceNo(order.getCode());
     movement.setRemark("采购质检合格入库 " + receipt.getCode());
     movement.setOperatorName(currentName());

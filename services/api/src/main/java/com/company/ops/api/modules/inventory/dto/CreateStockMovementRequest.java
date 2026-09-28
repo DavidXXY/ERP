@@ -8,6 +8,7 @@ import java.math.BigDecimal;
 public record CreateStockMovementRequest(
     @NotNull StockMovementType movementType,
     @NotNull @DecimalMin("0.01") BigDecimal quantity,
+    @DecimalMin("0") BigDecimal unitCost,
     String sourceNo,
     String remark
 ) {}

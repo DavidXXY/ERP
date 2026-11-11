@@ -16,7 +16,9 @@ permissions:
 
 jobs:
   frontend:
-    runs-on: ubuntu-latest
+    # ubuntu-latest 已切到 26.04，而 Playwright 1.55.1 不支持 26.04（chromium 装不上），
+    # 先固定 24.04；升级 @playwright/test 后可以改回 ubuntu-latest。
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5

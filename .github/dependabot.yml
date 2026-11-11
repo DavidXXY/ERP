@@ -20,14 +20,9 @@ updates:
     directory: /services/api
     schedule:
       interval: weekly
-  - package-ecosystem: docker
-    directory: /deploy
-    schedule:
-      interval: weekly
-  - package-ecosystem: docker
-    directory: /infra
-    schedule:
-      interval: weekly
+  # 仓库里没有 Dockerfile/K8s 清单，镜像只写在 docker-compose.yml 里；
+  # Dependabot 的 docker 生态不支持 compose，这两个任务每次都会以
+  # dependency_file_not_found 失败。镜像 tag 改为人工/Dependabot 之外的流程升级。
   - package-ecosystem: github-actions
     directory: /
     schedule:

@@ -1,0 +1,5 @@
+# False positives: RFC 6238 published test vectors and .env.example placeholders.
+# Fingerprints are commit:file:rule:line, as printed by `gitleaks detect --verbose`.
+15919c3114c26e534d57d543acc51311cd4653c7:services/api/src/test/java/com/company/ops/api/modules/system/security/TotpServiceTest.java:generic-api-key:12
+15919c3114c26e534d57d543acc51311cd4653c7:services/api/src/test/java/com/company/ops/api/modules/system/service/MfaServiceTest.java:generic-api-key:68
+8b1f989861bc3e4fff86c059f96cadedab6d0810:.env.example:generic-api-key:9

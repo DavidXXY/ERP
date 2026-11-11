@@ -23,6 +23,9 @@
     <minio.version>8.5.17</minio.version>
     <springdoc.version>2.8.0</springdoc.version>
     <shedlock.version>6.3.0</shedlock.version>
+    <!-- Testcontainers 1.x 无法与 Docker 29 通信（client API 1.32 < daemon 最低 1.44），
+         1.x 已停止维护，因此显式覆盖 Spring Boot 3.4.1 管理的 1.20.4。2.x 起模块名带 testcontainers- 前缀。 -->
+    <testcontainers.version>2.0.5</testcontainers.version>
   </properties>
 
   <dependencies>
@@ -136,12 +139,12 @@
     </dependency>
     <dependency>
       <groupId>org.testcontainers</groupId>
-      <artifactId>junit-jupiter</artifactId>
+      <artifactId>testcontainers-junit-jupiter</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.testcontainers</groupId>
-      <artifactId>postgresql</artifactId>
+      <artifactId>testcontainers-postgresql</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
